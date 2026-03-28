@@ -10,13 +10,17 @@ import click
 import yaml
 
 from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.yaml_storage import YAMLStorage
+from agentmemo.storage import create_storage
 from agentmemo.types import Fact, MemoryType
 
 
-def _make_kb(agent_id: str, data_dir: str) -> KnowledgeBase:
-    """Create a KnowledgeBase backed by the given data directory."""
-    storage = YAMLStorage(base_dir=data_dir)
+def _make_kb(ctx: click.Context, agent_id: str) -> KnowledgeBase:
+    """Create a KnowledgeBase from CLI context options."""
+    storage = create_storage(
+        ctx.obj["storage"],
+        base_dir=ctx.obj["data_dir"],
+        dsn=ctx.obj.get("dsn"),
+    )
     return KnowledgeBase(agent_id=agent_id, storage=storage)
 
 
@@ -28,16 +32,30 @@ def _parse_dt(value: str) -> datetime:
 
 @click.group()
 @click.version_option()
-def main() -> None:
+@click.option(
+    "--storage",
+    "-s",
+    type=click.Choice(["yaml", "sqlite", "postgres"]),
+    default="yaml",
+    help="Storage backend.",
+)
+@click.option("--data-dir", default=".agentmemo", help="Storage directory (yaml/sqlite).")
+@click.option("--dsn", envvar="AGENTMEMO_DSN", default=None, help="Database DSN (postgres).")
+@click.pass_context
+def main(ctx: click.Context, storage: str, data_dir: str, dsn: str | None) -> None:
     """agentmemo — Agent Knowledge Layer CLI."""
+    ctx.ensure_object(dict)
+    ctx.obj["storage"] = storage
+    ctx.obj["data_dir"] = data_dir
+    ctx.obj["dsn"] = dsn
 
 
 @main.command()
 @click.argument("agent_id")
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def show(agent_id: str, data_dir: str) -> None:
+@click.pass_context
+def show(ctx: click.Context, agent_id: str) -> None:
     """Show all stored facts for an agent."""
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     facts = kb.list_facts()
 
     if not facts:
@@ -65,8 +83,8 @@ def show(agent_id: str, data_dir: str) -> None:
     default="semantic",
     type=click.Choice(["semantic", "procedural", "episodic"]),
 )
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def add(agent_id: str, content: str, importance: float, fact_type: str, data_dir: str) -> None:
+@click.pass_context
+def add(ctx: click.Context, agent_id: str, content: str, importance: float, fact_type: str) -> None:
     """Add a fact to an agent's knowledge base."""
     if not 0.0 <= importance <= 1.0:
         raise click.BadParameter(
@@ -75,7 +93,7 @@ def add(agent_id: str, content: str, importance: float, fact_type: str, data_dir
         )
     if not content.strip():
         raise click.BadParameter("content must not be empty", param_hint="CONTENT")
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     fact = kb.add(content, importance=importance, type=MemoryType(fact_type))
     click.echo(f"Added fact {fact.id}: {content}")
 
@@ -84,10 +102,10 @@ def add(agent_id: str, content: str, importance: float, fact_type: str, data_dir
 @click.argument("agent_id")
 @click.argument("query")
 @click.option("--top-k", "-k", default=5, type=int, help="Max results.")
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def recall(agent_id: str, query: str, top_k: int, data_dir: str) -> None:
+@click.pass_context
+def recall(ctx: click.Context, agent_id: str, query: str, top_k: int) -> None:
     """Retrieve relevant facts for a query."""
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     result = kb.recall(query, top_k=top_k)
     if result:
         click.echo(result)
@@ -97,10 +115,10 @@ def recall(agent_id: str, query: str, top_k: int, data_dir: str) -> None:
 
 @main.command()
 @click.argument("agent_id")
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def stats(agent_id: str, data_dir: str) -> None:
+@click.pass_context
+def stats(ctx: click.Context, agent_id: str) -> None:
     """Show statistics for an agent's knowledge base."""
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     s = kb.stats()
     click.echo(f"Agent: {agent_id}")
     click.echo(f"Total facts: {s['total_facts']}")
@@ -111,23 +129,23 @@ def stats(agent_id: str, data_dir: str) -> None:
 
 @main.command()
 @click.argument("agent_id")
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def decay(agent_id: str, data_dir: str) -> None:
+@click.pass_context
+def decay(ctx: click.Context, agent_id: str) -> None:
     """Apply Ebbinghaus forgetting curve to all facts."""
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     kb.decay()
     click.echo(f"Decay applied to agent '{agent_id}'.")
 
 
 @main.command()
 @click.argument("agent_id")
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def clear(agent_id: str, data_dir: str) -> None:
+@click.pass_context
+def clear(ctx: click.Context, agent_id: str) -> None:
     """Clear all facts for an agent."""
     if not click.confirm(f"Delete all facts for agent '{agent_id}'?"):
         click.echo("Aborted.")
         return
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     kb.clear_all()
     click.echo(f"Cleared all facts for agent '{agent_id}'.")
 
@@ -135,10 +153,10 @@ def clear(agent_id: str, data_dir: str) -> None:
 @main.command("export")
 @click.argument("agent_id")
 @click.argument("output", type=click.Path())
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def export_cmd(agent_id: str, output: str, data_dir: str) -> None:
+@click.pass_context
+def export_cmd(ctx: click.Context, agent_id: str, output: str) -> None:
     """Export facts to a YAML file."""
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     facts = kb.list_facts()
     data: dict[str, dict[str, Any]] = {}
     for f in facts:
@@ -161,8 +179,8 @@ def export_cmd(agent_id: str, output: str, data_dir: str) -> None:
 @main.command("import")
 @click.argument("agent_id")
 @click.argument("input_file", type=click.Path(exists=True))
-@click.option("--data-dir", default=".agentmemo", help="Storage directory.")
-def import_cmd(agent_id: str, input_file: str, data_dir: str) -> None:
+@click.pass_context
+def import_cmd(ctx: click.Context, agent_id: str, input_file: str) -> None:
     """Import facts from a YAML file."""
     try:
         raw = yaml.safe_load(Path(input_file).read_text(encoding="utf-8"))
@@ -199,6 +217,6 @@ def import_cmd(agent_id: str, input_file: str, data_dir: str) -> None:
         except (ValueError, TypeError) as exc:
             raise click.ClickException(f"Fact {fid!r} has invalid data: {exc}.") from exc
 
-    kb = _make_kb(agent_id, data_dir)
+    kb = _make_kb(ctx, agent_id)
     kb.replace_facts(facts)
     click.echo(f"Imported {len(facts)} facts for agent '{agent_id}'.")
