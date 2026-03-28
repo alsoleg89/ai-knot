@@ -17,7 +17,7 @@ class MemoryEnabledOpenAI:
     Usage:
         kb = KnowledgeBase(agent_id="assistant")
         client = MemoryEnabledOpenAI(knowledge_base=kb)
-        enriched = client._enrich_messages(messages)
+        enriched = client.enrich_messages(messages)
         # Pass enriched messages to your OpenAI client.
 
     Args:
@@ -34,7 +34,7 @@ class MemoryEnabledOpenAI:
         self._kb = knowledge_base
         self._auto_learn = auto_learn
 
-    def _enrich_messages(
+    def enrich_messages(
         self,
         messages: list[dict[str, str]],
     ) -> list[dict[str, str]]:

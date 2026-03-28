@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Agent Knowledge Layer. Extract. Store. Retrieve. Any backend."
 readme = "README.md"
 license = {text = "MIT"}
+authors = [{name = "Oleg"}]
 requires-python = ">=3.11"
 keywords = ["ai", "agents", "memory", "knowledge", "llm", "rag"]
 classifiers = [
@@ -44,6 +45,7 @@ agentmemo = "agentmemo.cli:main"
 Homepage = "https://github.com/alsoleg89/Agentmemo"
 Repository = "https://github.com/alsoleg89/Agentmemo"
 Issues = "https://github.com/alsoleg89/Agentmemo/issues"
+Documentation = "https://github.com/alsoleg89/Agentmemo#readme"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentmemo"]
@@ -77,3 +79,11 @@ packages = ["agentmemo"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["httpx", "httpx.*", "click", "click.*", "yaml"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "agentmemo.cli"
+disallow_untyped_decorators = false

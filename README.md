@@ -34,6 +34,9 @@ pip install agentmemo
 
 # With OpenAI for LLM extraction:
 pip install "agentmemo[openai]"
+
+# With PostgreSQL backend:
+pip install "agentmemo[postgres]"
 ```
 
 ---
@@ -131,7 +134,7 @@ agentmemo uses an Ebbinghaus-based decay curve:
 ```
 retention = e^(-time / stability)
 
-stability = f(importance, access_count)
+stability = 336h × importance × (1 + ln(1 + access_count))
 -> high importance + frequently accessed = remembered for months
 -> low importance + never accessed     = forgotten in days
 ```
@@ -183,6 +186,27 @@ Edit it by hand. Commit it to Git. Roll back when needed.
 
 ---
 
+## LLM providers
+
+agentmemo supports 6 providers for fact extraction out of the box:
+
+| Provider | Name | Env var |
+|---|---|---|
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| Anthropic (Claude) | `anthropic` | `ANTHROPIC_API_KEY` |
+| GigaChat (Sber) | `gigachat` | `GIGACHAT_API_KEY` |
+| Yandex GPT | `yandex` | `YANDEX_API_KEY` |
+| Qwen | `qwen` | `QWEN_API_KEY` |
+| Any OpenAI-compatible | `openai-compat` | `LLM_API_KEY` |
+
+```python
+kb.learn(turns, provider="anthropic")  # uses ANTHROPIC_API_KEY from env
+kb.learn(turns, provider="gigachat", api_key="...")
+kb.learn(turns, provider="openai-compat", api_key="...", base_url="http://localhost:8080/v1")
+```
+
+---
+
 ## OpenAI integration
 
 ```python
@@ -196,7 +220,7 @@ kb.add("User deploys on Docker")
 client = MemoryEnabledOpenAI(knowledge_base=kb)
 
 messages = [{"role": "user", "content": "Write me a deployment script"}]
-enriched = client._enrich_messages(messages)
+enriched = client.enrich_messages(messages)
 # System prompt now includes relevant memory context.
 # Pass `enriched` to your OpenAI client.
 ```
