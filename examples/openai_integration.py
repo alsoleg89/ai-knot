@@ -28,7 +28,7 @@ messages = [
 ]
 
 # Enrich messages with memory context.
-enriched = client._enrich_messages(messages)
+enriched = client.enrich_messages(messages)
 
 print("=== Original system prompt ===")
 print(messages[0]["content"])
