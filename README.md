@@ -1,5 +1,9 @@
 # agentmemo
 
+![CI](https://github.com/alsoleg89/Agentmemo/actions/workflows/ci.yml/badge.svg)
+![PyPI](https://img.shields.io/pypi/v/agentmemo)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 **Agent Knowledge Layer. Extract. Store. Retrieve. Any backend.**
 
 Your agents don't need a memory — they need a knowledge base.
@@ -188,7 +192,7 @@ Edit it by hand. Commit it to Git. Roll back when needed.
 
 ## LLM providers
 
-agentmemo supports 6 providers for fact extraction out of the box:
+agentmemo ships with 6 providers for fact extraction:
 
 | Provider | Name | Env var |
 |---|---|---|
