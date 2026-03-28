@@ -117,9 +117,7 @@ class TestCLIExportImport:
 
         # Clear and reimport
         runner.invoke(main, ["clear", "myagent", "--data-dir", data_dir], input="y\n")
-        result = runner.invoke(
-            main, ["import", "myagent", export_path, "--data-dir", data_dir]
-        )
+        result = runner.invoke(main, ["import", "myagent", export_path, "--data-dir", data_dir])
         assert result.exit_code == 0
 
         show = runner.invoke(main, ["show", "myagent", "--data-dir", data_dir])

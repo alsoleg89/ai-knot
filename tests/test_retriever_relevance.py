@@ -33,9 +33,7 @@ def diverse_kb() -> list[Fact]:
 class TestRelevanceScenarios:
     """Does the retriever return the RIGHT facts for real queries?"""
 
-    def test_deployment_query(
-        self, retriever: TFIDFRetriever, diverse_kb: list[Fact]
-    ) -> None:
+    def test_deployment_query(self, retriever: TFIDFRetriever, diverse_kb: list[Fact]) -> None:
         results = retriever.search("how should I deploy this service?", diverse_kb, top_k=3)
         contents = [r.content for r in results]
         # Should find Docker/Kubernetes fact
@@ -48,30 +46,22 @@ class TestRelevanceScenarios:
         contents = [r.content for r in results]
         assert any("Python" in c for c in contents)
 
-    def test_database_query(
-        self, retriever: TFIDFRetriever, diverse_kb: list[Fact]
-    ) -> None:
+    def test_database_query(self, retriever: TFIDFRetriever, diverse_kb: list[Fact]) -> None:
         results = retriever.search("which database for this project?", diverse_kb, top_k=3)
         contents = [r.content for r in results]
         assert any("PostgreSQL" in c for c in contents)
 
-    def test_testing_query(
-        self, retriever: TFIDFRetriever, diverse_kb: list[Fact]
-    ) -> None:
+    def test_testing_query(self, retriever: TFIDFRetriever, diverse_kb: list[Fact]) -> None:
         results = retriever.search("how to test the code?", diverse_kb, top_k=3)
         contents = [r.content for r in results]
         assert any("pytest" in c or "test" in c.lower() for c in contents)
 
-    def test_api_framework_query(
-        self, retriever: TFIDFRetriever, diverse_kb: list[Fact]
-    ) -> None:
+    def test_api_framework_query(self, retriever: TFIDFRetriever, diverse_kb: list[Fact]) -> None:
         results = retriever.search("which API framework?", diverse_kb, top_k=3)
         contents = [r.content for r in results]
         assert any("FastAPI" in c or "API" in c for c in contents)
 
-    def test_who_is_user_query(
-        self, retriever: TFIDFRetriever, diverse_kb: list[Fact]
-    ) -> None:
+    def test_who_is_user_query(self, retriever: TFIDFRetriever, diverse_kb: list[Fact]) -> None:
         results = retriever.search("who is this user?", diverse_kb, top_k=3)
         # Should return profile-type facts
         assert len(results) > 0

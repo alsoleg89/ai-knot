@@ -13,9 +13,7 @@ from agentmemo.types import Fact, MemoryType
 class TestSQLiteSaveLoad:
     """Basic save/load round-trip."""
 
-    def test_save_and_load(
-        self, sqlite_storage: SQLiteStorage, sample_facts: list[Fact]
-    ) -> None:
+    def test_save_and_load(self, sqlite_storage: SQLiteStorage, sample_facts: list[Fact]) -> None:
         sqlite_storage.save("agent1", sample_facts)
         loaded = sqlite_storage.load("agent1")
         assert len(loaded) == len(sample_facts)

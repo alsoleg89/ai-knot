@@ -28,9 +28,7 @@ class TestExtractor:
         assert facts[0].content == "User deploys in Docker"
         assert facts[2].importance == 0.95
 
-    def test_extract_handles_empty_response(
-        self, sample_turns: list[ConversationTurn]
-    ) -> None:
+    def test_extract_handles_empty_response(self, sample_turns: list[ConversationTurn]) -> None:
         extractor = Extractor(api_key="fake-key", provider="openai")
 
         with patch.object(extractor, "_call_llm", return_value=[]):
@@ -43,9 +41,7 @@ class TestExtractor:
         facts = extractor.extract([])
         assert facts == []
 
-    def test_extract_maps_memory_types(
-        self, sample_turns: list[ConversationTurn]
-    ) -> None:
+    def test_extract_maps_memory_types(self, sample_turns: list[ConversationTurn]) -> None:
         extractor = Extractor(api_key="fake-key", provider="openai")
 
         with patch.object(extractor, "_call_llm", return_value=MOCK_LLM_RESPONSE):

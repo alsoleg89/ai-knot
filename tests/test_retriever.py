@@ -52,9 +52,7 @@ class TestTFIDFSearch:
         results = retriever.search("anything", [], top_k=5)
         assert results == []
 
-    def test_empty_query(
-        self, retriever: TFIDFRetriever, coding_facts: list[Fact]
-    ) -> None:
+    def test_empty_query(self, retriever: TFIDFRetriever, coding_facts: list[Fact]) -> None:
         results = retriever.search("", coding_facts, top_k=3)
         assert isinstance(results, list)
 
@@ -106,9 +104,7 @@ class TestSearchSpecialCharacters:
         results = retriever.search("Python?!", coding_facts, top_k=3)
         assert isinstance(results, list)
 
-    def test_very_long_query(
-        self, retriever: TFIDFRetriever, coding_facts: list[Fact]
-    ) -> None:
+    def test_very_long_query(self, retriever: TFIDFRetriever, coding_facts: list[Fact]) -> None:
         long_query = "Python " * 500
         results = retriever.search(long_query, coding_facts, top_k=3)
         assert isinstance(results, list)

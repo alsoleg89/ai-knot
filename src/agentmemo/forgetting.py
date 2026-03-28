@@ -15,9 +15,9 @@ from datetime import UTC, datetime
 
 from agentmemo.types import Fact
 
-# Base stability in hours (1 week). A fact with importance=1.0 and
-# access_count=0 will retain ~37% after 1 week.
-BASE_STABILITY_HOURS: float = 168.0
+# Base stability in hours (2 weeks). A fact with importance=1.0 and
+# access_count=0 will retain ~37% after 2 weeks.
+BASE_STABILITY_HOURS: float = 336.0
 
 
 def calculate_stability(importance: float, access_count: int) -> float:

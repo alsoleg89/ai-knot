@@ -177,7 +177,7 @@ class Extractor:
         try:
             parsed = json.loads(content)
             if isinstance(parsed, list):
-                return parsed  # type: ignore[no-any-return]
+                return parsed
         except (json.JSONDecodeError, TypeError):
             logger.warning("Failed to parse LLM response as JSON: %s", content[:200])
         return []

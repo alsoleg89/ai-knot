@@ -41,15 +41,11 @@ class TestStorageCompatibility:
             assert yf.importance == pytest.approx(sf.importance)
             assert yf.id == sf.id
 
-    def test_empty_load_identical(
-        self, both_storages: tuple[YAMLStorage, SQLiteStorage]
-    ) -> None:
+    def test_empty_load_identical(self, both_storages: tuple[YAMLStorage, SQLiteStorage]) -> None:
         yaml_store, sqlite_store = both_storages
         assert yaml_store.load("ghost") == sqlite_store.load("ghost") == []
 
-    def test_delete_identical(
-        self, both_storages: tuple[YAMLStorage, SQLiteStorage]
-    ) -> None:
+    def test_delete_identical(self, both_storages: tuple[YAMLStorage, SQLiteStorage]) -> None:
         yaml_store, sqlite_store = both_storages
         facts = [Fact(content="keep"), Fact(content="remove")]
 
@@ -63,9 +59,7 @@ class TestStorageCompatibility:
         assert len(yaml_result) == len(sqlite_result) == 1
         assert yaml_result[0].content == sqlite_result[0].content == "keep"
 
-    def test_list_agents_identical(
-        self, both_storages: tuple[YAMLStorage, SQLiteStorage]
-    ) -> None:
+    def test_list_agents_identical(self, both_storages: tuple[YAMLStorage, SQLiteStorage]) -> None:
         yaml_store, sqlite_store = both_storages
 
         for store in (yaml_store, sqlite_store):
