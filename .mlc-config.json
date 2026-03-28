@@ -1,0 +1,38 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "^https://shields\\.io"
+    },
+    {
+      "pattern": "^https://img\\.shields\\.io"
+    },
+    {
+      "pattern": "^https://github\\.com/.*/actions/workflows"
+    },
+    {
+      "pattern": "^https://pypi\\.org/project/agentmemo"
+    },
+    {
+      "pattern": "^https://copyleaks\\.com"
+    },
+    {
+      "pattern": "^https://originality\\.ai"
+    },
+    {
+      "pattern": "^https://zerogpt\\.com"
+    },
+    {
+      "pattern": "^https://gptzero\\.me"
+    },
+    {
+      "pattern": "^https://sapling\\.ai"
+    },
+    {
+      "pattern": "^http://localhost"
+    }
+  ],
+  "timeout": "10s",
+  "retryOn429": true,
+  "retryCount": 3,
+  "aliveStatusCodes": [200, 206]
+}
