@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from agentmemo.forgetting import calculate_retention
-from agentmemo.types import Fact, MemoryType
+from agentmemo.types import Fact
 
-
-BASE_TIME = datetime(2026, 1, 1, tzinfo=timezone.utc)
+BASE_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class TestShortTermDecay:

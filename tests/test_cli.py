@@ -39,7 +39,9 @@ class TestCLIAdd:
     """agentmemo add <agent_id> <content>."""
 
     def test_add_fact(self, runner: CliRunner, data_dir: str) -> None:
-        result = runner.invoke(main, ["add", "myagent", "User prefers Docker", "--data-dir", data_dir])
+        result = runner.invoke(
+            main, ["add", "myagent", "User prefers Docker", "--data-dir", data_dir]
+        )
         assert result.exit_code == 0
         assert "Added" in result.output or "added" in result.output
 
