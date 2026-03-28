@@ -81,7 +81,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["httpx", "httpx.*", "click", "click.*", "yaml"]
+module = ["httpx", "httpx.*", "click", "click.*", "yaml", "psycopg", "psycopg.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
