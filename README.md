@@ -192,7 +192,7 @@ Edit it by hand. Commit it to Git. Roll back when needed.
 
 ## LLM providers
 
-agentmemo supports 6 providers for fact extraction out of the box:
+agentmemo ships with 6 providers for fact extraction:
 
 | Provider | Name | Env var |
 |---|---|---|
