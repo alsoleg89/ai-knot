@@ -9,6 +9,7 @@ from typing import Any
 
 from agentmemo.extractor import Extractor
 from agentmemo.forgetting import apply_decay
+from agentmemo.providers import LLMProvider
 from agentmemo.retriever import TFIDFRetriever
 from agentmemo.storage.base import StorageBackend
 from agentmemo.storage.yaml_storage import YAMLStorage
@@ -82,25 +83,48 @@ class KnowledgeBase:
         turns: list[ConversationTurn],
         *,
         api_key: str | None = None,
-        provider: str = "openai",
+        provider: str | LLMProvider = "openai",
+        model: str | None = None,
+        **provider_kwargs: str,
     ) -> list[Fact]:
         """Extract and store facts from a conversation using an LLM.
 
         Args:
             turns: Conversation messages to extract knowledge from.
-            api_key: LLM API key. Required for extraction.
-            provider: "openai" or "anthropic".
+            api_key: LLM API key. If ``None``, reads from environment.
+            provider: Provider name or a pre-configured ``LLMProvider`` instance.
+                Supported names: openai, anthropic, gigachat, yandex, qwen, openai-compat.
+            model: Override the default model for this provider.
+            **provider_kwargs: Extra args forwarded to the provider constructor
+                (e.g. ``folder_id`` for Yandex, ``base_url`` for openai-compat).
 
         Returns:
             List of newly extracted and stored Facts.
         """
         if not turns:
             return []
-        if not api_key:
-            logger.warning("No API key provided — skipping LLM extraction")
-            return []
 
-        extractor = Extractor(api_key=api_key, provider=provider)
+        if isinstance(provider, str):
+            if not api_key:
+                import os
+
+                api_key = os.environ.get(
+                    {
+                        "openai": "OPENAI_API_KEY",
+                        "anthropic": "ANTHROPIC_API_KEY",
+                        "gigachat": "GIGACHAT_API_KEY",
+                        "yandex": "YANDEX_API_KEY",
+                        "qwen": "QWEN_API_KEY",
+                    }.get(provider, "LLM_API_KEY"),
+                    "",
+                )
+            if not api_key:
+                logger.warning("No API key provided — skipping LLM extraction")
+                return []
+            extractor = Extractor(provider, api_key=api_key, model=model, **provider_kwargs)
+        else:
+            extractor = Extractor(provider, model=model)
+
         new_facts = extractor.extract(turns)
 
         if new_facts:
