@@ -10,6 +10,7 @@ import contextlib
 import json
 import logging
 import re
+import time
 from typing import Any
 
 import httpx
@@ -17,6 +18,10 @@ import httpx
 from agentmemo.types import ConversationTurn, Fact, MemoryType
 
 logger = logging.getLogger(__name__)
+
+_MAX_RETRIES = 3
+# HTTP status codes that warrant a retry with backoff.
+_RETRY_STATUS_CODES = {429, 500, 502, 503}
 
 _EXTRACTION_SYSTEM_PROMPT = """You are a knowledge extraction engine.
 Given a conversation, extract ONLY meaningful facts worth remembering.
@@ -106,7 +111,7 @@ class Extractor:
             turns: List of conversation messages.
 
         Returns:
-            List of extracted Facts.
+            List of extracted Facts. Returns [] on any LLM error.
         """
         if not turns:
             return []
@@ -124,47 +129,109 @@ class Extractor:
         return self._call_openai(conversation_text)
 
     def _call_openai(self, conversation_text: str) -> list[dict[str, Any]]:
-        """Call OpenAI-compatible API."""
-        response = httpx.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self._model,
-                "messages": [
-                    {"role": "system", "content": _EXTRACTION_SYSTEM_PROMPT},
-                    {"role": "user", "content": conversation_text},
-                ],
-                "temperature": 0.0,
-            },
-            timeout=30.0,
-        )
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-        return self._parse_json_response(content)
+        """Call OpenAI-compatible API with retry on transient errors."""
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = httpx.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": self._model,
+                        "messages": [
+                            {"role": "system", "content": _EXTRACTION_SYSTEM_PROMPT},
+                            {"role": "user", "content": conversation_text},
+                        ],
+                        "temperature": 0.0,
+                    },
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                content = response.json()["choices"][0]["message"]["content"]
+                return self._parse_json_response(content)
+            except httpx.TimeoutException:
+                logger.warning(
+                    "OpenAI request timed out (attempt %d/%d)", attempt + 1, _MAX_RETRIES
+                )
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status in _RETRY_STATUS_CODES:
+                    logger.warning(
+                        "HTTP %d from OpenAI, will retry (attempt %d/%d)",
+                        status,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                    )
+                else:
+                    logger.warning("HTTP %d from OpenAI — aborting extraction", status)
+                    return []
+            except httpx.RequestError as exc:
+                logger.warning("OpenAI network error: %s", exc)
+            except (KeyError, ValueError) as exc:
+                logger.warning("Unexpected OpenAI response format: %s", exc)
+                return []
+
+            if attempt < _MAX_RETRIES - 1:
+                wait = 2**attempt
+                logger.info("Retrying in %ds…", wait)
+                time.sleep(wait)
+
+        logger.warning("OpenAI extraction failed after %d attempts", _MAX_RETRIES)
+        return []
 
     def _call_anthropic(self, conversation_text: str) -> list[dict[str, Any]]:
-        """Call Anthropic API."""
-        response = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": self._api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self._model,
-                "max_tokens": 2048,
-                "system": _EXTRACTION_SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": conversation_text}],
-            },
-            timeout=30.0,
-        )
-        response.raise_for_status()
-        content = response.json()["content"][0]["text"]
-        return self._parse_json_response(content)
+        """Call Anthropic API with retry on transient errors."""
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = httpx.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": self._api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": self._model,
+                        "max_tokens": 2048,
+                        "system": _EXTRACTION_SYSTEM_PROMPT,
+                        "messages": [{"role": "user", "content": conversation_text}],
+                    },
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                content = response.json()["content"][0]["text"]
+                return self._parse_json_response(content)
+            except httpx.TimeoutException:
+                logger.warning(
+                    "Anthropic request timed out (attempt %d/%d)", attempt + 1, _MAX_RETRIES
+                )
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status in _RETRY_STATUS_CODES:
+                    logger.warning(
+                        "HTTP %d from Anthropic, will retry (attempt %d/%d)",
+                        status,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                    )
+                else:
+                    logger.warning("HTTP %d from Anthropic — aborting extraction", status)
+                    return []
+            except httpx.RequestError as exc:
+                logger.warning("Anthropic network error: %s", exc)
+            except (KeyError, ValueError) as exc:
+                logger.warning("Unexpected Anthropic response format: %s", exc)
+                return []
+
+            if attempt < _MAX_RETRIES - 1:
+                wait = 2**attempt
+                logger.info("Retrying in %ds…", wait)
+                time.sleep(wait)
+
+        logger.warning("Anthropic extraction failed after %d attempts", _MAX_RETRIES)
+        return []
 
     @staticmethod
     def _parse_json_response(content: str) -> list[dict[str, Any]]:
@@ -190,8 +257,11 @@ class Extractor:
         with contextlib.suppress(ValueError):
             memory_type = MemoryType(raw_type)
 
+        # Clamp importance to valid range regardless of what LLM returned.
+        importance = max(0.0, min(1.0, float(entry.get("importance", 0.8))))
+
         return Fact(
             content=str(entry.get("content", "")),
             type=memory_type,
-            importance=float(entry.get("importance", 0.8)),
+            importance=importance,
         )

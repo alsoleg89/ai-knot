@@ -68,6 +68,13 @@ def show(agent_id: str, data_dir: str) -> None:
 @click.option("--data-dir", default=".agentmemo", help="Storage directory.")
 def add(agent_id: str, content: str, importance: float, fact_type: str, data_dir: str) -> None:
     """Add a fact to an agent's knowledge base."""
+    if not 0.0 <= importance <= 1.0:
+        raise click.BadParameter(
+            f"must be between 0.0 and 1.0, got {importance}",
+            param_hint="'--importance'",
+        )
+    if not content.strip():
+        raise click.BadParameter("content must not be empty", param_hint="CONTENT")
     kb = _make_kb(agent_id, data_dir)
     fact = kb.add(content, importance=importance, type=MemoryType(fact_type))
     click.echo(f"Added fact {fact.id}: {content}")
@@ -157,25 +164,40 @@ def export_cmd(agent_id: str, output: str, data_dir: str) -> None:
 @click.option("--data-dir", default=".agentmemo", help="Storage directory.")
 def import_cmd(agent_id: str, input_file: str, data_dir: str) -> None:
     """Import facts from a YAML file."""
-    raw = yaml.safe_load(Path(input_file).read_text(encoding="utf-8"))
+    try:
+        raw = yaml.safe_load(Path(input_file).read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise click.ClickException(f"Invalid YAML: {exc}") from exc
+
     if not raw:
         click.echo("No facts in file.")
         return
 
-    facts: list[Fact] = [
-        Fact(
-            id=str(fid),
-            content=entry["content"],
-            type=MemoryType(entry["type"]),
-            importance=float(entry["importance"]),
-            retention_score=float(entry.get("retention_score", 1.0)),
-            access_count=int(entry.get("access_count", 0)),
-            tags=list(entry.get("tags", [])),
-            created_at=_parse_dt(entry["created_at"]),
-            last_accessed=_parse_dt(entry.get("last_accessed", entry["created_at"])),
-        )
-        for fid, entry in raw.items()
-    ]
+    if not isinstance(raw, dict):
+        raise click.ClickException("Expected a YAML mapping at the top level.")
+
+    facts: list[Fact] = []
+    for fid, entry in raw.items():
+        if not isinstance(entry, dict):
+            raise click.ClickException(f"Invalid entry for fact {fid!r}: expected a mapping.")
+        try:
+            facts.append(
+                Fact(
+                    id=str(fid),
+                    content=entry["content"],
+                    type=MemoryType(entry["type"]),
+                    importance=float(entry["importance"]),
+                    retention_score=float(entry.get("retention_score", 1.0)),
+                    access_count=int(entry.get("access_count", 0)),
+                    tags=list(entry.get("tags", [])),
+                    created_at=_parse_dt(entry["created_at"]),
+                    last_accessed=_parse_dt(entry.get("last_accessed", entry["created_at"])),
+                )
+            )
+        except KeyError as exc:
+            raise click.ClickException(f"Fact {fid!r} is missing required field {exc}.") from exc
+        except (ValueError, TypeError) as exc:
+            raise click.ClickException(f"Fact {fid!r} has invalid data: {exc}.") from exc
 
     kb = _make_kb(agent_id, data_dir)
     kb.replace_facts(facts)
