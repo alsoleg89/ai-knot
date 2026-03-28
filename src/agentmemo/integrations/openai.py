@@ -7,7 +7,6 @@ and injection into the system prompt.
 from __future__ import annotations
 
 import copy
-from typing import Any
 
 from agentmemo.knowledge import KnowledgeBase
 

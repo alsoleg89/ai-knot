@@ -62,7 +62,7 @@ class TFIDFRetriever:
 
         # Score each fact.
         scored: list[tuple[float, int]] = []
-        for idx, (fact, doc_tokens) in enumerate(zip(facts, doc_tokens_list)):
+        for idx, (fact, doc_tokens) in enumerate(zip(facts, doc_tokens_list, strict=True)):
             if not doc_tokens:
                 scored.append((0.0, idx))
                 continue

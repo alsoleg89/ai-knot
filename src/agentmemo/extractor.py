@@ -6,6 +6,7 @@ The LLM is instructed to return structured JSON with extracted facts.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -23,7 +24,8 @@ Given a conversation, extract ONLY meaningful facts worth remembering.
 Rules:
 - Skip greetings, thanks, filler ("ok", "got it", "thanks").
 - Each fact must be a single, self-contained statement.
-- Classify each fact as: semantic (about user/world), procedural (preferences/how-to), episodic (specific events).
+- Classify each fact as: semantic (about user/world), procedural (preferences/how-to),
+  episodic (specific events).
 - Rate importance from 0.0 to 1.0.
 
 Return a JSON array. Example:
@@ -185,10 +187,8 @@ class Extractor:
         """Convert a raw dict from LLM output into a Fact."""
         memory_type = MemoryType.SEMANTIC
         raw_type = entry.get("type", "semantic")
-        try:
+        with contextlib.suppress(ValueError):
             memory_type = MemoryType(raw_type)
-        except ValueError:
-            pass
 
         return Fact(
             content=str(entry.get("content", "")),

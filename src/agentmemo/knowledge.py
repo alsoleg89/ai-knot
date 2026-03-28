@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from agentmemo.extractor import Extractor
@@ -132,7 +132,7 @@ class KnowledgeBase:
 
         # Increment access_count on returned facts and persist.
         returned_ids = {r.id for r in results}
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for fact in facts:
             if fact.id in returned_ids:
                 fact.access_count += 1

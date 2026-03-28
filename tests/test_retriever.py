@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from agentmemo.retriever import TFIDFRetriever
-from agentmemo.types import Fact, MemoryType
+from agentmemo.types import Fact
 
 
 @pytest.fixture
