@@ -1,4 +1,4 @@
-name: Publish to PyPI (one-time)
+name: Publish agentmem to PyPI (one-time)
 
 on:
   workflow_dispatch:
@@ -7,29 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  publish-agentmemo:
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install build tools
-        run: pip install hatch
-
-      - name: Build
-        run: hatch build
-
-      - name: Publish agentmemo
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-  publish-agentmem:
+  publish:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
