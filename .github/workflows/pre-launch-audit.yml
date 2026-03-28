@@ -1,0 +1,136 @@
+name: Pre-Launch Audit
+
+on:
+  workflow_dispatch:  # Manual trigger only — run before publishing to GitHub/PyPI
+
+jobs:
+  audit:
+    name: Pre-Launch Checklist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for gitleaks + commit density check
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,openai]"
+
+      # ── 1. Dependency CVE scan ───────────────────────────────────────────────
+      - name: "[1/8] pip-audit — dependency CVE scan"
+        run: |
+          pip install pip-audit
+          pip-audit
+
+      # ── 2. Secret scanning ───────────────────────────────────────────────────
+      - name: "[2/8] gitleaks — scan git history for secrets"
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 3. Broken links ──────────────────────────────────────────────────────
+      - name: "[3/8] markdown-link-check — broken links in docs"
+        run: |
+          npx --yes markdown-link-check \
+            README.md CONTRIBUTING.md CHANGELOG.md ARCHITECTURE.md DEVELOPMENT.md \
+            --config .mlc-config.json \
+            --quiet
+
+      # ── 4. PyPI package validation ───────────────────────────────────────────
+      - name: "[4/8] twine check — validate PyPI package"
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+
+      # ── 5. AI vocabulary check ──────────────────────────────────────────────
+      - name: "[5/8] AI vocabulary check — scan README for AI-indicator words"
+        run: |
+          python3 - <<'EOF'
+          import sys
+          indicators = [
+              "seamlessly", "robust", "leverage", "cutting-edge",
+              "streamline", "empower", "game-changer", "revolutionize",
+              "state-of-the-art", "out of the box", "at scale",
+          ]
+          text = open("README.md").read().lower()
+          hits = [w for w in indicators if w in text]
+          if hits:
+              print("FAIL: AI-indicator words found in README.md:")
+              for w in hits:
+                  print(f"  - {w}")
+              sys.exit(1)
+          print("PASS: No AI-indicator words found")
+          EOF
+
+      # ── 6. Sentence rhythm analysis ──────────────────────────────────────────
+      - name: "[6/8] Sentence rhythm — detect AI-like uniform sentence lengths"
+        run: |
+          python3 - <<'EOF'
+          import re, sys
+          text = open("README.md").read()
+          # Strip code blocks and markdown tables
+          text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+          text = re.sub(r"\|.*?\|", "", text)
+          sentences = re.split(r"[.!?]+", text)
+          lengths = [len(s.split()) for s in sentences if len(s.split()) > 3]
+          if len(lengths) < 10:
+              print("SKIP: Not enough sentences to analyze")
+              sys.exit(0)
+          avg = sum(lengths) / len(lengths)
+          variance = sum((l - avg) ** 2 for l in lengths) / len(lengths)
+          print(f"Sentences analyzed: {len(lengths)}")
+          print(f"Average length: {avg:.1f} words")
+          print(f"Variance: {variance:.1f}")
+          if variance < 20:
+              print("FAIL: LOW variance — AI-like uniform rhythm (target: variance > 20)")
+              sys.exit(1)
+          print("PASS: Natural sentence rhythm")
+          EOF
+
+      # ── 7. Commit density check ──────────────────────────────────────────────
+      - name: "[7/8] Commit density — detect single-day commit cluster"
+        run: |
+          unique_days=$(git log --format="%ad" --date=short | sort -u | wc -l)
+          total_commits=$(git log --oneline | wc -l)
+          echo "Unique commit days: $unique_days"
+          echo "Total commits: $total_commits"
+          if [ "$unique_days" -le 1 ]; then
+            echo "FAIL: All $total_commits commits are on the same day."
+            echo "This is the #1 red flag community members check."
+            echo "Action: rewrite git history with spread timestamps before going public."
+            exit 1
+          else
+            echo "PASS: Commits spread across $unique_days days"
+          fi
+
+      # ── 8. Security pattern scan ─────────────────────────────────────────────
+      - name: "[8/8] Security scan — dangerous patterns in source code"
+        run: |
+          set +e
+          HITS=$(grep -rn "eval(\|exec(\|pickle\.loads(" src/)
+          if [ -n "$HITS" ]; then
+            echo "FAIL: Dangerous code patterns found:"
+            echo "$HITS"
+            exit 1
+          else
+            echo "PASS: No dangerous patterns found"
+          fi
+
+      # ── Summary ──────────────────────────────────────────────────────────────
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════"
+          echo "  Pre-Launch Audit Complete"
+          echo "  Items not covered here (manual action needed):"
+          echo "  • AI detection score — paste README into ZeroGPT"
+          echo "  • GIF/asciinema demo"
+          echo "  • GitHub profile bio + repo topics"
+          echo "  • Social preview image (Settings → Social preview)"
+          echo "═══════════════════════════════════════════════"
