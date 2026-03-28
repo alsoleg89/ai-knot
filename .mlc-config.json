@@ -29,6 +29,12 @@
     },
     {
       "pattern": "^http://localhost"
+    },
+    {
+      "pattern": "^https://github\\.com/alsoleg89/Agentmemo/compare/"
+    },
+    {
+      "pattern": "^https://github\\.com/alsoleg89/Agentmemo/releases/tag/"
     }
   ],
   "timeout": "10s",

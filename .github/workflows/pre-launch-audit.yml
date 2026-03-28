@@ -77,6 +77,8 @@ jobs:
           python-version: "3.12"
 
       - name: AI vocabulary check
+        continue-on-error: true
+        id: ai_vocab
         run: |
           python3 - <<'EOF'
           import sys
@@ -96,6 +98,8 @@ jobs:
           EOF
 
       - name: Sentence rhythm analysis
+        continue-on-error: true
+        id: sentence_rhythm
         run: |
           python3 - <<'EOF'
           import re, sys
@@ -117,6 +121,8 @@ jobs:
           EOF
 
       - name: Commit density check
+        continue-on-error: true
+        id: commit_density
         run: |
           unique_days=$(git log --format="%ad" --date=short | sort -u | wc -l)
           total=$(git log --oneline | wc -l)
@@ -129,6 +135,8 @@ jobs:
           echo "PASS: Commits spread across $unique_days days"
 
       - name: Security pattern scan
+        continue-on-error: true
+        id: security_scan
         run: |
           python3 - <<'EOF'
           import re, sys
@@ -147,6 +155,16 @@ jobs:
               sys.exit(1)
           print("PASS: No dangerous patterns found")
           EOF
+
+      - name: Fail if any check failed
+        if: |
+          steps.ai_vocab.outcome == 'failure' ||
+          steps.sentence_rhythm.outcome == 'failure' ||
+          steps.commit_density.outcome == 'failure' ||
+          steps.security_scan.outcome == 'failure'
+        run: |
+          echo "One or more code checks failed — see steps above"
+          exit 1
 
   # ── Summary ────────────────────────────────────────────────────────────────
   summary:
