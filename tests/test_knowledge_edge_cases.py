@@ -8,7 +8,6 @@ import pytest
 
 from agentmemo.knowledge import KnowledgeBase
 from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import MemoryType
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agentmemo.types import ConversationTurn, Fact, MemoryType
 
@@ -57,8 +57,8 @@ class TestFact:
 
     def test_timestamps_are_utc(self) -> None:
         fact = Fact(content="utc test")
-        assert fact.created_at.tzinfo == timezone.utc
-        assert fact.last_accessed.tzinfo == timezone.utc
+        assert fact.created_at.tzinfo == UTC
+        assert fact.last_accessed.tzinfo == UTC
 
     def test_created_at_and_last_accessed_close(self) -> None:
         fact = Fact(content="timing test")

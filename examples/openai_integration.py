@@ -5,8 +5,8 @@ NOTE: Requires OPENAI_API_KEY environment variable for the actual API call.
 The memory injection works without an API key.
 """
 
-import os
 import json
+import shutil
 
 from agentmemo import KnowledgeBase, MemoryType
 from agentmemo.integrations.openai import MemoryEnabledOpenAI
@@ -48,6 +48,5 @@ print(json.dumps(enriched, indent=2))
 # )
 
 # Clean up.
-import shutil
 shutil.rmtree(".agentmemo", ignore_errors=True)
 print("\nDemo complete.")

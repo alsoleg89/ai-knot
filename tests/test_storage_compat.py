@@ -6,9 +6,9 @@ import pathlib
 
 import pytest
 
-from agentmemo.storage.yaml_storage import YAMLStorage
 from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.types import Fact, MemoryType
+from agentmemo.storage.yaml_storage import YAMLStorage
+from agentmemo.types import Fact
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ class TestStorageCompatibility:
         sqlite_facts = sqlite_store.load("agent1")
 
         assert len(yaml_facts) == len(sqlite_facts)
-        for yf, sf in zip(yaml_facts, sqlite_facts):
+        for yf, sf in zip(yaml_facts, sqlite_facts, strict=True):
             assert yf.content == sf.content
             assert yf.type == sf.type
             assert yf.importance == pytest.approx(sf.importance)

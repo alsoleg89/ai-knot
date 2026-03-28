@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from agentmemo.types import Fact, MemoryType
@@ -118,5 +118,5 @@ def _parse_datetime(value: str) -> datetime:
     """Parse an ISO-format datetime string, ensuring UTC timezone."""
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt

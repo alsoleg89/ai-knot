@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import uuid4
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     """Classification of stored knowledge.
 
     SEMANTIC — facts about the world or user ("works at Sber").
@@ -44,8 +44,8 @@ class Fact:
     access_count: int = 0
     tags: list[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid4().hex[:8])
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_accessed: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass

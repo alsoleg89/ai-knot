@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import pathlib
 
-import pytest
-
 from agentmemo.storage.yaml_storage import YAMLStorage
 from agentmemo.types import Fact, MemoryType
 
