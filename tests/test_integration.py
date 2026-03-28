@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import pathlib
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.yaml_storage import YAMLStorage
 from agentmemo.storage.sqlite_storage import SQLiteStorage
+from agentmemo.storage.yaml_storage import YAMLStorage
 from agentmemo.types import MemoryType
 
 
@@ -28,8 +28,8 @@ class TestFullLifecycle:
 
     def test_add_recall_forget(self, kb: KnowledgeBase) -> None:
         # Add facts
-        f1 = kb.add("User prefers Python", type=MemoryType.PROCEDURAL, importance=0.9)
-        f2 = kb.add("User works at Sber", type=MemoryType.SEMANTIC, importance=0.95)
+        kb.add("User prefers Python", type=MemoryType.PROCEDURAL, importance=0.9)
+        kb.add("User works at Sber", type=MemoryType.SEMANTIC, importance=0.95)
         f3 = kb.add("Deploy failed on Tuesday", type=MemoryType.EPISODIC, importance=0.4)
 
         # Recall should find relevant facts
@@ -50,7 +50,7 @@ class TestFullLifecycle:
         kb.add("Old information", importance=0.3)
 
         facts = kb._storage.load(kb._agent_id)
-        facts[0].last_accessed = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        facts[0].last_accessed = datetime(2025, 1, 1, tzinfo=UTC)
         facts[0].retention_score = 1.0
         kb._storage.save(kb._agent_id, facts)
 

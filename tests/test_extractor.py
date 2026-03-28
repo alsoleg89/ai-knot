@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from agentmemo.extractor import Extractor, deduplicate_facts
 from agentmemo.types import ConversationTurn, Fact, MemoryType
-
 
 MOCK_LLM_RESPONSE = [
     {"content": "User deploys in Docker", "type": "semantic", "importance": 0.8},
