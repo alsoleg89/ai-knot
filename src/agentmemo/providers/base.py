@@ -99,6 +99,9 @@ def call_with_retry(
                 return ""
         except httpx.RequestError as exc:
             logger.warning("%s network error: %s", provider.name, exc)
+        except (KeyError, ValueError) as exc:
+            logger.warning("Unexpected %s response format: %s", provider.name, exc)
+            return ""
 
         if attempt < max_retries - 1:
             wait = 2**attempt
