@@ -49,6 +49,12 @@ packages = ["src/agentmemo"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=agentmemo --cov-report=term-missing --cov-fail-under=80 -v"
+markers = [
+    "unit: fast, isolated unit tests",
+    "integration: tests that touch storage or multiple layers",
+    "slow: tests that are intentionally slow (benchmarks, large data)",
+    "requires_api_key: tests that call real LLM APIs (skipped in CI)",
+]
 
 [tool.ruff]
 src = ["src"]
