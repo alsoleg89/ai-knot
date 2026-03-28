@@ -1,4 +1,4 @@
-name: Publish agentmem to PyPI
+name: Publish to PyPI (one-time)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  publish-agentmemo:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -23,11 +23,33 @@ jobs:
       - name: Install build tools
         run: pip install hatch
 
-      - name: Build package
+      - name: Build
+        run: hatch build
+
+      - name: Publish agentmemo
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-agentmem:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install hatch
+
+      - name: Build
         working-directory: typosquat
         run: hatch build
 
-      - name: Publish to PyPI
+      - name: Publish agentmem
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: typosquat/dist/
