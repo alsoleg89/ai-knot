@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentmem"
+version = "0.1.0"
+description = "Typosquat protection for agentmemo. Please install agentmemo instead."
+license = {text = "MIT"}
+authors = [{name = "Oleg"}]
+requires-python = ">=3.11"
+
+[project.urls]
+Homepage = "https://github.com/alsoleg89/agentmemo"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentmem"]
