@@ -18,17 +18,16 @@ Most frameworks store everything — messages, tool calls, system prompts, the w
 That's fine until you're paying to inject six months of conversation history
 into every request, most of which has nothing to do with what the user asked.
 
-When building the next prompt you need maybe 300 tokens of context. You have 400,000 in the log.
-Which 300?
-
-That's the question agentmemo answers.
+The log grows to 400k tokens. The model needs maybe 300 of those for the next turn —
+but there's no obvious way to know which ones without reading all of them first.
+agentmemo solves this by keeping a distilled knowledge base instead of a raw log.
 
 ```
-Raw conversation (1000 messages, ~400k tokens)
-          |  LLM distillation
-Structured facts (12 entries, ~300 tokens)
-          |  Embeddings + vector search
-Relevant context (3 facts, injected into prompt)
+1000 messages  (~400k tokens)
+    ↓ LLM extraction
+~12 facts      (~300 tokens)
+    ↓ TF-IDF retrieval
+3–5 facts injected into the next prompt
 ```
 
 ---
@@ -83,8 +82,8 @@ response = openai_client.chat(...,
 
 ## What agentmemo keeps — and what it drops
 
-It runs your conversation through an LLM and pulls out facts worth remembering.
-Everything else is discarded.
+Pass it a conversation and it calls your LLM to figure out what's worth keeping —
+preferences, recurring patterns, explicit facts. Greetings, clarifications, filler — those don't make the cut.
 
 ```
 What happened in the conversation:         What agentmemo stores:
