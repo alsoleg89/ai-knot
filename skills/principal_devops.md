@@ -99,7 +99,6 @@ If publish fails after tag:
 - **Never** commit API keys, tokens, or passwords to the repository
 - All sensitive config passed via environment variables at runtime
 - `publish.yml` uses Trusted Publishing (OIDC `id-token: write`) — no `PYPI_TOKEN` secret needed
-- Run `git secrets --scan` or `trufflehog` before major releases
 
 ---
 
