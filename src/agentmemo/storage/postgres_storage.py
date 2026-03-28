@@ -49,7 +49,7 @@ class PostgresStorage:
 
     def __init__(self, dsn: str) -> None:
         try:
-            import psycopg  # type: ignore[import-not-found]  # noqa: F401
+            import psycopg  # noqa: F401
         except ImportError as exc:
             raise ImportError(
                 "PostgreSQL backend requires psycopg. "
