@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -13,6 +16,18 @@ from agentmemo.types import Fact, MemoryType
 
 logger = logging.getLogger(__name__)
 
+# One lock per on-disk YAML file; keyed by resolved absolute path.
+_file_locks: dict[str, threading.Lock] = {}
+_file_locks_mutex = threading.Lock()
+
+
+def _get_lock(path: Path) -> threading.Lock:
+    key = str(path.resolve())
+    with _file_locks_mutex:
+        if key not in _file_locks:
+            _file_locks[key] = threading.Lock()
+        return _file_locks[key]
+
 
 class YAMLStorage:
     """Stores facts as YAML files on disk.
@@ -21,13 +36,15 @@ class YAMLStorage:
         {base_dir}/{agent_id}/knowledge.yaml
 
     Each file is human-readable, editable, and Git-trackable.
+    Concurrent writes from multiple threads are serialized per-file via a
+    threading.Lock; the file is replaced atomically (write → fsync → rename).
     """
 
     def __init__(self, base_dir: str = ".agentmemo") -> None:
         self._base_dir = Path(base_dir)
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
-        """Write all facts for an agent to a YAML file."""
+        """Write all facts for an agent to a YAML file (atomic)."""
         agent_dir = self._base_dir / agent_id
         agent_dir.mkdir(parents=True, exist_ok=True)
 
@@ -45,10 +62,23 @@ class YAMLStorage:
             }
 
         yaml_path = agent_dir / "knowledge.yaml"
-        yaml_path.write_text(
-            yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False),
-            encoding="utf-8",
-        )
+        yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        lock = _get_lock(yaml_path)
+        with lock:
+            # Write to a temp file in the same directory, then rename atomically.
+            fd, tmp_path = tempfile.mkstemp(dir=agent_dir, suffix=".yaml.tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(yaml_text)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp_path, yaml_path)
+            except Exception:
+                with suppress_oserror():
+                    os.unlink(tmp_path)
+                raise
+
         logger.debug("Saved %d facts for agent '%s' to %s", len(facts), agent_id, yaml_path)
 
     def load(self, agent_id: str) -> list[Fact]:
@@ -57,7 +87,10 @@ class YAMLStorage:
         if not yaml_path.exists():
             return []
 
-        raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        lock = _get_lock(yaml_path)
+        with lock:
+            raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+
         if not raw:
             return []
 
@@ -94,6 +127,16 @@ class YAMLStorage:
             for d in self._base_dir.iterdir()
             if d.is_dir() and (d / "knowledge.yaml").exists()
         ]
+
+
+class suppress_oserror:
+    """Tiny context manager to swallow OSError (used for temp-file cleanup)."""
+
+    def __enter__(self) -> suppress_oserror:
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> bool:
+        return isinstance(exc_val, OSError)
 
 
 def _parse_datetime(value: str) -> datetime:
