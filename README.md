@@ -12,14 +12,16 @@ when needed, and forgets the irrelevant. One line of code. Any storage backend.
 
 ---
 
-## The problem (honestly)
+## The problem
 
-Storing full conversation logs is easy. Everyone does it.
-The hard part is answering one question at inference time:
+Most frameworks store everything — messages, tool calls, system prompts, the whole log.
+That's fine until you're paying to inject six months of conversation history
+into every request, most of which has nothing to do with what the user asked.
 
-> **"Out of 10,000 messages — what does my agent need to know RIGHT NOW?"**
+At inference time you need maybe 300 tokens of context. You have 400,000 in the log.
+Which 300?
 
-A log can't answer that. agentmemo can.
+That's the question agentmemo answers.
 
 ```
 Raw conversation (1000 messages, ~400k tokens)
@@ -79,9 +81,10 @@ response = openai_client.chat(...,
 
 ---
 
-## What gets stored (and what doesn't)
+## What agentmemo keeps — and what it drops
 
-agentmemo is **not a conversation log.** It's a structured knowledge extractor.
+It runs your conversation through an LLM and pulls out facts worth remembering.
+Everything else is discarded.
 
 ```
 What happened in the conversation:         What agentmemo stores:
