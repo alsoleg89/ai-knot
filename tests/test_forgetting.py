@@ -7,7 +7,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agentmemo.forgetting import apply_decay, calculate_retention, calculate_stability
+from agentmemo.forgetting import (
+    BASE_STABILITY_HOURS,
+    apply_decay,
+    calculate_retention,
+    calculate_stability,
+)
 from agentmemo.types import Fact
 
 
@@ -15,14 +20,12 @@ class TestCalculateStability:
     """stability = base_hours * importance * (1 + log(1 + access_count))."""
 
     def test_default_importance_no_access(self) -> None:
-        # base=168h, importance=0.8, access=0 → 168 * 0.8 * (1 + log(1)) = 134.4
         stability = calculate_stability(importance=0.8, access_count=0)
-        assert stability == pytest.approx(168.0 * 0.8 * 1.0, rel=1e-6)
+        assert stability == pytest.approx(BASE_STABILITY_HOURS * 0.8 * 1.0, rel=1e-6)
 
     def test_high_importance_many_accesses(self) -> None:
         stability = calculate_stability(importance=1.0, access_count=100)
-        # 168 * 1.0 * (1 + log(101)) ≈ 168 * 5.615 ≈ 943.4
-        expected = 168.0 * 1.0 * (1.0 + math.log(101))
+        expected = BASE_STABILITY_HOURS * 1.0 * (1.0 + math.log(101))
         assert stability == pytest.approx(expected, rel=1e-6)
 
     def test_zero_importance(self) -> None:
@@ -115,5 +118,3 @@ class TestApplyDecay:
         fact = Fact(content="fresh", importance=0.9)
         result = apply_decay([fact])
         assert result[0].retention_score == pytest.approx(1.0, abs=0.01)
-
-
