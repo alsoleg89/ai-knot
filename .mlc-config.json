@@ -16,10 +16,10 @@
       "pattern": "^http://localhost"
     },
     {
-      "pattern": "^https://github\\.com/alsoleg89/Agentmemo/compare/"
+      "pattern": "^https://github\\.com/alsoleg89/agentmemo/compare/"
     },
     {
-      "pattern": "^https://github\\.com/alsoleg89/Agentmemo/releases/tag/"
+      "pattern": "^https://github\\.com/alsoleg89/agentmemo/releases/tag/"
     }
   ],
   "timeout": "10s",

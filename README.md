@@ -1,6 +1,6 @@
 # agentmemo
 
-![CI](https://github.com/alsoleg89/Agentmemo/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/alsoleg89/agentmemo/actions/workflows/ci.yml/badge.svg)
 ![PyPI](https://img.shields.io/pypi/v/agentmemo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 

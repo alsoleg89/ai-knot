@@ -7,7 +7,7 @@ Thank you for your interest in contributing! This document describes how to set 
 ## Quick setup
 
 ```bash
-git clone https://github.com/alsoleg89/Agentmemo.git
+git clone https://github.com/alsoleg89/agentmemo.git
 cd Agentmemo
 pip install -e ".[dev,openai]"
 ```

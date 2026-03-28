@@ -11,7 +11,7 @@
 ## Installation
 
 ```bash
-git clone https://github.com/alsoleg89/Agentmemo.git
+git clone https://github.com/alsoleg89/agentmemo.git
 cd Agentmemo
 
 # Install in editable mode with all dev and optional deps

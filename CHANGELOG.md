@@ -59,5 +59,5 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `BASE_STABILITY_HOURS` set to 336 (2 weeks retention baseline)
 - TF-IDF tokenizer: camelCase splitting + basic plural stemming
 
-[Unreleased]: https://github.com/alsoleg89/Agentmemo/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/alsoleg89/Agentmemo/releases/tag/v0.1.0
+[Unreleased]: https://github.com/alsoleg89/agentmemo/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/alsoleg89/agentmemo/releases/tag/v0.1.0

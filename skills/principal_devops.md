@@ -76,7 +76,7 @@ git tag v0.2.0
 git push origin main --tags
 
 # 7. GitHub Actions publish.yml fires automatically
-#    Verify at: https://github.com/alsoleg89/Agentmemo/actions
+#    Verify at: https://github.com/alsoleg89/agentmemo/actions
 #    Verify PyPI: https://pypi.org/project/agentmemo/
 ```
 

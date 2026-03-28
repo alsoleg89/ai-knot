@@ -42,10 +42,10 @@ dev = [
 agentmemo = "agentmemo.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/alsoleg89/Agentmemo"
-Repository = "https://github.com/alsoleg89/Agentmemo"
-Issues = "https://github.com/alsoleg89/Agentmemo/issues"
-Documentation = "https://github.com/alsoleg89/Agentmemo#readme"
+Homepage = "https://github.com/alsoleg89/agentmemo"
+Repository = "https://github.com/alsoleg89/agentmemo"
+Issues = "https://github.com/alsoleg89/agentmemo/issues"
+Documentation = "https://github.com/alsoleg89/agentmemo#readme"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentmemo"]
