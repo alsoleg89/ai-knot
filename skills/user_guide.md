@@ -153,7 +153,7 @@ messages = [
 ]
 
 # Memory context injected automatically into the system prompt
-enriched = client._enrich_messages(messages)
+enriched = client.enrich_messages(messages)
 
 # Pass enriched to your real OpenAI client
 import openai

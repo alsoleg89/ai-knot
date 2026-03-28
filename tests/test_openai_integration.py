@@ -29,7 +29,7 @@ class TestMemoryEnabledOpenAI:
         client = MemoryEnabledOpenAI(knowledge_base=kb)
         messages = [{"role": "user", "content": "Write me a script"}]
 
-        enriched = client._enrich_messages(messages)
+        enriched = client.enrich_messages(messages)
 
         # Should have a system message with memory context
         system_msgs = [m for m in enriched if m["role"] == "system"]
@@ -45,7 +45,7 @@ class TestMemoryEnabledOpenAI:
             {"role": "user", "content": "Deploy this"},
         ]
 
-        enriched = client._enrich_messages(messages)
+        enriched = client.enrich_messages(messages)
         system_content = enriched[0]["content"]
 
         assert "helpful assistant" in system_content
@@ -55,7 +55,7 @@ class TestMemoryEnabledOpenAI:
         client = MemoryEnabledOpenAI(knowledge_base=kb)
         messages = [{"role": "user", "content": "Hello"}]
 
-        enriched = client._enrich_messages(messages)
+        enriched = client.enrich_messages(messages)
         # Should not inject empty context
         system_msgs = [m for m in enriched if m["role"] == "system"]
         if system_msgs:
@@ -66,4 +66,4 @@ class TestMemoryEnabledOpenAI:
         # auto_learn=False means we don't call LLM extraction
         # Just verify the interface exists
         assert hasattr(client, "_kb")
-        assert hasattr(client, "_enrich_messages")
+        assert hasattr(client, "enrich_messages")
