@@ -15,7 +15,7 @@ from agentmemo.integrations.openai import MemoryEnabledOpenAI
 kb = KnowledgeBase(agent_id="assistant")
 kb.add("User prefers Python for all backend code", type=MemoryType.PROCEDURAL, importance=0.9)
 kb.add("User deploys on Kubernetes with Docker", importance=0.85)
-kb.add("User works at Sber managing 12 engineers", importance=0.90)
+kb.add("User is a senior backend developer managing a team of 12", importance=0.90)
 kb.add("User wants all code tested with pytest", type=MemoryType.PROCEDURAL, importance=0.85)
 
 # Create memory-enabled wrapper.

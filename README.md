@@ -55,7 +55,7 @@ from agentmemo import KnowledgeBase
 kb = KnowledgeBase(agent_id="my_agent")
 
 # Add facts manually
-kb.add("User works at Sber as Operations Director",
+kb.add("User is a senior backend developer at Acme Corp",
        type="semantic", importance=0.95)
 kb.add("User prefers Python, dislikes async code",
        type="procedural", importance=0.85)
@@ -66,13 +66,13 @@ turns = [
     ConversationTurn(role="user",      content="I deploy everything in Docker"),
     ConversationTurn(role="assistant", content="Got it, I'll use Docker examples"),
 ]
-kb.learn(turns, api_key="sk-...")  # LLM extracts + stores relevant facts
+kb.learn(turns, provider="openai", api_key="sk-...")  # LLM extracts + stores relevant facts
 
 # At inference time — get what matters
 context = kb.recall("how should I write this deployment script?")
 # -> "[procedural] User prefers Python, dislikes async code
 #     [semantic]   User deploys everything in Docker
-#     [semantic]   User works at Sber as Operations Director"
+#     [semantic]   User is a senior backend developer at Acme Corp"
 
 # Inject into your prompt
 response = openai_client.chat(...,
@@ -121,11 +121,45 @@ Same API. Same code. Different storage.
 
 ---
 
+## Initialization — storage + LLM provider together
+
+Storage is set once on `KnowledgeBase`. The LLM provider is passed per `learn()` call.
+They are independent and combine freely:
+
+```python
+from agentmemo import KnowledgeBase, ConversationTurn
+from agentmemo.storage import SQLiteStorage
+
+# Step 1: pick a storage backend
+storage = SQLiteStorage(db_path="./agent.db")
+
+# Step 2: create the knowledge base
+kb = KnowledgeBase(agent_id="assistant", storage=storage)
+
+# Step 3: learn from a conversation — LLM provider goes here
+turns = [
+    ConversationTurn(role="user", content="I deploy everything in Docker"),
+    ConversationTurn(role="assistant", content="Got it!"),
+]
+kb.learn(turns, provider="openai")           # reads OPENAI_API_KEY from env
+kb.learn(turns, provider="openai",    api_key="sk-...")      # explicit key
+kb.learn(turns, provider="anthropic", api_key="sk-ant-...")  # Claude
+kb.learn(turns, provider="openai-compat",                    # any compatible API
+         api_key="...", base_url="http://localhost:8000/v1")
+
+# Recall never calls the LLM — no provider needed
+context = kb.recall("how should I deploy this?")
+```
+
+Mix and match: any storage backend with any LLM provider.
+
+---
+
 ## Memory types
 
 | Type | Stores | Example | Default importance |
 |---|---|---|---|
-| `semantic` | Facts about the world / user | "User works at Sber" | 0.8 |
+| `semantic` | Facts about the world / user | "User works at Acme Corp" | 0.8 |
 | `procedural` | How the user wants things done | "Always use type hints" | 0.8 |
 | `episodic` | Specific past events | "Deploy failed last Tuesday" | 0.8 |
 
@@ -172,7 +206,7 @@ agentmemo import my_agent in.yaml    # restore from backup
 # .agentmemo/my_agent/knowledge.yaml — readable, editable, Git-trackable
 
 a1b2c3:
-  content: "User works at Sber as Operations Director"
+  content: "User is a senior backend developer at Acme Corp"
   type: semantic
   importance: 0.95
   retention_score: 0.91
@@ -201,7 +235,7 @@ agentmemo ships with 6 providers for fact extraction:
 |---|---|---|
 | OpenAI | `openai` | `OPENAI_API_KEY` |
 | Anthropic (Claude) | `anthropic` | `ANTHROPIC_API_KEY` |
-| GigaChat (Sber) | `gigachat` | `GIGACHAT_API_KEY` |
+| GigaChat | `gigachat` | `GIGACHAT_API_KEY` |
 | Yandex GPT | `yandex` | `YANDEX_API_KEY` |
 | Qwen | `qwen` | `QWEN_API_KEY` |
 | Any OpenAI-compatible | `openai-compat` | `LLM_API_KEY` |
@@ -243,7 +277,7 @@ Conversation Turns
        |
 [ KnowledgeBase ]     importance scoring + deduplication + decay
        |
-[ Storage Adapter ]   YAML / SQLite (Postgres, Mongo, Qdrant planned)
+[ Storage Adapter ]   YAML / SQLite / PostgreSQL (Mongo, Qdrant planned)
        |
 [ Retriever ]         TF-IDF (zero deps) + Embeddings (planned)
        |
@@ -252,32 +286,114 @@ Context String        injected into agent system prompt
 
 ---
 
-## Real-world use cases
+## Examples
 
-### Personal AI assistant
-Agent remembers your name, role, preferences, tech stack — across all sessions.
+### 1. Manual add + recall (no LLM required)
 
-### Customer support (per-customer knowledge)
 ```python
-def handle_ticket(customer_id: str, message: str):
+from agentmemo import KnowledgeBase, MemoryType
+
+kb = KnowledgeBase(agent_id="assistant")
+kb.add("User prefers Python",          type=MemoryType.PROCEDURAL, importance=0.9)
+kb.add("User deploys with Docker",     importance=0.85)
+kb.add("Deploy failed last Tuesday",   type=MemoryType.EPISODIC,   importance=0.4)
+
+context = kb.recall("how to deploy?")
+# -> "[procedural] User prefers Python
+#     [semantic]   User deploys with Docker"
+```
+
+### 2. SQLite + OpenAI
+
+```python
+from agentmemo import KnowledgeBase, ConversationTurn
+from agentmemo.storage import SQLiteStorage
+
+kb = KnowledgeBase(agent_id="bot", storage=SQLiteStorage(db_path="./bot.db"))
+turns = [ConversationTurn(role="user", content="I work with Python and FastAPI")]
+kb.learn(turns, provider="openai")          # reads OPENAI_API_KEY from env
+context = kb.recall("what stack does user use?")
+```
+
+### 3. YAML storage + Anthropic (Claude)
+
+```python
+from agentmemo import KnowledgeBase, ConversationTurn
+from agentmemo.storage import YAMLStorage
+
+kb = KnowledgeBase(agent_id="bot", storage=YAMLStorage(base_dir=".agentmemo"))
+turns = [ConversationTurn(role="user", content="Always write tests with pytest")]
+kb.learn(turns, provider="anthropic", api_key="sk-ant-...")
+# Facts are saved to .agentmemo/bot/knowledge.yaml — readable, Git-trackable
+```
+
+### 4. PostgreSQL + any OpenAI-compatible endpoint
+
+```python
+from agentmemo import KnowledgeBase, ConversationTurn
+from agentmemo.storage import create_storage
+
+storage = create_storage("postgres", dsn="postgresql://user:pass@db:5432/agentmemo")
+kb = KnowledgeBase(agent_id="assistant", storage=storage)
+turns = [ConversationTurn(role="user", content="Prefer concise answers")]
+kb.learn(turns, provider="openai-compat",
+         api_key="...", base_url="http://localhost:8000/v1")
+```
+
+### 5. Per-customer knowledge (support agent)
+
+```python
+from agentmemo import KnowledgeBase
+
+def handle_ticket(customer_id: str, message: str) -> str:
     kb = KnowledgeBase(agent_id=f"customer_{customer_id}")
     context = kb.recall(message)
-    # Agent knows: VIP status, past issues, preferred language
+    # Agent sees: past issues, preferences, tier — specific to this customer
+    return context
 ```
 
-### Coding agent with project context
+### 6. Coding agent with project context
+
 ```python
+from agentmemo import KnowledgeBase, MemoryType
+from agentmemo.storage import YAMLStorage
+
 kb = KnowledgeBase(agent_id="project", storage=YAMLStorage(".agentmemo"))
-kb.add("Stack: FastAPI + PostgreSQL + Docker", importance=1.0)
-kb.add("No unittest — use pytest only", importance=0.9)
-# New team member clones repo -> agent already knows the project
+kb.add("Stack: FastAPI + PostgreSQL + Docker",  importance=1.0)
+kb.add("No unittest — use pytest only",         type=MemoryType.PROCEDURAL, importance=0.9)
+kb.add("All endpoints require JWT auth",        importance=0.95)
+# Commit .agentmemo/ to Git — new team members clone the context
 ```
 
-### Multi-agent knowledge sharing
+### 7. Shared knowledge across multiple agents
+
 ```python
-researcher = KnowledgeBase(agent_id="team_alpha")
-writer     = KnowledgeBase(agent_id="team_alpha")  # same store
-# researcher.add() -> writer.recall() — zero extra setup
+from agentmemo import KnowledgeBase
+from agentmemo.storage import SQLiteStorage
+
+storage = SQLiteStorage(db_path="./team.db")
+researcher = KnowledgeBase(agent_id="team_alpha", storage=storage)
+writer     = KnowledgeBase(agent_id="team_alpha", storage=storage)
+
+researcher.add("API rate limit is 100 req/s")
+context = writer.recall("rate limits")  # sees researcher's facts instantly
+```
+
+### 8. Stats and forgetting curve
+
+```python
+from agentmemo import KnowledgeBase
+
+kb = KnowledgeBase(agent_id="assistant")
+kb.add("User likes dark mode")
+kb.add("User timezone is UTC+3")
+
+stats = kb.stats()
+print(f"Facts: {stats['total_facts']}")
+print(f"Avg importance: {stats['avg_importance']:.2f}")
+print(f"By type: {stats['by_type']}")
+
+kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention score
 ```
 
 ---
@@ -289,7 +405,7 @@ writer     = KnowledgeBase(agent_id="team_alpha")  # same store
 - [x] YAML + SQLite backends
 - [x] OpenAI integration
 - [x] CLI
-- [ ] PostgreSQL + pgvector backend
+- [x] PostgreSQL backend
 - [ ] MongoDB backend
 - [ ] Qdrant + Weaviate backends
 - [ ] Semantic embeddings (sentence-transformers / OpenAI)
