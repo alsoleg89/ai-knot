@@ -60,6 +60,11 @@ class KnowledgeBase:
         Returns:
             The created Fact.
         """
+        if not content.strip():
+            raise ValueError("content must not be empty")
+        if not 0.0 <= importance <= 1.0:
+            raise ValueError(f"importance must be between 0.0 and 1.0, got {importance}")
+
         fact = Fact(
             content=content,
             type=type,
