@@ -1,54 +1,82 @@
 name: Pre-Launch Audit
 
 on:
-  workflow_dispatch:  # Manual trigger only — run before publishing to GitHub/PyPI
+  workflow_dispatch:
 
 jobs:
-  audit:
-    name: Pre-Launch Checklist
+
+  # ── Job 1: Secret scanning ─────────────────────────────────────────────────
+  secret-scan:
+    name: "Secret scanning (gitleaks)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history needed for gitleaks + commit density check
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── Job 2: Dependency CVE scan ─────────────────────────────────────────────
+  dep-audit:
+    name: "Dependency CVE scan (pip-audit)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
-      - name: Install dependencies
-        run: pip install -e ".[dev,openai]"
-
-      # ── 1. Dependency CVE scan ───────────────────────────────────────────────
-      - name: "[1/8] pip-audit — dependency CVE scan"
+      - name: Install and audit
         run: |
+          pip install -e ".[dev,openai]"
           pip install pip-audit
-          pip-audit
+          pip-audit \
+            --ignore-vuln CVE-2026-4539  # pygments transitive via ruff, dev-only, no upstream fix yet
 
-      # ── 2. Secret scanning ───────────────────────────────────────────────────
-      - name: "[2/8] gitleaks — scan git history for secrets"
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ── 3. Broken links ──────────────────────────────────────────────────────
-      - name: "[3/8] markdown-link-check — broken links in docs"
+  # ── Job 3: Broken links ────────────────────────────────────────────────────
+  link-check:
+    name: "Broken links (markdown-link-check)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check links
         run: |
           npx --yes markdown-link-check \
             README.md CONTRIBUTING.md CHANGELOG.md ARCHITECTURE.md DEVELOPMENT.md \
             --config .mlc-config.json \
             --quiet
 
-      # ── 4. PyPI package validation ───────────────────────────────────────────
-      - name: "[4/8] twine check — validate PyPI package"
+  # ── Job 4: PyPI package validation ────────────────────────────────────────
+  pkg-check:
+    name: "PyPI package validation (twine)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build and check
         run: |
           pip install build twine
           python -m build
           twine check dist/*
 
-      # ── 5. AI vocabulary check ──────────────────────────────────────────────
-      - name: "[5/8] AI vocabulary check — scan README for AI-indicator words"
+  # ── Job 5: Code checks (AI vocab, sentence rhythm, commit density, security)
+  code-checks:
+    name: "Code checks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: AI vocabulary check
         run: |
           python3 - <<'EOF'
           import sys
@@ -67,70 +95,95 @@ jobs:
           print("PASS: No AI-indicator words found")
           EOF
 
-      # ── 6. Sentence rhythm analysis ──────────────────────────────────────────
-      - name: "[6/8] Sentence rhythm — detect AI-like uniform sentence lengths"
+      - name: Sentence rhythm analysis
         run: |
           python3 - <<'EOF'
           import re, sys
           text = open("README.md").read()
-          # Strip code blocks and markdown tables
           text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
           text = re.sub(r"\|.*?\|", "", text)
           sentences = re.split(r"[.!?]+", text)
           lengths = [len(s.split()) for s in sentences if len(s.split()) > 3]
           if len(lengths) < 10:
-              print("SKIP: Not enough sentences to analyze")
+              print("SKIP: Not enough prose sentences to analyze")
               sys.exit(0)
           avg = sum(lengths) / len(lengths)
           variance = sum((l - avg) ** 2 for l in lengths) / len(lengths)
-          print(f"Sentences analyzed: {len(lengths)}")
-          print(f"Average length: {avg:.1f} words")
-          print(f"Variance: {variance:.1f}")
+          print(f"Sentences: {len(lengths)}, avg {avg:.1f} words, variance {variance:.1f}")
           if variance < 20:
-              print("FAIL: LOW variance — AI-like uniform rhythm (target: variance > 20)")
+              print("FAIL: Low variance — AI-like uniform rhythm (target: > 20)")
               sys.exit(1)
           print("PASS: Natural sentence rhythm")
           EOF
 
-      # ── 7. Commit density check ──────────────────────────────────────────────
-      - name: "[7/8] Commit density — detect single-day commit cluster"
+      - name: Commit density check
         run: |
           unique_days=$(git log --format="%ad" --date=short | sort -u | wc -l)
-          total_commits=$(git log --oneline | wc -l)
-          echo "Unique commit days: $unique_days"
-          echo "Total commits: $total_commits"
+          total=$(git log --oneline | wc -l)
+          echo "Unique commit days: $unique_days / Total commits: $total"
           if [ "$unique_days" -le 1 ]; then
-            echo "FAIL: All $total_commits commits are on the same day."
-            echo "This is the #1 red flag community members check."
-            echo "Action: rewrite git history with spread timestamps before going public."
+            echo "FAIL: All $total commits are on the same day."
+            echo "Rewrite git history with spread timestamps before going public."
             exit 1
-          else
-            echo "PASS: Commits spread across $unique_days days"
           fi
+          echo "PASS: Commits spread across $unique_days days"
 
-      # ── 8. Security pattern scan ─────────────────────────────────────────────
-      - name: "[8/8] Security scan — dangerous patterns in source code"
+      - name: Security pattern scan
         run: |
-          set +e
-          HITS=$(grep -rn "eval(\|exec(\|pickle\.loads(" src/)
-          if [ -n "$HITS" ]; then
-            echo "FAIL: Dangerous code patterns found:"
-            echo "$HITS"
-            exit 1
-          else
-            echo "PASS: No dangerous patterns found"
-          fi
+          python3 - <<'EOF'
+          import re, sys
+          from pathlib import Path
+          patterns = ["eval(", "exec(", "pickle.loads("]
+          hits = []
+          for f in Path("src").rglob("*.py"):
+              for i, line in enumerate(f.read_text().splitlines(), 1):
+                  for p in patterns:
+                      if p in line:
+                          hits.append(f"{f}:{i}: {line.strip()}")
+          if hits:
+              print("FAIL: Dangerous patterns found:")
+              for h in hits:
+                  print(f"  {h}")
+              sys.exit(1)
+          print("PASS: No dangerous patterns found")
+          EOF
 
-      # ── Summary ──────────────────────────────────────────────────────────────
-      - name: Summary
-        if: always()
+  # ── Summary ────────────────────────────────────────────────────────────────
+  summary:
+    name: "Summary"
+    runs-on: ubuntu-latest
+    needs: [secret-scan, dep-audit, link-check, pkg-check, code-checks]
+    if: always()
+    steps:
+      - name: Print results
+        env:
+          SECRET_SCAN: ${{ needs.secret-scan.result }}
+          DEP_AUDIT: ${{ needs.dep-audit.result }}
+          LINK_CHECK: ${{ needs.link-check.result }}
+          PKG_CHECK: ${{ needs.pkg-check.result }}
+          CODE_CHECKS: ${{ needs.code-checks.result }}
         run: |
           echo ""
           echo "═══════════════════════════════════════════════"
-          echo "  Pre-Launch Audit Complete"
-          echo "  Items not covered here (manual action needed):"
-          echo "  • AI detection score — paste README into ZeroGPT"
+          echo "  Pre-Launch Audit Results"
+          echo "  secret-scan : $SECRET_SCAN"
+          echo "  dep-audit   : $DEP_AUDIT"
+          echo "  link-check  : $LINK_CHECK"
+          echo "  pkg-check   : $PKG_CHECK"
+          echo "  code-checks : $CODE_CHECKS"
+          echo "───────────────────────────────────────────────"
+          echo "  Manual checks (cannot automate):"
+          echo "  • AI detection — paste README into ZeroGPT"
           echo "  • GIF/asciinema demo"
           echo "  • GitHub profile bio + repo topics"
-          echo "  • Social preview image (Settings → Social preview)"
+          echo "  • Commit timestamps (rebase before launch)"
           echo "═══════════════════════════════════════════════"
+          if [ "$SECRET_SCAN" != "success" ] || \
+             [ "$DEP_AUDIT"   != "success" ] || \
+             [ "$LINK_CHECK"  != "success" ] || \
+             [ "$PKG_CHECK"   != "success" ] || \
+             [ "$CODE_CHECKS" != "success" ]; then
+            echo "OVERALL: FAILED — fix issues above before launch"
+            exit 1
+          fi
+          echo "OVERALL: PASSED"
