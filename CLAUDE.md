@@ -1,40 +1,40 @@
-# Claude Code Instructions
+# Dev Notes
 
 ## Git workflow
 
-**NEVER push directly to `main`.** No exceptions.
+**Never push directly to `main`.** No exceptions.
 
 - All changes go to a feature branch
-- To get code into `main`: create a pull request, wait for explicit user approval
-- Force push to `main` is also forbidden
-- If a fix is needed on `main`: commit to feature branch → create PR → user merges
+- To merge into `main`: open a pull request, wait for maintainer approval
+- Force-pushing `main` is forbidden
+- To fix something on `main`: branch → commit → PR → merge
 
-## Commit hygiene — before every commit
+## Commit conventions
 
-**Author**: always use `--author="alsoleg89 <155813332+alsoleg89@users.noreply.github.com>"`
-Verify with: `git log -1 --format="%an"` — must show `alsoleg89`, never `Claude`
+**Author**: commits must be attributed to the project maintainer:
+`alsoleg89 <155813332+alsoleg89@users.noreply.github.com>`
 
-**Commit message subject** — forbidden words:
-- `claude.ai`, `Claude`, `CLAUDE`
-- `AI-indicator`, `AI-flagged`, `AI vocab`, `ZeroGPT`
-- `sentence rhythm`, `commit density`, `pre-launch-audit`
-
-**Commit message body** — keep minimal or empty.
-Never add `https://claude.ai/code/session_...` URLs.
-
-**Merge commits** — must not expose branch names with `claude/` in the message.
-
-## Before pushing
-
-Run this sanity check:
+Verify before pushing:
 ```bash
-# No Claude author
-git log --format="%an" | sort -u
-
-# No AI-related words in commit messages
-git log --format="%s %b" | grep -i "claude\.ai\|AI-indicator\|zerogpt\|sentence rhythm"
+git log -1 --format="%an"   # must be: alsoleg89
 ```
 
-## Files
+**Subject line** — keep it short and factual. Avoid:
+- Tool or service names (editor, AI assistant, CI bot names)
+- Internal workflow jargon (audit names, pipeline step names)
+- Auto-generated session or trace URLs
 
-`CLAUDE.md` is gitignored — never commit it.
+**Body** — optional. If present: one blank line after subject, then context.
+No auto-generated footers or URLs.
+
+**Merge commits** — subject must not expose internal branch naming conventions.
+
+## Sanity check before push
+
+```bash
+# Confirm author
+git log --format="%an" | sort -u
+
+# Confirm no leaked URLs
+git log --format="%B" | grep "https://claude\|session_"
+```
