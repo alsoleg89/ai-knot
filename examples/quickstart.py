@@ -1,5 +1,7 @@
 """agentmemo quickstart — minimal working example."""
 
+import shutil
+
 from agentmemo import KnowledgeBase, MemoryType
 
 # Create a knowledge base (stores in .agentmemo/ by default).
@@ -26,7 +28,7 @@ print()
 
 # Check stats.
 stats = kb.stats()
-print(f"=== Stats ===")
+print("=== Stats ===")
 print(f"Total facts: {stats['total_facts']}")
 print(f"By type: {stats['by_type']}")
 print(f"Avg importance: {stats['avg_importance']:.2f}")
@@ -36,6 +38,5 @@ print(f"Avg retention: {stats['avg_retention']:.2f}")
 kb.decay()
 
 # Clean up demo data.
-import shutil
 shutil.rmtree(".agentmemo", ignore_errors=True)
 print("\nDemo complete. Cleaned up .agentmemo/")

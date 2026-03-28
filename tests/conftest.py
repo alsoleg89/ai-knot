@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import pathlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
-from agentmemo.types import ConversationTurn, Fact, MemoryType
-from agentmemo.storage.yaml_storage import YAMLStorage
 from agentmemo.storage.sqlite_storage import SQLiteStorage
+from agentmemo.storage.yaml_storage import YAMLStorage
+from agentmemo.types import ConversationTurn, Fact, MemoryType
 
 
 @pytest.fixture
@@ -99,8 +99,8 @@ def old_fact() -> Fact:
         type=MemoryType.EPISODIC,
         importance=0.3,
         access_count=0,
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-        last_accessed=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
+        last_accessed=datetime(2025, 1, 1, tzinfo=UTC),
     )
 
 

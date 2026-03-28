@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from agentmemo.forgetting import calculate_retention, calculate_stability, apply_decay
-from agentmemo.types import Fact, MemoryType
+import pytest
+
+from agentmemo.forgetting import apply_decay, calculate_retention, calculate_stability
+from agentmemo.types import Fact
 
 
 class TestCalculateStability:
@@ -49,7 +51,7 @@ class TestCalculateRetention:
         assert retention == pytest.approx(1.0, abs=1e-9)
 
     def test_retention_decreases_over_time(self) -> None:
-        base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        base_time = datetime(2026, 1, 1, tzinfo=UTC)
         fact = Fact(content="test", last_accessed=base_time, importance=0.8)
 
         r_1h = calculate_retention(fact, now=base_time + timedelta(hours=1))
@@ -65,7 +67,7 @@ class TestCalculateRetention:
         assert retention == 0.0
 
     def test_high_importance_retains_longer(self) -> None:
-        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        base = datetime(2026, 1, 1, tzinfo=UTC)
         one_week_later = base + timedelta(days=7)
 
         low = Fact(content="low", importance=0.2, last_accessed=base)
@@ -76,7 +78,7 @@ class TestCalculateRetention:
         )
 
     def test_frequently_accessed_retains_longer(self) -> None:
-        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        base = datetime(2026, 1, 1, tzinfo=UTC)
         one_week_later = base + timedelta(days=7)
 
         rarely = Fact(content="rare", access_count=0, last_accessed=base)
@@ -92,12 +94,12 @@ class TestApplyDecay:
 
     def test_updates_retention_scores(self, sample_facts: list[Fact]) -> None:
         # Set all facts to have old last_accessed
-        past = datetime(2025, 6, 1, tzinfo=timezone.utc)
+        past = datetime(2025, 6, 1, tzinfo=UTC)
         for fact in sample_facts:
             fact.last_accessed = past
             fact.retention_score = 1.0
 
-        now = datetime(2026, 3, 28, tzinfo=timezone.utc)
+        now = datetime(2026, 3, 28, tzinfo=UTC)
         updated = apply_decay(sample_facts, now=now)
 
         for fact in updated:
@@ -115,4 +117,3 @@ class TestApplyDecay:
         assert result[0].retention_score == pytest.approx(1.0, abs=0.01)
 
 
-import pytest  # noqa: E402 — imported after code for pytest.approx in class

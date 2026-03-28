@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import pathlib
-from unittest.mock import patch
 
 import pytest
 
 from agentmemo.knowledge import KnowledgeBase
 from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from agentmemo.types import Fact, MemoryType
 
 
 @pytest.fixture
@@ -99,12 +98,12 @@ class TestDecay:
     """Applying forgetting curve to all facts."""
 
     def test_decay_updates_retention(self, kb: KnowledgeBase) -> None:
-        from datetime import datetime, timedelta, timezone
+        from datetime import UTC, datetime
 
-        fact = kb.add("Old fact")
+        kb.add("Old fact")
         # Manually set old last_accessed
         facts = kb._storage.load(kb._agent_id)
-        facts[0].last_accessed = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        facts[0].last_accessed = datetime(2025, 1, 1, tzinfo=UTC)
         kb._storage.save(kb._agent_id, facts)
 
         kb.decay()

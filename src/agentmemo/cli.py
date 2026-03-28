@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +23,7 @@ def _make_kb(agent_id: str, data_dir: str) -> KnowledgeBase:
 def _parse_dt(value: str) -> datetime:
     """Parse an ISO-format datetime string, ensuring UTC timezone."""
     dt = datetime.fromisoformat(value)
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 @click.group()

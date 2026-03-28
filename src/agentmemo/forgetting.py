@@ -11,7 +11,7 @@ Low importance + never accessed = forgotten in days.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agentmemo.types import Fact
 
@@ -46,7 +46,7 @@ def calculate_retention(fact: Fact, *, now: datetime | None = None) -> float:
     Returns:
         Retention score between 0.0 and 1.0.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     time_hours = (now - fact.last_accessed).total_seconds() / 3600.0
 
     if time_hours <= 0:
@@ -71,7 +71,7 @@ def apply_decay(facts: list[Fact], *, now: datetime | None = None) -> list[Fact]
     Returns:
         The same list of facts with updated retention_score values.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     for fact in facts:
         fact.retention_score = calculate_retention(fact, now=now)
     return facts
