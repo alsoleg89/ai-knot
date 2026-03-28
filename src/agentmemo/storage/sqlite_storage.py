@@ -43,12 +43,12 @@ class SQLiteStorage:
 
     def _get_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
     def _init_db(self) -> None:
         with self._get_conn() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(_CREATE_TABLE)
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:

@@ -191,7 +191,9 @@ def import_cmd(agent_id: str, input_file: str, data_dir: str) -> None:
                     access_count=int(entry.get("access_count", 0)),
                     tags=list(entry.get("tags", [])),
                     created_at=_parse_dt(entry["created_at"]),
-                    last_accessed=_parse_dt(entry.get("last_accessed", entry["created_at"])),
+                    last_accessed=_parse_dt(
+                        str(entry.get("last_accessed", entry["created_at"]))
+                    ),
                 )
             )
         except KeyError as exc:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import tempfile
@@ -75,7 +76,7 @@ class YAMLStorage:
                     os.fsync(fh.fileno())
                 os.replace(tmp_path, yaml_path)
             except Exception:
-                with suppress_oserror():
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
                 raise
 
@@ -127,16 +128,6 @@ class YAMLStorage:
             for d in self._base_dir.iterdir()
             if d.is_dir() and (d / "knowledge.yaml").exists()
         ]
-
-
-class suppress_oserror:
-    """Tiny context manager to swallow OSError (used for temp-file cleanup)."""
-
-    def __enter__(self) -> suppress_oserror:
-        return self
-
-    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> bool:
-        return isinstance(exc_val, OSError)
 
 
 def _parse_datetime(value: str) -> datetime:
