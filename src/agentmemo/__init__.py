@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from agentmemo.knowledge import KnowledgeBase
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from agentmemo.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
 
 __version__ = "0.1.0"
 
@@ -12,5 +12,6 @@ __all__ = [
     "Fact",
     "KnowledgeBase",
     "MemoryType",
+    "SnapshotDiff",
     "__version__",
 ]

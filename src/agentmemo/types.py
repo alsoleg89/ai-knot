@@ -49,6 +49,23 @@ class Fact:
 
 
 @dataclass
+class SnapshotDiff:
+    """Difference between two named snapshots (or a snapshot and current state).
+
+    Attributes:
+        snapshot_a: Name of the first snapshot (or "current").
+        snapshot_b: Name of the second snapshot (or "current").
+        added: Facts present in snapshot_b but absent in snapshot_a.
+        removed: Facts present in snapshot_a but absent in snapshot_b.
+    """
+
+    snapshot_a: str
+    snapshot_b: str
+    added: list[Fact]
+    removed: list[Fact]
+
+
+@dataclass
 class ConversationTurn:
     """A single message in a conversation.
 
