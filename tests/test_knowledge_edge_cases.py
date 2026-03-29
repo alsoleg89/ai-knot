@@ -72,6 +72,7 @@ class TestDuplicates:
 class TestScale:
     """Performance with many facts."""
 
+    @pytest.mark.slow
     def test_hundred_facts(self, kb: KnowledgeBase) -> None:
         for i in range(100):
             kb.add(f"Fact number {i} about topic {i % 10}")
@@ -83,6 +84,7 @@ class TestScale:
         assert isinstance(result, str)
         assert len(result) > 0
 
+    @pytest.mark.slow
     def test_recall_with_many_facts(self, kb: KnowledgeBase) -> None:
         for i in range(50):
             kb.add(f"Python is great for task {i}", importance=0.5)
