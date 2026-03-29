@@ -19,6 +19,7 @@ Tests are consolidated into 5 groups to minimize subprocess spawns:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -331,7 +332,5 @@ def test_mcp_sequential_and_latency(tmp_path: Any) -> None:
         assert time.monotonic() - start < 5.0
     finally:
         # stdin already closed above; just kill if still alive
-        try:
+        with contextlib.suppress(OSError):
             session._proc.kill()
-        except OSError:
-            pass
