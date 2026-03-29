@@ -40,6 +40,18 @@ jobs:
           path: benchmark.json
           retention-days: 90
 
+      # Create gh-pages branch if it does not exist yet (first run only).
+      # github-action-benchmark fetches gh-pages before appending history;
+      # the fetch fails with exit 128 when the branch is missing.
+      - name: Initialize gh-pages branch if missing
+        run: |
+          if ! git ls-remote --exit-code origin gh-pages 2>/dev/null; then
+            git switch --orphan gh-pages
+            git commit --allow-empty -m "Initialize benchmark history"
+            git push origin gh-pages
+            git checkout -
+          fi
+
       # Continuous benchmark history + regression alerts
       # Pushes results to gh-pages and posts PR comments when perf degrades >150%
       # Reference: github.com/benchmark-action/github-action-benchmark
