@@ -131,10 +131,9 @@ def test_recall_1k_p99(
 
     benchmark(run)
 
-    data = sorted(benchmark.stats.data)
-    p99_idx = max(0, int(len(data) * 0.99) - 1)
-    p99 = data[p99_idx]
-    assert p99 < 0.05, f"P99 latency too high: {p99 * 1000:.1f} ms (target: 50 ms)"
+    # benchmark.stats is a Metadata dict; use max as conservative P99 proxy
+    max_s = benchmark.stats["max"]
+    assert max_s < 0.05, f"Max latency too high: {max_s * 1000:.1f} ms (target: 50 ms)"
 
 
 @pytest.mark.slow

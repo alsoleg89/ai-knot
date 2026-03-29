@@ -103,4 +103,5 @@ jobs:
         run: pip install -e ".[dev,mcp]"
 
       - name: Run E2E tests
-        run: pytest tests/test_mcp_e2e.py -v -m integration
+        # --no-cov: coverage is measured via subprocess, not import; 80% threshold would fail
+        run: pytest tests/test_mcp_e2e.py -v -m integration --no-cov

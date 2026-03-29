@@ -13,8 +13,8 @@ Marked @pytest.mark.integration — included in normal CI but skipped if the
 from __future__ import annotations
 
 import json
+import os
 import subprocess
-import sys
 import threading
 import time
 from typing import Any
@@ -54,7 +54,7 @@ class McpSession:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             env={
-                "PATH": __import__("os").environ.get("PATH", ""),
+                "PATH": os.environ.get("PATH", ""),
                 "AGENTMEMO_STORAGE": "yaml",
                 "AGENTMEMO_DATA_DIR": tmp_path,
                 "AGENTMEMO_AGENT_ID": "e2e-test",
