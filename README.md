@@ -177,19 +177,66 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-**Available tools:** `add`, `recall`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`.
+**Available tools:** `add`, `recall`, `recall_json`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`, `list_snapshots`.
+
+Use `recall_json` when you need structured data (IDs, types, importance scores) instead of plain text.
 
 **Environment variables:**
 
 | Variable | Default | Description |
 |---|---|---|
 | `AGENTMEMO_AGENT_ID` | `default` | Agent namespace |
-| `AGENTMEMO_STORAGE` | `yaml` | `yaml` or `sqlite` |
-| `AGENTMEMO_DATA_DIR` | `.agentmemo` | Base dir for YAML backend (use absolute path) |
+| `AGENTMEMO_STORAGE` | `sqlite` | `sqlite` (recommended) or `yaml` |
+| `AGENTMEMO_DATA_DIR` | `.agentmemo` | Base dir for file backends (use absolute path) |
 | `AGENTMEMO_DB_PATH` | — | Full path to SQLite file (overrides `DATA_DIR` for sqlite) |
 
 > **Note:** Claude Desktop launches processes from a non-interactive shell where `cwd` is
 > undefined. Always set `AGENTMEMO_DATA_DIR` or `AGENTMEMO_DB_PATH` to an absolute path.
+
+---
+
+## OpenClaw integration
+
+agentmemo works as an OpenClaw memory backend via MCP. Two steps:
+
+```bash
+pip install "agentmemo[mcp]"
+```
+
+Generate the config snippet:
+
+```python
+import json
+from agentmemo.integrations.openclaw import generate_mcp_config
+
+print(json.dumps(generate_mcp_config("my_agent"), indent=2))
+```
+
+Paste the output into your OpenClaw config file:
+
+- **macOS / Linux:** `~/.openclaw/openclaw.json`
+- **Windows:** `%APPDATA%\OpenClaw\openclaw.json`
+
+Your agent will have access to all agentmemo tools: `add`, `recall`, `recall_json`,
+`forget`, `list_facts`, `list_snapshots`, `stats`, `snapshot`, `restore`.
+
+For Python-native agents (LangChain, LangGraph, CrewAI), use the adapter class instead:
+
+```python
+from agentmemo import KnowledgeBase
+from agentmemo.integrations.openclaw import OpenClawMemoryAdapter
+
+kb = KnowledgeBase("my_agent")
+memory = OpenClawMemoryAdapter(kb)
+
+memory.add([{"role": "user", "content": "Deploy on Fridays"}])
+results = memory.search("deployment schedule")
+memory.update(results[0]["id"], "Deploy on Thursdays")
+memory.delete(results[0]["id"])
+```
+
+> **Multi-turn extraction:** `add()` stores the last user message. For extracting multiple
+> facts from a full conversation, use `kb.learn(turns, api_key=...)` directly.
 
 ---
 
@@ -249,11 +296,14 @@ Mix and match: any storage backend with any LLM provider.
 
 ## Memory types
 
-| Type | Stores | Example | Default importance |
-|---|---|---|---|
-| `semantic` | Facts about the world / user | "User works at Acme Corp" | 0.8 |
-| `procedural` | How the user wants things done | "Always use type hints" | 0.8 |
-| `episodic` | Specific past events | "Deploy failed last Tuesday" | 0.8 |
+| Type | When to use | Example |
+|---|---|---|
+| `semantic` | Stable facts about the user or world | "User works at Sber", "Stack is Python + FastAPI" |
+| `procedural` | How the user wants things done | "Always use type hints", "Prefer pytest over unittest" |
+| `episodic` | Specific past events with time context | "Deploy failed last Tuesday at 3 PM", "User approved the v2 design on Monday" |
+
+Not sure which type to use? Default `semantic` covers most cases. Use `procedural` for
+preferences and rules; `episodic` for dated events you might want to forget sooner.
 
 ---
 
@@ -273,7 +323,11 @@ stability = 336h × importance × (1 + ln(1 + access_count))
 ```
 
 Facts accessed often get **reinforced**. Stale facts **fade automatically**.
-No manual cleanup needed.
+
+**Do you need to call `decay()` manually?** No — decay is applied automatically inside
+every `recall()` call. For facts that are never recalled (e.g. background knowledge your
+agent doesn't actively query), run `kb.decay()` in a daily cron job to keep retention
+scores current.
 
 ---
 

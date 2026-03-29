@@ -2,19 +2,29 @@
 
 Provides two integration paths:
 
-1. OpenClawMemoryAdapter — Python class mirroring the Mem0Provider interface
-   used by OpenClaw community plugins. For Python-native agents or when
-   migrating from a Mem0-based setup.
+**Which path should I use?**
 
-2. generate_mcp_config() — returns the mcpServers JSON snippet to wire
-   agentmemo-mcp into OpenClaw at the TypeScript level (the recommended
-   runtime integration for OpenClaw users).
++----------------------+-------------------------------------------+
+| Situation            | Solution                                  |
++======================+===========================================+
+| OpenClaw TypeScript  | generate_mcp_config() → paste into        |
+| app (recommended)    | ~/.openclaw/openclaw.json                 |
++----------------------+-------------------------------------------+
+| Python agent         | OpenClawMemoryAdapter(kb)                 |
+| (LangChain, custom)  |                                           |
++----------------------+-------------------------------------------+
 
-Runtime integration example (openclaw.json)::
+For multi-turn fact extraction in Python: use ``kb.learn(turns, api_key=...)``
+directly — ``add()`` stores only the last user message without an LLM.
+
+Runtime integration example::
 
     import json
     from agentmemo.integrations.openclaw import generate_mcp_config
+
     print(json.dumps(generate_mcp_config("my_agent"), indent=2))
+    # Paste output into ~/.openclaw/openclaw.json (macOS/Linux)
+    # or %APPDATA%\\OpenClaw\\openclaw.json (Windows)
 
 Python-native example::
 
@@ -29,12 +39,14 @@ Python-native example::
 
 from __future__ import annotations
 
-from typing import Any
+import warnings
+from typing import Any, Literal
 
 from agentmemo.knowledge import KnowledgeBase
+from agentmemo.types import Fact
 
 
-def _fact_to_item(fact: Any, *, score: float | None = None) -> dict[str, Any]:
+def _fact_to_item(fact: Fact, *, score: float | None = None) -> dict[str, Any]:
     return {
         "id": fact.id,
         "memory": fact.content,
@@ -65,15 +77,14 @@ class OpenClawMemoryAdapter:
         self,
         messages: list[dict[str, str]],
         *,
-        user_id: str | None = None,  # noqa: ARG002 — accepted for interface compat
+        user_id: str | None = None,  # noqa: ARG002 — kept as user_id for API compat, not _user_id
         **_: Any,
     ) -> dict[str, Any]:
         """Store information from a message list.
 
-        Single-message lists store the message directly. Multi-turn lists
-        store the last user message. For LLM-powered extraction from
-        multi-turn conversations, call ``kb.learn()`` directly and wrap
-        the result.
+        Stores the last user message. For LLM-powered extraction from
+        multi-turn conversations (extracting multiple facts at once),
+        call ``kb.learn()`` directly and wrap the result.
 
         Args:
             messages: List of ``{"role": str, "content": str}`` dicts.
@@ -84,6 +95,12 @@ class OpenClawMemoryAdapter:
             ``{"results": [{"id": str, "memory": str, "event": "ADD"}]}``
         """
         user_msgs = [m for m in messages if m.get("role") == "user"]
+        if len(user_msgs) > 1:
+            warnings.warn(
+                "add() received multi-turn history but has no LLM — storing only the last "
+                "user message. For full extraction call kb.learn(turns, api_key=...) directly.",
+                stacklevel=2,
+            )
         if user_msgs:
             fact = self._kb.add(user_msgs[-1]["content"])
             return {"results": [{"id": fact.id, "memory": fact.content, "event": "ADD"}]}
@@ -104,15 +121,11 @@ class OpenClawMemoryAdapter:
 
         Returns:
             List of MemoryItem dicts (id, memory, score, metadata).
+            ``score`` is always ``None`` — agentmemo does not expose a
+            per-query relevance score; filter by content, not score.
         """
-        raw = self._kb.recall(query, top_k=top_k)
-        if not raw:
-            return []
-        # recall() returns "[type] content\n[type] content\n..."
-        # Reconstruct MemoryItems by matching content against stored facts.
-        contents = {line.split("] ", 1)[1] for line in raw.splitlines() if "] " in line}
-        facts = [f for f in self._kb.list_facts() if f.content in contents]
-        return [_fact_to_item(f, score=f.retention_score) for f in facts]
+        facts = self._kb.recall_facts(query, top_k=top_k)
+        return [_fact_to_item(f, score=None) for f in facts]
 
     def get(self, memory_id: str) -> dict[str, Any]:
         """Retrieve a specific memory by ID.
@@ -134,7 +147,7 @@ class OpenClawMemoryAdapter:
     def get_all(
         self,
         *,
-        user_id: str | None = None,  # noqa: ARG002 — accepted for interface compat
+        user_id: str | None = None,  # noqa: ARG002 — kept as user_id for API compat, not _user_id
         **_: Any,
     ) -> list[dict[str, Any]]:
         """Return all stored memories.
@@ -146,6 +159,24 @@ class OpenClawMemoryAdapter:
             List of MemoryItem dicts for all stored facts.
         """
         return [_fact_to_item(f) for f in self._kb.list_facts()]
+
+    def update(self, memory_id: str, data: str, **_: Any) -> dict[str, Any]:
+        """Replace the content of an existing memory.
+
+        The fact is deleted and re-created, so the returned item has a
+        new ID. If ID stability matters, use delete() + add() explicitly
+        and record the new ID.
+
+        Args:
+            memory_id: 8-char hex ID of the fact to replace.
+            data: New content string.
+
+        Returns:
+            MemoryItem dict for the replacement fact.
+        """
+        self._kb.forget(memory_id)
+        fact = self._kb.add(data)
+        return _fact_to_item(fact)
 
     def delete(self, memory_id: str, **_: Any) -> None:
         """Remove a memory by ID.
@@ -159,13 +190,17 @@ class OpenClawMemoryAdapter:
 def generate_mcp_config(
     agent_id: str = "default",
     data_dir: str = ".agentmemo",
-    storage: str = "sqlite",
+    storage: Literal["sqlite", "yaml"] = "sqlite",
 ) -> dict[str, Any]:
     """Return the OpenClaw mcpServers config snippet for agentmemo-mcp.
 
-    Paste the returned dict into your ``openclaw.json`` under
-    ``"mcpServers"``. SQLite is the default backend because WAL mode
-    (already enabled) handles concurrent agent reads without write locks.
+    Paste the returned dict into your OpenClaw config file:
+
+    - macOS / Linux: ``~/.openclaw/openclaw.json``
+    - Windows:       ``%APPDATA%\\OpenClaw\\openclaw.json``
+
+    SQLite is the default backend because WAL mode (already enabled)
+    handles concurrent agent reads without write locks.
 
     Args:
         agent_id: Agent namespace passed to agentmemo-mcp.
@@ -176,25 +211,19 @@ def generate_mcp_config(
     Returns:
         Dict ready for ``json.dumps()``.
 
+    Raises:
+        ValueError: If ``storage`` is not ``"sqlite"`` or ``"yaml"``.
+
     Example::
 
         import json
         from agentmemo.integrations.openclaw import generate_mcp_config
 
         print(json.dumps(generate_mcp_config("my_agent"), indent=2))
-        # {
-        #   "mcpServers": {
-        #     "agentmemo": {
-        #       "command": "agentmemo-mcp",
-        #       "env": {
-        #         "AGENTMEMO_AGENT_ID": "my_agent",
-        #         "AGENTMEMO_DATA_DIR": ".agentmemo",
-        #         "AGENTMEMO_STORAGE": "sqlite"
-        #       }
-        #     }
-        #   }
-        # }
+        # Paste into ~/.openclaw/openclaw.json under "mcpServers"
     """
+    if storage not in ("sqlite", "yaml"):
+        raise ValueError(f"storage must be 'sqlite' or 'yaml', got {storage!r}")
     return {
         "mcpServers": {
             "agentmemo": {

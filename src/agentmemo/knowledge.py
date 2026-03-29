@@ -191,6 +191,50 @@ class KnowledgeBase:
         """
         return self._storage.load(self._agent_id)
 
+    def recall_facts(self, query: str, *, top_k: int = 5) -> list[Fact]:
+        """Structured alternative to recall() — returns Fact objects.
+
+        Use when you need IDs, types, importance scores, or other metadata.
+        Use recall() when you only need a formatted string for prompt injection.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+
+        Returns:
+            List of relevant Facts (may be empty), sorted by relevance.
+        """
+        facts = self._storage.load(self._agent_id)
+        if not facts:
+            return []
+
+        facts = apply_decay(facts)
+        results = self._retriever.search(query, facts, top_k=top_k)
+        if not results:
+            return []
+
+        returned_ids = {r.id for r in results}
+        now = datetime.now(UTC)
+        for fact in facts:
+            if fact.id in returned_ids:
+                fact.access_count += 1
+                fact.last_accessed = now
+        self._storage.save(self._agent_id, facts)
+        return results
+
+    def recall_by_tag(self, tag: str) -> list[Fact]:
+        """Return all facts that carry the given tag.
+
+        Tags are assigned at add() time via the ``tags=`` parameter.
+
+        Args:
+            tag: The tag string to filter by.
+
+        Returns:
+            List of Facts whose tags include ``tag`` (may be empty).
+        """
+        return [f for f in self._storage.load(self._agent_id) if tag in f.tags]
+
     def replace_facts(self, facts: list[Fact]) -> None:
         """Replace all stored facts with the given list (used for import).
 

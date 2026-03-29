@@ -107,14 +107,38 @@ class TestOpenClawMemoryAdapter:
 
         assert adapter.get_all() == []
 
-    def test_memory_item_score_in_search(
-        self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
-    ) -> None:
+    def test_search_score_is_none(self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase) -> None:
         kb.add("User prefers pytest")
         items = adapter.search("testing framework")
-        if items:
-            assert items[0]["score"] is not None
-            assert 0.0 <= items[0]["score"] <= 1.0
+        assert len(items) >= 1, "Expected at least one result for 'testing framework'"
+        assert all(item["score"] is None for item in items)
+
+    def test_add_multi_turn_warns(self, adapter: OpenClawMemoryAdapter) -> None:
+        messages = [
+            {"role": "user", "content": "I work at Sber"},
+            {"role": "assistant", "content": "Got it"},
+            {"role": "user", "content": "I prefer dark mode"},
+        ]
+        with pytest.warns(UserWarning, match="multi-turn"):
+            adapter.add(messages)
+
+    def test_update_replaces_content(
+        self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
+    ) -> None:
+        fact = kb.add("Old content")
+        adapter.update(fact.id, "New content")
+        contents = [f.content for f in kb.list_facts()]
+        assert "New content" in contents
+        assert "Old content" not in contents
+
+    def test_update_returns_memory_item(
+        self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
+    ) -> None:
+        fact = kb.add("Will be replaced")
+        item = adapter.update(fact.id, "Replacement text")
+        assert item["memory"] == "Replacement text"
+        assert "id" in item
+        assert "metadata" in item
 
 
 class TestGenerateMcpConfig:
@@ -142,3 +166,7 @@ class TestGenerateMcpConfig:
         dumped = json.dumps(cfg)
         assert "agentmemo-mcp" in dumped
         assert "agent_x" in dumped
+
+    def test_invalid_storage_raises(self) -> None:
+        with pytest.raises(ValueError, match="sqlite.*yaml"):
+            generate_mcp_config(storage="postgres")  # type: ignore[arg-type]

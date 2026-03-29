@@ -129,3 +129,64 @@ class TestStats:
         assert stats["by_type"]["semantic"] == 1
         assert stats["by_type"]["procedural"] == 1
         assert stats["by_type"]["episodic"] == 1
+
+
+class TestRecallFacts:
+    """Structured retrieval returning Fact objects."""
+
+    def test_recall_facts_returns_fact_objects(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        results = kb.recall_facts("what language?")
+        assert isinstance(results, list)
+        assert all(isinstance(f, Fact) for f in results)
+
+    def test_recall_facts_empty_kb(self, kb: KnowledgeBase) -> None:
+        assert kb.recall_facts("anything") == []
+
+    def test_recall_facts_respects_top_k(self, kb: KnowledgeBase) -> None:
+        for i in range(10):
+            kb.add(f"Fact number {i} about deployment")
+        results = kb.recall_facts("deployment", top_k=2)
+        assert len(results) <= 2
+
+    def test_recall_facts_content_matches_query(self, kb: KnowledgeBase) -> None:
+        kb.add("User deploys on Fridays")
+        kb.add("User prefers tea over coffee")
+        results = kb.recall_facts("deployment day")
+        assert len(results) >= 1
+        assert any("Friday" in f.content for f in results)
+
+    def test_recall_facts_updates_access_count(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python", importance=0.9)
+        kb.recall_facts("Python")
+        facts = kb._storage.load(kb._agent_id)
+        accessed = [f for f in facts if f.access_count > 0]
+        assert len(accessed) >= 1
+
+
+class TestRecallByTag:
+    """Tag-based filtering of stored facts."""
+
+    def test_recall_by_tag_finds_tagged(self, kb: KnowledgeBase) -> None:
+        kb.add("User works at Sber", tags=["profile"])
+        results = kb.recall_by_tag("profile")
+        assert len(results) == 1
+        assert results[0].content == "User works at Sber"
+
+    def test_recall_by_tag_empty_when_no_match(self, kb: KnowledgeBase) -> None:
+        kb.add("Some fact", tags=["other"])
+        assert kb.recall_by_tag("nonexistent") == []
+
+    def test_recall_by_tag_ignores_untagged(self, kb: KnowledgeBase) -> None:
+        kb.add("Tagged fact", tags=["work"])
+        kb.add("Untagged fact")
+        results = kb.recall_by_tag("work")
+        assert len(results) == 1
+        assert results[0].content == "Tagged fact"
+
+    def test_recall_by_tag_multiple_facts(self, kb: KnowledgeBase) -> None:
+        kb.add("Fact A", tags=["important"])
+        kb.add("Fact B", tags=["important"])
+        kb.add("Fact C", tags=["other"])
+        results = kb.recall_by_tag("important")
+        assert len(results) == 2
