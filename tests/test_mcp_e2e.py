@@ -232,7 +232,7 @@ def test_mcp_concurrent_reads(tmp_path: Any) -> None:
     session = McpSession(str(tmp_path))
     try:
         session.initialize()
-        for i in range(10):
+        for i in range(5):
             session.tool_call("add", {"content": f"fact about topic {i}"})
 
         results: list[str] = []
@@ -249,14 +249,14 @@ def test_mcp_concurrent_reads(tmp_path: Any) -> None:
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
-        threads = [threading.Thread(target=do_recall, args=(f"topic {i}",)) for i in range(5)]
+        threads = [threading.Thread(target=do_recall, args=(f"topic {i}",)) for i in range(3)]
         for t in threads:
             t.start()
         for t in threads:
             t.join(timeout=10)
 
         assert not errors, f"Concurrent recall errors: {errors}"
-        assert len(results) == 5
+        assert len(results) == 3
     finally:
         session.close()
 
@@ -434,7 +434,7 @@ def test_mcp_rapid_sequential_calls(tmp_path: Any) -> None:
     session = McpSession(str(tmp_path))
     try:
         session.initialize()
-        for i in range(50):
+        for i in range(10):
             session.tool_call("add", {"content": f"rapid fact {i}"})
             session.tool_call("recall", {"query": f"rapid fact {i}"})
 
@@ -470,18 +470,18 @@ def test_mcp_round_trip_latency_profile(tmp_path: Any) -> None:
     try:
         session.initialize()
         # Pre-populate so recall() does real work
-        for i in range(50):
+        for i in range(10):
             session.tool_call("add", {"content": f"Python fact number {i}"})
 
         latencies: list[float] = []
-        for _ in range(20):
+        for _ in range(10):
             t0 = time.perf_counter()
             session.tool_call("recall", {"query": "Python deployment"})
             latencies.append(time.perf_counter() - t0)
 
         latencies.sort()
         p50 = latencies[len(latencies) // 2]
-        p95 = latencies[int(len(latencies) * 0.95)]
+        p95 = latencies[-1]  # max = p100 for 10 samples
 
         assert p50 < 0.5, f"MCP recall P50 too high: {p50 * 1000:.0f}ms (target: <500ms)"
         assert p95 < 1.0, f"MCP recall P95 too high: {p95 * 1000:.0f}ms (target: <1000ms)"

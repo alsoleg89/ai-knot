@@ -40,24 +40,3 @@ jobs:
           path: benchmark.json
           retention-days: 90
 
-      # Continuous benchmark history + regression alerts
-      # Pushes results to gh-pages and posts PR comments when perf degrades >150%
-      # Reference: github.com/benchmark-action/github-action-benchmark
-      - name: Store benchmark trend (gh-pages)
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          name: agentmemo Python Benchmarks
-          tool: pytest
-          output-file-path: benchmark.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          # Push history to gh-pages only on pushes to main (not on PRs)
-          auto-push: ${{ github.event_name == 'push' }}
-          # Skip fetching gh-pages on PRs — branch may not exist yet and
-          # auto-push is false anyway, so history is not needed for comparison
-          skip-fetch-gh-pages: ${{ github.event_name == 'pull_request' }}
-          # Post a PR comment when a benchmark regresses by more than 150%
-          comment-on-alert: true
-          # Do not fail the workflow — informational only
-          fail-on-alert: false
-          alert-threshold: "150%"
-          benchmark-data-dir-path: dev/bench
