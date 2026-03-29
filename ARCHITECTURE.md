@@ -124,6 +124,7 @@ stability = 168h × importance × (1 + ln(1 + access_count))
 ## Retrieval (`agentmemo.retriever`)
 
 `TFIDFRetriever.search(query, facts, top_k)` — zero external dependencies.
+Returns `list[tuple[Fact, float]]` — each tuple is `(fact, hybrid_score)`.
 
 Scoring:
 ```
@@ -131,6 +132,10 @@ hybrid_score = 0.6 × tfidf + 0.2 × retention_score + 0.2 × importance
 ```
 
 TF-IDF is computed fresh per query (no index) — suitable for knowledge bases up to ~10k facts.
+
+`KnowledgeBase.recall_facts_with_scores()` exposes `(Fact, float)` pairs to callers that need
+relevance scores (e.g. integration adapters). `recall()` and `recall_facts()` unpack the scores
+internally and work as before.
 
 ---
 

@@ -42,6 +42,43 @@ Versioning: [Semantic Versioning](https://semver.org/).
   "Publish to PyPI" and "Publish to npm". No tags required; version read from
   `pyproject.toml` and `npm/package.json`.
 
+- **`KnowledgeBase.recall_facts_with_scores()`** — like `recall_facts()` but returns
+  `list[tuple[Fact, float]]` with the hybrid relevance score (TF-IDF + retention + importance)
+  for each result. Useful for integration adapters and ranking UIs.
+
+- **OpenClaw integration** — `agentmemo.integrations.openclaw`:
+  - `OpenClawMemoryAdapter(kb)` — drop-in memory backend for Python agents (LangChain, LangGraph, CrewAI)
+  - `generate_mcp_config(agent_id)` — generate the JSON snippet for `~/.openclaw/openclaw.json`
+
+- **MCP `add` tool** now accepts a `tags` parameter (comma-separated string).
+
+### Changed
+
+- **`TFIDFRetriever.search()` return type changed** from `list[Fact]` to `list[tuple[Fact, float]]`.
+  Hybrid scores are now returned to callers instead of being discarded.
+  **Migration:** unpack `(fact, score)` pairs wherever you call `retriever.search()` directly.
+
+- **`KnowledgeBase.learn()` raises `ValueError`** when no API key can be resolved
+  (was: silently return `[]`). Passing empty `turns` still returns `[]` immediately.
+  **Migration:** wrap `learn()` in a `try/except ValueError` or set the appropriate env var
+  (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
+
+- **`OpenClawMemoryAdapter.search()`** now returns real `float` relevance scores sourced from
+  `recall_facts_with_scores()` (was: always `None`).
+
+### Fixed
+
+- `generate_mcp_config()` raises `ImportError` with an actionable install hint when
+  `agentmemo[mcp]` is not installed (was: silently generated a broken config).
+
+- `mcp_server.main()` exits with `sys.exit(1)` and a clear message when the `mcp` package is
+  missing (was: cryptic `ImportError` traceback).
+
+- MCP `list_snapshots` tool returns `"[]"` (valid JSON array) when no snapshots exist
+  (was: `"No snapshots saved."` — not parseable as JSON).
+
+- CI test matrix now installs `[mcp]` extra so MCP tool tests always run.
+
 ---
 
 ## [0.2.0] — 2026-03-29

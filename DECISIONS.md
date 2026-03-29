@@ -21,7 +21,7 @@ score = 0.6 × tfidf + 0.2 × retention + 0.2 × importance
 The weights came from manual testing across ~200 facts. Flipping tfidf and
 retention weights made recent-but-irrelevant facts rank too high.
 
-We'll add optional embedding support in v0.3, but it will be additive —
+We'll add optional embedding support in a future version, but it will be additive —
 TF-IDF stays as the default because it requires zero external dependencies
 and works predictably at the fact counts agentmemo is designed for (~10k max).
 

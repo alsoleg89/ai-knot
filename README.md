@@ -349,7 +349,7 @@ turns = [
     ConversationTurn(role="assistant", content="Got it!"),
 ]
 kb.learn(turns, provider="openai")           # reads OPENAI_API_KEY from env
-# ↑ No key found? learn() returns [] silently — check logs for "No API key provided" warning
+# ↑ No key found? learn() raises ValueError — pass api_key= or set OPENAI_API_KEY
 kb.learn(turns, provider="openai",    api_key="sk-...")      # explicit key
 kb.learn(turns, provider="anthropic", api_key="sk-ant-...")  # Claude
 kb.learn(turns, provider="openai-compat",                    # any compatible API
@@ -639,7 +639,9 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 - [x] Conflict resolution in `learn()` (cross-session deduplication)
 - [x] Snapshots (`snapshot`, `restore`, `diff`)
 - [x] MCP server (Claude Desktop / Claude Code)
-- [x] npm package (`npm install agentmemo`)
+- [x] npm package (`npm install @alsoleg/agentmemo`)
+- [x] OpenClaw integration (`OpenClawMemoryAdapter` + `generate_mcp_config`)
+- [x] Scored retrieval (`recall_facts_with_scores`)
 - [ ] MongoDB backend
 - [ ] Qdrant + Weaviate backends
 - [ ] Semantic embeddings (sentence-transformers / OpenAI)
