@@ -259,3 +259,231 @@ def test_mcp_concurrent_reads(tmp_path: Any) -> None:
         assert len(results) == 5
     finally:
         session.close()
+
+
+# ---------------------------------------------------------------------------
+# Role 5: QA Engineer — functional correctness
+# ---------------------------------------------------------------------------
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_snapshot_and_restore(tmp_path: Any) -> None:
+    """snapshot() + restore() round-trip: state reverts to snapshot contents."""
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        session.tool_call("add", {"content": "fact alpha"})
+        session.tool_call("add", {"content": "fact beta"})
+        session.tool_call("add", {"content": "fact gamma"})
+
+        snap_resp = session.tool_call("snapshot", {"name": "v1"})
+        assert "v1" in snap_resp
+
+        session.tool_call("add", {"content": "fact delta"})
+        session.tool_call("add", {"content": "fact epsilon"})
+
+        before_restore = json.loads(session.tool_call("list_facts", {}))
+        assert len(before_restore) == 5
+
+        restore_resp = session.tool_call("restore", {"name": "v1"})
+        assert "v1" in restore_resp
+
+        after_restore = json.loads(session.tool_call("list_facts", {}))
+        assert len(after_restore) == 3
+        contents = {f["content"] for f in after_restore}
+        assert contents == {"fact alpha", "fact beta", "fact gamma"}
+    finally:
+        session.close()
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_all_memory_types(tmp_path: Any) -> None:
+    """stats() by_type reflects all three memory types after adding each."""
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        session.tool_call("add", {"content": "semantic fact", "type": "semantic"})
+        session.tool_call("add", {"content": "procedural fact", "type": "procedural"})
+        session.tool_call("add", {"content": "episodic fact", "type": "episodic"})
+
+        stats = json.loads(session.tool_call("stats", {}))
+        by_type = stats["by_type"]
+        assert by_type["semantic"] >= 1
+        assert by_type["procedural"] >= 1
+        assert by_type["episodic"] >= 1
+        assert stats["total_facts"] == 3
+    finally:
+        session.close()
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_recall_relevance_ordering(tmp_path: Any) -> None:
+    """recall() returns the semantically relevant fact among unrelated ones."""
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        for topic in [
+            "Python",
+            "Docker",
+            "PostgreSQL",
+            "Redis",
+            "Kubernetes",
+            "React",
+            "FastAPI",
+            "Nginx",
+            "Prometheus",
+            "Grafana",
+        ]:
+            session.tool_call("add", {"content": f"{topic} is used in the stack"})
+        session.tool_call("add", {"content": "Rust is used for performance-critical modules"})
+
+        recall_resp = session.tool_call("recall", {"query": "Rust performance"})
+        assert "Rust" in recall_resp
+    finally:
+        session.close()
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_importance_round_trip(tmp_path: Any) -> None:
+    """add() with custom importance → list_facts() returns that importance value."""
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        session.tool_call("add", {"content": "low importance fact", "importance": 0.3})
+
+        facts = json.loads(session.tool_call("list_facts", {}))
+        assert len(facts) == 1
+        assert abs(facts[0]["importance"] - 0.3) < 0.01
+    finally:
+        session.close()
+
+
+# ---------------------------------------------------------------------------
+# Role 6: Chaos Engineer — boundary conditions and resilience
+# ---------------------------------------------------------------------------
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_large_content_10kb(tmp_path: Any) -> None:
+    """A 10 KB fact survives add() → recall() round-trip intact.
+
+    IPC pipe buffers average ~32 KB (research: netmeister.org/blog/ipcbufs.html).
+    A 10 KB payload exercises near-limit framing without deadlock risk.
+    """
+    large_content = "Python is great. " * 555  # ~10 KB
+    assert len(large_content) >= 9_990
+
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        session.tool_call("add", {"content": large_content})
+
+        recall_resp = session.tool_call("recall", {"query": "Python"})
+        assert "Python" in recall_resp
+    finally:
+        session.close()
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_unicode_cjk_emoji(tmp_path: Any) -> None:
+    """CJK characters and emoji survive add() → list_facts() round-trip unchanged."""
+    content = "用Python写代码🐍 — Kubernetes部署на облаке☁️"
+
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        session.tool_call("add", {"content": content})
+
+        facts = json.loads(session.tool_call("list_facts", {}))
+        assert len(facts) == 1
+        assert facts[0]["content"] == content
+    finally:
+        session.close()
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_invalid_tool_name_error(tmp_path: Any) -> None:
+    """Calling a nonexistent tool returns an error without crashing the server."""
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        resp = session._send("tools/call", {"name": "does_not_exist", "arguments": {}})
+        # Server must respond (not crash); response contains error or isError
+        assert resp is not None
+        has_error = "error" in resp or resp.get("result", {}).get("isError", False)
+        assert has_error, f"Expected error response, got: {resp}"
+
+        # Server must still be alive after the bad call
+        add_resp = session.tool_call("add", {"content": "server still alive"})
+        assert "Added" in add_resp
+    finally:
+        session.close()
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_rapid_sequential_calls(tmp_path: Any) -> None:
+    """50 add-recall-forget cycles without pauses must not crash the server."""
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        for i in range(50):
+            session.tool_call("add", {"content": f"rapid fact {i}"})
+            session.tool_call("recall", {"query": f"rapid fact {i}"})
+
+        # Clean up all facts
+        facts = json.loads(session.tool_call("list_facts", {}))
+        for fact in facts:
+            session.tool_call("forget", {"fact_id": fact["id"]})
+
+        final = session.tool_call("list_facts", {})
+        assert final == "No facts stored."
+    finally:
+        session.close()
+
+
+# ---------------------------------------------------------------------------
+# Role 7: Observability Engineer — latency profiling
+# ---------------------------------------------------------------------------
+
+
+@requires_mcp
+@pytest.mark.integration
+def test_mcp_round_trip_latency_profile(tmp_path: Any) -> None:
+    """Measure real MCP tool-call latency: P50 and P95 must be within budget.
+
+    Research context:
+    - Pure MCP stdio JSON-RPC (no tool execution): P95 ~10ms (tmdevlab benchmark)
+    - Anthropic agent memory budget: <100ms per tool call (platform.claude.com docs)
+    - mem0 with LLM: P95 ~1.4s — our goal: <500ms (TF-IDF + YAML, no LLM)
+
+    This test uses 20 iterations (conservative — enough for P95 with sorted index).
+    """
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+        # Pre-populate so recall() does real work
+        for i in range(50):
+            session.tool_call("add", {"content": f"Python fact number {i}"})
+
+        latencies: list[float] = []
+        for _ in range(20):
+            t0 = time.perf_counter()
+            session.tool_call("recall", {"query": "Python deployment"})
+            latencies.append(time.perf_counter() - t0)
+
+        latencies.sort()
+        p50 = latencies[len(latencies) // 2]
+        p95 = latencies[int(len(latencies) * 0.95)]
+
+        assert p50 < 0.5, f"MCP recall P50 too high: {p50 * 1000:.0f}ms (target: <500ms)"
+        assert p95 < 1.0, f"MCP recall P95 too high: {p95 * 1000:.0f}ms (target: <1000ms)"
+    finally:
+        session.close()

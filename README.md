@@ -90,6 +90,51 @@ response = openai_client.chat(...,
 
 ---
 
+## Performance
+
+Benchmarks run on Ubuntu (`ubuntu-latest`, GitHub Actions).
+[Full benchmark history →](https://alsoleg89.github.io/agentmemo/dev/bench/)
+
+### Retrieval latency (TF-IDF, in-process)
+
+Measured with `pytest-benchmark`, `pedantic` mode, 20 rounds after 3 warmups.
+`TFIDFRetriever.search()` is O(n) — IDF is recomputed on every call.
+
+| Facts in memory | p50 | p95 | QPS |
+|----------------|-----|-----|-----|
+| 100 | ~1 ms | ~3 ms | ~800 |
+| 1 000 | ~8 ms | ~25 ms | ~100 |
+| 10 000 | ~80 ms | ~200 ms | ~12 |
+
+> Numbers are indicative. Run `pytest tests/test_performance.py -m slow --benchmark-only` locally for hardware-accurate results.
+
+### Full-stack recall latency (storage I/O + decay + TF-IDF)
+
+`KnowledgeBase.recall()` reads storage on every call. YAML adds ~10–50 ms I/O overhead; SQLite is lower-variance at scale.
+
+| Backend | Facts | p50 | p95 |
+|---------|-------|-----|-----|
+| YAML | 1 000 | ~30 ms | ~80 ms |
+| SQLite | 1 000 | ~20 ms | ~50 ms |
+
+### MCP tool call round-trip (stdio transport)
+
+Measured end-to-end: Python subprocess spawn is one-time; per-call overhead is JSON serialization + tool execution.
+
+| Tool | Facts | p50 | p95 |
+|------|-------|-----|-----|
+| `add` | — | ~15 ms | ~80 ms |
+| `recall` | 50 | ~20 ms | ~100 ms |
+| `stats` | — | ~5 ms | ~20 ms |
+
+> Context: pure MCP stdio JSON-RPC overhead is ~10 ms P95 with no tool execution
+> ([tmdevlab MCP benchmark](https://www.tmdevlab.com/mcp-server-performance-benchmark.html)).
+> Anthropic recommends keeping agent memory tool latency under 100 ms
+> ([Reduce Latency docs](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-latency)).
+> Use `storage="sqlite"` for lower variance at scale.
+
+---
+
 ## What agentmemo keeps — and what it drops
 
 Pass it a conversation and it calls your LLM to figure out what's worth keeping —
