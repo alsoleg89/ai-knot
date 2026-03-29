@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/alsoleg89/agentmemo/actions/workflows/ci.yml/badge.svg)
 ![PyPI](https://img.shields.io/pypi/v/agentmemo)
-![npm](https://img.shields.io/npm/v/agentmemo)
+![npm](https://img.shields.io/npm/v/@alsoleg89/agentmemo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **Agent knowledge layer — distills conversations into structured facts, retrieves what matters, forgets the rest.**
@@ -51,7 +51,7 @@ pip install "agentmemo[mcp]"
 
 **Node.js / TypeScript (requires Python 3.11+ in PATH):**
 ```bash
-npm install agentmemo
+npm install @alsoleg89/agentmemo
 ```
 
 ---
