@@ -26,14 +26,18 @@ class TestOpenAIErrors:
     """OpenAI provider error paths."""
 
     def test_timeout_returns_empty(self, turns: list[ConversationTurn]) -> None:
-        with patch("httpx.post", side_effect=httpx.TimeoutException("timeout")), \
-                patch("agentmemo.providers.base.time.sleep"):
+        with (
+            patch("httpx.post", side_effect=httpx.TimeoutException("timeout")),
+            patch("agentmemo.providers.base.time.sleep"),
+        ):
             result = Extractor(api_key="key", provider="openai").extract(turns)
         assert result == []
 
     def test_connection_error_returns_empty(self, turns: list[ConversationTurn]) -> None:
-        with patch("httpx.post", side_effect=httpx.ConnectError("refused")), \
-                patch("agentmemo.providers.base.time.sleep"):
+        with (
+            patch("httpx.post", side_effect=httpx.ConnectError("refused")),
+            patch("agentmemo.providers.base.time.sleep"),
+        ):
             result = Extractor(api_key="key", provider="openai").extract(turns)
         assert result == []
 
@@ -107,8 +111,10 @@ class TestAnthropicErrors:
     """Anthropic provider error paths."""
 
     def test_timeout_returns_empty(self, turns: list[ConversationTurn]) -> None:
-        with patch("httpx.post", side_effect=httpx.TimeoutException("timeout")), \
-                patch("agentmemo.providers.base.time.sleep"):
+        with (
+            patch("httpx.post", side_effect=httpx.TimeoutException("timeout")),
+            patch("agentmemo.providers.base.time.sleep"),
+        ):
             result = Extractor(api_key="key", provider="anthropic").extract(turns)
         assert result == []
 
