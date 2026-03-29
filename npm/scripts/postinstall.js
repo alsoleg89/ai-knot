@@ -8,7 +8,7 @@ import { execSync } from "node:child_process";
 const PACKAGE = "ai-knot[mcp]";
 
 if (
-  process.env["AGENTMEMO_SKIP_PYTHON_INSTALL"] === "1" ||
+  process.env["AI_KNOT_SKIP_PYTHON_INSTALL"] === "1" ||
   process.env["CI_SKIP_POSTINSTALL"] === "1"
 ) {
   process.exit(0);
