@@ -1,0 +1,60 @@
+{
+  "name": "agentmemo",
+  "version": "0.2.0",
+  "description": "TypeScript client for agentmemo — agent memory via MCP stdio bridge",
+  "license": "MIT",
+  "author": "Oleg",
+  "homepage": "https://github.com/alsoleg89/agentmemo#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alsoleg89/agentmemo.git",
+    "directory": "npm"
+  },
+  "bugs": {
+    "url": "https://github.com/alsoleg89/agentmemo/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "memory",
+    "knowledge",
+    "llm",
+    "mcp"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "files": [
+    "dist/",
+    "scripts/postinstall.js",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "tsc -p tsconfig.build.json --outDir dist/esm",
+    "build:cjs": "tsc -p tsconfig.build.json --outDir dist/cjs --module commonjs --moduleResolution node && node --input-type=module -e \"import{writeFileSync}from'node:fs';writeFileSync('dist/cjs/package.json',JSON.stringify({type:'commonjs'}))\"",
+    "typecheck": "tsc --noEmit",
+    "clean": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('dist',{recursive:true,force:true})\"",
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.4.0"
+  }
+}
