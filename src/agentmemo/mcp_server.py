@@ -157,7 +157,7 @@ def tool_snapshot(kb: KnowledgeBase, name: str) -> str:
         Confirmation string, or an error if snapshots are not supported.
     """
     try:
-        kb.snapshot(name)  # type: ignore[attr-defined]
+        kb.snapshot(name)
         return f"Snapshot {name!r} saved."
     except NotImplementedError as exc:
         return f"Snapshots not supported by this storage backend: {exc}"
@@ -174,7 +174,7 @@ def tool_restore(kb: KnowledgeBase, name: str) -> str:
         Confirmation string, or an error message.
     """
     try:
-        kb.restore(name)  # type: ignore[attr-defined]
+        kb.restore(name)
         return f"Restored from snapshot {name!r}."
     except NotImplementedError as exc:
         return f"Snapshots not supported by this storage backend: {exc}"
