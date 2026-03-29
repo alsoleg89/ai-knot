@@ -32,7 +32,7 @@ class TestTFIDFSearch:
     ) -> None:
         results = retriever.search("Python", coding_facts, top_k=3)
         assert len(results) > 0
-        assert "Python" in results[0].content
+        assert "Python" in results[0][0].content
 
     def test_top_k_limits_results(
         self, retriever: TFIDFRetriever, coding_facts: list[Fact]
@@ -60,7 +60,7 @@ class TestTFIDFSearch:
         facts = [Fact(content="User likes cats")]
         results = retriever.search("cats", facts, top_k=5)
         assert len(results) == 1
-        assert results[0].content == "User likes cats"
+        assert results[0][0].content == "User likes cats"
 
 
 class TestSearchWithRetentionBoost:
@@ -78,13 +78,13 @@ class TestSearchWithRetentionBoost:
             retention_score=0.1,
         )
         results = retriever.search("Python", [low_retention, high_retention], top_k=2)
-        assert results[0].retention_score > results[1].retention_score
+        assert results[0][0].retention_score > results[1][0].retention_score
 
     def test_high_importance_ranked_higher(self, retriever: TFIDFRetriever) -> None:
         important = Fact(content="User deploys with Docker", importance=0.99)
         trivial = Fact(content="User mentioned Docker once", importance=0.1)
         results = retriever.search("Docker", [trivial, important], top_k=2)
-        assert results[0].importance > results[1].importance
+        assert results[0][0].importance > results[1][0].importance
 
 
 class TestSearchSpecialCharacters:

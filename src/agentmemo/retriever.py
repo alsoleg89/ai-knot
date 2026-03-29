@@ -36,7 +36,7 @@ class TFIDFRetriever:
     Scoring: hybrid_score = w1*tfidf + w2*retention + w3*importance
     """
 
-    def search(self, query: str, facts: list[Fact], *, top_k: int = 5) -> list[Fact]:
+    def search(self, query: str, facts: list[Fact], *, top_k: int = 5) -> list[tuple[Fact, float]]:
         """Find the most relevant facts for a query.
 
         Args:
@@ -45,14 +45,15 @@ class TFIDFRetriever:
             top_k: Maximum number of results to return.
 
         Returns:
-            List of Facts sorted by relevance (most relevant first).
+            List of (Fact, score) pairs sorted by relevance (most relevant first).
+            Scores are hybrid values combining TF-IDF, retention, and importance.
         """
         if not facts or not query.strip():
-            return facts[:top_k] if facts else []
+            return [(f, 0.0) for f in facts[:top_k]] if facts else []
 
         query_tokens = _tokenize(query)
         if not query_tokens:
-            return facts[:top_k]
+            return [(f, 0.0) for f in facts[:top_k]]
 
         # Build document frequency map.
         doc_tokens_list: list[list[str]] = []
@@ -95,4 +96,4 @@ class TFIDFRetriever:
         # Sort descending by score.
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        return [facts[idx] for _, idx in scored[:top_k]]
+        return [(facts[idx], score) for score, idx in scored[:top_k]]

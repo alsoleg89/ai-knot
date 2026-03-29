@@ -11,7 +11,7 @@ or::
 Configuration is via environment variables:
 
 - ``AGENTMEMO_AGENT_ID``   — agent namespace (default: "default")
-- ``AGENTMEMO_STORAGE``    — backend: "yaml" or "sqlite" (default: "yaml")
+- ``AGENTMEMO_STORAGE``    — backend: "yaml" or "sqlite" (default: "sqlite")
 - ``AGENTMEMO_DATA_DIR``   — base directory for file backends (default: ".agentmemo")
 - ``AGENTMEMO_DB_PATH``    — full path to SQLite file (overrides DATA_DIR for sqlite)
 """
@@ -34,7 +34,7 @@ def _build_kb() -> KnowledgeBase:
         A configured KnowledgeBase instance.
     """
     agent_id = os.environ.get("AGENTMEMO_AGENT_ID", "default")
-    backend = os.environ.get("AGENTMEMO_STORAGE", "yaml")
+    backend = os.environ.get("AGENTMEMO_STORAGE", "sqlite")
     data_dir = os.environ.get("AGENTMEMO_DATA_DIR", ".agentmemo")
     db_path = os.environ.get("AGENTMEMO_DB_PATH")
 
@@ -146,6 +146,47 @@ def tool_stats(kb: KnowledgeBase) -> str:
     return json.dumps(kb.stats(), ensure_ascii=False, indent=2)
 
 
+def tool_recall_json(kb: KnowledgeBase, query: str, *, top_k: int = 5) -> str:
+    """Recall relevant facts as a JSON array of structured objects.
+
+    Args:
+        kb: The knowledge base instance.
+        query: What the agent needs to know.
+        top_k: Maximum number of facts to return.
+
+    Returns:
+        JSON array of MemoryItem objects, or "[]" if nothing found.
+    """
+    facts = kb.recall_facts(query, top_k=top_k)
+    data = [
+        {
+            "id": f.id,
+            "memory": f.content,
+            "type": f.type.value,
+            "importance": f.importance,
+            "retention": round(f.retention_score, 3),
+        }
+        for f in facts
+    ]
+    return json.dumps(data, ensure_ascii=False)
+
+
+def tool_list_snapshots(kb: KnowledgeBase) -> str:
+    """Return names of all saved snapshots.
+
+    Args:
+        kb: The knowledge base instance.
+
+    Returns:
+        JSON array of snapshot names, or a message if none exist.
+    """
+    try:
+        names = kb.list_snapshots()
+    except NotImplementedError as exc:
+        return f"Snapshots not supported by this storage backend: {exc}"
+    return json.dumps(names, ensure_ascii=False) if names else "[]"
+
+
 def tool_snapshot(kb: KnowledgeBase, name: str) -> str:
     """Save the current knowledge base state as a named snapshot.
 
@@ -210,22 +251,30 @@ def _make_server(kb: KnowledgeBase) -> Any:
         "agentmemo",
         instructions=(
             "Use these tools to manage persistent agent memory. "
-            "add: store a new fact. recall: retrieve relevant context for a query. "
+            "add: store a new fact. recall: retrieve relevant context as text. "
+            "recall_json: retrieve relevant context as structured JSON. "
             "forget: remove a fact by ID. list_facts: view all stored facts. "
-            "stats: memory statistics. snapshot/restore: version the memory state."
+            "stats: memory statistics. snapshot/restore: version the memory state. "
+            "list_snapshots: see available snapshots."
         ),
     )
 
     @app.tool()
-    def add(content: str, type: str = "semantic", importance: float = 0.8) -> str:
+    def add(
+        content: str,
+        type: str = "semantic",
+        importance: float = 0.8,
+        tags: list[str] | None = None,
+    ) -> str:
         """Add a fact to agent memory.
 
         Args:
             content: The knowledge string to remember.
             type: Classification — semantic, procedural, or episodic.
             importance: How important (0.0–1.0). Higher = remembered longer.
+            tags: Optional labels for later retrieval via recall_by_tag.
         """
-        return tool_add(kb, content, type=type, importance=importance)
+        return tool_add(kb, content, type=type, importance=importance, tags=tags)
 
     @app.tool()
     def recall(query: str, top_k: int = 5) -> str:
@@ -274,11 +323,38 @@ def _make_server(kb: KnowledgeBase) -> Any:
         """
         return tool_restore(kb, name)
 
+    @app.tool()
+    def recall_json(query: str, top_k: int = 5) -> str:
+        """Recall relevant facts as a JSON array (id, memory, type, importance, retention).
+
+        Use instead of recall() when you need structured data rather than plain text.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+        """
+        return tool_recall_json(kb, query, top_k=top_k)
+
+    @app.tool()
+    def list_snapshots() -> str:
+        """List all saved memory snapshots by name."""
+        return tool_list_snapshots(kb)
+
     return app
 
 
 def main() -> None:
     """Entry point for the agentmemo MCP server."""
+    try:
+        from mcp.server.fastmcp import FastMCP  # noqa: F401
+    except ImportError:
+        import sys
+
+        print(
+            "Error: mcp package not installed.\nInstall with: pip install 'agentmemo[mcp]'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     kb = _build_kb()
     app = _make_server(kb)
     app.run()

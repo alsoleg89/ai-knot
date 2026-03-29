@@ -50,7 +50,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev,openai]"
+        run: pip install -e ".[dev,openai,mcp]"
 
       - name: Run tests
         run: |

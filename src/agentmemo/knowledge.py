@@ -126,8 +126,11 @@ class KnowledgeBase:
                     "",
                 )
             if not api_key:
-                logger.warning("No API key provided — skipping LLM extraction")
-                return []
+                raise ValueError(
+                    f"No API key for provider {provider!r}. "
+                    "Pass api_key= or set the environment variable "
+                    f"(e.g. OPENAI_API_KEY for openai, ANTHROPIC_API_KEY for anthropic)."
+                )
             extractor = Extractor(provider, api_key=api_key, model=model, **provider_kwargs)
         else:
             extractor = Extractor(provider, model=model)
@@ -166,9 +169,11 @@ class KnowledgeBase:
         # Apply decay before searching.
         facts = apply_decay(facts)
 
-        results = self._retriever.search(query, facts, top_k=top_k)
-        if not results:
+        pairs = self._retriever.search(query, facts, top_k=top_k)
+        if not pairs:
             return ""
+
+        results = [f for f, _ in pairs]
 
         # Increment access_count on returned facts and persist.
         returned_ids = {r.id for r in results}
@@ -190,6 +195,83 @@ class KnowledgeBase:
             List of all Facts, in storage order.
         """
         return self._storage.load(self._agent_id)
+
+    def recall_facts(self, query: str, *, top_k: int = 5) -> list[Fact]:
+        """Structured alternative to recall() — returns Fact objects.
+
+        Use when you need IDs, types, importance scores, or other metadata.
+        Use recall() when you only need a formatted string for prompt injection.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+
+        Returns:
+            List of relevant Facts (may be empty), sorted by relevance.
+        """
+        facts = self._storage.load(self._agent_id)
+        if not facts:
+            return []
+
+        facts = apply_decay(facts)
+        pairs = self._retriever.search(query, facts, top_k=top_k)
+        if not pairs:
+            return []
+
+        results = [f for f, _ in pairs]
+        returned_ids = {r.id for r in results}
+        now = datetime.now(UTC)
+        for fact in facts:
+            if fact.id in returned_ids:
+                fact.access_count += 1
+                fact.last_accessed = now
+        self._storage.save(self._agent_id, facts)
+        return results
+
+    def recall_facts_with_scores(self, query: str, *, top_k: int = 5) -> list[tuple[Fact, float]]:
+        """Like recall_facts() but also returns the relevance score for each fact.
+
+        The score is a hybrid value (TF-IDF + retention + importance). Use it
+        to rank or filter results in integration adapters.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+
+        Returns:
+            List of (Fact, score) pairs sorted by relevance (most relevant first).
+            Empty list if no facts stored or none match.
+        """
+        facts = self._storage.load(self._agent_id)
+        if not facts:
+            return []
+
+        facts = apply_decay(facts)
+        pairs = self._retriever.search(query, facts, top_k=top_k)
+        if not pairs:
+            return []
+
+        returned_ids = {f.id for f, _ in pairs}
+        now = datetime.now(UTC)
+        for fact in facts:
+            if fact.id in returned_ids:
+                fact.access_count += 1
+                fact.last_accessed = now
+        self._storage.save(self._agent_id, facts)
+        return pairs
+
+    def recall_by_tag(self, tag: str) -> list[Fact]:
+        """Return all facts that carry the given tag.
+
+        Tags are assigned at add() time via the ``tags=`` parameter.
+
+        Args:
+            tag: The tag string to filter by.
+
+        Returns:
+            List of Facts whose tags include ``tag`` (may be empty).
+        """
+        return [f for f in self._storage.load(self._agent_id) if tag in f.tags]
 
     def replace_facts(self, facts: list[Fact]) -> None:
         """Replace all stored facts with the given list (used for import).

@@ -18,7 +18,9 @@ from agentmemo.mcp_server import (
     tool_add,
     tool_forget,
     tool_list_facts,
+    tool_list_snapshots,
     tool_recall,
+    tool_recall_json,
     tool_restore,
     tool_snapshot,
     tool_stats,
@@ -105,6 +107,10 @@ class TestToolAdd:
         result = tool_add(kb, "User prefers Python")
         fact_id = kb.list_facts()[0].id
         assert fact_id in result
+
+    def test_tags_stored(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "User works at Sber", tags=["profile"])
+        assert "profile" in kb.list_facts()[0].tags
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +248,93 @@ class TestToolSnapshotRestore:
         ):
             result = tool_restore(kb, "v1")
         assert "not supported" in result
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# tool_recall_json
+# ---------------------------------------------------------------------------
+
+
+class TestToolRecallJson:
+    def test_recall_json_returns_valid_json(self, kb: KnowledgeBase) -> None:
+        kb.add("User deploys on Fridays")
+        result = tool_recall_json(kb, "deployment day")
+        parsed = json.loads(result)
+        assert isinstance(parsed, list)
+
+    def test_recall_json_has_expected_keys(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        result = tool_recall_json(kb, "language preference")
+        items = json.loads(result)
+        assert len(items) >= 1
+        item = items[0]
+        assert "id" in item
+        assert "memory" in item
+        assert "type" in item
+        assert "importance" in item
+        assert "retention" in item
+
+    def test_recall_json_empty_kb(self, kb: KnowledgeBase) -> None:
+        result = tool_recall_json(kb, "anything")
+        assert json.loads(result) == []
+
+    def test_recall_json_top_k(self, kb: KnowledgeBase) -> None:
+        for i in range(10):
+            kb.add(f"Deployment fact {i}")
+        result = tool_recall_json(kb, "deployment", top_k=2)
+        items = json.loads(result)
+        assert len(items) <= 2
+
+
+# ---------------------------------------------------------------------------
+# tool_list_snapshots
+# ---------------------------------------------------------------------------
+
+
+class TestToolListSnapshots:
+    def test_list_snapshots_empty(self, kb: KnowledgeBase) -> None:
+        result = tool_list_snapshots(kb)
+        assert json.loads(result) == []
+
+    def test_list_snapshots_returns_names(self, tmp_path: pathlib.Path) -> None:
+        from agentmemo.storage.yaml_storage import YAMLStorage
+
+        snap_kb = KnowledgeBase(agent_id="snap_test", storage=YAMLStorage(base_dir=str(tmp_path)))
+        snap_kb.add("Some fact")
+        snap_kb.snapshot("release_1")
+        snap_kb.snapshot("release_2")
+        result = tool_list_snapshots(snap_kb)
+        names = json.loads(result)
+        assert "release_1" in names
+        assert "release_2" in names
+
+    def test_list_snapshots_unsupported_backend(self, kb: KnowledgeBase) -> None:
+        with patch.object(kb, "list_snapshots", side_effect=NotImplementedError("no snapshots")):
+            result = tool_list_snapshots(kb)
+        assert "not supported" in result
+
+
+# ---------------------------------------------------------------------------
+# tool_recall / tool_recall_json empty-state contract
+# ---------------------------------------------------------------------------
+
+
+class TestRecallEmptyContract:
+    """recall returns a human string; recall_json always returns valid JSON."""
+
+    def test_recall_empty_returns_message(self, kb: KnowledgeBase) -> None:
+        result = tool_recall(kb, "anything")
+        assert "No relevant facts" in result
+
+    def test_recall_json_empty_returns_valid_json_array(self, kb: KnowledgeBase) -> None:
+        result = tool_recall_json(kb, "anything")
+        assert json.loads(result) == []
+
+    def test_recall_json_never_raises_on_empty(self, kb: KnowledgeBase) -> None:
+        result = tool_recall_json(kb, "anything")
+        parsed = json.loads(result)  # must not raise JSONDecodeError
+        assert isinstance(parsed, list)
 
 
 # ---------------------------------------------------------------------------

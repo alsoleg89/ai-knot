@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
+from unittest.mock import patch
 
 import pytest
 
 from agentmemo.knowledge import KnowledgeBase
 from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import Fact, MemoryType
+from agentmemo.types import ConversationTurn, Fact, MemoryType
 
 
 @pytest.fixture
@@ -129,3 +131,107 @@ class TestStats:
         assert stats["by_type"]["semantic"] == 1
         assert stats["by_type"]["procedural"] == 1
         assert stats["by_type"]["episodic"] == 1
+
+
+class TestRecallFacts:
+    """Structured retrieval returning Fact objects."""
+
+    def test_recall_facts_returns_fact_objects(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        results = kb.recall_facts("what language?")
+        assert isinstance(results, list)
+        assert all(isinstance(f, Fact) for f in results)
+
+    def test_recall_facts_empty_kb(self, kb: KnowledgeBase) -> None:
+        assert kb.recall_facts("anything") == []
+
+    def test_recall_facts_respects_top_k(self, kb: KnowledgeBase) -> None:
+        for i in range(10):
+            kb.add(f"Fact number {i} about deployment")
+        results = kb.recall_facts("deployment", top_k=2)
+        assert len(results) <= 2
+
+    def test_recall_facts_content_matches_query(self, kb: KnowledgeBase) -> None:
+        kb.add("User deploys on Fridays")
+        kb.add("User prefers tea over coffee")
+        results = kb.recall_facts("deployment day")
+        assert len(results) >= 1
+        assert any("Friday" in f.content for f in results)
+
+    def test_recall_facts_updates_access_count(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python", importance=0.9)
+        kb.recall_facts("Python")
+        facts = kb._storage.load(kb._agent_id)
+        accessed = [f for f in facts if f.access_count > 0]
+        assert len(accessed) >= 1
+
+
+class TestRecallByTag:
+    """Tag-based filtering of stored facts."""
+
+    def test_recall_by_tag_finds_tagged(self, kb: KnowledgeBase) -> None:
+        kb.add("User works at Sber", tags=["profile"])
+        results = kb.recall_by_tag("profile")
+        assert len(results) == 1
+        assert results[0].content == "User works at Sber"
+
+    def test_recall_by_tag_empty_when_no_match(self, kb: KnowledgeBase) -> None:
+        kb.add("Some fact", tags=["other"])
+        assert kb.recall_by_tag("nonexistent") == []
+
+    def test_recall_by_tag_ignores_untagged(self, kb: KnowledgeBase) -> None:
+        kb.add("Tagged fact", tags=["work"])
+        kb.add("Untagged fact")
+        results = kb.recall_by_tag("work")
+        assert len(results) == 1
+        assert results[0].content == "Tagged fact"
+
+    def test_recall_by_tag_multiple_facts(self, kb: KnowledgeBase) -> None:
+        kb.add("Fact A", tags=["important"])
+        kb.add("Fact B", tags=["important"])
+        kb.add("Fact C", tags=["other"])
+        results = kb.recall_by_tag("important")
+        assert len(results) == 2
+
+
+class TestLearnApiKey:
+    """learn() must raise ValueError when no API key is available."""
+
+    def test_learn_raises_without_api_key(self, kb: KnowledgeBase) -> None:
+        turns = [ConversationTurn(role="user", content="Deploy on Fridays")]
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False),
+            pytest.raises(ValueError, match="No API key"),
+        ):
+            kb.learn(turns, provider="openai", api_key=None)
+
+    def test_learn_empty_turns_returns_empty_without_key(self, kb: KnowledgeBase) -> None:
+        # empty turns → early return before key check
+        result = kb.learn([], provider="openai", api_key=None)
+        assert result == []
+
+
+class TestRecallFactsWithScores:
+    """recall_facts_with_scores() returns (Fact, float) pairs."""
+
+    def test_returns_pairs(self, kb: KnowledgeBase) -> None:
+        kb.add("User deploys on Fridays")
+        pairs = kb.recall_facts_with_scores("deployment day")
+        assert len(pairs) >= 1
+        fact, score = pairs[0]
+        assert isinstance(fact, Fact)
+        assert isinstance(score, float)
+
+    def test_empty_kb_returns_empty(self, kb: KnowledgeBase) -> None:
+        assert kb.recall_facts_with_scores("anything") == []
+
+    def test_scores_are_non_negative(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        pairs = kb.recall_facts_with_scores("language")
+        assert all(score >= 0.0 for _, score in pairs)
+
+    def test_top_k_limits_results(self, kb: KnowledgeBase) -> None:
+        for i in range(10):
+            kb.add(f"Deployment fact {i}")
+        pairs = kb.recall_facts_with_scores("deployment", top_k=3)
+        assert len(pairs) <= 3
