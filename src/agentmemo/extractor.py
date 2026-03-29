@@ -10,6 +10,7 @@ import contextlib
 import json
 import logging
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 from agentmemo.providers import LLMProvider, call_with_retry, create_provider
@@ -71,6 +72,48 @@ def deduplicate_facts(facts: list[Fact], *, threshold: float = 0.8) -> list[Fact
         if not is_dup:
             unique.append(fact)
     return unique
+
+
+def resolve_against_existing(
+    new_facts: list[Fact],
+    existing: list[Fact],
+    *,
+    threshold: float = 0.7,
+) -> tuple[list[Fact], list[Fact]]:
+    """Separate new facts into inserts and updates relative to existing facts.
+
+    For each new fact, if a similar existing fact is found (Jaccard >= threshold),
+    the existing fact is updated in-place: importance is bumped by 0.05 (capped
+    at 1.0) and ``last_accessed`` is set to UTC now. Otherwise the new fact is
+    collected for insertion.
+
+    Args:
+        new_facts: Facts extracted from the latest conversation.
+        existing: Facts already stored for this agent.
+        threshold: Jaccard similarity threshold to consider two facts duplicates.
+
+    Returns:
+        A 2-tuple ``(to_insert, updated_existing)`` where:
+        - ``to_insert``: new facts with no match in existing.
+        - ``updated_existing``: existing facts that were updated in place.
+    """
+    to_insert: list[Fact] = []
+    updated: list[Fact] = []
+
+    for new in new_facts:
+        matched: Fact | None = None
+        for old in existing:
+            if _jaccard_similarity(new.content, old.content) >= threshold:
+                matched = old
+                break
+        if matched is not None:
+            matched.importance = min(1.0, matched.importance + 0.05)
+            matched.last_accessed = datetime.now(UTC)
+            updated.append(matched)
+        else:
+            to_insert.append(new)
+
+    return to_insert, updated
 
 
 class Extractor:

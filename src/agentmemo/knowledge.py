@@ -7,7 +7,7 @@ from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 
-from agentmemo.extractor import Extractor
+from agentmemo.extractor import Extractor, resolve_against_existing
 from agentmemo.forgetting import apply_decay
 from agentmemo.providers import LLMProvider
 from agentmemo.retriever import TFIDFRetriever
@@ -85,9 +85,14 @@ class KnowledgeBase:
         api_key: str | None = None,
         provider: str | LLMProvider = "openai",
         model: str | None = None,
+        conflict_threshold: float = 0.7,
         **provider_kwargs: str,
     ) -> list[Fact]:
         """Extract and store facts from a conversation using an LLM.
+
+        Existing facts that are similar to newly extracted ones (Jaccard >=
+        ``conflict_threshold``) are updated in place (importance bumped, access
+        time refreshed) instead of being duplicated.
 
         Args:
             turns: Conversation messages to extract knowledge from.
@@ -95,11 +100,13 @@ class KnowledgeBase:
             provider: Provider name or a pre-configured ``LLMProvider`` instance.
                 Supported names: openai, anthropic, gigachat, yandex, qwen, openai-compat.
             model: Override the default model for this provider.
+            conflict_threshold: Jaccard similarity threshold above which a new
+                fact is treated as a duplicate of an existing one (0.0–1.0).
             **provider_kwargs: Extra args forwarded to the provider constructor
                 (e.g. ``folder_id`` for Yandex, ``base_url`` for openai-compat).
 
         Returns:
-            List of newly extracted and stored Facts.
+            List of genuinely new Facts that were inserted (excludes updates).
         """
         if not turns:
             return []
@@ -129,14 +136,18 @@ class KnowledgeBase:
 
         if new_facts:
             existing = self._storage.load(self._agent_id)
-            existing.extend(new_facts)
-            self._storage.save(self._agent_id, existing)
+            to_insert, _ = resolve_against_existing(
+                new_facts, existing, threshold=conflict_threshold
+            )
+            self._storage.save(self._agent_id, existing + to_insert)
             logger.info(
-                "Learned %d facts from conversation for agent '%s'",
-                len(new_facts),
+                "Learned %d new facts (%d merged) for agent '%s'",
+                len(to_insert),
+                len(new_facts) - len(to_insert),
                 self._agent_id,
             )
-        return new_facts
+            return to_insert
+        return []
 
     def recall(self, query: str, *, top_k: int = 5) -> str:
         """Retrieve relevant facts as a formatted string for prompt injection.
