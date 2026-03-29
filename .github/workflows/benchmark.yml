@@ -7,8 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write  # needed to push gh-pages benchmark history
-  pull-requests: write  # needed to post regression comments on PRs
+  contents: read
 
 jobs:
   benchmark:

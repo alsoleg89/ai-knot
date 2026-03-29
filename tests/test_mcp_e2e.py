@@ -430,7 +430,7 @@ def test_mcp_invalid_tool_name_error(tmp_path: Any) -> None:
 @requires_mcp
 @pytest.mark.integration
 def test_mcp_rapid_sequential_calls(tmp_path: Any) -> None:
-    """50 add-recall-forget cycles without pauses must not crash the server."""
+    """10 add-recall-forget cycles without pauses must not crash the server."""
     session = McpSession(str(tmp_path))
     try:
         session.initialize()
@@ -464,7 +464,8 @@ def test_mcp_round_trip_latency_profile(tmp_path: Any) -> None:
     - Anthropic agent memory budget: <100ms per tool call (platform.claude.com docs)
     - mem0 with LLM: P95 ~1.4s — our goal: <500ms (TF-IDF + YAML, no LLM)
 
-    This test uses 20 iterations (conservative — enough for P95 with sorted index).
+    This test uses 10 iterations; the maximum latency is used as a conservative
+    upper bound (equivalent to P100 for this sample size).
     """
     session = McpSession(str(tmp_path))
     try:
