@@ -12,10 +12,44 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - MongoDB storage backend
 - Qdrant and Weaviate backends
 - Semantic embeddings (sentence-transformers / OpenAI)
-- MCP server support
 - LangChain / CrewAI integrations
 - Web UI knowledge inspector
 - REST API / sidecar mode
+
+---
+
+## [0.2.0] — 2026-03-29
+
+### Added
+
+- **Conflict resolution in `learn()`** — before inserting new facts, `learn()` now cross-checks them
+  against existing facts using word-level Jaccard similarity. Duplicate facts (≥ 0.7 similarity by
+  default) are not re-inserted; instead the existing fact's importance is reinforced (+0.05, capped at
+  1.0) and its `last_accessed` timestamp is updated. The threshold is configurable via
+  `conflict_threshold` kwarg on `learn()`.
+
+- **Snapshots** — point-in-time versioning of the knowledge base:
+  - `kb.snapshot("name")` — save current state
+  - `kb.restore("name")` — atomically replace live facts with snapshot contents
+  - `kb.list_snapshots()` — list all saved snapshot names
+  - `kb.diff("a", "b")` — compare two snapshots; pass `"current"` as either name for live facts
+  - Both YAML and SQLite backends support snapshots via the new `SnapshotCapable` protocol
+  - `SnapshotDiff` dataclass exported from top-level `agentmemo`
+
+- **MCP server** — run agentmemo as a native Claude Desktop / Claude Code tool server:
+  ```bash
+  pip install "agentmemo[mcp]"
+  agentmemo-mcp
+  ```
+  Exposes 7 tools: `add`, `recall`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`.
+  Configured entirely via environment variables (`AGENTMEMO_AGENT_ID`, `AGENTMEMO_STORAGE`,
+  `AGENTMEMO_DATA_DIR`, `AGENTMEMO_DB_PATH`). The `mcp` package is optional — the core package
+  does not require it.
+
+### Changed
+
+- `learn()` now returns only the **newly inserted** facts (previously returned all extracted facts).
+  Facts that matched existing entries are updated in-place and excluded from the return value.
 
 ---
 
@@ -59,5 +93,6 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `BASE_STABILITY_HOURS` set to 336 (2 weeks retention baseline)
 - TF-IDF tokenizer: camelCase splitting + basic plural stemming
 
-[Unreleased]: https://github.com/alsoleg89/agentmemo/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/alsoleg89/agentmemo/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/alsoleg89/agentmemo/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alsoleg89/agentmemo/releases/tag/v0.1.0

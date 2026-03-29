@@ -42,6 +42,9 @@ pip install "agentmemo[openai]"
 
 # With PostgreSQL backend:
 pip install "agentmemo[postgres]"
+
+# With MCP server (Claude Desktop / Claude Code):
+pip install "agentmemo[mcp]"
 ```
 
 ---
@@ -97,6 +100,96 @@ What happened in the conversation:         What agentmemo stores:
 ```
 
 **Signal, not noise.** Importance scores, retention decay, deduplication — built in.
+
+---
+
+## Conflict resolution — no more duplicate facts
+
+`learn()` cross-checks new facts against everything already stored before inserting anything.
+If a new fact is semantically similar to an existing one (Jaccard similarity ≥ 0.7 by default),
+the existing fact is reinforced instead of a duplicate being created:
+
+```python
+kb.add("User deploys on Docker")
+kb.add("User deploys with Docker Compose")  # similar enough -> reinforced, not duplicated
+
+# Control the threshold per call:
+kb.learn(turns, provider="openai", conflict_threshold=0.8)
+```
+
+Importance is bumped by 0.05 (capped at 1.0) each time reinforcement fires — the knowledge base
+naturally weights well-confirmed facts higher over time.
+
+---
+
+## Snapshots — version your knowledge base
+
+Save and restore the complete state of a knowledge base at any point in time:
+
+```python
+kb.add("User prefers Python")
+kb.add("User deploys on Docker")
+
+kb.snapshot("before_refactor")      # save current state
+
+kb.add("User switched to Go")       # state changes
+kb.forget(some_fact_id)
+
+kb.restore("before_refactor")       # atomically roll back
+
+# List all saved snapshots:
+names = kb.list_snapshots()         # ["before_refactor"]
+
+# Compare two snapshots (or current state):
+diff = kb.diff("before_refactor", "current")
+print(f"Added: {[f.content for f in diff.added]}")
+print(f"Removed: {[f.content for f in diff.removed]}")
+```
+
+Both YAML and SQLite backends support snapshots. YAML stores them under
+`.agentmemo/{agent_id}/snapshots/`. SQLite stores them in the same database file.
+
+---
+
+## MCP server — use agentmemo from Claude Desktop or Claude Code
+
+agentmemo ships a native MCP server. Install it and Claude can call `add`, `recall`,
+`forget`, and `snapshot` as tools — without any Python code on your end:
+
+```bash
+pip install "agentmemo[mcp]"
+```
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "agentmemo": {
+      "command": "agentmemo-mcp",
+      "env": {
+        "AGENTMEMO_AGENT_ID": "myagent",
+        "AGENTMEMO_STORAGE": "sqlite",
+        "AGENTMEMO_DB_PATH": "/absolute/path/to/memory.db"
+      }
+    }
+  }
+}
+```
+
+**Available tools:** `add`, `recall`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `AGENTMEMO_AGENT_ID` | `default` | Agent namespace |
+| `AGENTMEMO_STORAGE` | `yaml` | `yaml` or `sqlite` |
+| `AGENTMEMO_DATA_DIR` | `.agentmemo` | Base dir for YAML backend (use absolute path) |
+| `AGENTMEMO_DB_PATH` | — | Full path to SQLite file (overrides `DATA_DIR` for sqlite) |
+
+> **Note:** Claude Desktop launches processes from a non-interactive shell where `cwd` is
+> undefined. Always set `AGENTMEMO_DATA_DIR` or `AGENTMEMO_DB_PATH` to an absolute path.
 
 ---
 
@@ -420,10 +513,12 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 - [x] OpenAI integration
 - [x] CLI
 - [x] PostgreSQL backend
+- [x] Conflict resolution in `learn()` (cross-session deduplication)
+- [x] Snapshots (`snapshot`, `restore`, `diff`)
+- [x] MCP server (Claude Desktop / Claude Code)
 - [ ] MongoDB backend
 - [ ] Qdrant + Weaviate backends
 - [ ] Semantic embeddings (sentence-transformers / OpenAI)
-- [ ] MCP server support
 - [ ] LangChain / CrewAI integrations
 - [ ] Web UI knowledge inspector
 - [ ] REST API / sidecar mode
@@ -441,6 +536,8 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 | Setup time | 30 sec | 10 min | 30 min | 5 min |
 | Framework-agnostic | Yes | Partial | Partial | LangGraph only |
 | Forgetting curve | Yes | No | No | No |
+| Snapshots + diff | Yes | No | No | No |
+| MCP server | Yes | No | No | No |
 | Free forever | Yes (MIT) | No | No | Yes |
 
 ---
