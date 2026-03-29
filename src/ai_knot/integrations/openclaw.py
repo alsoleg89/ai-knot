@@ -227,8 +227,7 @@ def generate_mcp_config(
         import mcp  # noqa: F401
     except ImportError as exc:
         raise ImportError(
-            "mcp package is required to use ai-knot-mcp. "
-            "Install with: pip install 'ai-knot[mcp]'"
+            "mcp package is required to use ai-knot-mcp. Install with: pip install 'ai-knot[mcp]'"
         ) from exc
     return {
         "mcpServers": {
