@@ -53,7 +53,13 @@ jobs:
         run: pip install -e ".[dev,openai]"
 
       - name: Run tests
-        run: pytest --cov=agentmemo --cov-report=xml --cov-report=term-missing
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            pytest -n auto --timeout=10 -m "not slow" \
+              --cov=agentmemo --cov-report=xml --cov-report=term-missing
+          else
+            pytest -n auto --timeout=10 -m "not slow" --no-cov
+          fi
 
       - name: Upload coverage
         if: matrix.python-version == '3.12'

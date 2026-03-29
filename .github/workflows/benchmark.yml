@@ -35,6 +35,7 @@ jobs:
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results-${{ github.sha }}
+          name: benchmark-results-${{ github.run_id }}-${{ github.sha }}
           path: benchmark.json
           retention-days: 90
+
