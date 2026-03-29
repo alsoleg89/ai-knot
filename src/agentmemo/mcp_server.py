@@ -260,15 +260,21 @@ def _make_server(kb: KnowledgeBase) -> Any:
     )
 
     @app.tool()
-    def add(content: str, type: str = "semantic", importance: float = 0.8) -> str:
+    def add(
+        content: str,
+        type: str = "semantic",
+        importance: float = 0.8,
+        tags: list[str] | None = None,
+    ) -> str:
         """Add a fact to agent memory.
 
         Args:
             content: The knowledge string to remember.
             type: Classification — semantic, procedural, or episodic.
             importance: How important (0.0–1.0). Higher = remembered longer.
+            tags: Optional labels for later retrieval via recall_by_tag.
         """
-        return tool_add(kb, content, type=type, importance=importance)
+        return tool_add(kb, content, type=type, importance=importance, tags=tags)
 
     @app.tool()
     def recall(query: str, top_k: int = 5) -> str:

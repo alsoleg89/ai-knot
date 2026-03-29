@@ -108,6 +108,10 @@ class TestToolAdd:
         fact_id = kb.list_facts()[0].id
         assert fact_id in result
 
+    def test_tags_stored(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "User works at Sber", tags=["profile"])
+        assert "profile" in kb.list_facts()[0].tags
+
 
 # ---------------------------------------------------------------------------
 # tool_recall

@@ -179,7 +179,8 @@ Add to your `claude_desktop_config.json`:
 
 **Available tools:** `add`, `recall`, `recall_json`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`, `list_snapshots`.
 
-Use `recall_json` when you need structured data (IDs, types, importance scores) instead of plain text.
+> **TypeScript agents:** always use `recall_json` — it returns a stable JSON array (`[]` when empty).
+> `recall` returns a plain string and `"No relevant facts found."` on empty — harder to parse reliably.
 
 **Environment variables:**
 
@@ -197,11 +198,21 @@ Use `recall_json` when you need structured data (IDs, types, importance scores) 
 
 ## OpenClaw integration
 
+**Which path should I use?**
+
+| Situation | Solution |
+|---|---|
+| OpenClaw TypeScript app (recommended) | `generate_mcp_config()` → paste into `~/.openclaw/openclaw.json` |
+| Python agent (LangChain, LangGraph, CrewAI) | `OpenClawMemoryAdapter(kb)` |
+
 agentmemo works as an OpenClaw memory backend via MCP. Two steps:
 
 ```bash
-pip install "agentmemo[mcp]"
+pip install "agentmemo[mcp]"   # installs the agentmemo-mcp entry point
 ```
+
+> **Note:** `agentmemo` (without `[mcp]`) does not install `agentmemo-mcp`.
+> The config will be generated but OpenClaw won't find the command.
 
 Generate the config snippet:
 
