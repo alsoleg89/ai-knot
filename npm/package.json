@@ -51,10 +51,13 @@
     "build:cjs": "tsc -p tsconfig.build.json --outDir dist/cjs --module commonjs --moduleResolution node && node --input-type=module -e \"import{writeFileSync}from'node:fs';writeFileSync('dist/cjs/package.json',JSON.stringify({type:'commonjs'}))\"",
     "typecheck": "tsc --noEmit",
     "clean": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('dist',{recursive:true,force:true})\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "node scripts/postinstall.js"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.9"
   }
 }

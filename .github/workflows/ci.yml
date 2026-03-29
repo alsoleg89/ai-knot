@@ -61,3 +61,47 @@ jobs:
         with:
           files: coverage.xml
           fail_ci_if_error: false
+
+  test-npm:
+    name: Test (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: npm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: npm/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  test-e2e:
+    name: E2E (MCP server)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,mcp]"
+
+      - name: Run E2E tests
+        # --no-cov: coverage is measured via subprocess, not import; 80% threshold would fail
+        run: pytest tests/test_mcp_e2e.py -v -m integration --no-cov
