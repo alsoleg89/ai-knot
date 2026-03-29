@@ -22,7 +22,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **npm package** — `npm install agentmemo` installs a TypeScript client for Node.js 18+.
+- **npm package** — `npm install @alsoleg89/agentmemo` installs a TypeScript client for Node.js 18+.
   Zero runtime npm dependencies. Communicates with the Python `agentmemo-mcp` subprocess
   via JSON-RPC 2.0 over stdio. Dual ESM + CJS exports. Postinstall auto-runs
   `pip install "agentmemo[mcp]"`.

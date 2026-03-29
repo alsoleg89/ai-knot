@@ -1,5 +1,5 @@
 {
-  "name": "agentmemo",
+  "name": "@alsoleg89/agentmemo",
   "version": "0.3.0",
   "description": "TypeScript client for agentmemo — agent memory via MCP stdio bridge",
   "license": "MIT",
