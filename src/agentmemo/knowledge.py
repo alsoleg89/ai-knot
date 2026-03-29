@@ -11,9 +11,9 @@ from agentmemo.extractor import Extractor, resolve_against_existing
 from agentmemo.forgetting import apply_decay
 from agentmemo.providers import LLMProvider
 from agentmemo.retriever import TFIDFRetriever
-from agentmemo.storage.base import StorageBackend
+from agentmemo.storage.base import SnapshotCapable, StorageBackend
 from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from agentmemo.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +222,84 @@ class KnowledgeBase:
         """Remove all facts for this agent."""
         self._storage.save(self._agent_id, [])
         logger.info("Cleared all facts for agent '%s'", self._agent_id)
+
+    def snapshot(self, name: str) -> None:
+        """Save the current state of the knowledge base as a named snapshot.
+
+        Args:
+            name: Identifier for this snapshot (e.g. "before_v2_campaign").
+
+        Raises:
+            NotImplementedError: If the storage backend does not support snapshots.
+        """
+        if not isinstance(self._storage, SnapshotCapable):
+            raise NotImplementedError(f"{type(self._storage).__name__} does not support snapshots.")
+        facts = self._storage.load(self._agent_id)
+        self._storage.save_snapshot(self._agent_id, name, facts)
+        logger.info("Snapshot '%s' saved for agent '%s'", name, self._agent_id)
+
+    def list_snapshots(self) -> list[str]:
+        """Return names of all saved snapshots for this agent.
+
+        Returns:
+            List of snapshot names sorted by creation time (oldest first).
+
+        Raises:
+            NotImplementedError: If the storage backend does not support snapshots.
+        """
+        if not isinstance(self._storage, SnapshotCapable):
+            raise NotImplementedError(f"{type(self._storage).__name__} does not support snapshots.")
+        return self._storage.list_snapshots(self._agent_id)
+
+    def restore(self, name: str) -> None:
+        """Replace current facts with the contents of a named snapshot.
+
+        Args:
+            name: The snapshot to restore.
+
+        Raises:
+            NotImplementedError: If the storage backend does not support snapshots.
+            KeyError: If the snapshot does not exist.
+        """
+        if not isinstance(self._storage, SnapshotCapable):
+            raise NotImplementedError(f"{type(self._storage).__name__} does not support snapshots.")
+        facts = self._storage.load_snapshot(self._agent_id, name)
+        self._storage.save(self._agent_id, facts)
+        logger.info("Restored snapshot '%s' for agent '%s'", name, self._agent_id)
+
+    def diff(self, a: str, b: str) -> SnapshotDiff:
+        """Compute the difference between two snapshots.
+
+        Use the special name ``"current"`` to refer to the live facts in storage.
+
+        Args:
+            a: Name of the first snapshot (or "current").
+            b: Name of the second snapshot (or "current").
+
+        Returns:
+            A :class:`SnapshotDiff` with ``added`` and ``removed`` fact lists.
+
+        Raises:
+            NotImplementedError: If the storage backend does not support snapshots.
+            KeyError: If a named snapshot does not exist.
+        """
+        if not isinstance(self._storage, SnapshotCapable):
+            raise NotImplementedError(f"{type(self._storage).__name__} does not support snapshots.")
+        facts_a = (
+            self._storage.load(self._agent_id)
+            if a == "current"
+            else self._storage.load_snapshot(self._agent_id, a)
+        )
+        facts_b = (
+            self._storage.load(self._agent_id)
+            if b == "current"
+            else self._storage.load_snapshot(self._agent_id, b)
+        )
+        ids_a = {f.id for f in facts_a}
+        ids_b = {f.id for f in facts_b}
+        removed = [f for f in facts_a if f.id not in ids_b]
+        added = [f for f in facts_b if f.id not in ids_a]
+        return SnapshotDiff(snapshot_a=a, snapshot_b=b, added=added, removed=removed)
 
     def stats(self) -> dict[str, Any]:
         """Return statistics about the knowledge base.

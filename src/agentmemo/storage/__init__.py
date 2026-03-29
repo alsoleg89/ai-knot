@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import os
 
-from agentmemo.storage.base import StorageBackend
+from agentmemo.storage.base import SnapshotCapable, StorageBackend
 from agentmemo.storage.sqlite_storage import SQLiteStorage
 from agentmemo.storage.yaml_storage import YAMLStorage
 
-__all__ = ["SQLiteStorage", "StorageBackend", "YAMLStorage", "create_storage"]
+__all__ = ["SQLiteStorage", "SnapshotCapable", "StorageBackend", "YAMLStorage", "create_storage"]
 
 _BACKENDS = {
     "yaml": "YAMLStorage",
