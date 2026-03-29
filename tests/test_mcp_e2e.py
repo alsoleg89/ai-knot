@@ -375,7 +375,7 @@ def test_mcp_large_content_10kb(tmp_path: Any) -> None:
     IPC pipe buffers average ~32 KB (research: netmeister.org/blog/ipcbufs.html).
     A 10 KB payload exercises near-limit framing without deadlock risk.
     """
-    large_content = "Python is great. " * 555  # ~10 KB
+    large_content = "Python is great. " * 600  # 17 chars × 600 = 10 200 bytes
     assert len(large_content) >= 9_990
 
     session = McpSession(str(tmp_path))
