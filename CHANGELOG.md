@@ -18,6 +18,32 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] — 2026-03-29
+
+### Added
+
+- **npm package** — `npm install agentmemo` installs a TypeScript client for Node.js 18+.
+  Zero runtime npm dependencies. Communicates with the Python `agentmemo-mcp` subprocess
+  via JSON-RPC 2.0 over stdio. Dual ESM + CJS exports. Postinstall auto-runs
+  `pip install "agentmemo[mcp]"`.
+
+  ```typescript
+  import { KnowledgeBase } from 'agentmemo';
+  const kb = new KnowledgeBase({ agentId: 'bot', storage: 'sqlite', dbPath: '/data/mem.db' });
+  await kb.add('User prefers TypeScript');
+  const ctx = await kb.recall('what language?');
+  await kb.close();
+  ```
+
+  Full API: `add`, `recall`, `forget`, `listFacts`, `stats`, `snapshot`, `restore`, `close`.
+  Concurrent calls safe — JSON-RPC 2.0 request-id multiplexing over a single subprocess.
+
+- **Manual publish workflows** — `workflow_dispatch` buttons in GitHub Actions for
+  "Publish to PyPI" and "Publish to npm". No tags required; version read from
+  `pyproject.toml` and `npm/package.json`.
+
+---
+
 ## [0.2.0] — 2026-03-29
 
 ### Added
@@ -93,6 +119,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `BASE_STABILITY_HOURS` set to 336 (2 weeks retention baseline)
 - TF-IDF tokenizer: camelCase splitting + basic plural stemming
 
-[Unreleased]: https://github.com/alsoleg89/agentmemo/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/alsoleg89/agentmemo/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/alsoleg89/agentmemo/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alsoleg89/agentmemo/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alsoleg89/agentmemo/releases/tag/v0.1.0

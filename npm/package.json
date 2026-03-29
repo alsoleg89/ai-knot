@@ -1,6 +1,6 @@
 {
   "name": "agentmemo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript client for agentmemo — agent memory via MCP stdio bridge",
   "license": "MIT",
   "author": "Oleg",

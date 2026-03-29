@@ -2,6 +2,7 @@
 
 ![CI](https://github.com/alsoleg89/agentmemo/actions/workflows/ci.yml/badge.svg)
 ![PyPI](https://img.shields.io/pypi/v/agentmemo)
+![npm](https://img.shields.io/npm/v/agentmemo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **Agent knowledge layer — distills conversations into structured facts, retrieves what matters, forgets the rest.**
@@ -34,6 +35,7 @@ agentmemo solves this by keeping a distilled knowledge base instead of a raw log
 
 ## Install
 
+**Python:**
 ```bash
 pip install agentmemo
 
@@ -45,6 +47,11 @@ pip install "agentmemo[postgres]"
 
 # With MCP server (Claude Desktop / Claude Code):
 pip install "agentmemo[mcp]"
+```
+
+**Node.js / TypeScript (requires Python 3.11+ in PATH):**
+```bash
+npm install agentmemo
 ```
 
 ---
@@ -516,6 +523,7 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 - [x] Conflict resolution in `learn()` (cross-session deduplication)
 - [x] Snapshots (`snapshot`, `restore`, `diff`)
 - [x] MCP server (Claude Desktop / Claude Code)
+- [x] npm package (`npm install agentmemo`)
 - [ ] MongoDB backend
 - [ ] Qdrant + Weaviate backends
 - [ ] Semantic embeddings (sentence-transformers / OpenAI)
