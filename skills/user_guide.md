@@ -1,8 +1,8 @@
-# Skill: User Guide — Applying agentmemo to Your Project
+# Skill: User Guide — Applying ai-knot to Your Project
 
 ## Who this is for
 
-You are a developer integrating agentmemo into your own AI agent or chatbot project.
+You are a developer integrating ai-knot into your own AI agent or chatbot project.
 This guide takes you from zero to a working memory layer in 30 seconds,
 then covers everything you need to go production.
 
@@ -11,10 +11,10 @@ then covers everything you need to go production.
 ## Step 1: Install
 
 ```bash
-pip install agentmemo
+pip install ai-knot
 
 # If you want LLM-powered automatic fact extraction:
-pip install "agentmemo[openai]"
+pip install "ai-knot[openai]"
 ```
 
 ---
@@ -22,13 +22,13 @@ pip install "agentmemo[openai]"
 ## Step 2: Create a knowledge base
 
 ```python
-from agentmemo import KnowledgeBase
+from ai_knot import KnowledgeBase
 
 # agent_id is your namespace — one KB per agent / user / context
 kb = KnowledgeBase(agent_id="my_assistant")
 ```
 
-By default, facts are stored in `.agentmemo/my_assistant/knowledge.yaml` —
+By default, facts are stored in `.ai_knot/my_assistant/knowledge.yaml` —
 human-readable, editable, Git-trackable.
 
 ---
@@ -36,7 +36,7 @@ human-readable, editable, Git-trackable.
 ## Step 3: Add facts manually
 
 ```python
-from agentmemo import MemoryType
+from ai_knot import MemoryType
 
 kb.add("User works at Sber as Operations Director",
        importance=0.95)                              # semantic by default
@@ -89,7 +89,7 @@ response = openai_client.chat.completions.create(
 
 ```python
 import os
-from agentmemo import ConversationTurn
+from ai_knot import ConversationTurn
 
 turns = [
     ConversationTurn(role="user",      content="I deploy everything in Docker"),
@@ -113,11 +113,11 @@ The extractor skips filler (“thanks”, “ok”, “got it”) and returns on
 
 ### YAML (default) — development, small projects
 ```python
-from agentmemo.storage import YAMLStorage
+from ai_knot.storage import YAMLStorage
 
 kb = KnowledgeBase(
     agent_id="bot",
-    storage=YAMLStorage(base_dir=".agentmemo"),  # default
+    storage=YAMLStorage(base_dir=".ai_knot"),  # default
 )
 ```
 - Human-readable files, editable by hand
@@ -126,11 +126,11 @@ kb = KnowledgeBase(
 
 ### SQLite — production, single server
 ```python
-from agentmemo.storage import SQLiteStorage
+from ai_knot.storage import SQLiteStorage
 
 kb = KnowledgeBase(
     agent_id="bot",
-    storage=SQLiteStorage(db_path="/data/agentmemo.db"),
+    storage=SQLiteStorage(db_path="/data/ai_knot.db"),
 )
 ```
 - Zero-server production storage
@@ -142,7 +142,7 @@ kb = KnowledgeBase(
 ## OpenAI integration (automatic memory injection)
 
 ```python
-from agentmemo.integrations.openai import MemoryEnabledOpenAI
+from ai_knot.integrations.openai import MemoryEnabledOpenAI
 
 client = MemoryEnabledOpenAI(knowledge_base=kb)
 
@@ -172,7 +172,7 @@ response = openai.OpenAI().chat.completions.create(
 def get_kb(user_id: str) -> KnowledgeBase:
     return KnowledgeBase(
         agent_id=f"user_{user_id}",
-        storage=SQLiteStorage(db_path="/data/agentmemo.db"),
+        storage=SQLiteStorage(db_path="/data/ai_knot.db"),
     )
 
 # In your request handler:
@@ -188,28 +188,28 @@ Shared storage, isolated namespaces. Zero extra setup.
 
 ```bash
 # List all facts
-agentmemo show my_assistant
+ai-knot show my_assistant
 
 # Test retrieval
-agentmemo recall my_assistant "how should I deploy this?"
+ai-knot recall my_assistant "how should I deploy this?"
 
 # Add a fact manually
-agentmemo add my_assistant "User prefers FastAPI" --importance 0.9 --type procedural
+ai-knot add my_assistant "User prefers FastAPI" --importance 0.9 --type procedural
 
 # View stats
-agentmemo stats my_assistant
+ai-knot stats my_assistant
 
 # Apply forgetting curve manually
-agentmemo decay my_assistant
+ai-knot decay my_assistant
 
 # Backup
-agentmemo export my_assistant backup.yaml
+ai-knot export my_assistant backup.yaml
 
 # Restore
-agentmemo import my_assistant backup.yaml
+ai-knot import my_assistant backup.yaml
 
 # Wipe
-agentmemo clear my_assistant
+ai-knot clear my_assistant
 ```
 
 ---
@@ -220,7 +220,7 @@ Accumulating everything makes your agent **worse**:
 - Old, irrelevant facts pollute the context window
 - The agent gets confused by outdated information
 
-agentmemo uses an Ebbinghaus decay curve:
+ai-knot uses an Ebbinghaus decay curve:
 - Facts with **low importance** and **no recent access** fade automatically
 - Facts with **high importance** or **frequent access** are reinforced
 - You never need to manually clean up — `decay()` runs on every `recall()`
@@ -235,12 +235,12 @@ kb.decay()
 ## Integrating into an existing chatbot (pattern)
 
 ```python
-from agentmemo import KnowledgeBase
-from agentmemo.storage import SQLiteStorage
+from ai_knot import KnowledgeBase
+from ai_knot.storage import SQLiteStorage
 import os
 
 # Initialize once, reuse across requests
-STORAGE = SQLiteStorage(db_path=os.environ.get("AGENTMEMO_DB", ".agentmemo/bot.db"))
+STORAGE = SQLiteStorage(db_path=os.environ.get("AI_KNOT_DB", ".ai_knot/bot.db"))
 
 def chat(user_id: str, user_message: str) -> str:
     kb = KnowledgeBase(agent_id=f"user_{user_id}", storage=STORAGE)
@@ -257,7 +257,7 @@ def chat(user_id: str, user_message: str) -> str:
     response = call_your_llm(system_prompt, user_message)
 
     # 4. (Optional) learn from this exchange
-    from agentmemo import ConversationTurn
+    from ai_knot import ConversationTurn
     kb.learn(
         [ConversationTurn("user", user_message), ConversationTurn("assistant", response)],
         api_key=os.environ.get("OPENAI_API_KEY"),
@@ -270,7 +270,7 @@ def chat(user_id: str, user_message: str) -> str:
 
 ## FAQ
 
-**Q: Does agentmemo store conversation logs?**
+**Q: Does ai-knot store conversation logs?**
 No. It stores structured facts extracted from conversations. Logs are your business.
 
 **Q: Can I run it without an LLM?**
@@ -286,11 +286,11 @@ For high-concurrency production, use the planned PostgreSQL backend.
 
 **Q: Why not use Mem0 / Zep / LangMem?**
 See the comparison table in `README.md`.
-Short answer: agentmemo is self-hosted, pluggable, human-readable, and free forever (MIT).
+Short answer: ai-knot is self-hosted, pluggable, human-readable, and free forever (MIT).
 
 **Q: How do I migrate from YAML to SQLite?**
 ```bash
-agentmemo export my_agent backup.yaml --data-dir .agentmemo
-agentmemo import my_agent backup.yaml --data-dir /path/to/sqlite/dir
+ai-knot export my_agent backup.yaml --data-dir .ai_knot
+ai-knot import my_agent backup.yaml --data-dir /path/to/sqlite/dir
 ```
 Or pass the new storage backend directly in Python and call `save()` with the loaded facts.

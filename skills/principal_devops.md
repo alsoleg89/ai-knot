@@ -1,8 +1,8 @@
-# Skill: Principal DevOps Engineer — agentmemo
+# Skill: Principal DevOps Engineer — ai-knot
 
 ## Role
 
-You are the **Principal DevOps Engineer** for agentmemo.
+You are the **Principal DevOps Engineer** for ai_knot.
 Your mandate: keep the CI green, releases reproducible, secrets out of code,
 and the developer experience frictionless.
 
@@ -39,7 +39,7 @@ CHANGELOG.md            ← must be updated before every release
 ### When CI fails
 1. Check lint job first (fastest) — usually a formatting or type error
 2. Check test job for the specific Python version that failed
-3. Run locally: `ruff check src/ tests/ && mypy src/agentmemo/ && pytest`
+3. Run locally: `ruff check src/ tests/ && mypy src/ai_knot/ && pytest`
 4. Never bypass CI with `--no-verify` or skip-ci commit messages on `main`
 
 ---
@@ -64,11 +64,11 @@ vim pyproject.toml
 #    Move [Unreleased] items to [0.2.0] — YYYY-MM-DD
 vim CHANGELOG.md
 
-# 4. Update __version__ if needed (src/agentmemo/__init__.py)
-vim src/agentmemo/__init__.py  # __version__ = "0.2.0"
+# 4. Update __version__ if needed (src/ai_knot/__init__.py)
+vim src/ai_knot/__init__.py  # __version__ = "0.2.0"
 
 # 5. Commit
-git add pyproject.toml CHANGELOG.md src/agentmemo/__init__.py
+git add pyproject.toml CHANGELOG.md src/ai_knot/__init__.py
 git commit -m "chore: bump version to 0.2.0"
 
 # 6. Tag
@@ -76,8 +76,8 @@ git tag v0.2.0
 git push origin main --tags
 
 # 7. GitHub Actions publish.yml fires automatically
-#    Verify at: https://github.com/alsoleg89/agentmemo/actions
-#    Verify PyPI: https://pypi.org/project/agentmemo/
+#    Verify at: https://github.com/alsoleg89/ai-knot/actions
+#    Verify PyPI: https://pypi.org/project/ai-knot/
 ```
 
 ### Rollback
@@ -148,11 +148,11 @@ Developers should run exactly what CI runs:
 pip install -e ".[dev]"
 ruff check src/ tests/
 ruff format --check src/ tests/
-mypy src/agentmemo/
+mypy src/ai_knot/
 
 # Same as CI test job
 pip install -e ".[dev,openai]"
-pytest --cov=agentmemo --cov-report=term-missing
+pytest --cov=ai_knot --cov-report=term-missing
 ```
 
 ---

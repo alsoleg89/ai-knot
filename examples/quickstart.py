@@ -1,10 +1,10 @@
-"""agentmemo quickstart — minimal working example."""
+"""ai-knot quickstart — minimal working example."""
 
 import shutil
 
-from agentmemo import KnowledgeBase, MemoryType
+from ai_knot import KnowledgeBase, MemoryType
 
-# Create a knowledge base (stores in .agentmemo/ by default).
+# Create a knowledge base (stores in .ai_knot/ by default).
 kb = KnowledgeBase(agent_id="demo")
 
 # Add facts manually.
@@ -38,5 +38,5 @@ print(f"Avg retention: {stats['avg_retention']:.2f}")
 kb.decay()
 
 # Clean up demo data.
-shutil.rmtree(".agentmemo", ignore_errors=True)
-print("\nDemo complete. Cleaned up .agentmemo/")
+shutil.rmtree(".ai_knot", ignore_errors=True)
+print("\nDemo complete. Cleaned up .ai_knot/")

@@ -23,7 +23,7 @@ retention weights made recent-but-irrelevant facts rank too high.
 
 We'll add optional embedding support in a future version, but it will be additive —
 TF-IDF stays as the default because it requires zero external dependencies
-and works predictably at the fact counts agentmemo is designed for (~10k max).
+and works predictably at the fact counts ai-knot is designed for (~10k max).
 
 ---
 
@@ -70,6 +70,6 @@ produces a clean diff. Partial upserts produce noisy diffs with interleaved
 changes that are hard to review.
 
 The downside is write amplification: saving 1 changed fact writes all N facts.
-At the scale agentmemo targets (hundreds, not millions of facts per agent) this
+At the scale ai-knot targets (hundreds, not millions of facts per agent) this
 is not a bottleneck. If it becomes one, the storage backend can implement
 internal diffing transparently — the protocol doesn't need to change.

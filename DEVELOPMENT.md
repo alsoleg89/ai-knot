@@ -11,8 +11,8 @@
 ## Installation
 
 ```bash
-git clone https://github.com/alsoleg89/agentmemo.git
-cd agentmemo
+git clone https://github.com/alsoleg89/ai_knot.git
+cd ai-knot
 
 # Install in editable mode with all dev and optional deps
 pip install -e ".[dev,openai]"
@@ -59,7 +59,7 @@ ruff format src/ tests/
 ruff format --check src/ tests/
 
 # Type check
-mypy src/agentmemo/
+mypy src/ai_knot/
 ```
 
 All three must pass clean before opening a PR.
@@ -69,7 +69,7 @@ All three must pass clean before opening a PR.
 ## Project structure
 
 ```
-src/agentmemo/          # Package source
+src/ai_knot/          # Package source
   types.py              # Fact, MemoryType, ConversationTurn
   storage/              # Storage backends
     base.py             # StorageBackend protocol
@@ -99,18 +99,18 @@ skills/                 # Role-based working guides for this project
 
 ```bash
 # Add facts
-agentmemo add mybot "User prefers Python" --importance 0.9
-agentmemo add mybot "User deploys on Docker"
+ai-knot add mybot "User prefers Python" --importance 0.9
+ai-knot add mybot "User deploys on Docker"
 
 # Query
-agentmemo recall mybot "how to deploy?"
+ai-knot recall mybot "how to deploy?"
 
 # Inspect
-agentmemo show mybot
-agentmemo stats mybot
+ai-knot show mybot
+ai-knot stats mybot
 
 # Apply forgetting
-agentmemo decay mybot
+ai-knot decay mybot
 ```
 
 ### Try the Python API
@@ -133,7 +133,7 @@ python examples/openai_integration.py
 See `CONTRIBUTING.md → Adding a storage backend` and `ARCHITECTURE.md → Storage layer`.
 
 Quick checklist:
-1. Create file in `src/agentmemo/storage/`
+1. Create file in `src/ai_knot/storage/`
 2. Implement `save`, `load`, `delete`, `list_agents`
 3. Export from `storage/__init__.py`
 4. Add optional dep to `pyproject.toml` if needed

@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from agentmemo.types import Fact, MemoryType
+from ai_knot.types import Fact, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class YAMLStorage:
     threading.Lock; the file is replaced atomically (write → fsync → rename).
     """
 
-    def __init__(self, base_dir: str = ".agentmemo") -> None:
+    def __init__(self, base_dir: str = ".ai_knot") -> None:
         self._base_dir = Path(base_dir)
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:

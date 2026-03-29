@@ -21,7 +21,7 @@ jobs:
       - name: Install dev dependencies
         run: npm ci
         env:
-          AGENTMEMO_SKIP_PYTHON_INSTALL: "1"
+          AI_KNOT_SKIP_PYTHON_INSTALL: "1"
 
       - name: Build (ESM + CJS)
         run: npm run build

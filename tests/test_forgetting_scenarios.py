@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from agentmemo.forgetting import calculate_retention
-from agentmemo.types import Fact
+from ai_knot.forgetting import calculate_retention
+from ai_knot.types import Fact
 
 BASE_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 

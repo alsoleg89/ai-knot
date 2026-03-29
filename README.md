@@ -1,13 +1,13 @@
-# agentmemo
+# ai-knot
 
-![CI](https://github.com/alsoleg89/agentmemo/actions/workflows/ci.yml/badge.svg)
-![PyPI](https://img.shields.io/pypi/v/agentmemo)
-![npm](https://img.shields.io/npm/v/@alsoleg/agentmemo)
+![CI](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml/badge.svg)
+![PyPI](https://img.shields.io/pypi/v/ai-knot)
+![npm](https://img.shields.io/npm/v/ai-knot)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **Agent knowledge layer — distills conversations into structured facts, retrieves what matters, forgets the rest.**
 
-Most agent frameworks treat memory as a log. agentmemo treats it as a knowledge base.
+Most agent frameworks treat memory as a log. ai-knot treats it as a knowledge base.
 It extracts facts from conversations, scores them by importance, and retrieves only what's
 relevant when building the next prompt. Pluggable storage, six LLM providers, no vendor lock-in.
 
@@ -21,7 +21,7 @@ into every request, most of which has nothing to do with what the user asked.
 
 The log grows to 400k tokens. The model needs maybe 300 of those for the next turn —
 but there's no obvious way to know which ones without reading all of them first.
-agentmemo solves this by keeping a distilled knowledge base instead of a raw log.
+ai-knot solves this by keeping a distilled knowledge base instead of a raw log.
 
 ```
 1000 messages  (~400k tokens)
@@ -37,21 +37,21 @@ agentmemo solves this by keeping a distilled knowledge base instead of a raw log
 
 **Python:**
 ```bash
-pip install agentmemo
+pip install ai-knot
 
 # With OpenAI for LLM extraction:
-pip install "agentmemo[openai]"
+pip install "ai-knot[openai]"
 
 # With PostgreSQL backend:
-pip install "agentmemo[postgres]"
+pip install "ai-knot[postgres]"
 
 # With MCP server (Claude Desktop / Claude Code):
-pip install "agentmemo[mcp]"
+pip install "ai-knot[mcp]"
 ```
 
 **Node.js / TypeScript (requires Python 3.11+ in PATH):**
 ```bash
-npm install @alsoleg/agentmemo
+npm install ai-knot
 ```
 
 ---
@@ -59,7 +59,7 @@ npm install @alsoleg/agentmemo
 ## Quickstart (30 seconds)
 
 ```python
-from agentmemo import KnowledgeBase
+from ai_knot import KnowledgeBase
 
 kb = KnowledgeBase(agent_id="my_agent")
 
@@ -70,7 +70,7 @@ kb.add("User prefers Python, dislikes async code",
        type="procedural", importance=0.85)
 
 # Or extract automatically from a conversation
-from agentmemo import ConversationTurn
+from ai_knot import ConversationTurn
 turns = [
     ConversationTurn(role="user",      content="I deploy everything in Docker"),
     ConversationTurn(role="assistant", content="Got it, I'll use Docker examples"),
@@ -93,7 +93,7 @@ response = openai_client.chat(...,
 ## Performance
 
 Benchmarks run on Ubuntu (`ubuntu-latest`, GitHub Actions).
-[Full benchmark history →](https://alsoleg89.github.io/agentmemo/dev/bench/)
+[Full benchmark history →](https://alsoleg89.github.io/ai-knot/dev/bench/)
 
 ### Retrieval latency (TF-IDF, in-process)
 
@@ -135,13 +135,13 @@ Measured end-to-end: Python subprocess spawn is one-time; per-call overhead is J
 
 ---
 
-## What agentmemo keeps — and what it drops
+## What ai-knot keeps — and what it drops
 
 Pass it a conversation and it calls your LLM to figure out what's worth keeping —
 preferences, recurring patterns, explicit facts. Greetings, clarifications, filler — those don't make the cut.
 
 ```
-What happened in the conversation:         What agentmemo stores:
+What happened in the conversation:         What ai-knot stores:
 ---                                        ---
 "hey"                                      X skipped
 "thanks"                                   X skipped
@@ -199,17 +199,17 @@ print(f"Removed: {[f.content for f in diff.removed]}")
 ```
 
 Both YAML and SQLite backends support snapshots. YAML stores them under
-`.agentmemo/{agent_id}/snapshots/`. SQLite stores them in the same database file.
+`.ai_knot/{agent_id}/snapshots/`. SQLite stores them in the same database file.
 
 ---
 
-## MCP server — use agentmemo from Claude Desktop or Claude Code
+## MCP server — use ai-knot from Claude Desktop or Claude Code
 
-agentmemo ships a native MCP server. Install it and Claude can call `add`, `recall`,
+ai-knot ships a native MCP server. Install it and Claude can call `add`, `recall`,
 `forget`, and `snapshot` as tools — without any Python code on your end:
 
 ```bash
-pip install "agentmemo[mcp]"
+pip install "ai-knot[mcp]"
 ```
 
 Add to your `claude_desktop_config.json`:
@@ -217,12 +217,12 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "agentmemo": {
-      "command": "agentmemo-mcp",
+    "ai-knot": {
+      "command": "ai-knot-mcp",
       "env": {
-        "AGENTMEMO_AGENT_ID": "myagent",
-        "AGENTMEMO_STORAGE": "sqlite",
-        "AGENTMEMO_DB_PATH": "/absolute/path/to/memory.db"
+        "AI_KNOT_AGENT_ID": "myagent",
+        "AI_KNOT_STORAGE": "sqlite",
+        "AI_KNOT_DB_PATH": "/absolute/path/to/memory.db"
       }
     }
   }
@@ -238,13 +238,13 @@ Add to your `claude_desktop_config.json`:
 
 | Variable | Default | Description |
 |---|---|---|
-| `AGENTMEMO_AGENT_ID` | `default` | Agent namespace |
-| `AGENTMEMO_STORAGE` | `sqlite` | `sqlite` (recommended) or `yaml` |
-| `AGENTMEMO_DATA_DIR` | `.agentmemo` | Base dir for file backends (use absolute path) |
-| `AGENTMEMO_DB_PATH` | — | Full path to SQLite file (overrides `DATA_DIR` for sqlite) |
+| `AI_KNOT_AGENT_ID` | `default` | Agent namespace |
+| `AI_KNOT_STORAGE` | `sqlite` | `sqlite` (recommended) or `yaml` |
+| `AI_KNOT_DATA_DIR` | `.ai_knot` | Base dir for file backends (use absolute path) |
+| `AI_KNOT_DB_PATH` | — | Full path to SQLite file (overrides `DATA_DIR` for sqlite) |
 
 > **Note:** Claude Desktop launches processes from a non-interactive shell where `cwd` is
-> undefined. Always set `AGENTMEMO_DATA_DIR` or `AGENTMEMO_DB_PATH` to an absolute path.
+> undefined. Always set `AI_KNOT_DATA_DIR` or `AI_KNOT_DB_PATH` to an absolute path.
 
 ---
 
@@ -257,20 +257,20 @@ Add to your `claude_desktop_config.json`:
 | OpenClaw TypeScript app (recommended) | `generate_mcp_config()` → paste into `~/.openclaw/openclaw.json` |
 | Python agent (LangChain, LangGraph, CrewAI) | `OpenClawMemoryAdapter(kb)` |
 
-agentmemo works as an OpenClaw memory backend via MCP. Two steps:
+ai-knot works as an OpenClaw memory backend via MCP. Two steps:
 
 ```bash
-pip install "agentmemo[mcp]"   # installs the agentmemo-mcp entry point
+pip install "ai-knot[mcp]"   # installs the ai-knot-mcp entry point
 ```
 
-> **Note:** `agentmemo` (without `[mcp]`) does not install `agentmemo-mcp`.
+> **Note:** `ai-knot` (without `[mcp]`) does not install `ai-knot-mcp`.
 > The config will be generated but OpenClaw won't find the command.
 
 Generate the config snippet:
 
 ```python
 import json
-from agentmemo.integrations.openclaw import generate_mcp_config
+from ai_knot.integrations.openclaw import generate_mcp_config
 
 print(json.dumps(generate_mcp_config("my_agent"), indent=2))
 ```
@@ -280,14 +280,14 @@ Paste the output into your OpenClaw config file:
 - **macOS / Linux:** `~/.openclaw/openclaw.json`
 - **Windows:** `%APPDATA%\OpenClaw\openclaw.json`
 
-Your agent will have access to all agentmemo tools: `add`, `recall`, `recall_json`,
+Your agent will have access to all ai-knot tools: `add`, `recall`, `recall_json`,
 `forget`, `list_facts`, `list_snapshots`, `stats`, `snapshot`, `restore`.
 
 For Python-native agents (LangChain, LangGraph, CrewAI), use the adapter class instead:
 
 ```python
-from agentmemo import KnowledgeBase
-from agentmemo.integrations.openclaw import OpenClawMemoryAdapter
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.openclaw import OpenClawMemoryAdapter
 
 kb = KnowledgeBase("my_agent")
 memory = OpenClawMemoryAdapter(kb)
@@ -313,8 +313,8 @@ memory.delete(results[0]["id"])
 No vendor lock-in. Swap backends with one line:
 
 ```python
-from agentmemo import KnowledgeBase
-from agentmemo.storage import YAMLStorage, SQLiteStorage
+from ai_knot import KnowledgeBase
+from ai_knot.storage import YAMLStorage, SQLiteStorage
 
 # Development — zero infra:
 kb = KnowledgeBase(agent_id="bot", storage=YAMLStorage())
@@ -334,8 +334,8 @@ Storage is set once on `KnowledgeBase`. The LLM provider is passed per `learn()`
 They are independent and combine freely:
 
 ```python
-from agentmemo import KnowledgeBase, ConversationTurn
-from agentmemo.storage import SQLiteStorage
+from ai_knot import KnowledgeBase, ConversationTurn
+from ai_knot.storage import SQLiteStorage
 
 # Step 1: pick a storage backend
 storage = SQLiteStorage(db_path="./agent.db")
@@ -381,7 +381,7 @@ preferences and rules; `episodic` for dated events you might want to forget soon
 Accumulating everything makes agents **worse**, not better.
 Irrelevant facts pollute the context window — this is called **context rot**.
 
-agentmemo uses an Ebbinghaus-based decay curve:
+ai-knot uses an Ebbinghaus-based decay curve:
 
 ```
 retention = e^(-time / stability)
@@ -403,14 +403,14 @@ scores current.
 ## CLI
 
 ```bash
-agentmemo show   my_agent            # list all stored facts
-agentmemo recall my_agent "query"    # test retrieval
-agentmemo add    my_agent "fact"     # add a fact
-agentmemo stats  my_agent            # counts, avg importance, retention
-agentmemo decay  my_agent            # apply forgetting curve
-agentmemo clear  my_agent            # wipe knowledge base
-agentmemo export my_agent out.yaml   # backup to file
-agentmemo import my_agent in.yaml    # restore from backup
+ai-knot show   my_agent            # list all stored facts
+ai-knot recall my_agent "query"    # test retrieval
+ai-knot add    my_agent "fact"     # add a fact
+ai-knot stats  my_agent            # counts, avg importance, retention
+ai-knot decay  my_agent            # apply forgetting curve
+ai-knot clear  my_agent            # wipe knowledge base
+ai-knot export my_agent out.yaml   # backup to file
+ai-knot import my_agent in.yaml    # restore from backup
 ```
 
 ---
@@ -418,7 +418,7 @@ agentmemo import my_agent in.yaml    # restore from backup
 ## How knowledge looks on disk (YAML backend)
 
 ```yaml
-# .agentmemo/my_agent/knowledge.yaml — readable, editable, Git-trackable
+# .ai_knot/my_agent/knowledge.yaml — readable, editable, Git-trackable
 
 a1b2c3:
   content: "User is a senior backend developer at Acme Corp"
@@ -444,7 +444,7 @@ Edit it by hand. Commit it to Git. Roll back when needed.
 
 ## LLM providers
 
-agentmemo ships with 6 providers for fact extraction:
+ai-knot ships with 6 providers for fact extraction:
 
 | Provider | Name | Env var |
 |---|---|---|
@@ -466,8 +466,8 @@ kb.learn(turns, provider="openai-compat", api_key="...", base_url="http://localh
 ## OpenAI integration
 
 ```python
-from agentmemo import KnowledgeBase
-from agentmemo.integrations.openai import MemoryEnabledOpenAI
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.openai import MemoryEnabledOpenAI
 
 kb = KnowledgeBase(agent_id="assistant")
 kb.add("User prefers Python")
@@ -521,7 +521,7 @@ conflate episodic events with semantic facts. When accuracy matters, use a capab
 ### 1. Manual add + recall (no LLM required)
 
 ```python
-from agentmemo import KnowledgeBase, MemoryType
+from ai_knot import KnowledgeBase, MemoryType
 
 kb = KnowledgeBase(agent_id="assistant")
 kb.add("User prefers Python",          type=MemoryType.PROCEDURAL, importance=0.9)
@@ -536,8 +536,8 @@ context = kb.recall("how to deploy?")
 ### 2. SQLite + OpenAI
 
 ```python
-from agentmemo import KnowledgeBase, ConversationTurn
-from agentmemo.storage import SQLiteStorage
+from ai_knot import KnowledgeBase, ConversationTurn
+from ai_knot.storage import SQLiteStorage
 
 kb = KnowledgeBase(agent_id="bot", storage=SQLiteStorage(db_path="./bot.db"))
 turns = [ConversationTurn(role="user", content="I work with Python and FastAPI")]
@@ -548,22 +548,22 @@ context = kb.recall("what stack does user use?")
 ### 3. YAML storage + Anthropic (Claude)
 
 ```python
-from agentmemo import KnowledgeBase, ConversationTurn
-from agentmemo.storage import YAMLStorage
+from ai_knot import KnowledgeBase, ConversationTurn
+from ai_knot.storage import YAMLStorage
 
-kb = KnowledgeBase(agent_id="bot", storage=YAMLStorage(base_dir=".agentmemo"))
+kb = KnowledgeBase(agent_id="bot", storage=YAMLStorage(base_dir=".ai_knot"))
 turns = [ConversationTurn(role="user", content="Always write tests with pytest")]
 kb.learn(turns, provider="anthropic", api_key="sk-ant-...")
-# Facts are saved to .agentmemo/bot/knowledge.yaml — readable, Git-trackable
+# Facts are saved to .ai_knot/bot/knowledge.yaml — readable, Git-trackable
 ```
 
 ### 4. PostgreSQL + any OpenAI-compatible endpoint
 
 ```python
-from agentmemo import KnowledgeBase, ConversationTurn
-from agentmemo.storage import create_storage
+from ai_knot import KnowledgeBase, ConversationTurn
+from ai_knot.storage import create_storage
 
-storage = create_storage("postgres", dsn="postgresql://user:pass@db:5432/agentmemo")
+storage = create_storage("postgres", dsn="postgresql://user:pass@db:5432/ai-knot")
 kb = KnowledgeBase(agent_id="assistant", storage=storage)
 turns = [ConversationTurn(role="user", content="Prefer concise answers")]
 kb.learn(turns, provider="openai-compat",
@@ -573,7 +573,7 @@ kb.learn(turns, provider="openai-compat",
 ### 5. Per-customer knowledge (support agent)
 
 ```python
-from agentmemo import KnowledgeBase
+from ai_knot import KnowledgeBase
 
 def handle_ticket(customer_id: str, message: str) -> str:
     kb = KnowledgeBase(agent_id=f"customer_{customer_id}")
@@ -585,21 +585,21 @@ def handle_ticket(customer_id: str, message: str) -> str:
 ### 6. Coding agent with project context
 
 ```python
-from agentmemo import KnowledgeBase, MemoryType
-from agentmemo.storage import YAMLStorage
+from ai_knot import KnowledgeBase, MemoryType
+from ai_knot.storage import YAMLStorage
 
-kb = KnowledgeBase(agent_id="project", storage=YAMLStorage(".agentmemo"))
+kb = KnowledgeBase(agent_id="project", storage=YAMLStorage(".ai_knot"))
 kb.add("Stack: FastAPI + PostgreSQL + Docker",  importance=1.0)
 kb.add("No unittest — use pytest only",         type=MemoryType.PROCEDURAL, importance=0.9)
 kb.add("All endpoints require JWT auth",        importance=0.95)
-# Commit .agentmemo/ to Git — new team members clone the context
+# Commit .ai_knot/ to Git — new team members clone the context
 ```
 
 ### 7. Shared knowledge across multiple agents
 
 ```python
-from agentmemo import KnowledgeBase
-from agentmemo.storage import SQLiteStorage
+from ai_knot import KnowledgeBase
+from ai_knot.storage import SQLiteStorage
 
 storage = SQLiteStorage(db_path="./team.db")
 researcher = KnowledgeBase(agent_id="team_alpha", storage=storage)
@@ -612,7 +612,7 @@ context = writer.recall("rate limits")  # sees researcher's facts instantly
 ### 8. Stats and forgetting curve
 
 ```python
-from agentmemo import KnowledgeBase
+from ai_knot import KnowledgeBase
 
 kb = KnowledgeBase(agent_id="assistant")
 kb.add("User likes dark mode")
@@ -639,7 +639,7 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 - [x] Conflict resolution in `learn()` (cross-session deduplication)
 - [x] Snapshots (`snapshot`, `restore`, `diff`)
 - [x] MCP server (Claude Desktop / Claude Code)
-- [x] npm package (`npm install @alsoleg/agentmemo`)
+- [x] npm package (`npm install ai-knot`)
 - [x] OpenClaw integration (`OpenClawMemoryAdapter` + `generate_mcp_config`)
 - [x] Scored retrieval (`recall_facts_with_scores`)
 - [ ] MongoDB backend
@@ -653,7 +653,7 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 
 ## Why not just use Mem0 / Zep / LangMem?
 
-| | agentmemo | Mem0 | Zep | LangMem |
+| | ai-knot | Mem0 | Zep | LangMem |
 |---|---|---|---|---|
 | Self-hosted | Yes | Partial | Yes | Yes |
 | No cloud required | Yes | No | No | Yes |

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pathlib
 
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import Fact, MemoryType
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import Fact, MemoryType
 
 
 class TestYAMLStorageSaveLoad:

@@ -6,8 +6,8 @@ import pathlib
 
 import pytest
 
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.yaml_storage import YAMLStorage
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage.yaml_storage import YAMLStorage
 
 
 @pytest.fixture

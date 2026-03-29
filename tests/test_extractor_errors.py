@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from agentmemo.extractor import Extractor
-from agentmemo.types import ConversationTurn
+from ai_knot.extractor import Extractor
+from ai_knot.types import ConversationTurn
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ class TestOpenAIErrors:
     def test_timeout_returns_empty(self, turns: list[ConversationTurn]) -> None:
         with (
             patch("httpx.post", side_effect=httpx.TimeoutException("timeout")),
-            patch("agentmemo.providers.base.time.sleep"),
+            patch("ai_knot.providers.base.time.sleep"),
         ):
             result = Extractor(api_key="key", provider="openai").extract(turns)
         assert result == []
@@ -36,7 +36,7 @@ class TestOpenAIErrors:
     def test_connection_error_returns_empty(self, turns: list[ConversationTurn]) -> None:
         with (
             patch("httpx.post", side_effect=httpx.ConnectError("refused")),
-            patch("agentmemo.providers.base.time.sleep"),
+            patch("ai_knot.providers.base.time.sleep"),
         ):
             result = Extractor(api_key="key", provider="openai").extract(turns)
         assert result == []
@@ -113,7 +113,7 @@ class TestAnthropicErrors:
     def test_timeout_returns_empty(self, turns: list[ConversationTurn]) -> None:
         with (
             patch("httpx.post", side_effect=httpx.TimeoutException("timeout")),
-            patch("agentmemo.providers.base.time.sleep"),
+            patch("ai_knot.providers.base.time.sleep"),
         ):
             result = Extractor(api_key="key", provider="anthropic").extract(turns)
         assert result == []

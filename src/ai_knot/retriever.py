@@ -11,7 +11,7 @@ import math
 import re
 from collections import Counter
 
-from agentmemo.types import Fact
+from ai_knot.types import Fact
 
 # Weight multipliers for the hybrid score.
 _TFIDF_WEIGHT: float = 0.6

@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from agentmemo.providers import create_provider
-from agentmemo.providers.base import call_with_retry
+from ai_knot.providers import create_provider
+from ai_knot.providers.base import call_with_retry
 
 
 def _make_http_error(status: int) -> httpx.HTTPStatusError:

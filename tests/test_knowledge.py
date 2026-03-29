@@ -1,4 +1,4 @@
-"""Tests for agentmemo.knowledge — KnowledgeBase main class."""
+"""Tests for ai_knot.knowledge — KnowledgeBase main class."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 
 @pytest.fixture

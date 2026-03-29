@@ -1,4 +1,4 @@
-"""Core data types for agentmemo."""
+"""Core data types for ai_knot."""
 
 from __future__ import annotations
 

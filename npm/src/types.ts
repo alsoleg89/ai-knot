@@ -28,7 +28,7 @@ export interface KnowledgeBaseOptions {
   dataDir?: string;
   /** Full path to SQLite database file. Overrides dataDir for sqlite. */
   dbPath?: string;
-  /** Path to agentmemo-mcp binary. Default: "agentmemo-mcp". */
+  /** Path to ai-knot-mcp binary. Default: "ai-knot-mcp". */
   command?: string;
 }
 

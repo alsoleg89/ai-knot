@@ -6,10 +6,10 @@ import pathlib
 
 import pytest
 
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import Fact, SnapshotDiff
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import Fact, SnapshotDiff
 
 # ---------------------------------------------------------------------------
 # Parametrized storage fixtures

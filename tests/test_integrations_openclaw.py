@@ -6,9 +6,9 @@ import pathlib
 
 import pytest
 
-from agentmemo.integrations.openclaw import OpenClawMemoryAdapter, generate_mcp_config
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.yaml_storage import YAMLStorage
+from ai_knot.integrations.openclaw import OpenClawMemoryAdapter, generate_mcp_config
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage.yaml_storage import YAMLStorage
 
 
 @pytest.fixture
@@ -162,26 +162,26 @@ class TestGenerateMcpConfig:
     def test_defaults(self) -> None:
         cfg = generate_mcp_config()
 
-        assert cfg["mcpServers"]["agentmemo"]["command"] == "agentmemo-mcp"
-        env = cfg["mcpServers"]["agentmemo"]["env"]
-        assert env["AGENTMEMO_AGENT_ID"] == "default"
-        assert env["AGENTMEMO_DATA_DIR"] == ".agentmemo"
-        assert env["AGENTMEMO_STORAGE"] == "sqlite"
+        assert cfg["mcpServers"]["ai-knot"]["command"] == "ai-knot-mcp"
+        env = cfg["mcpServers"]["ai-knot"]["env"]
+        assert env["AI_KNOT_AGENT_ID"] == "default"
+        assert env["AI_KNOT_DATA_DIR"] == ".ai_knot"
+        assert env["AI_KNOT_STORAGE"] == "sqlite"
 
     def test_custom_params(self) -> None:
         cfg = generate_mcp_config(agent_id="bot_a", data_dir="/data/mem", storage="yaml")
 
-        env = cfg["mcpServers"]["agentmemo"]["env"]
-        assert env["AGENTMEMO_AGENT_ID"] == "bot_a"
-        assert env["AGENTMEMO_DATA_DIR"] == "/data/mem"
-        assert env["AGENTMEMO_STORAGE"] == "yaml"
+        env = cfg["mcpServers"]["ai-knot"]["env"]
+        assert env["AI_KNOT_AGENT_ID"] == "bot_a"
+        assert env["AI_KNOT_DATA_DIR"] == "/data/mem"
+        assert env["AI_KNOT_STORAGE"] == "yaml"
 
     def test_is_json_serialisable(self) -> None:
         import json
 
         cfg = generate_mcp_config("agent_x")
         dumped = json.dumps(cfg)
-        assert "agentmemo-mcp" in dumped
+        assert "ai-knot-mcp" in dumped
         assert "agent_x" in dumped
 
     def test_invalid_storage_raises(self) -> None:
@@ -193,6 +193,6 @@ class TestGenerateMcpConfig:
 
         with (
             patch.dict("sys.modules", {"mcp": None}),
-            pytest.raises(ImportError, match="agentmemo\\[mcp\\]"),
+            pytest.raises(ImportError, match="ai-knot\\[mcp\\]"),
         ):
             generate_mcp_config()

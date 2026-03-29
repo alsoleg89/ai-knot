@@ -28,7 +28,7 @@ export class McpClient extends EventEmitter {
 
   constructor(options: McpClientOptions = {}) {
     super();
-    this.command = options.command ?? "agentmemo-mcp";
+    this.command = options.command ?? "ai-knot-mcp";
     this.extraEnv = options.env ?? {};
   }
 
@@ -118,7 +118,7 @@ export class McpClient extends EventEmitter {
         params: {
           protocolVersion: "2024-11-05",
           capabilities: {},
-          clientInfo: { name: "agentmemo-js", version: "0.2.0" },
+          clientInfo: { name: "ai-knot-js", version: "0.2.0" },
         },
       });
     });
@@ -156,7 +156,7 @@ export class McpClient extends EventEmitter {
 
   private _writeLine(obj: JsonRpcRequest): void {
     if (!this.proc?.stdin?.writable) {
-      throw new Error("agentmemo-mcp stdin is not writable");
+      throw new Error("ai-knot-mcp stdin is not writable");
     }
     this.proc.stdin.write(JSON.stringify(obj) + "\n");
   }
@@ -178,7 +178,7 @@ export class McpClient extends EventEmitter {
 
     if (msg.error !== undefined) {
       pending.reject(
-        new Error(`agentmemo-mcp error ${msg.error.code}: ${msg.error.message}`)
+        new Error(`ai-knot-mcp error ${msg.error.code}: ${msg.error.message}`)
       );
       return;
     }
@@ -197,7 +197,7 @@ export class McpClient extends EventEmitter {
     this.state = "crashed";
 
     const err = new Error(
-      `agentmemo-mcp process exited unexpectedly (code ${code ?? "null"})`
+      `ai-knot-mcp process exited unexpectedly (code ${code ?? "null"})`
     );
 
     for (const { reject } of this.inflight.values()) reject(err);
@@ -220,8 +220,8 @@ export class McpClient extends EventEmitter {
   private _handleSpawnError(err: Error): void {
     this.state = "crashed";
     const wrapped = new Error(
-      `Failed to spawn agentmemo-mcp: ${err.message}. ` +
-        `Make sure it is installed: pip install "agentmemo[mcp]"`
+      `Failed to spawn ai-knot-mcp: ${err.message}. ` +
+        `Make sure it is installed: pip install "ai-knot[mcp]"`
     );
     for (const { reject } of this.inflight.values()) reject(wrapped);
     this.inflight.clear();

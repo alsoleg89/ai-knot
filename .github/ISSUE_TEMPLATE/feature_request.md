@@ -6,7 +6,7 @@ labels: enhancement
 
 ## Problem
 
-<!-- What are you trying to do that agentmemo doesn't support yet?
+<!-- What are you trying to do that ai-knot doesn't support yet?
      Be specific: "I want to store facts in Redis" is better than "more backends". -->
 
 ## Proposed solution

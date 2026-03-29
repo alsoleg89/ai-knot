@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to agentmemo are documented here.
+All notable changes to ai-knot are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning: [Semantic Versioning](https://semver.org/).
 
@@ -22,13 +22,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **npm package** — `npm install @alsoleg/agentmemo` installs a TypeScript client for Node.js 18+.
-  Zero runtime npm dependencies. Communicates with the Python `agentmemo-mcp` subprocess
+- **npm package** — `npm install ai-knot` installs a TypeScript client for Node.js 18+.
+  Zero runtime npm dependencies. Communicates with the Python `ai-knot-mcp` subprocess
   via JSON-RPC 2.0 over stdio. Dual ESM + CJS exports. Postinstall auto-runs
-  `pip install "agentmemo[mcp]"`.
+  `pip install "ai-knot[mcp]"`.
 
   ```typescript
-  import { KnowledgeBase } from 'agentmemo';
+  import { KnowledgeBase } from 'ai-knot';
   const kb = new KnowledgeBase({ agentId: 'bot', storage: 'sqlite', dbPath: '/data/mem.db' });
   await kb.add('User prefers TypeScript');
   const ctx = await kb.recall('what language?');
@@ -46,7 +46,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
   `list[tuple[Fact, float]]` with the hybrid relevance score (TF-IDF + retention + importance)
   for each result. Useful for integration adapters and ranking UIs.
 
-- **OpenClaw integration** — `agentmemo.integrations.openclaw`:
+- **OpenClaw integration** — `ai_knot.integrations.openclaw`:
   - `OpenClawMemoryAdapter(kb)` — drop-in memory backend for Python agents (LangChain, LangGraph, CrewAI)
   - `generate_mcp_config(agent_id)` — generate the JSON snippet for `~/.openclaw/openclaw.json`
 
@@ -69,7 +69,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - `generate_mcp_config()` raises `ImportError` with an actionable install hint when
-  `agentmemo[mcp]` is not installed (was: silently generated a broken config).
+  `ai-knot[mcp]` is not installed (was: silently generated a broken config).
 
 - `mcp_server.main()` exits with `sys.exit(1)` and a clear message when the `mcp` package is
   missing (was: cryptic `ImportError` traceback).
@@ -97,16 +97,16 @@ Versioning: [Semantic Versioning](https://semver.org/).
   - `kb.list_snapshots()` — list all saved snapshot names
   - `kb.diff("a", "b")` — compare two snapshots; pass `"current"` as either name for live facts
   - Both YAML and SQLite backends support snapshots via the new `SnapshotCapable` protocol
-  - `SnapshotDiff` dataclass exported from top-level `agentmemo`
+  - `SnapshotDiff` dataclass exported from top-level `ai-knot`
 
-- **MCP server** — run agentmemo as a native Claude Desktop / Claude Code tool server:
+- **MCP server** — run ai-knot as a native Claude Desktop / Claude Code tool server:
   ```bash
-  pip install "agentmemo[mcp]"
-  agentmemo-mcp
+  pip install "ai-knot[mcp]"
+  ai-knot-mcp
   ```
   Exposes 7 tools: `add`, `recall`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`.
-  Configured entirely via environment variables (`AGENTMEMO_AGENT_ID`, `AGENTMEMO_STORAGE`,
-  `AGENTMEMO_DATA_DIR`, `AGENTMEMO_DB_PATH`). The `mcp` package is optional — the core package
+  Configured entirely via environment variables (`AI_KNOT_AGENT_ID`, `AI_KNOT_STORAGE`,
+  `AI_KNOT_DATA_DIR`, `AI_KNOT_DB_PATH`). The `mcp` package is optional — the core package
   does not require it.
 
 ### Changed
@@ -130,7 +130,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - **Env var API key resolution** — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GIGACHAT_API_KEY`, `YANDEX_API_KEY`, `QWEN_API_KEY`, `LLM_API_KEY`
 - **YAML storage backend** — human-readable, Git-trackable, editable by hand; thread-safe with per-file lock + atomic write
 - **SQLite storage backend** — zero-server production storage with WAL mode
-- **PostgreSQL storage backend** — provide a DSN, table auto-created; `pip install agentmemo[postgres]`
+- **PostgreSQL storage backend** — provide a DSN, table auto-created; `pip install ai-knot[postgres]`
 - **Configurable storage** — `create_storage("yaml"|"sqlite"|"postgres")` factory; CLI `--storage` / `--dsn` options
 - **`StorageBackend` protocol** — plug-in interface for custom backends
 - **OpenAI integration** — `MemoryEnabledOpenAI` wraps message lists with memory context injection
@@ -156,7 +156,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `BASE_STABILITY_HOURS` set to 336 (2 weeks retention baseline)
 - TF-IDF tokenizer: camelCase splitting + basic plural stemming
 
-[Unreleased]: https://github.com/alsoleg89/agentmemo/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/alsoleg89/agentmemo/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/alsoleg89/agentmemo/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/alsoleg89/agentmemo/releases/tag/v0.1.0
+[Unreleased]: https://github.com/alsoleg89/ai-knot/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/alsoleg89/ai-knot/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/alsoleg89/ai-knot/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/alsoleg89/ai-knot/releases/tag/v0.1.0

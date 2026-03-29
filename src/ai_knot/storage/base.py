@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from agentmemo.types import Fact
+from ai_knot.types import Fact
 
 
 class StorageBackend(Protocol):

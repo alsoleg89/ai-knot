@@ -1,4 +1,4 @@
-"""Shared fixtures for agentmemo test suite."""
+"""Shared fixtures for ai-knot test suite."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 
 @pytest.fixture

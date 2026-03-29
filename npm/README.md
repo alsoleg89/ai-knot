@@ -1,11 +1,11 @@
-# @alsoleg/agentmemo
+# ai-knot
 
-![npm](https://img.shields.io/npm/v/@alsoleg/agentmemo)
+![npm](https://img.shields.io/npm/v/ai-knot)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **Agent memory for Node.js and TypeScript.** Stores facts, retrieves what's relevant, forgets the rest.
 
-TypeScript client for the [agentmemo](https://github.com/alsoleg89/agentmemo) Python library — communicates with the `agentmemo-mcp` subprocess via JSON-RPC 2.0 over stdio.
+TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) Python library — communicates with the `ai-knot-mcp` subprocess via JSON-RPC 2.0 over stdio.
 
 ---
 
@@ -17,13 +17,13 @@ TypeScript client for the [agentmemo](https://github.com/alsoleg89/agentmemo) Py
 ## Install
 
 ```bash
-npm install @alsoleg/agentmemo
+npm install ai-knot
 ```
 
-The postinstall script automatically runs `pip install "agentmemo[mcp]"`. If pip is not found, a warning is printed — install it manually:
+The postinstall script automatically runs `pip install "ai-knot[mcp]"`. If pip is not found, a warning is printed — install it manually:
 
 ```bash
-pip install "agentmemo[mcp]"
+pip install "ai-knot[mcp]"
 ```
 
 ---
@@ -31,7 +31,7 @@ pip install "agentmemo[mcp]"
 ## Quickstart
 
 ```typescript
-import { KnowledgeBase } from '@alsoleg/agentmemo';
+import { KnowledgeBase } from 'ai-knot';
 
 const kb = new KnowledgeBase({
   agentId: 'my-agent',
@@ -71,7 +71,7 @@ const kb = new KnowledgeBase({
   storage?: 'yaml' | 'sqlite',  // default: "yaml"
   dataDir?: string,   // base dir for YAML/SQLite (use absolute path!)
   dbPath?: string,    // full path to SQLite file
-  command?: string,   // path to agentmemo-mcp binary
+  command?: string,   // path to ai-knot-mcp binary
 });
 ```
 
@@ -164,10 +164,10 @@ try {
 
 | Variable | Default | Description |
 |---|---|---|
-| `AGENTMEMO_AGENT_ID` | `default` | Agent namespace |
-| `AGENTMEMO_STORAGE` | `yaml` | `yaml` or `sqlite` |
-| `AGENTMEMO_DATA_DIR` | `.agentmemo` | Base dir (use absolute path) |
-| `AGENTMEMO_DB_PATH` | — | Full path to SQLite file |
+| `AI_KNOT_AGENT_ID` | `default` | Agent namespace |
+| `AI_KNOT_STORAGE` | `yaml` | `yaml` or `sqlite` |
+| `AI_KNOT_DATA_DIR` | `.ai_knot` | Base dir (use absolute path) |
+| `AI_KNOT_DB_PATH` | — | Full path to SQLite file |
 
 ---
 

@@ -10,16 +10,16 @@
       "pattern": "^https://github\\.com/.*/actions/workflows"
     },
     {
-      "pattern": "^https://pypi\\.org/project/agentmemo"
+      "pattern": "^https://pypi\\.org/project/ai-knot"
     },
     {
       "pattern": "^http://localhost"
     },
     {
-      "pattern": "^https://github\\.com/alsoleg89/agentmemo/compare/"
+      "pattern": "^https://github\\.com/alsoleg89/ai-knot/compare/"
     },
     {
-      "pattern": "^https://github\\.com/alsoleg89/agentmemo/releases/tag/"
+      "pattern": "^https://github\\.com/alsoleg89/ai-knot/releases/tag/"
     }
   ],
   "timeout": "10s",

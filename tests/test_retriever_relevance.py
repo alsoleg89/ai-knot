@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from agentmemo.retriever import TFIDFRetriever
-from agentmemo.types import Fact
+from ai_knot.retriever import TFIDFRetriever
+from ai_knot.types import Fact
 
 
 @pytest.fixture

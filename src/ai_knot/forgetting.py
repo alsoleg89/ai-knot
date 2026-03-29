@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from datetime import UTC, datetime
 
-from agentmemo.types import Fact
+from ai_knot.types import Fact
 
 # Base stability in hours (2 weeks). A fact with importance=1.0 and
 # access_count=0 will retain ~37% after 2 weeks.

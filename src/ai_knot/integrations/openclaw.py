@@ -20,7 +20,7 @@ directly — ``add()`` stores only the last user message without an LLM.
 Runtime integration example::
 
     import json
-    from agentmemo.integrations.openclaw import generate_mcp_config
+    from ai_knot.integrations.openclaw import generate_mcp_config
 
     print(json.dumps(generate_mcp_config("my_agent"), indent=2))
     # Paste output into ~/.openclaw/openclaw.json (macOS/Linux)
@@ -28,8 +28,8 @@ Runtime integration example::
 
 Python-native example::
 
-    from agentmemo import KnowledgeBase
-    from agentmemo.integrations.openclaw import OpenClawMemoryAdapter
+    from ai_knot import KnowledgeBase
+    from ai_knot.integrations.openclaw import OpenClawMemoryAdapter
 
     kb = KnowledgeBase("my_agent")
     memory = OpenClawMemoryAdapter(kb)
@@ -42,8 +42,8 @@ from __future__ import annotations
 import warnings
 from typing import Any, Literal
 
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.types import Fact
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.types import Fact
 
 
 def _fact_to_item(fact: Fact, *, score: float | None = None) -> dict[str, Any]:
@@ -188,10 +188,10 @@ class OpenClawMemoryAdapter:
 
 def generate_mcp_config(
     agent_id: str = "default",
-    data_dir: str = ".agentmemo",
+    data_dir: str = ".ai_knot",
     storage: Literal["sqlite", "yaml"] = "sqlite",
 ) -> dict[str, Any]:
-    """Return the OpenClaw mcpServers config snippet for agentmemo-mcp.
+    """Return the OpenClaw mcpServers config snippet for ai-knot-mcp.
 
     Paste the returned dict into your OpenClaw config file:
 
@@ -202,9 +202,9 @@ def generate_mcp_config(
     handles concurrent agent reads without write locks.
 
     Args:
-        agent_id: Agent namespace passed to agentmemo-mcp.
-        data_dir: Directory where agentmemo stores its data.
-            The SQLite file will be at ``{data_dir}/agentmemo.db``.
+        agent_id: Agent namespace passed to ai-knot-mcp.
+        data_dir: Directory where ai-knot stores its data.
+            The SQLite file will be at ``{data_dir}/ai_knot.db``.
         storage: Backend type — ``"sqlite"`` (recommended) or ``"yaml"``.
 
     Returns:
@@ -216,7 +216,7 @@ def generate_mcp_config(
     Example::
 
         import json
-        from agentmemo.integrations.openclaw import generate_mcp_config
+        from ai_knot.integrations.openclaw import generate_mcp_config
 
         print(json.dumps(generate_mcp_config("my_agent"), indent=2))
         # Paste into ~/.openclaw/openclaw.json under "mcpServers"
@@ -227,17 +227,17 @@ def generate_mcp_config(
         import mcp  # noqa: F401
     except ImportError as exc:
         raise ImportError(
-            "mcp package is required to use agentmemo-mcp. "
-            "Install with: pip install 'agentmemo[mcp]'"
+            "mcp package is required to use ai-knot-mcp. "
+            "Install with: pip install 'ai-knot[mcp]'"
         ) from exc
     return {
         "mcpServers": {
-            "agentmemo": {
-                "command": "agentmemo-mcp",
+            "ai-knot": {
+                "command": "ai-knot-mcp",
                 "env": {
-                    "AGENTMEMO_AGENT_ID": agent_id,
-                    "AGENTMEMO_DATA_DIR": data_dir,
-                    "AGENTMEMO_STORAGE": storage,
+                    "AI_KNOT_AGENT_ID": agent_id,
+                    "AI_KNOT_DATA_DIR": data_dir,
+                    "AI_KNOT_STORAGE": storage,
                 },
             }
         }

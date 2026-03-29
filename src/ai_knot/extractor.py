@@ -13,8 +13,8 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from agentmemo.providers import LLMProvider, call_with_retry, create_provider
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from ai_knot.providers import LLMProvider, call_with_retry, create_provider
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 logger = logging.getLogger(__name__)
 

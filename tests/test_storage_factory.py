@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from agentmemo.storage import create_storage
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.storage.yaml_storage import YAMLStorage
+from ai_knot.storage import create_storage
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage.yaml_storage import YAMLStorage
 
 
 class TestCreateStorage:
@@ -31,9 +31,9 @@ class TestCreateStorage:
             create_storage("postgres")
 
     def test_postgres_with_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Should read AGENTMEMO_DSN from env when dsn= is not passed."""
+        """Should read AI_KNOT_DSN from env when dsn= is not passed."""
         # We can't actually connect, but we can verify the env var path works
         # by checking that it tries to import psycopg (not ValueError for missing DSN)
-        monkeypatch.setenv("AGENTMEMO_DSN", "postgresql://fake:fake@localhost/fake")
+        monkeypatch.setenv("AI_KNOT_DSN", "postgresql://fake:fake@localhost/fake")
         with pytest.raises(ImportError, match="psycopg"):
             create_storage("postgres")

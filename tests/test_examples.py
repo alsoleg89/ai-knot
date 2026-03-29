@@ -4,8 +4,8 @@ import pathlib
 
 import pytest
 
-from agentmemo import KnowledgeBase, MemoryType
-from agentmemo.storage import SQLiteStorage, YAMLStorage, create_storage
+from ai_knot import KnowledgeBase, MemoryType
+from ai_knot.storage import SQLiteStorage, YAMLStorage, create_storage
 
 
 @pytest.fixture

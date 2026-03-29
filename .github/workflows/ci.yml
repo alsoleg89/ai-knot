@@ -31,7 +31,7 @@ jobs:
         run: ruff format --check src/ tests/
 
       - name: Mypy
-        run: mypy src/agentmemo/
+        run: mypy src/ai_knot/
 
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -56,7 +56,7 @@ jobs:
         run: |
           if [ "${{ matrix.python-version }}" = "3.12" ]; then
             pytest -n auto --timeout=10 -m "not slow" \
-              --cov=agentmemo --cov-report=xml --cov-report=term-missing
+              --cov=ai_knot --cov-report=xml --cov-report=term-missing
           else
             pytest -n auto --timeout=10 -m "not slow" --no-cov
           fi

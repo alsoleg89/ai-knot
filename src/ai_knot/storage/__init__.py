@@ -1,12 +1,12 @@
-"""Storage backends for agentmemo."""
+"""Storage backends for ai_knot."""
 
 from __future__ import annotations
 
 import os
 
-from agentmemo.storage.base import SnapshotCapable, StorageBackend
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.storage.yaml_storage import YAMLStorage
+from ai_knot.storage.base import SnapshotCapable, StorageBackend
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage.yaml_storage import YAMLStorage
 
 __all__ = ["SQLiteStorage", "SnapshotCapable", "StorageBackend", "YAMLStorage", "create_storage"]
 
@@ -18,7 +18,7 @@ _BACKENDS = {
 
 
 def create_storage(
-    backend: str, *, base_dir: str = ".agentmemo", dsn: str | None = None
+    backend: str, *, base_dir: str = ".ai_knot", dsn: str | None = None
 ) -> StorageBackend:  # noqa: E501
     """Create a storage backend by name.
 
@@ -26,7 +26,7 @@ def create_storage(
         backend: One of "yaml", "sqlite", "postgres".
         base_dir: Directory for file-based backends (yaml, sqlite).
         dsn: Connection string for remote backends (postgres).
-            Also read from ``AGENTMEMO_DSN`` env var if not provided.
+            Also read from ``AI_KNOT_DSN`` env var if not provided.
 
     Returns:
         A storage backend instance.
@@ -37,15 +37,15 @@ def create_storage(
     if backend == "yaml":
         return YAMLStorage(base_dir=base_dir)
     if backend == "sqlite":
-        return SQLiteStorage(db_path=os.path.join(base_dir, "agentmemo.db"))
+        return SQLiteStorage(db_path=os.path.join(base_dir, "ai_knot.db"))
     if backend == "postgres":
-        resolved_dsn = dsn or os.environ.get("AGENTMEMO_DSN")
+        resolved_dsn = dsn or os.environ.get("AI_KNOT_DSN")
         if not resolved_dsn:
             raise ValueError(
                 "PostgreSQL backend requires a DSN. "
-                "Pass dsn= or set the AGENTMEMO_DSN environment variable."
+                "Pass dsn= or set the AI_KNOT_DSN environment variable."
             )
-        from agentmemo.storage.postgres_storage import PostgresStorage
+        from ai_knot.storage.postgres_storage import PostgresStorage
 
         return PostgresStorage(dsn=resolved_dsn)
     raise ValueError(f"Unknown storage backend {backend!r}. Choose from: {', '.join(_BACKENDS)}")

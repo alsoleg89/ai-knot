@@ -6,9 +6,9 @@ import pathlib
 
 import pytest
 
-from agentmemo.integrations.openai import MemoryEnabledOpenAI
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.yaml_storage import YAMLStorage
+from ai_knot.integrations.openai import MemoryEnabledOpenAI
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage.yaml_storage import YAMLStorage
 
 
 @pytest.fixture

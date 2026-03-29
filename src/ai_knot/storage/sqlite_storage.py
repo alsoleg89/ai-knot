@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentmemo.types import Fact, MemoryType
+from ai_knot.types import Fact, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class SQLiteStorage:
     more robustness than YAML files but don't need a separate DB server.
     """
 
-    def __init__(self, db_path: str = ".agentmemo/agentmemo.db") -> None:
+    def __init__(self, db_path: str = ".ai_knot/ai_knot.db") -> None:
         self._db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()

@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.mcp_server import (
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.mcp_server import (
     _build_kb,
     tool_add,
     tool_forget,
@@ -25,8 +25,8 @@ from agentmemo.mcp_server import (
     tool_snapshot,
     tool_stats,
 )
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import MemoryType
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import MemoryType
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -48,12 +48,12 @@ class TestBuildKb:
     """Verify that _build_kb() reads env vars correctly."""
 
     def test_defaults(self, tmp_path: pathlib.Path) -> None:
-        with patch.dict(os.environ, {"AGENTMEMO_DATA_DIR": str(tmp_path)}, clear=False):
+        with patch.dict(os.environ, {"AI_KNOT_DATA_DIR": str(tmp_path)}, clear=False):
             kb = _build_kb()
         assert kb is not None
 
     def test_custom_agent_id(self, tmp_path: pathlib.Path) -> None:
-        env = {"AGENTMEMO_AGENT_ID": "my_agent", "AGENTMEMO_DATA_DIR": str(tmp_path)}
+        env = {"AI_KNOT_AGENT_ID": "my_agent", "AI_KNOT_DATA_DIR": str(tmp_path)}
         with patch.dict(os.environ, env, clear=False):
             kb = _build_kb()
         assert kb._agent_id == "my_agent"
@@ -61,9 +61,9 @@ class TestBuildKb:
     def test_sqlite_backend(self, tmp_path: pathlib.Path) -> None:
         db = str(tmp_path / "test.db")
         env = {
-            "AGENTMEMO_STORAGE": "sqlite",
-            "AGENTMEMO_DB_PATH": db,
-            "AGENTMEMO_DATA_DIR": str(tmp_path),
+            "AI_KNOT_STORAGE": "sqlite",
+            "AI_KNOT_DB_PATH": db,
+            "AI_KNOT_DATA_DIR": str(tmp_path),
         }
         with patch.dict(os.environ, env, clear=False):
             kb = _build_kb()
@@ -298,7 +298,7 @@ class TestToolListSnapshots:
         assert json.loads(result) == []
 
     def test_list_snapshots_returns_names(self, tmp_path: pathlib.Path) -> None:
-        from agentmemo.storage.yaml_storage import YAMLStorage
+        from ai_knot.storage.yaml_storage import YAMLStorage
 
         snap_kb = KnowledgeBase(agent_id="snap_test", storage=YAMLStorage(base_dir=str(tmp_path)))
         snap_kb.add("Some fact")
@@ -346,7 +346,7 @@ class TestMakeServer:
     """Verify _make_server() raises ImportError when mcp is not installed."""
 
     def test_import_error_without_mcp(self, kb: KnowledgeBase) -> None:
-        from agentmemo.mcp_server import _make_server
+        from ai_knot.mcp_server import _make_server
 
         with (
             patch.dict(
@@ -357,7 +357,7 @@ class TestMakeServer:
             _make_server(kb)
 
     def test_make_server_with_mock_mcp(self, kb: KnowledgeBase) -> None:
-        from agentmemo.mcp_server import _make_server
+        from ai_knot.mcp_server import _make_server
 
         mock_app = MagicMock()
         mock_fastmcp_cls = MagicMock(return_value=mock_app)
@@ -376,5 +376,5 @@ class TestMakeServer:
 
         assert app is mock_app
         call_args = mock_fastmcp_cls.call_args
-        assert call_args[0][0] == "agentmemo"
+        assert call_args[0][0] == "ai-knot"
         assert "instructions" in call_args[1]

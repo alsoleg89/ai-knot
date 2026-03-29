@@ -10,12 +10,12 @@ import type {
 export type { AddOptions, Fact, KnowledgeBaseOptions, MemoryType, RecallOptions, Stats } from "./types.js";
 
 /**
- * TypeScript client for agentmemo. Spawns the agentmemo-mcp subprocess on
+ * TypeScript client for ai_knot. Spawns the ai-knot-mcp subprocess on
  * the first method call and communicates via JSON-RPC 2.0 over stdio.
  *
  * @example
  * ```typescript
- * import { KnowledgeBase } from 'agentmemo';
+ * import { KnowledgeBase } from 'ai-knot';
  *
  * const kb = new KnowledgeBase({ agentId: 'my-agent', storage: 'sqlite', dbPath: '/data/mem.db' });
  * await kb.add('User prefers TypeScript');
@@ -29,10 +29,10 @@ export class KnowledgeBase {
 
   constructor(options: KnowledgeBaseOptions = {}) {
     const env: Record<string, string> = {};
-    if (options.agentId !== undefined) env["AGENTMEMO_AGENT_ID"] = options.agentId;
-    if (options.storage !== undefined) env["AGENTMEMO_STORAGE"] = options.storage;
-    if (options.dataDir !== undefined) env["AGENTMEMO_DATA_DIR"] = options.dataDir;
-    if (options.dbPath !== undefined) env["AGENTMEMO_DB_PATH"] = options.dbPath;
+    if (options.agentId !== undefined) env["AI_KNOT_AGENT_ID"] = options.agentId;
+    if (options.storage !== undefined) env["AI_KNOT_STORAGE"] = options.storage;
+    if (options.dataDir !== undefined) env["AI_KNOT_DATA_DIR"] = options.dataDir;
+    if (options.dbPath !== undefined) env["AI_KNOT_DB_PATH"] = options.dbPath;
     this.client = new McpClient({ command: options.command, env });
   }
 
@@ -123,7 +123,7 @@ export class KnowledgeBase {
   }
 
   /**
-   * Gracefully shut down the agentmemo-mcp subprocess.
+   * Gracefully shut down the ai-knot-mcp subprocess.
    * Call this when you are done using the KnowledgeBase.
    */
   async close(): Promise<void> {

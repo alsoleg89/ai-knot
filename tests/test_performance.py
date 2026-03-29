@@ -2,7 +2,7 @@
 
 Run with: pytest tests/test_performance.py -m slow --benchmark-only
 These tests are marked @pytest.mark.slow and are skipped in normal CI runs.
-Requires pytest-benchmark: pip install agentmemo[dev]
+Requires pytest-benchmark: pip install ai-knot[dev]
 
 Research references:
 - Qdrant P99 vs pgvector: 38.71ms vs 74.60ms (Qdrant benchmarks, 1M OpenAI vectors)
@@ -22,11 +22,11 @@ import pytest
 
 pytest.importorskip("pytest_benchmark")
 
-from agentmemo.forgetting import apply_decay
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.retriever import TFIDFRetriever, _tokenize
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import Fact, MemoryType
+from ai_knot.forgetting import apply_decay
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.retriever import TFIDFRetriever, _tokenize
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import Fact, MemoryType
 
 # ---------------------------------------------------------------------------
 # Realistic facts corpus (20+ distinct topics for accurate TF-IDF scoring)
@@ -172,7 +172,7 @@ def test_sqlite_save_load_1k(
 ) -> None:
     """SQLite save+load roundtrip for 1 000 facts should complete in < 1 s."""
     pytest.importorskip("sqlite3")
-    from agentmemo.storage.sqlite_storage import SQLiteStorage  # noqa: PLC0415
+    from ai_knot.storage.sqlite_storage import SQLiteStorage  # noqa: PLC0415
 
     storage = SQLiteStorage(db_path=str(tmp_path / "perf.db"))
 
@@ -471,7 +471,7 @@ def test_sqlite_concurrent_writes_safe(
     Reference: sqlite.org/wal.html — WAL allows concurrent reads during write.
     """
     pytest.importorskip("sqlite3")
-    from agentmemo.storage.sqlite_storage import SQLiteStorage  # noqa: PLC0415
+    from ai_knot.storage.sqlite_storage import SQLiteStorage  # noqa: PLC0415
 
     storage = SQLiteStorage(db_path=str(tmp_path / "conc.db"))
     errors: list[Exception] = []

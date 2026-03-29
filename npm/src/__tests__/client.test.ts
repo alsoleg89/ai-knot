@@ -185,7 +185,7 @@ describe("McpClient", () => {
     const connectPromise = client.connect();
     // Give _doConnect a tick to register the 'error' handler on proc
     await new Promise<void>((r) => setImmediate(r));
-    capturedProc!.emit("error", new Error("ENOENT: agentmemo-mcp not found"));
+    capturedProc!.emit("error", new Error("ENOENT: ai-knot-mcp not found"));
 
     await expect(connectPromise).rejects.toThrow(/Failed to spawn/);
   });

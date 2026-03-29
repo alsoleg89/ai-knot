@@ -1,19 +1,19 @@
-"""MCP server for agentmemo — exposes KnowledgeBase as MCP tools.
+"""MCP server for ai-knot — exposes KnowledgeBase as MCP tools.
 
 Run with::
 
-    agentmemo-mcp
+    ai-knot-mcp
 
 or::
 
-    AGENTMEMO_AGENT_ID=my_agent python -m agentmemo.mcp_server
+    AI_KNOT_AGENT_ID=my_agent python -m ai_knot.mcp_server
 
 Configuration is via environment variables:
 
-- ``AGENTMEMO_AGENT_ID``   — agent namespace (default: "default")
-- ``AGENTMEMO_STORAGE``    — backend: "yaml" or "sqlite" (default: "sqlite")
-- ``AGENTMEMO_DATA_DIR``   — base directory for file backends (default: ".agentmemo")
-- ``AGENTMEMO_DB_PATH``    — full path to SQLite file (overrides DATA_DIR for sqlite)
+- ``AI_KNOT_AGENT_ID``   — agent namespace (default: "default")
+- ``AI_KNOT_STORAGE``    — backend: "yaml" or "sqlite" (default: "sqlite")
+- ``AI_KNOT_DATA_DIR``   — base directory for file backends (default: ".ai_knot")
+- ``AI_KNOT_DB_PATH``    — full path to SQLite file (overrides DATA_DIR for sqlite)
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ import json
 import os
 from typing import Any
 
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage import create_storage
-from agentmemo.types import MemoryType
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage import create_storage
+from ai_knot.types import MemoryType
 
 
 def _build_kb() -> KnowledgeBase:
@@ -33,12 +33,12 @@ def _build_kb() -> KnowledgeBase:
     Returns:
         A configured KnowledgeBase instance.
     """
-    agent_id = os.environ.get("AGENTMEMO_AGENT_ID", "default")
-    backend = os.environ.get("AGENTMEMO_STORAGE", "sqlite")
-    data_dir = os.environ.get("AGENTMEMO_DATA_DIR", ".agentmemo")
-    db_path = os.environ.get("AGENTMEMO_DB_PATH")
+    agent_id = os.environ.get("AI_KNOT_AGENT_ID", "default")
+    backend = os.environ.get("AI_KNOT_STORAGE", "sqlite")
+    data_dir = os.environ.get("AI_KNOT_DATA_DIR", ".ai_knot")
+    db_path = os.environ.get("AI_KNOT_DB_PATH")
 
-    dsn = db_path or os.path.join(data_dir, "agentmemo.db") if backend == "sqlite" else None
+    dsn = db_path or os.path.join(data_dir, "ai_knot.db") if backend == "sqlite" else None
     storage = create_storage(backend, base_dir=data_dir, dsn=dsn)
     return KnowledgeBase(agent_id=agent_id, storage=storage)
 
@@ -244,11 +244,11 @@ def _make_server(kb: KnowledgeBase) -> Any:
         from mcp.server.fastmcp import FastMCP
     except ImportError as exc:
         raise ImportError(
-            "mcp package is required. Install with: pip install 'agentmemo[mcp]'"
+            "mcp package is required. Install with: pip install 'ai-knot[mcp]'"
         ) from exc
 
     app = FastMCP(
-        "agentmemo",
+        "ai-knot",
         instructions=(
             "Use these tools to manage persistent agent memory. "
             "add: store a new fact. recall: retrieve relevant context as text. "
@@ -344,14 +344,14 @@ def _make_server(kb: KnowledgeBase) -> Any:
 
 
 def main() -> None:
-    """Entry point for the agentmemo MCP server."""
+    """Entry point for the ai-knot MCP server."""
     try:
         from mcp.server.fastmcp import FastMCP  # noqa: F401
     except ImportError:
         import sys
 
         print(
-            "Error: mcp package not installed.\nInstall with: pip install 'agentmemo[mcp]'",
+            "Error: mcp package not installed.\nInstall with: pip install 'ai-knot[mcp]'",
             file=sys.stderr,
         )
         sys.exit(1)

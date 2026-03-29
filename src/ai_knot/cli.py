@@ -1,4 +1,4 @@
-"""Command-line interface for agentmemo."""
+"""Command-line interface for ai_knot."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from typing import Any
 import click
 import yaml
 
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage import create_storage
-from agentmemo.types import Fact, MemoryType
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage import create_storage
+from ai_knot.types import Fact, MemoryType
 
 
 def _make_kb(ctx: click.Context, agent_id: str) -> KnowledgeBase:
@@ -39,11 +39,11 @@ def _parse_dt(value: str) -> datetime:
     default="yaml",
     help="Storage backend.",
 )
-@click.option("--data-dir", default=".agentmemo", help="Storage directory (yaml/sqlite).")
-@click.option("--dsn", envvar="AGENTMEMO_DSN", default=None, help="Database DSN (postgres).")
+@click.option("--data-dir", default=".ai_knot", help="Storage directory (yaml/sqlite).")
+@click.option("--dsn", envvar="AI_KNOT_DSN", default=None, help="Database DSN (postgres).")
 @click.pass_context
 def main(ctx: click.Context, storage: str, data_dir: str, dsn: str | None) -> None:
-    """agentmemo — Agent Knowledge Layer CLI."""
+    """ai-knot — Agent Knowledge Layer CLI."""
     ctx.ensure_object(dict)
     ctx.obj["storage"] = storage
     ctx.obj["data_dir"] = data_dir

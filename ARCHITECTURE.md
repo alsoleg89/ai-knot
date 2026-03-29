@@ -1,4 +1,4 @@
-# agentmemo — Architecture
+# ai-knot — Architecture
 
 ## Design goals
 
@@ -16,9 +16,9 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  CLI (agentmemo.cli)          Integrations (*.integrations) │
+│  CLI (ai_knot.cli)          Integrations (*.integrations) │
 ├─────────────────────────────────────────────────────────────┤
-│                  KnowledgeBase (agentmemo.knowledge)         │  ← public API
+│                  KnowledgeBase (ai_knot.knowledge)         │  ← public API
 ├──────────────┬──────────────────┬───────────────────────────┤
 │  Extractor   │  TFIDFRetriever  │  apply_decay / forgetting  │
 │  (LLM calls) │  (TF-IDF search) │  (Ebbinghaus curve)        │
@@ -45,7 +45,7 @@ Nothing in `storage/`, `forgetting.py`, or `retriever.py` may import from `knowl
 
 ---
 
-## Core types (`agentmemo.types`)
+## Core types (`ai_knot.types`)
 
 ### `Fact`
 The atomic unit of knowledge.
@@ -106,7 +106,7 @@ CREATE TABLE facts (
 
 ---
 
-## Forgetting curve (`agentmemo.forgetting`)
+## Forgetting curve (`ai_knot.forgetting`)
 
 ```
 retention(t) = exp(−t / stability)
@@ -121,7 +121,7 @@ stability = 168h × importance × (1 + ln(1 + access_count))
 
 ---
 
-## Retrieval (`agentmemo.retriever`)
+## Retrieval (`ai_knot.retriever`)
 
 `TFIDFRetriever.search(query, facts, top_k)` — zero external dependencies.
 Returns `list[tuple[Fact, float]]` — each tuple is `(fact, hybrid_score)`.
@@ -139,7 +139,7 @@ internally and work as before.
 
 ---
 
-## Extraction (`agentmemo.extractor`)
+## Extraction (`ai_knot.extractor`)
 
 `Extractor.extract(turns)` sends the conversation to an LLM and parses the returned JSON array of facts.  
 Supports `openai` and `anthropic` providers via `httpx`.  
@@ -151,7 +151,7 @@ Deduplication: Jaccard word-similarity ≥ 0.8 → keep first occurrence.
 
 | What | Where | Interface |
 |---|---|---|
-| New storage backend | `src/agentmemo/storage/` | `StorageBackend` protocol |
+| New storage backend | `src/ai_knot/storage/` | `StorageBackend` protocol |
 | New LLM provider | `Extractor._call_<provider>` | Returns `list[dict]` from LLM |
-| New integration | `src/agentmemo/integrations/` | Import `KnowledgeBase`, wrap |
+| New integration | `src/ai_knot/integrations/` | Import `KnowledgeBase`, wrap |
 | New retriever | Replace `TFIDFRetriever` | `.search(query, facts, top_k)` |

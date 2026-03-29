@@ -1,17 +1,17 @@
 {
-  "name": "@alsoleg/agentmemo",
+  "name": "ai-knot",
   "version": "0.3.0",
-  "description": "TypeScript client for agentmemo — agent memory via MCP stdio bridge",
+  "description": "TypeScript client for ai-knot — agent memory via MCP stdio bridge",
   "license": "MIT",
   "author": "Oleg",
-  "homepage": "https://github.com/alsoleg89/agentmemo#readme",
+  "homepage": "https://github.com/alsoleg89/ai-knot#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alsoleg89/agentmemo.git",
+    "url": "https://github.com/alsoleg89/ai_knot.git",
     "directory": "npm"
   },
   "bugs": {
-    "url": "https://github.com/alsoleg89/agentmemo/issues"
+    "url": "https://github.com/alsoleg89/ai-knot/issues"
   },
   "keywords": [
     "ai",

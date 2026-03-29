@@ -7,7 +7,7 @@ import pathlib
 import yaml
 from click.testing import CliRunner
 
-from agentmemo.cli import main
+from ai_knot.cli import main
 
 
 def _cmd(data_dir: str, args: list[str]) -> list[str]:
@@ -16,7 +16,7 @@ def _cmd(data_dir: str, args: list[str]) -> list[str]:
 
 
 class TestAddValidation:
-    """agentmemo add — input validation."""
+    """ai-knot add — input validation."""
 
     def setup_method(self) -> None:
         self.runner = CliRunner()
@@ -53,7 +53,7 @@ class TestAddValidation:
 
 
 class TestImportValidation:
-    """agentmemo import — file and YAML validation."""
+    """ai-knot import — file and YAML validation."""
 
     def setup_method(self) -> None:
         self.runner = CliRunner()

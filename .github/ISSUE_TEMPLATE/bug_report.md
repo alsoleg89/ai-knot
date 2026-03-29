@@ -8,7 +8,7 @@ labels: bug
 
 - OS: <!-- e.g. macOS 14, Ubuntu 22.04, Windows 11 -->
 - Python version: <!-- e.g. 3.11.9 -->
-- agentmemo version: <!-- e.g. 0.1.0 — run `agentmemo --version` or `pip show agentmemo` -->
+- ai-knot version: <!-- e.g. 0.1.0 — run `ai-knot --version` or `pip show ai-knot` -->
 - Storage backend: <!-- yaml / sqlite / postgres -->
 - LLM provider: <!-- openai / anthropic / yandex / gigachat / qwen / openai-compat -->
 

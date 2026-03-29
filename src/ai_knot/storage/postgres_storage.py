@@ -1,7 +1,7 @@
 """PostgreSQL storage backend — remote/cloud-ready production storage.
 
 Provide a DSN (connection string) and the table is auto-created.
-Requires ``psycopg[binary]>=3.1``: ``pip install agentmemo[postgres]``
+Requires ``psycopg[binary]>=3.1``: ``pip install ai-knot[postgres]``
 
 Example DSN::
 
@@ -15,12 +15,12 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from agentmemo.types import Fact, MemoryType
+from ai_knot.types import Fact, MemoryType
 
 logger = logging.getLogger(__name__)
 
 _CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS agentmemo_facts (
+CREATE TABLE IF NOT EXISTS ai-knot_facts (
     id            TEXT NOT NULL,
     agent_id      TEXT NOT NULL,
     content       TEXT NOT NULL,
@@ -53,7 +53,7 @@ class PostgresStorage:
         except ImportError as exc:
             raise ImportError(
                 "PostgreSQL backend requires psycopg. "
-                "Install it with: pip install 'agentmemo[postgres]'"
+                "Install it with: pip install 'ai-knot[postgres]'"
             ) from exc
         self._dsn = dsn
         self._init_db()
@@ -71,10 +71,10 @@ class PostgresStorage:
     def save(self, agent_id: str, facts: list[Fact]) -> None:
         """Replace all facts for an agent."""
         with self._get_conn() as conn:
-            conn.execute("DELETE FROM agentmemo_facts WHERE agent_id = %s", (agent_id,))
+            conn.execute("DELETE FROM ai-knot_facts WHERE agent_id = %s", (agent_id,))
             for fact in facts:
                 conn.execute(
-                    """INSERT INTO agentmemo_facts
+                    """INSERT INTO ai-knot_facts
                        (id, agent_id, content, type, importance, retention,
                         access_count, tags, created_at, last_accessed)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
@@ -100,7 +100,7 @@ class PostgresStorage:
             cur = conn.execute(
                 """SELECT id, content, type, importance, retention,
                           access_count, tags, created_at, last_accessed
-                   FROM agentmemo_facts WHERE agent_id = %s
+                   FROM ai-knot_facts WHERE agent_id = %s
                    ORDER BY created_at""",
                 (agent_id,),
             )
@@ -125,7 +125,7 @@ class PostgresStorage:
         """Remove a single fact by id."""
         with self._get_conn() as conn:
             conn.execute(
-                "DELETE FROM agentmemo_facts WHERE agent_id = %s AND id = %s",
+                "DELETE FROM ai-knot_facts WHERE agent_id = %s AND id = %s",
                 (agent_id, fact_id),
             )
             conn.commit()
@@ -133,7 +133,7 @@ class PostgresStorage:
     def list_agents(self) -> list[str]:
         """Return all agent_ids that have stored facts."""
         with self._get_conn() as conn:
-            cur = conn.execute("SELECT DISTINCT agent_id FROM agentmemo_facts")
+            cur = conn.execute("SELECT DISTINCT agent_id FROM ai-knot_facts")
             rows = cur.fetchall()
         return [row[0] for row in rows]
 

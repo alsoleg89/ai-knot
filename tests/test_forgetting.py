@@ -1,4 +1,4 @@
-"""Tests for agentmemo.forgetting — Ebbinghaus curve core math."""
+"""Tests for ai_knot.forgetting — Ebbinghaus curve core math."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agentmemo.forgetting import (
+from ai_knot.forgetting import (
     BASE_STABILITY_HOURS,
     apply_decay,
     calculate_retention,
     calculate_stability,
 )
-from agentmemo.types import Fact
+from ai_knot.types import Fact
 
 
 class TestCalculateStability:

@@ -1,6 +1,6 @@
 """Simulation scenarios — end-to-end tests for memory, storage, providers, CLI.
 
-These tests simulate real-world usage patterns to verify that agentmemo
+These tests simulate real-world usage patterns to verify that ai-knot
 works correctly as a whole system, not just individual units.
 """
 
@@ -17,17 +17,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from agentmemo.cli import main
-from agentmemo.extractor import Extractor, deduplicate_facts
-from agentmemo.forgetting import calculate_retention
-from agentmemo.integrations.openai import MemoryEnabledOpenAI
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.providers import create_provider
-from agentmemo.providers.base import call_with_retry
-from agentmemo.storage import create_storage
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from ai_knot.cli import main
+from ai_knot.extractor import Extractor, deduplicate_facts
+from ai_knot.forgetting import calculate_retention
+from ai_knot.integrations.openai import MemoryEnabledOpenAI
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.providers import create_provider
+from ai_knot.providers.base import call_with_retry
+from ai_knot.storage import create_storage
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 # ---------------------------------------------------------------------------
 # 2A. Memory Scenarios (13 tests)
@@ -348,7 +348,7 @@ class TestStorageScenarios:
 
         sys.modules["psycopg"] = mock_psycopg
         try:
-            import agentmemo.storage.postgres_storage as pg_mod
+            import ai_knot.storage.postgres_storage as pg_mod
 
             importlib.reload(pg_mod)
             storage = pg_mod.PostgresStorage(dsn="postgresql://fake:fake@localhost/fake")
@@ -380,8 +380,8 @@ class TestProviderScenarios:
 
     def test_22_provider_factory_all_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """create_provider() creates correct class for each supported provider."""
-        from agentmemo.providers.anthropic import AnthropicProvider
-        from agentmemo.providers.openai_compat import OpenAICompatProvider
+        from ai_knot.providers.anthropic import AnthropicProvider
+        from ai_knot.providers.openai_compat import OpenAICompatProvider
 
         provider = create_provider("openai", "sk-fake")
         assert isinstance(provider, OpenAICompatProvider)
@@ -415,7 +415,7 @@ class TestProviderScenarios:
 
         mock_provider.call.side_effect = [error_429, error_429, "Success response"]
 
-        with patch("agentmemo.providers.base.time.sleep"):
+        with patch("ai_knot.providers.base.time.sleep"):
             result = call_with_retry(mock_provider, "sys", "user", "model", max_retries=3)
 
         assert result == "Success response"

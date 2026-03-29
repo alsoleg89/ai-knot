@@ -1,10 +1,10 @@
-"""Tests for agentmemo.types — Fact, ConversationTurn, MemoryType."""
+"""Tests for ai_knot.types — Fact, ConversationTurn, MemoryType."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 
 class TestMemoryType:

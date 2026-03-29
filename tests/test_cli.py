@@ -1,4 +1,4 @@
-"""Tests for agentmemo CLI — all commands via Click CliRunner."""
+"""Tests for ai-knot CLI — all commands via Click CliRunner."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import pathlib
 import pytest
 from click.testing import CliRunner
 
-from agentmemo.cli import main
+from ai_knot.cli import main
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def _cmd(data_dir: str, args: list[str]) -> list[str]:
 
 
 class TestCLIShow:
-    """agentmemo show <agent_id>."""
+    """ai-knot show <agent_id>."""
 
     def test_show_empty(self, runner: CliRunner, data_dir: str) -> None:
         result = runner.invoke(main, _cmd(data_dir, ["show", "myagent"]))
@@ -41,7 +41,7 @@ class TestCLIShow:
 
 
 class TestCLIAdd:
-    """agentmemo add <agent_id> <content>."""
+    """ai-knot add <agent_id> <content>."""
 
     def test_add_fact(self, runner: CliRunner, data_dir: str) -> None:
         result = runner.invoke(main, _cmd(data_dir, ["add", "myagent", "User prefers Docker"]))
@@ -56,7 +56,7 @@ class TestCLIAdd:
 
 
 class TestCLIRecall:
-    """agentmemo recall <agent_id> <query>."""
+    """ai-knot recall <agent_id> <query>."""
 
     def test_recall_empty(self, runner: CliRunner, data_dir: str) -> None:
         result = runner.invoke(main, _cmd(data_dir, ["recall", "myagent", "test"]))
@@ -70,7 +70,7 @@ class TestCLIRecall:
 
 
 class TestCLIStats:
-    """agentmemo stats <agent_id>."""
+    """ai-knot stats <agent_id>."""
 
     def test_stats_empty(self, runner: CliRunner, data_dir: str) -> None:
         result = runner.invoke(main, _cmd(data_dir, ["stats", "myagent"]))
@@ -85,7 +85,7 @@ class TestCLIStats:
 
 
 class TestCLIClear:
-    """agentmemo clear <agent_id>."""
+    """ai-knot clear <agent_id>."""
 
     def test_clear(self, runner: CliRunner, data_dir: str) -> None:
         runner.invoke(main, _cmd(data_dir, ["add", "myagent", "Temporary"]))
@@ -97,7 +97,7 @@ class TestCLIClear:
 
 
 class TestCLIDecay:
-    """agentmemo decay <agent_id>."""
+    """ai-knot decay <agent_id>."""
 
     def test_decay(self, runner: CliRunner, data_dir: str) -> None:
         runner.invoke(main, _cmd(data_dir, ["add", "myagent", "Some fact"]))
@@ -106,7 +106,7 @@ class TestCLIDecay:
 
 
 class TestCLIExportImport:
-    """agentmemo export/import."""
+    """ai-knot export/import."""
 
     def test_export_import_round_trip(
         self, runner: CliRunner, data_dir: str, tmp_path: pathlib.Path

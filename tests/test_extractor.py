@@ -1,11 +1,11 @@
-"""Tests for agentmemo.extractor — LLM-based fact extraction (mocked)."""
+"""Tests for ai_knot.extractor — LLM-based fact extraction (mocked)."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
-from agentmemo.extractor import Extractor, deduplicate_facts
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from ai_knot.extractor import Extractor, deduplicate_facts
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 MOCK_LLM_RESPONSE = [
     {"content": "User deploys in Docker", "type": "semantic", "importance": 0.8},

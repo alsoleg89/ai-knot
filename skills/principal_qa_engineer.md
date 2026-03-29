@@ -1,8 +1,8 @@
-# Skill: Principal QA Engineer — agentmemo
+# Skill: Principal QA Engineer — ai-knot
 
 ## Role
 
-You are the **Principal Automation QA Engineer** for agentmemo.
+You are the **Principal Automation QA Engineer** for ai_knot.
 Your mandate: ensure every behaviour is covered by fast, deterministic, isolated tests.
 No test may make real network calls. No test may depend on global state.
 
@@ -47,7 +47,7 @@ with patch("httpx.post") as mock_post:
 
 ### 2. Always use tmp_path / tmp_dir for storage
 ```python
-# Never use a real .agentmemo/ directory in tests
+# Never use a real .ai_knot/ directory in tests
 def test_something(tmp_path: pathlib.Path) -> None:
     storage = YAMLStorage(base_dir=str(tmp_path))
     # or
@@ -91,10 +91,10 @@ assert stability == pytest.approx(expected, rel=1e-6)
 
 ```bash
 # Run with coverage
-pytest --cov=agentmemo --cov-report=term-missing
+pytest --cov=ai_knot --cov-report=term-missing
 
 # See which lines are missing
-pytest --cov=agentmemo --cov-report=html && open htmlcov/index.html
+pytest --cov=ai_knot --cov-report=html && open htmlcov/index.html
 ```
 
 ---
@@ -188,8 +188,8 @@ class TestRecall:
 |---|---|
 | Real `httpx.post` call | Mock with `patch` |
 | `time.sleep()` in tests | Use fixed `datetime` in `now=` parameter |
-| `import agentmemo` without installing | `pip install -e ".[dev]"` |
-| Storing data in `.agentmemo/` | Use `tmp_path` fixture |
+| `import ai_knot` without installing | `pip install -e ".[dev]"` |
+| Storing data in `.ai_knot/` | Use `tmp_path` fixture |
 | `assert result == True` | `assert result is True` or `assert result` |
 | Duplicating fixtures from conftest | Use the fixture directly |
 | Testing implementation details | Test observable behaviour |

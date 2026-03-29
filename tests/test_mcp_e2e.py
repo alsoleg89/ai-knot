@@ -1,13 +1,13 @@
-"""End-to-end tests for the agentmemo-mcp JSON-RPC server.
+"""End-to-end tests for the ai-knot-mcp JSON-RPC server.
 
-Spawns the real `agentmemo-mcp` subprocess and communicates with it over
+Spawns the real `ai-knot-mcp` subprocess and communicates with it over
 stdio using raw JSON-RPC 2.0, without any Python client library in between.
 
 Requires the mcp extra:
-    pip install "agentmemo[mcp]"
+    pip install "ai-knot[mcp]"
 
 Marked @pytest.mark.integration — included in normal CI but skipped if the
-`agentmemo-mcp` command is not available.
+`ai-knot-mcp` command is not available.
 
 Tests are consolidated into 5 groups to minimize subprocess spawns:
   1. lifecycle  — CRUD + stats
@@ -37,7 +37,7 @@ import pytest
 def _is_mcp_available() -> bool:
     try:
         result = subprocess.run(
-            ["agentmemo-mcp", "--help"],
+            ["ai-knot-mcp", "--help"],
             capture_output=True,
             timeout=5,
         )
@@ -48,7 +48,7 @@ def _is_mcp_available() -> bool:
 
 requires_mcp = pytest.mark.skipif(
     not _is_mcp_available(),
-    reason="agentmemo-mcp not installed (pip install 'agentmemo[mcp]')",
+    reason="ai-knot-mcp not installed (pip install 'ai-knot[mcp]')",
 )
 
 
@@ -57,15 +57,15 @@ class McpSession:
 
     def __init__(self, tmp_path: str) -> None:
         self._proc = subprocess.Popen(
-            ["agentmemo-mcp"],
+            ["ai-knot-mcp"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             env={
                 "PATH": os.environ.get("PATH", ""),
-                "AGENTMEMO_STORAGE": "yaml",
-                "AGENTMEMO_DATA_DIR": tmp_path,
-                "AGENTMEMO_AGENT_ID": "e2e-test",
+                "AI_KNOT_STORAGE": "yaml",
+                "AI_KNOT_DATA_DIR": tmp_path,
+                "AI_KNOT_AGENT_ID": "e2e-test",
             },
         )
         self._next_id = 1
@@ -91,7 +91,7 @@ class McpSession:
         assert self._proc.stdout is not None
         raw = self._proc.stdout.readline()
         if not raw:
-            raise RuntimeError("agentmemo-mcp closed stdout unexpectedly")
+            raise RuntimeError("ai-knot-mcp closed stdout unexpectedly")
         return json.loads(raw.decode())
 
     def initialize(self) -> dict[str, Any]:
@@ -328,7 +328,7 @@ def test_mcp_sequential_and_latency(tmp_path: Any) -> None:
             session._proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             session._proc.kill()
-            pytest.fail("agentmemo-mcp did not exit within 5s after stdin close")
+            pytest.fail("ai-knot-mcp did not exit within 5s after stdin close")
         assert time.monotonic() - start < 5.0
     finally:
         # stdin already closed above; just kill if still alive

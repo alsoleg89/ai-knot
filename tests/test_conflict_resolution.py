@@ -8,10 +8,10 @@ from unittest.mock import patch
 
 import pytest
 
-from agentmemo.extractor import resolve_against_existing
-from agentmemo.knowledge import KnowledgeBase
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import ConversationTurn, Fact, MemoryType
+from ai_knot.extractor import resolve_against_existing
+from ai_knot.knowledge import KnowledgeBase
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -125,7 +125,7 @@ class TestLearnConflictResolution:
 
     def _mock_extract(self, facts: list[Fact]):  # type: ignore[return]
         """Patch Extractor.extract to return a fixed list of facts."""
-        return patch("agentmemo.knowledge.Extractor.extract", return_value=facts)
+        return patch("ai_knot.knowledge.Extractor.extract", return_value=facts)
 
     def test_learn_does_not_duplicate_existing_fact(self, kb: KnowledgeBase) -> None:
         kb.add("User works at Sber as Operations Director", importance=0.9)

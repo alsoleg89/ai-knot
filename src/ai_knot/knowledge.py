@@ -1,4 +1,4 @@
-"""KnowledgeBase — the main public API for agentmemo."""
+"""KnowledgeBase — the main public API for ai_knot."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 
-from agentmemo.extractor import Extractor, resolve_against_existing
-from agentmemo.forgetting import apply_decay
-from agentmemo.providers import LLMProvider
-from agentmemo.retriever import TFIDFRetriever
-from agentmemo.storage.base import SnapshotCapable, StorageBackend
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
+from ai_knot.extractor import Extractor, resolve_against_existing
+from ai_knot.forgetting import apply_decay
+from ai_knot.providers import LLMProvider
+from ai_knot.retriever import TFIDFRetriever
+from ai_knot.storage.base import SnapshotCapable, StorageBackend
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class KnowledgeBase:
 
     Args:
         agent_id: Unique identifier for this agent's memory namespace.
-        storage: Storage backend (defaults to YAMLStorage in .agentmemo/).
+        storage: Storage backend (defaults to YAMLStorage in .ai_knot/).
     """
 
     def __init__(

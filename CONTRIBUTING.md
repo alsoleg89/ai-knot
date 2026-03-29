@@ -1,4 +1,4 @@
-# Contributing to agentmemo
+# Contributing to ai-knot
 
 Thank you for your interest in contributing! This document describes how to set up the project, submit changes, and pass code review.
 
@@ -7,8 +7,8 @@ Thank you for your interest in contributing! This document describes how to set 
 ## Quick setup
 
 ```bash
-git clone https://github.com/alsoleg89/agentmemo.git
-cd agentmemo
+git clone https://github.com/alsoleg89/ai_knot.git
+cd ai-knot
 pip install -e ".[dev,openai]"
 ```
 
@@ -23,7 +23,7 @@ Run linters:
 ```bash
 ruff check src/ tests/
 ruff format --check src/ tests/
-mypy src/agentmemo/
+mypy src/ai_knot/
 ```
 
 ---
@@ -59,15 +59,15 @@ Key rules:
 - All public classes and functions must have docstrings
 - No bare `except:` — catch specific exceptions
 - No mutable default arguments — use `field(default_factory=...)`
-- Storage backends must fully implement `StorageBackend` (see `src/agentmemo/storage/base.py`)
+- Storage backends must fully implement `StorageBackend` (see `src/ai_knot/storage/base.py`)
 
 ---
 
 ## Adding a storage backend
 
-1. Create `src/agentmemo/storage/my_backend.py`
+1. Create `src/ai_knot/storage/my_backend.py`
 2. Implement the four methods: `save`, `load`, `delete`, `list_agents`
-3. Export from `src/agentmemo/storage/__init__.py`
+3. Export from `src/ai_knot/storage/__init__.py`
 4. Add optional dependency to `pyproject.toml` if needed
 5. Add tests in `tests/test_my_backend.py` mirroring `test_yaml_storage.py`
 6. Add to the compat test in `test_storage_compat.py`
@@ -76,9 +76,9 @@ Key rules:
 
 ## Adding an integration
 
-1. Create `src/agentmemo/integrations/my_integration.py`
-2. Import `KnowledgeBase` from `agentmemo.knowledge`
-3. Export from `src/agentmemo/integrations/__init__.py`
+1. Create `src/ai_knot/integrations/my_integration.py`
+2. Import `KnowledgeBase` from `ai_knot.knowledge`
+3. Export from `src/ai_knot/integrations/__init__.py`
 4. Add an example in `examples/`
 5. Add tests in `tests/test_my_integration.py` — mock all external calls
 

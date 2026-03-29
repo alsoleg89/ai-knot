@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 
-from agentmemo.knowledge import KnowledgeBase
+from ai_knot.knowledge import KnowledgeBase
 
 
 class MemoryEnabledOpenAI:

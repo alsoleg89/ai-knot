@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agentmemo"
+name = "ai-knot"
 version = "0.3.0"
 description = "Agent Knowledge Layer. Extract. Store. Retrieve. Any backend."
 readme = "README.md"
@@ -42,21 +42,21 @@ dev = [
 ]
 
 [project.scripts]
-agentmemo = "agentmemo.cli:main"
-agentmemo-mcp = "agentmemo.mcp_server:main"
+ai-knot = "ai_knot.cli:main"
+ai-knot-mcp = "ai_knot.mcp_server:main"
 
 [project.urls]
-Homepage = "https://github.com/alsoleg89/agentmemo"
-Repository = "https://github.com/alsoleg89/agentmemo"
-Issues = "https://github.com/alsoleg89/agentmemo/issues"
-Documentation = "https://github.com/alsoleg89/agentmemo#readme"
+Homepage = "https://github.com/alsoleg89/ai-knot"
+Repository = "https://github.com/alsoleg89/ai-knot"
+Issues = "https://github.com/alsoleg89/ai-knot/issues"
+Documentation = "https://github.com/alsoleg89/ai-knot#readme"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agentmemo"]
+packages = ["src/ai_knot"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=agentmemo --cov-report=term-missing --cov-fail-under=80 -v"
+addopts = "--cov=ai_knot --cov-report=term-missing --cov-fail-under=80 -v"
 markers = [
     "unit: fast, isolated unit tests",
     "integration: tests that touch storage or multiple layers",
@@ -73,13 +73,13 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agentmemo"]
+known-first-party = ["ai_knot"]
 
 [tool.mypy]
 strict = true
 python_version = "3.11"
 mypy_path = "src"
-packages = ["agentmemo"]
+packages = ["ai_knot"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -89,5 +89,5 @@ module = ["httpx", "httpx.*", "click", "click.*", "yaml", "psycopg", "psycopg.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["agentmemo.cli", "agentmemo.mcp_server"]
+module = ["ai_knot.cli", "ai_knot.mcp_server"]
 disallow_untyped_decorators = false

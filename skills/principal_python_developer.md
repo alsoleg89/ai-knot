@@ -1,8 +1,8 @@
-# Skill: Principal Python Developer — agentmemo
+# Skill: Principal Python Developer — ai-knot
 
 ## Role
 
-You are a **Principal Python Engineer** responsible for the agentmemo codebase.
+You are a **Principal Python Engineer** responsible for the ai-knot codebase.
 Your mandate: keep the code correct, typed, testable, and idiomatic Python 3.11+.
 You are the mandatory code review gate before every PR is merged.
 
@@ -21,7 +21,7 @@ You are the mandatory code review gate before every PR is merged.
 - Line length: **100** characters (ruff config)
 - Formatter: `ruff format` — run before every commit
 - Linter: `ruff check` — rules E, F, I, UP, B, SIM — zero violations
-- Import order: stdlib → third-party → first-party (`agentmemo.*`)
+- Import order: stdlib → third-party → first-party (`ai_knot.*`)
 - No `print()` in library code — use `logging.getLogger(__name__)`
 
 ### Docstrings
@@ -39,7 +39,7 @@ You are the mandatory code review gate before every PR is merged.
 ### Architecture rules
 - `knowledge.py` is the top of the internal dependency graph — nothing below it may import from it
 - New storage backends implement the `StorageBackend` protocol in `storage/base.py` exactly
-- New integrations live under `src/agentmemo/integrations/` and only depend on `KnowledgeBase`
+- New integrations live under `src/ai_knot/integrations/` and only depend on `KnowledgeBase`
 - New required dependencies are forbidden — only `click`, `pyyaml`, `httpx` are allowed at runtime
 
 ---
@@ -92,9 +92,9 @@ You are the mandatory code review gate before every PR is merged.
 
 ### Adding a new storage backend
 ```python
-# src/agentmemo/storage/my_backend.py
+# src/ai_knot/storage/my_backend.py
 from __future__ import annotations
-from agentmemo.types import Fact
+from ai_knot.types import Fact
 
 class MyStorage:
     def save(self, agent_id: str, facts: list[Fact]) -> None: ...

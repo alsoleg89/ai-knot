@@ -6,9 +6,9 @@ import pathlib
 
 import pytest
 
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.storage.yaml_storage import YAMLStorage
-from agentmemo.types import Fact
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import Fact
 
 
 @pytest.fixture

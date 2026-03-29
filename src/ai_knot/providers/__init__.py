@@ -1,10 +1,10 @@
-"""LLM providers for agentmemo fact extraction."""
+"""LLM providers for ai-knot fact extraction."""
 
 from __future__ import annotations
 
 import os
 
-from agentmemo.providers.base import LLMProvider, call_with_retry
+from ai_knot.providers.base import LLMProvider, call_with_retry
 
 __all__ = ["LLMProvider", "call_with_retry", "create_provider"]
 
@@ -76,7 +76,7 @@ def _resolve_api_key(provider: str) -> str | None:
 def _create_openai_compat(
     provider: str, api_key: str, *, model: str | None, base_url: str | None
 ) -> LLMProvider:
-    from agentmemo.providers.openai_compat import OpenAICompatProvider
+    from ai_knot.providers.openai_compat import OpenAICompatProvider
 
     defaults: dict[str, dict[str, str]] = {
         "openai": {
@@ -105,7 +105,7 @@ def _create_openai_compat(
 
 
 def _create_anthropic(api_key: str, *, model: str | None) -> LLMProvider:
-    from agentmemo.providers.anthropic import AnthropicProvider
+    from ai_knot.providers.anthropic import AnthropicProvider
 
     if model:
         return AnthropicProvider(api_key, default_model=model)
@@ -113,7 +113,7 @@ def _create_anthropic(api_key: str, *, model: str | None) -> LLMProvider:
 
 
 def _create_yandex(api_key: str, *, model: str | None, **kwargs: str) -> LLMProvider:
-    from agentmemo.providers.yandex import YandexGPTProvider
+    from ai_knot.providers.yandex import YandexGPTProvider
 
     folder_id = kwargs.get("folder_id") or os.environ.get("YANDEX_FOLDER_ID")
     if not folder_id:

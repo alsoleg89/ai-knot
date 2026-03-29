@@ -1,8 +1,8 @@
-# Skill: Principal Architect — agentmemo
+# Skill: Principal Architect — ai-knot
 
 ## Role
 
-You are the **Principal Software Architect** for agentmemo.
+You are the **Principal Software Architect** for ai_knot.
 Your mandate: guard the design integrity, review extension points,
 ensure the system stays composable, layered, and dependency-minimal.
 
@@ -10,7 +10,7 @@ ensure the system stays composable, layered, and dependency-minimal.
 
 ## Architecture summary
 
-agentmemo is a **layered, protocol-driven, zero-vendor-lock-in** knowledge layer for AI agents.
+ai-knot is a **layered, protocol-driven, zero-vendor-lock-in** knowledge layer for AI agents.
 
 ```
 ┌───────────────────────────────────────────────────────┐
@@ -73,13 +73,13 @@ Nobody else computes retention. If the formula must change, it changes there and
 
 ### Step 1: Create the file
 ```
-src/agentmemo/storage/postgres_storage.py
+src/ai_knot/storage/postgres_storage.py
 ```
 
 ### Step 2: Implement all four methods
 ```python
 from __future__ import annotations
-from agentmemo.types import Fact
+from ai_knot.types import Fact
 
 class PostgresStorage:
     """PostgreSQL + pgvector storage backend."""
@@ -93,7 +93,7 @@ class PostgresStorage:
 
 ### Step 3: Export from `storage/__init__.py`
 ```python
-from agentmemo.storage.postgres_storage import PostgresStorage
+from ai_knot.storage.postgres_storage import PostgresStorage
 __all__ = ["SQLiteStorage", "StorageBackend", "YAMLStorage", "PostgresStorage"]
 ```
 
@@ -114,13 +114,13 @@ postgres = ["psycopg[binary]>=3.1", "pgvector>=0.2"]
 
 ### Step 1: Create the file
 ```
-src/agentmemo/integrations/langchain.py
+src/ai_knot/integrations/langchain.py
 ```
 
 ### Step 2: Import only KnowledgeBase
 ```python
 from __future__ import annotations
-from agentmemo.knowledge import KnowledgeBase
+from ai_knot.knowledge import KnowledgeBase
 
 class LangChainMemoryAdapter:
     """Wraps KnowledgeBase as a LangChain memory component."""
@@ -158,13 +158,13 @@ Reject PRs that introduce any of these:
 
 | Red flag | Why |
 |---|---|
-| `from agentmemo.knowledge import KnowledgeBase` in `storage/*.py` | Circular import |
+| `from ai_knot.knowledge import KnowledgeBase` in `storage/*.py` | Circular import |
 | New class in `src/` that doesn’t fit a layer | Smell — define the layer first |
 | `import numpy` in any non-optional module | Breaks zero-deps rule |
 | Storing retriever state across calls | Makes the class stateful, breaks concurrency |
 | `save(agent_id, [existing] + [new])` pattern in KnowledgeBase | Already done: load → append → save |
 | Global mutable state (module-level lists, dicts) | Thread-unsafe |
-| Hardcoded `.agentmemo/` path outside `YAMLStorage.__init__` | Path ownership violation |
+| Hardcoded `.ai_knot/` path outside `YAMLStorage.__init__` | Path ownership violation |
 
 ---
 

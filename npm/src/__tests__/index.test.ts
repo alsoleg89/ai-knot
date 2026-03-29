@@ -1,6 +1,6 @@
 /**
  * Unit tests for KnowledgeBase public API.
- * The agentmemo-mcp subprocess is mocked via node:child_process.
+ * The ai-knot-mcp subprocess is mocked via node:child_process.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -247,12 +247,12 @@ describe("KnowledgeBase", () => {
     const kb = new KnowledgeBase({ agentId: "agent-1", storage: "sqlite" });
     await kb.recall("test");
     expect(spawn).toHaveBeenCalledWith(
-      "agentmemo-mcp",
+      "ai-knot-mcp",
       [],
       expect.objectContaining({
         env: expect.objectContaining({
-          AGENTMEMO_AGENT_ID: "agent-1",
-          AGENTMEMO_STORAGE: "sqlite",
+          AI_KNOT_AGENT_ID: "agent-1",
+          AI_KNOT_STORAGE: "sqlite",
         }),
       })
     );

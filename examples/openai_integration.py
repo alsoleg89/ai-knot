@@ -1,4 +1,4 @@
-"""agentmemo + OpenAI integration example.
+"""ai-knot + OpenAI integration example.
 
 This example shows how to enrich OpenAI messages with agent memory.
 NOTE: Requires OPENAI_API_KEY environment variable for the actual API call.
@@ -8,8 +8,8 @@ The memory injection works without an API key.
 import json
 import shutil
 
-from agentmemo import KnowledgeBase, MemoryType
-from agentmemo.integrations.openai import MemoryEnabledOpenAI
+from ai_knot import KnowledgeBase, MemoryType
+from ai_knot.integrations.openai import MemoryEnabledOpenAI
 
 # Create a knowledge base with some facts.
 kb = KnowledgeBase(agent_id="assistant")
@@ -48,5 +48,5 @@ print(json.dumps(enriched, indent=2))
 # )
 
 # Clean up.
-shutil.rmtree(".agentmemo", ignore_errors=True)
+shutil.rmtree(".ai_knot", ignore_errors=True)
 print("\nDemo complete.")

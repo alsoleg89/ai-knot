@@ -5,13 +5,13 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.storage.yaml_storage import YAMLStorage
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage.yaml_storage import YAMLStorage
 
 
 def _add_facts(storage: YAMLStorage | SQLiteStorage, agent_id: str, n: int) -> None:
     """Helper: load, append n facts with incrementing content, save."""
-    from agentmemo.types import Fact, MemoryType
+    from ai_knot.types import Fact, MemoryType
 
     for i in range(n):
         facts = storage.load(agent_id)
@@ -46,7 +46,7 @@ class TestYAMLConcurrent:
 
     def test_concurrent_reads_never_raise(self, tmp_path: Path) -> None:
         storage = YAMLStorage(base_dir=str(tmp_path))
-        from agentmemo.types import Fact, MemoryType
+        from ai_knot.types import Fact, MemoryType
 
         storage.save(
             "agent2",
@@ -73,7 +73,7 @@ class TestYAMLConcurrent:
     def test_write_read_consistency(self, tmp_path: Path) -> None:
         """A value saved by one thread must be readable by another."""
         storage = YAMLStorage(base_dir=str(tmp_path))
-        from agentmemo.types import Fact, MemoryType
+        from ai_knot.types import Fact, MemoryType
 
         sentinel = "unique-sentinel-value"
         written = threading.Event()
@@ -121,7 +121,7 @@ class TestSQLiteConcurrent:
     def test_concurrent_reads_never_raise(self, tmp_path: Path) -> None:
         db = str(tmp_path / "test.db")
         storage = SQLiteStorage(db_path=db)
-        from agentmemo.types import Fact, MemoryType
+        from ai_knot.types import Fact, MemoryType
 
         storage.save(
             "agent2",

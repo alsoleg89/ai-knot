@@ -6,8 +6,8 @@ import pathlib
 
 import pytest
 
-from agentmemo.storage.sqlite_storage import SQLiteStorage
-from agentmemo.types import Fact, MemoryType
+from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.types import Fact, MemoryType
 
 
 class TestSQLiteSaveLoad:
