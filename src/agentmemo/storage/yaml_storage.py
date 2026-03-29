@@ -129,6 +129,97 @@ class YAMLStorage:
             if d.is_dir() and (d / "knowledge.yaml").exists()
         ]
 
+    # ------------------------------------------------------------------
+    # SnapshotCapable implementation
+    # ------------------------------------------------------------------
+
+    def _snapshot_dir(self, agent_id: str) -> Path:
+        return self._base_dir / agent_id / "snapshots"
+
+    def save_snapshot(self, agent_id: str, name: str, facts: list[Fact]) -> None:
+        """Persist a named snapshot (overwrites if name already exists)."""
+        snap_dir = self._snapshot_dir(agent_id)
+        snap_dir.mkdir(parents=True, exist_ok=True)
+        snap_path = snap_dir / f"{name}.yaml"
+
+        data: dict[str, Any] = {}
+        for fact in facts:
+            data[fact.id] = {
+                "content": fact.content,
+                "type": fact.type.value,
+                "importance": fact.importance,
+                "retention_score": fact.retention_score,
+                "access_count": fact.access_count,
+                "tags": fact.tags,
+                "created_at": fact.created_at.isoformat(),
+                "last_accessed": fact.last_accessed.isoformat(),
+            }
+
+        yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        lock = _get_lock(snap_path)
+        with lock:
+            fd, tmp_path = tempfile.mkstemp(dir=snap_dir, suffix=".yaml.tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(yaml_text)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp_path, snap_path)
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
+
+        logger.debug("Saved snapshot '%s' for agent '%s'", name, agent_id)
+
+    def load_snapshot(self, agent_id: str, name: str) -> list[Fact]:
+        """Load facts from a named snapshot.
+
+        Raises:
+            KeyError: If no snapshot with the given name exists.
+        """
+        snap_path = self._snapshot_dir(agent_id) / f"{name}.yaml"
+        if not snap_path.exists():
+            raise KeyError(f"Snapshot {name!r} not found for agent {agent_id!r}")
+
+        lock = _get_lock(snap_path)
+        with lock:
+            raw = yaml.safe_load(snap_path.read_text(encoding="utf-8"))
+
+        if not raw:
+            return []
+
+        facts: list[Fact] = []
+        for fact_id, entry in raw.items():
+            facts.append(
+                Fact(
+                    id=str(fact_id),
+                    content=entry["content"],
+                    type=MemoryType(entry["type"]),
+                    importance=float(entry["importance"]),
+                    retention_score=float(entry["retention_score"]),
+                    access_count=int(entry["access_count"]),
+                    tags=list(entry.get("tags", [])),
+                    created_at=_parse_datetime(entry["created_at"]),
+                    last_accessed=_parse_datetime(entry["last_accessed"]),
+                )
+            )
+        return facts
+
+    def list_snapshots(self, agent_id: str) -> list[str]:
+        """Return snapshot names sorted by modification time (oldest first)."""
+        snap_dir = self._snapshot_dir(agent_id)
+        if not snap_dir.exists():
+            return []
+        files = sorted(snap_dir.glob("*.yaml"), key=lambda p: p.stat().st_mtime)
+        return [p.stem for p in files]
+
+    def delete_snapshot(self, agent_id: str, name: str) -> None:
+        """Delete a named snapshot. No-op if it does not exist."""
+        snap_path = self._snapshot_dir(agent_id) / f"{name}.yaml"
+        with contextlib.suppress(FileNotFoundError):
+            snap_path.unlink()
+
 
 def _parse_datetime(value: str) -> datetime:
     """Parse an ISO-format datetime string, ensuring UTC timezone."""

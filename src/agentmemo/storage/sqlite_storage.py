@@ -7,6 +7,7 @@ import logging
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from agentmemo.types import Fact, MemoryType
 
@@ -25,6 +26,16 @@ CREATE TABLE IF NOT EXISTS facts (
     created_at  TEXT NOT NULL,
     last_accessed TEXT NOT NULL,
     PRIMARY KEY (agent_id, id)
+)
+"""
+
+_CREATE_SNAPSHOTS_TABLE = """
+CREATE TABLE IF NOT EXISTS snapshots (
+    agent_id   TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    facts_json TEXT NOT NULL,
+    PRIMARY KEY (agent_id, name)
 )
 """
 
@@ -50,6 +61,7 @@ class SQLiteStorage:
         with self._get_conn() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(_CREATE_TABLE)
+            conn.execute(_CREATE_SNAPSHOTS_TABLE)
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
         """Replace all facts for an agent."""
@@ -115,6 +127,82 @@ class SQLiteStorage:
         with self._get_conn() as conn:
             rows = conn.execute("SELECT DISTINCT agent_id FROM facts").fetchall()
         return [row[0] for row in rows]
+
+    # ------------------------------------------------------------------
+    # SnapshotCapable implementation
+    # ------------------------------------------------------------------
+
+    def save_snapshot(self, agent_id: str, name: str, facts: list[Fact]) -> None:
+        """Persist a named snapshot (overwrites if name already exists)."""
+        facts_data = [
+            {
+                "id": f.id,
+                "content": f.content,
+                "type": f.type.value,
+                "importance": f.importance,
+                "retention_score": f.retention_score,
+                "access_count": f.access_count,
+                "tags": f.tags,
+                "created_at": f.created_at.isoformat(),
+                "last_accessed": f.last_accessed.isoformat(),
+            }
+            for f in facts
+        ]
+        with self._get_conn() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO snapshots (agent_id, name, created_at, facts_json)
+                   VALUES (?, ?, ?, ?)""",
+                (agent_id, name, datetime.now(UTC).isoformat(), json.dumps(facts_data)),
+            )
+        logger.debug("Saved snapshot '%s' for agent '%s'", name, agent_id)
+
+    def load_snapshot(self, agent_id: str, name: str) -> list[Fact]:
+        """Load facts from a named snapshot.
+
+        Raises:
+            KeyError: If no snapshot with the given name exists.
+        """
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT facts_json FROM snapshots WHERE agent_id = ? AND name = ?",
+                (agent_id, name),
+            ).fetchone()
+
+        if row is None:
+            raise KeyError(f"Snapshot {name!r} not found for agent {agent_id!r}")
+
+        raw: list[dict[str, Any]] = json.loads(row[0])
+        return [
+            Fact(
+                id=str(entry["id"]),
+                content=str(entry["content"]),
+                type=MemoryType(str(entry["type"])),
+                importance=float(entry["importance"]),
+                retention_score=float(entry["retention_score"]),
+                access_count=int(entry["access_count"]),
+                tags=list(entry["tags"]),
+                created_at=_parse_datetime(str(entry["created_at"])),
+                last_accessed=_parse_datetime(str(entry["last_accessed"])),
+            )
+            for entry in raw
+        ]
+
+    def list_snapshots(self, agent_id: str) -> list[str]:
+        """Return snapshot names sorted by creation time (oldest first)."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT name FROM snapshots WHERE agent_id = ? ORDER BY created_at",
+                (agent_id,),
+            ).fetchall()
+        return [row[0] for row in rows]
+
+    def delete_snapshot(self, agent_id: str, name: str) -> None:
+        """Delete a named snapshot. No-op if it does not exist."""
+        with self._get_conn() as conn:
+            conn.execute(
+                "DELETE FROM snapshots WHERE agent_id = ? AND name = ?",
+                (agent_id, name),
+            )
 
 
 def _parse_datetime(value: str) -> datetime:
