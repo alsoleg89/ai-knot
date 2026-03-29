@@ -27,6 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = ["mcp>=1.0"]
 openai = ["openai>=1.0"]
 postgres = ["psycopg[binary]>=3.1"]
 dev = [
@@ -40,6 +41,7 @@ dev = [
 
 [project.scripts]
 agentmemo = "agentmemo.cli:main"
+agentmemo-mcp = "agentmemo.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/alsoleg89/agentmemo"
@@ -81,9 +83,9 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["httpx", "httpx.*", "click", "click.*", "yaml", "psycopg", "psycopg.*"]
+module = ["httpx", "httpx.*", "click", "click.*", "yaml", "psycopg", "psycopg.*", "mcp", "mcp.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "agentmemo.cli"
+module = ["agentmemo.cli", "agentmemo.mcp_server"]
 disallow_untyped_decorators = false
