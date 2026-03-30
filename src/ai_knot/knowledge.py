@@ -157,9 +157,7 @@ class KnowledgeBase:
             if not content.strip():
                 raise ValueError("content must not be empty")
             if not 0.0 <= item_importance <= 1.0:
-                raise ValueError(
-                    f"importance must be between 0.0 and 1.0, got {item_importance}"
-                )
+                raise ValueError(f"importance must be between 0.0 and 1.0, got {item_importance}")
             new_facts.append(
                 Fact(content=content, type=item_type, importance=item_importance, tags=item_tags)
             )

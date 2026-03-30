@@ -294,9 +294,7 @@ class TestAddMany:
 class TestLearnDefaultProvider:
     """Provider config set at __init__ used as fallback in learn()."""
 
-    def test_default_provider_used_when_not_passed(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_default_provider_used_when_not_passed(self, tmp_path: pathlib.Path) -> None:
         storage = YAMLStorage(base_dir=str(tmp_path))
         kb = KnowledgeBase(
             agent_id="agent",
@@ -313,9 +311,7 @@ class TestLearnDefaultProvider:
             result = kb.learn(turns)  # no api_key / provider per call
         assert isinstance(result, list)
 
-    def test_per_call_provider_overrides_default(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_per_call_provider_overrides_default(self, tmp_path: pathlib.Path) -> None:
         storage = YAMLStorage(base_dir=str(tmp_path))
         kb = KnowledgeBase(
             agent_id="agent",
@@ -329,9 +325,7 @@ class TestLearnDefaultProvider:
             result = kb.learn(turns, provider="anthropic", api_key="sk-other")
         assert result == []
 
-    def test_no_api_key_at_init_or_call_raises(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_no_api_key_at_init_or_call_raises(self, tmp_path: pathlib.Path) -> None:
         storage = YAMLStorage(base_dir=str(tmp_path))
         kb = KnowledgeBase(agent_id="agent", storage=storage)
         turns = [ConversationTurn(role="user", content="Hello")]
