@@ -32,13 +32,21 @@ class LLMProvider(Protocol):
         """Default model ID for this provider."""
         ...
 
-    def call(self, system_prompt: str, user_content: str, model: str) -> str:
+    def call(
+        self,
+        system_prompt: str,
+        user_content: str,
+        model: str,
+        *,
+        timeout: float | None = None,
+    ) -> str:
         """Send a prompt to the LLM and return the text response.
 
         Args:
             system_prompt: System-level instruction.
             user_content: User message content.
             model: Model identifier to use.
+            timeout: Request timeout in seconds. ``None`` uses the provider default.
 
         Returns:
             Raw text response from the LLM.
@@ -58,6 +66,7 @@ def call_with_retry(
     model: str,
     *,
     max_retries: int = 3,
+    timeout: float | None = None,
 ) -> str:
     """Call an LLM provider with retry on transient errors.
 
@@ -70,13 +79,14 @@ def call_with_retry(
         user_content: User message content.
         model: Model identifier.
         max_retries: Maximum number of attempts.
+        timeout: Per-request timeout in seconds. ``None`` uses the provider default.
 
     Returns:
         LLM response text, or ``""`` on failure.
     """
     for attempt in range(max_retries):
         try:
-            return provider.call(system_prompt, user_content, model)
+            return provider.call(system_prompt, user_content, model, timeout=timeout)
         except httpx.TimeoutException:
             logger.warning(
                 "%s request timed out (attempt %d/%d)",

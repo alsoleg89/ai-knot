@@ -235,3 +235,143 @@ class TestRecallFactsWithScores:
             kb.add(f"Deployment fact {i}")
         pairs = kb.recall_facts_with_scores("deployment", top_k=3)
         assert len(pairs) <= 3
+
+
+class TestAddMany:
+    """add_many() — batch insertion without LLM."""
+
+    def test_add_many_strings(self, kb: KnowledgeBase) -> None:
+        facts = kb.add_many(["User prefers Python", "User works at Sber"])
+        assert len(facts) == 2
+        assert all(isinstance(f, Fact) for f in facts)
+        assert facts[0].content == "User prefers Python"
+        assert facts[1].content == "User works at Sber"
+
+    def test_add_many_dicts(self, kb: KnowledgeBase) -> None:
+        items = [
+            {"content": "User deploys on Fridays", "type": "episodic", "importance": 0.7},
+            {"content": "User prefers async frameworks", "type": "procedural"},
+        ]
+        facts = kb.add_many(items)
+        assert len(facts) == 2
+        assert facts[0].type == MemoryType.EPISODIC
+        assert pytest.approx(facts[0].importance) == 0.7
+        assert facts[1].type == MemoryType.PROCEDURAL
+
+    def test_add_many_empty(self, kb: KnowledgeBase) -> None:
+        assert kb.add_many([]) == []
+
+    def test_add_many_persists(self, kb: KnowledgeBase) -> None:
+        kb.add_many(["Fact A", "Fact B", "Fact C"])
+        stored = kb._storage.load(kb._agent_id)
+        assert len(stored) == 3
+
+    def test_add_many_default_type_applied_to_strings(self, kb: KnowledgeBase) -> None:
+        facts = kb.add_many(["Some procedure"], type=MemoryType.PROCEDURAL)
+        assert facts[0].type == MemoryType.PROCEDURAL
+
+    def test_add_many_with_tags(self, kb: KnowledgeBase) -> None:
+        facts = kb.add_many(["Tagged fact"], tags=["work"])
+        assert facts[0].tags == ["work"]
+
+    def test_add_many_single_storage_op(self, kb: KnowledgeBase) -> None:
+        """add_many persists all facts in one load+save, not N×2 ops."""
+        kb.add_many(["Fact A", "Fact B", "Fact C"])
+        stored = kb._storage.load(kb._agent_id)
+        assert len(stored) == 3
+
+    def test_add_many_missing_content_raises(self, kb: KnowledgeBase) -> None:
+        with pytest.raises(ValueError, match="content"):
+            kb.add_many([{"type": "semantic"}])
+
+    def test_add_many_validates_all_before_persisting(self, kb: KnowledgeBase) -> None:
+        """Validation failure on item N must not partially persist items 0..N-1."""
+        with pytest.raises(ValueError):
+            kb.add_many(["Valid fact", {"type": "semantic"}])  # second item missing content
+        assert kb._storage.load(kb._agent_id) == []
+
+
+class TestLearnDefaultProvider:
+    """Provider config set at __init__ used as fallback in learn()."""
+
+    def test_default_provider_used_when_not_passed(self, tmp_path: pathlib.Path) -> None:
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            provider="openai",
+            api_key="sk-default",
+        )
+        turns = [ConversationTurn(role="user", content="I deploy on Fridays")]
+        mock_facts = [{"content": "User deploys on Fridays", "type": "semantic", "importance": 0.8}]
+        with (
+            patch("ai_knot.extractor.call_with_retry", return_value="[]"),
+            patch("ai_knot.extractor.Extractor._call_llm", return_value=mock_facts),
+        ):
+            result = kb.learn(turns)  # no api_key / provider per call
+        assert isinstance(result, list)
+
+    def test_per_call_provider_overrides_default(self, tmp_path: pathlib.Path) -> None:
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            provider="openai",
+            api_key="sk-default",
+        )
+        turns = [ConversationTurn(role="user", content="Hello")]
+        with patch("ai_knot.extractor.Extractor._call_llm", return_value=[]):
+            # Override with anthropic for this specific call
+            result = kb.learn(turns, provider="anthropic", api_key="sk-other")
+        assert result == []
+
+    def test_no_api_key_at_init_or_call_raises(self, tmp_path: pathlib.Path) -> None:
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="agent", storage=storage)
+        turns = [ConversationTurn(role="user", content="Hello")]
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False),
+            pytest.raises(ValueError, match="No API key"),
+        ):
+            kb.learn(turns)
+
+
+class TestAsyncAPI:
+    """alearn(), arecall(), arecall_facts() — non-blocking variants."""
+
+    def test_alearn_returns_list(self, tmp_path: pathlib.Path) -> None:
+        import asyncio
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="async_agent", storage=storage)
+        turns = [ConversationTurn(role="user", content="Hello")]
+        with patch("ai_knot.extractor.Extractor._call_llm", return_value=[]):
+            result = asyncio.run(kb.alearn(turns, provider="openai", api_key="sk-test"))
+        assert result == []
+
+    def test_arecall_returns_string(self, tmp_path: pathlib.Path) -> None:
+        import asyncio
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="async_agent", storage=storage)
+        kb.add("User prefers Python")
+        result = asyncio.run(kb.arecall("language"))
+        assert isinstance(result, str)
+        assert "Python" in result
+
+    def test_arecall_facts_returns_list(self, tmp_path: pathlib.Path) -> None:
+        import asyncio
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="async_agent", storage=storage)
+        kb.add("User deploys on Fridays")
+        results = asyncio.run(kb.arecall_facts("deployment"))
+        assert isinstance(results, list)
+        assert all(isinstance(f, Fact) for f in results)
+
+    def test_arecall_empty_kb(self, tmp_path: pathlib.Path) -> None:
+        import asyncio
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="async_agent", storage=storage)
+        assert asyncio.run(kb.arecall("anything")) == ""

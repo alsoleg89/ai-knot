@@ -36,7 +36,14 @@ class YandexGPTProvider:
     def default_model(self) -> str:
         return self._default_model
 
-    def call(self, system_prompt: str, user_content: str, model: str) -> str:
+    def call(
+        self,
+        system_prompt: str,
+        user_content: str,
+        model: str,
+        *,
+        timeout: float | None = None,
+    ) -> str:
         """Send a completion request to Yandex GPT and return the text response."""
         response = httpx.post(
             "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
@@ -55,7 +62,7 @@ class YandexGPTProvider:
                     {"role": "user", "text": user_content},
                 ],
             },
-            timeout=self._timeout,
+            timeout=timeout if timeout is not None else self._timeout,
         )
         response.raise_for_status()
         return str(response.json()["result"]["alternatives"][0]["message"]["text"])

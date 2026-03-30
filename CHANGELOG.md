@@ -18,6 +18,54 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] — 2026-03-30
+
+### Added
+
+- **Async API** — `KnowledgeBase.alearn()`, `arecall()`, `arecall_facts()` run their
+  sync counterparts in a thread-pool executor via `asyncio.get_running_loop().run_in_executor()`,
+  keeping the event loop unblocked during LLM HTTP calls. Safe to use in FastAPI handlers
+  and `asyncio.gather()`.
+
+- **Provider config at `__init__`** — `KnowledgeBase` now accepts `provider`, `api_key`,
+  `model`, and extra `**provider_kwargs` at construction time. These serve as defaults for
+  every subsequent `learn()` call; per-call values still override. No more repeating
+  credentials on every call in production code.
+
+  ```python
+  kb = KnowledgeBase(agent_id="bot", provider="openai", api_key="sk-...")
+  kb.learn(turns_a)   # uses init-time credentials
+  kb.learn(turns_b)   # same
+  ```
+
+- **`KnowledgeBase.add_many()`** — batch-insert a list of facts (strings or dicts) in a
+  single storage round-trip, without any LLM call. Validation of all items happens before
+  any persistence, so a bad item never partially commits.
+
+- **Per-call timeout** — `learn()` (and `alearn()`) accept `timeout: float | None`
+  which propagates through `Extractor` → `call_with_retry` → `provider.call()` →
+  `httpx.post()`. `None` (default) uses the provider's built-in 30 s default.
+
+- **Automatic conversation batching** — `learn()` accepts `batch_size: int = 20`
+  (forwarded to `Extractor`). Long conversations are split into chunks before being
+  sent to the LLM, preventing silent fact loss from JSON truncation.
+
+- **Auto-publish on version tag** — `publish.yml` and `npm-publish.yml` now also
+  trigger on `push` of `v[0-9]+.[0-9]+.[0-9]+` tags, wiring the `release.yml` tag
+  push directly to PyPI and npm publish without a separate manual dispatch.
+
+- **`recall_facts_with_scores()` documented** — README now includes a usage example
+  and explains the hybrid score (TF-IDF similarity + Ebbinghaus retention + fact importance).
+
+### Fixed
+
+- `add_many()` validates all items before touching storage (atomic-style: either all
+  items persist or none do on validation failure).
+- `add_many()` performs a single `load` + `save` regardless of list length (previously
+  each item caused two storage round-trips via `add()`).
+
+---
+
 ## [0.3.0] — 2026-03-29
 
 ### Added

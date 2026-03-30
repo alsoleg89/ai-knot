@@ -29,12 +29,26 @@ No auto-generated footers or URLs.
 
 **Merge commits** — subject must not expose internal branch naming conventions.
 
-## Sanity check before push
+## Pre-commit checklist (run before every push)
 
 ```bash
-# Confirm author
-git log --format="%an" | sort -u
+# 1. Format — CI runs ruff format --check; fix locally first
+ruff format src/ tests/
 
-# Confirm no leaked URLs
+# 2. Lint
+ruff check src/ tests/
+
+# 3. Types
+mypy src/ai_knot --strict
+
+# 4. Tests
+pytest tests/ --ignore=tests/test_performance.py --ignore=tests/test_mcp_e2e.py -q
+
+# 5. Confirm author
+git log --format="%an" | sort -u   # must be: alsoleg89
+
+# 6. Confirm no leaked URLs
 git log --format="%B" | grep "https://claude\|session_"
 ```
+
+**Order matters:** format → lint → types → tests. Don't skip format — CI will fail.

@@ -43,7 +43,14 @@ class OpenAICompatProvider:
     def default_model(self) -> str:
         return self._default_model
 
-    def call(self, system_prompt: str, user_content: str, model: str) -> str:
+    def call(
+        self,
+        system_prompt: str,
+        user_content: str,
+        model: str,
+        *,
+        timeout: float | None = None,
+    ) -> str:
         """Send a chat completion request and return the assistant message."""
         headers = {
             "Authorization": f"Bearer {self._api_key}",
@@ -61,7 +68,7 @@ class OpenAICompatProvider:
                 ],
                 "temperature": 0.0,
             },
-            timeout=self._timeout,
+            timeout=timeout if timeout is not None else self._timeout,
         )
         response.raise_for_status()
         return str(response.json()["choices"][0]["message"]["content"])

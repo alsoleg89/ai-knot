@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import Counter
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,19 +30,41 @@ class KnowledgeBase:
         context = kb.recall("what language?")
         # → "[procedural] User prefers Python"
 
+        # Configure provider once at init — no need to repeat credentials:
+        kb = KnowledgeBase(agent_id="my_agent", provider="openai", api_key="sk-...")
+        kb.learn(turns)
+        kb.learn(more_turns)
+
     Args:
         agent_id: Unique identifier for this agent's memory namespace.
         storage: Storage backend (defaults to YAMLStorage in .ai_knot/).
+        provider: Default LLM provider name or instance used by :meth:`learn`.
+            When set, ``learn()`` calls do not need to repeat the provider name.
+        api_key: Default API key for the provider. Falls back to environment
+            variables when not set.
+        model: Default model override for the provider.
+        **provider_kwargs: Extra provider arguments stored as defaults for
+            ``learn()`` (e.g. ``folder_id`` for Yandex, ``base_url`` for
+            openai-compat).
     """
 
     def __init__(
         self,
         agent_id: str,
         storage: StorageBackend | None = None,
+        *,
+        provider: str | LLMProvider | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        **provider_kwargs: str,
     ) -> None:
         self._agent_id = agent_id
         self._storage: StorageBackend = storage or YAMLStorage()
         self._retriever = TFIDFRetriever()
+        self._default_provider = provider
+        self._default_api_key = api_key
+        self._default_model = model
+        self._default_provider_kwargs: dict[str, str] = dict(provider_kwargs)
 
     def add(
         self,
@@ -78,14 +102,83 @@ class KnowledgeBase:
         logger.info("Added fact '%s' to agent '%s'", content[:50], self._agent_id)
         return fact
 
+    def add_many(
+        self,
+        facts: Sequence[str | dict[str, Any]],
+        *,
+        type: MemoryType = MemoryType.SEMANTIC,
+        importance: float = 0.8,
+        tags: list[str] | tuple[str, ...] = (),
+    ) -> list[Fact]:
+        """Add multiple pre-extracted facts at once without an LLM call.
+
+        Each item can be a plain string (content only) or a dict with any of the
+        keys ``content`` (required), ``type``, ``importance``, ``tags``.  Dict
+        values take precedence over the method-level defaults.
+
+        Args:
+            facts: Sequence of fact strings or dicts.
+            type: Default memory type applied to string items and to dicts that
+                do not specify a type.
+            importance: Default importance applied to string items and to dicts
+                that do not specify importance.
+            tags: Default tags applied to string items and to dicts that do not
+                specify tags.
+
+        Returns:
+            List of created Facts in the same order as the input.
+
+        Raises:
+            ValueError: If any fact has empty content or an invalid importance.
+        """
+        if not facts:
+            return []
+
+        # Build and validate all Fact objects before touching storage so that
+        # a validation error on item N does not leave the first N-1 persisted.
+        new_facts: list[Fact] = []
+        for item in facts:
+            if isinstance(item, str):
+                content = item
+                item_type = type
+                item_importance = importance
+                item_tags: list[str] = list(tags)
+            else:
+                raw_content = item.get("content")
+                if not raw_content:
+                    raise ValueError("each dict item must include a non-empty 'content' key")
+                content = str(raw_content)
+                raw_type = item.get("type")
+                item_type = MemoryType(raw_type) if raw_type else type
+                item_importance = float(item.get("importance", importance))
+                raw_tags = item.get("tags", list(tags))
+                item_tags = raw_tags if isinstance(raw_tags, (list, tuple)) else list(tags)  # type: ignore[assignment]
+
+            if not content.strip():
+                raise ValueError("content must not be empty")
+            if not 0.0 <= item_importance <= 1.0:
+                raise ValueError(f"importance must be between 0.0 and 1.0, got {item_importance}")
+            new_facts.append(
+                Fact(content=content, type=item_type, importance=item_importance, tags=item_tags)
+            )
+
+        # Single load + save: O(1) storage round-trips regardless of list length.
+        existing = self._storage.load(self._agent_id)
+        existing.extend(new_facts)
+        self._storage.save(self._agent_id, existing)
+        logger.info("Added %d facts to agent '%s'", len(new_facts), self._agent_id)
+        return new_facts
+
     def learn(
         self,
         turns: list[ConversationTurn],
         *,
         api_key: str | None = None,
-        provider: str | LLMProvider = "openai",
+        provider: str | LLMProvider | None = None,
         model: str | None = None,
         conflict_threshold: float = 0.7,
+        timeout: float | None = None,
+        batch_size: int = 20,
         **provider_kwargs: str,
     ) -> list[Fact]:
         """Extract and store facts from a conversation using an LLM.
@@ -94,16 +187,29 @@ class KnowledgeBase:
         ``conflict_threshold``) are updated in place (importance bumped, access
         time refreshed) instead of being duplicated.
 
+        Provider credentials default to those passed at :meth:`__init__` when
+        not specified per-call.
+
         Args:
             turns: Conversation messages to extract knowledge from.
-            api_key: LLM API key. If ``None``, reads from environment.
+            api_key: LLM API key. Falls back to the value set at init, then to
+                environment variables.
             provider: Provider name or a pre-configured ``LLMProvider`` instance.
-                Supported names: openai, anthropic, gigachat, yandex, qwen, openai-compat.
-            model: Override the default model for this provider.
+                Falls back to the value set at init, then to ``"openai"``.
+                Supported names: openai, anthropic, gigachat, yandex, qwen,
+                openai-compat.
+            model: Override the default model for this provider. Falls back to
+                the value set at init.
             conflict_threshold: Jaccard similarity threshold above which a new
                 fact is treated as a duplicate of an existing one (0.0–1.0).
+            timeout: Per-request timeout in seconds for LLM calls. ``None``
+                uses the provider's built-in default (30 s).
+            batch_size: Maximum conversation turns sent per LLM call. Longer
+                conversations are split into batches to prevent JSON truncation.
             **provider_kwargs: Extra args forwarded to the provider constructor
                 (e.g. ``folder_id`` for Yandex, ``base_url`` for openai-compat).
+                Merged with any defaults set at init, with per-call values taking
+                precedence.
 
         Returns:
             List of genuinely new Facts that were inserted (excludes updates).
@@ -111,29 +217,46 @@ class KnowledgeBase:
         if not turns:
             return []
 
-        if isinstance(provider, str):
-            if not api_key:
+        resolved_provider = provider or self._default_provider or "openai"
+        resolved_api_key = api_key or self._default_api_key
+        resolved_model = model or self._default_model
+        resolved_kwargs: dict[str, str] = {**self._default_provider_kwargs, **provider_kwargs}
+
+        if isinstance(resolved_provider, str):
+            if not resolved_api_key:
                 import os
 
-                api_key = os.environ.get(
+                resolved_api_key = os.environ.get(
                     {
                         "openai": "OPENAI_API_KEY",
                         "anthropic": "ANTHROPIC_API_KEY",
                         "gigachat": "GIGACHAT_API_KEY",
                         "yandex": "YANDEX_API_KEY",
                         "qwen": "QWEN_API_KEY",
-                    }.get(provider, "LLM_API_KEY"),
+                    }.get(resolved_provider, "LLM_API_KEY"),
                     "",
                 )
-            if not api_key:
+            if not resolved_api_key:
                 raise ValueError(
-                    f"No API key for provider {provider!r}. "
+                    f"No API key for provider {resolved_provider!r}. "
                     "Pass api_key= or set the environment variable "
                     f"(e.g. OPENAI_API_KEY for openai, ANTHROPIC_API_KEY for anthropic)."
                 )
-            extractor = Extractor(provider, api_key=api_key, model=model, **provider_kwargs)
+            extractor = Extractor(
+                resolved_provider,
+                api_key=resolved_api_key,
+                model=resolved_model,
+                timeout=timeout,
+                batch_size=batch_size,
+                **resolved_kwargs,
+            )
         else:
-            extractor = Extractor(provider, model=model)
+            extractor = Extractor(
+                resolved_provider,
+                model=resolved_model,
+                timeout=timeout,
+                batch_size=batch_size,
+            )
 
         new_facts = extractor.extract(turns)
 
@@ -151,6 +274,76 @@ class KnowledgeBase:
             )
             return to_insert
         return []
+
+    async def alearn(
+        self,
+        turns: list[ConversationTurn],
+        *,
+        api_key: str | None = None,
+        provider: str | LLMProvider | None = None,
+        model: str | None = None,
+        conflict_threshold: float = 0.7,
+        timeout: float | None = None,
+        batch_size: int = 20,
+        **provider_kwargs: str,
+    ) -> list[Fact]:
+        """Async variant of :meth:`learn` — non-blocking for asyncio applications.
+
+        Runs ``learn()`` in a thread-pool executor so the event loop is never
+        blocked during the LLM HTTP call.  All parameters are identical to
+        :meth:`learn`.
+
+        Example::
+
+            # FastAPI handler — does not block the event loop
+            facts = await kb.alearn(turns, provider="openai", api_key="sk-...")
+
+            # Concurrent extraction for multiple agents
+            results = await asyncio.gather(
+                kb_a.alearn(turns_a, ...),
+                kb_b.alearn(turns_b, ...),
+            )
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self.learn(
+                turns,
+                api_key=api_key,
+                provider=provider,
+                model=model,
+                conflict_threshold=conflict_threshold,
+                timeout=timeout,
+                batch_size=batch_size,
+                **provider_kwargs,
+            ),
+        )
+
+    async def arecall(self, query: str, *, top_k: int = 5) -> str:
+        """Async variant of :meth:`recall` — non-blocking for asyncio applications.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+
+        Returns:
+            Formatted multi-line string, or "" if no facts found.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.recall(query, top_k=top_k))
+
+    async def arecall_facts(self, query: str, *, top_k: int = 5) -> list[Fact]:
+        """Async variant of :meth:`recall_facts` — non-blocking for asyncio applications.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+
+        Returns:
+            List of relevant Facts (may be empty), sorted by relevance.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.recall_facts(query, top_k=top_k))
 
     def recall(self, query: str, *, top_k: int = 5) -> str:
         """Retrieve relevant facts as a formatted string for prompt injection.

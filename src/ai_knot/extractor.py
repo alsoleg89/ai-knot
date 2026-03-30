@@ -124,6 +124,10 @@ class Extractor:
             If a string, ``api_key`` is required.
         api_key: API key (used only when ``provider`` is a string).
         model: Model name (defaults to provider's default model).
+        timeout: Per-request timeout in seconds. ``None`` uses the provider default.
+        batch_size: Maximum number of conversation turns per LLM call. Long
+            conversations are automatically split into chunks of this size and
+            results are merged. Prevents JSON truncation on large inputs.
     """
 
     def __init__(
@@ -132,6 +136,8 @@ class Extractor:
         *,
         api_key: str | None = None,
         model: str | None = None,
+        timeout: float | None = None,
+        batch_size: int = 20,
         **provider_kwargs: str,
     ) -> None:
         if isinstance(provider, str):
@@ -139,9 +145,15 @@ class Extractor:
         else:
             self._provider = provider
         self._model = model or self._provider.default_model
+        self._timeout = timeout
+        self._batch_size = batch_size
 
     def extract(self, turns: list[ConversationTurn]) -> list[Fact]:
         """Extract facts from a conversation.
+
+        Long conversations are automatically split into chunks of ``batch_size``
+        turns so that the LLM never receives more than that at once, preventing
+        silent fact loss due to JSON truncation.
 
         Args:
             turns: List of conversation messages.
@@ -152,15 +164,23 @@ class Extractor:
         if not turns:
             return []
 
-        raw_facts = self._call_llm(turns)
-        facts = [self._parse_fact(entry) for entry in raw_facts if isinstance(entry, dict)]
+        all_raw: list[dict[str, Any]] = []
+        for i in range(0, len(turns), self._batch_size):
+            chunk = turns[i : i + self._batch_size]
+            all_raw.extend(self._call_llm(chunk))
+
+        facts = [self._parse_fact(entry) for entry in all_raw if isinstance(entry, dict)]
         return deduplicate_facts(facts)
 
     def _call_llm(self, turns: list[ConversationTurn]) -> list[dict[str, Any]]:
         """Call the LLM to extract facts. Returns parsed JSON array."""
         conversation_text = "\n".join(f"{t.role}: {t.content}" for t in turns)
         content = call_with_retry(
-            self._provider, _EXTRACTION_SYSTEM_PROMPT, conversation_text, self._model
+            self._provider,
+            _EXTRACTION_SYSTEM_PROMPT,
+            conversation_text,
+            self._model,
+            timeout=self._timeout,
         )
         if not content:
             return []
