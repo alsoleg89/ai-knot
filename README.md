@@ -330,26 +330,30 @@ Same API. Same code. Different storage.
 
 ## Initialization — storage + LLM provider together
 
-Storage is set once on `KnowledgeBase`. The LLM provider is passed per `learn()` call.
-They are independent and combine freely:
+Storage is set once on `KnowledgeBase`. The LLM provider can be set at init (recommended
+for production) or passed per `learn()` call. They are independent and combine freely:
 
 ```python
 from ai_knot import KnowledgeBase, ConversationTurn
 from ai_knot.storage import SQLiteStorage
 
-# Step 1: pick a storage backend
-storage = SQLiteStorage(db_path="./agent.db")
+# Option A: configure provider once at init (recommended)
+kb = KnowledgeBase(
+    agent_id="assistant",
+    storage=SQLiteStorage(db_path="./agent.db"),
+    provider="openai",
+    api_key="sk-...",          # or reads OPENAI_API_KEY from env if omitted
+)
+kb.learn(turns)                # no credentials needed per call
+kb.learn(more_turns)           # same provider reused
 
-# Step 2: create the knowledge base
-kb = KnowledgeBase(agent_id="assistant", storage=storage)
-
-# Step 3: learn from a conversation — LLM provider goes here
+# Option B: pass provider per call (legacy, still supported)
+kb = KnowledgeBase(agent_id="assistant", storage=SQLiteStorage(db_path="./agent.db"))
 turns = [
     ConversationTurn(role="user", content="I deploy everything in Docker"),
     ConversationTurn(role="assistant", content="Got it!"),
 ]
 kb.learn(turns, provider="openai")           # reads OPENAI_API_KEY from env
-# ↑ No key found? learn() raises ValueError — pass api_key= or set OPENAI_API_KEY
 kb.learn(turns, provider="openai",    api_key="sk-...")      # explicit key
 kb.learn(turns, provider="anthropic", api_key="sk-ant-...")  # Claude
 kb.learn(turns, provider="openai-compat",                    # any compatible API
@@ -360,6 +364,31 @@ context = kb.recall("how should I deploy this?")
 ```
 
 Mix and match: any storage backend with any LLM provider.
+
+---
+
+## Retrieval with relevance scores
+
+`recall_facts_with_scores()` returns each fact together with its numeric relevance score.
+The score is a **hybrid value** combining TF-IDF similarity to the query, Ebbinghaus
+retention, and the fact's importance — higher is more relevant.
+
+Use it when you need to filter or rank facts programmatically rather than inject them
+directly into a prompt:
+
+```python
+scored = kb.recall_facts_with_scores("Docker deployment", top_k=5)
+for fact, score in scored:
+    print(f"[{score:.2f}] [{fact.type.value}] {fact.content}")
+# [0.87] [procedural] User deploys everything in Docker
+# [0.61] [episodic] Deploy failed last Tuesday at 3 PM
+
+# Keep only highly relevant facts
+relevant = [fact for fact, score in scored if score >= 0.5]
+```
+
+**vs `recall_facts()`** — use `recall_facts()` when you just need the Fact objects;
+use `recall_facts_with_scores()` when scores matter for downstream logic.
 
 ---
 

@@ -51,6 +51,38 @@ class TestExtractor:
         assert facts[1].type == MemoryType.PROCEDURAL
 
 
+class TestBatching:
+    """Extractor splits long conversations into batch_size chunks."""
+
+    def test_single_batch_when_turns_fit(self, sample_turns: list[ConversationTurn]) -> None:
+        extractor = Extractor(api_key="fake-key", provider="openai", batch_size=50)
+        with patch.object(extractor, "_call_llm", return_value=[]) as mock_llm:
+            extractor.extract(sample_turns)
+        # All turns fit in one batch → exactly one call
+        assert mock_llm.call_count == 1
+
+    def test_two_batches_when_turns_exceed_batch_size(self) -> None:
+        turns = [ConversationTurn(role="user", content=f"msg {i}") for i in range(5)]
+        extractor = Extractor(api_key="fake-key", provider="openai", batch_size=3)
+        with patch.object(extractor, "_call_llm", return_value=[]) as mock_llm:
+            extractor.extract(turns)
+        # 5 turns / batch_size=3 → 2 calls
+        assert mock_llm.call_count == 2
+
+    def test_results_from_all_batches_merged(self) -> None:
+        turns = [ConversationTurn(role="user", content=f"msg {i}") for i in range(4)]
+        extractor = Extractor(api_key="fake-key", provider="openai", batch_size=2)
+        batch_response = [{"content": "Fact from batch", "type": "semantic", "importance": 0.8}]
+        with patch.object(extractor, "_call_llm", return_value=batch_response):
+            facts = extractor.extract(turns)
+        # 2 batches × 1 fact each, but dedup removes exact duplicates → 1 unique
+        assert len(facts) >= 1
+
+    def test_empty_turns_returns_empty(self) -> None:
+        extractor = Extractor(api_key="fake-key", provider="openai", batch_size=5)
+        assert extractor.extract([]) == []
+
+
 class TestDeduplication:
     """Deduplication by content similarity."""
 

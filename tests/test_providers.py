@@ -149,6 +149,24 @@ class TestCreateProvider:
         assert p.name == "yandex"
 
 
+class TestTimeout:
+    """Timeout propagation through call_with_retry → provider.call()."""
+
+    def test_timeout_passed_to_provider_call(self) -> None:
+        provider = MagicMock()
+        provider.name = "test"
+        provider.call.return_value = "ok"
+        call_with_retry(provider, "sys", "user", "model", timeout=5.0)
+        provider.call.assert_called_once_with("sys", "user", "model", timeout=5.0)
+
+    def test_none_timeout_passed_when_not_specified(self) -> None:
+        provider = MagicMock()
+        provider.name = "test"
+        provider.call.return_value = "ok"
+        call_with_retry(provider, "sys", "user", "model")
+        provider.call.assert_called_once_with("sys", "user", "model", timeout=None)
+
+
 class TestOpenAICompatProviderCall:
     """OpenAICompatProvider.call() with mocked httpx."""
 
@@ -160,6 +178,28 @@ class TestOpenAICompatProviderCall:
         with patch("httpx.post", return_value=mock_resp):
             result = p.call("system prompt", "user message", "gpt-4o-mini")
         assert result == "extracted facts"
+
+    def test_per_call_timeout_overrides_init_timeout(self) -> None:
+        p = create_provider("openai", "test-key")
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        with patch("httpx.post", return_value=mock_resp) as mock_post:
+            p.call("sys", "user", "gpt-4o-mini", timeout=10.0)
+        _, kwargs = mock_post.call_args
+        assert kwargs["timeout"] == 10.0
+
+    def test_init_timeout_used_when_no_per_call_timeout(self) -> None:
+        from ai_knot.providers.openai_compat import OpenAICompatProvider
+
+        p = OpenAICompatProvider("key", timeout=42.0)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        with patch("httpx.post", return_value=mock_resp) as mock_post:
+            p.call("sys", "user", "gpt-4o-mini")
+        _, kwargs = mock_post.call_args
+        assert kwargs["timeout"] == 42.0
 
 
 class TestAnthropicProviderCall:

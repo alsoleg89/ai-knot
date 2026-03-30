@@ -33,7 +33,14 @@ class AnthropicProvider:
     def default_model(self) -> str:
         return self._default_model
 
-    def call(self, system_prompt: str, user_content: str, model: str) -> str:
+    def call(
+        self,
+        system_prompt: str,
+        user_content: str,
+        model: str,
+        *,
+        timeout: float | None = None,
+    ) -> str:
         """Send a message to the Anthropic API and return the text response."""
         response = httpx.post(
             "https://api.anthropic.com/v1/messages",
@@ -48,7 +55,7 @@ class AnthropicProvider:
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_content}],
             },
-            timeout=self._timeout,
+            timeout=timeout if timeout is not None else self._timeout,
         )
         response.raise_for_status()
         return str(response.json()["content"][0]["text"])
