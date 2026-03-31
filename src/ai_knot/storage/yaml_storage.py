@@ -15,6 +15,9 @@ import yaml
 
 from ai_knot.types import Fact, MemoryType
 
+# Use C extension loader when available (10-20x faster than pure Python).
+_YamlLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 logger = logging.getLogger(__name__)
 
 # One lock per on-disk YAML file; keyed by resolved absolute path.
@@ -61,6 +64,19 @@ class YAMLStorage:
                 "created_at": fact.created_at.isoformat(),
                 "last_accessed": fact.last_accessed.isoformat(),
             }
+            # Only write evidence fields when non-default to keep YAML compact.
+            if fact.source_snippets:
+                data[fact.id]["source_snippets"] = fact.source_snippets
+            if fact.source_spans:
+                data[fact.id]["source_spans"] = fact.source_spans
+            if not fact.supported:
+                data[fact.id]["supported"] = fact.supported
+            if fact.support_confidence != 1.0:
+                data[fact.id]["support_confidence"] = fact.support_confidence
+            if fact.verification_source != "manual":
+                data[fact.id]["verification_source"] = fact.verification_source
+            if fact.access_intervals:
+                data[fact.id]["access_intervals"] = fact.access_intervals
 
         yaml_path = agent_dir / "knowledge.yaml"
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -90,7 +106,7 @@ class YAMLStorage:
 
         lock = _get_lock(yaml_path)
         with lock:
-            raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+            raw = yaml.load(yaml_path.read_text(encoding="utf-8"), Loader=_YamlLoader)
 
         if not raw:
             return []
@@ -108,6 +124,12 @@ class YAMLStorage:
                     tags=list(entry.get("tags", [])),
                     created_at=_parse_datetime(entry["created_at"]),
                     last_accessed=_parse_datetime(entry["last_accessed"]),
+                    source_snippets=list(entry.get("source_snippets", [])),
+                    source_spans=list(entry.get("source_spans", [])),
+                    supported=bool(entry.get("supported", True)),
+                    support_confidence=float(entry.get("support_confidence", 1.0)),
+                    verification_source=str(entry.get("verification_source", "legacy")),
+                    access_intervals=[float(x) for x in entry.get("access_intervals", [])],
                 )
             )
         return facts
@@ -154,6 +176,18 @@ class YAMLStorage:
                 "created_at": fact.created_at.isoformat(),
                 "last_accessed": fact.last_accessed.isoformat(),
             }
+            if fact.source_snippets:
+                data[fact.id]["source_snippets"] = fact.source_snippets
+            if fact.source_spans:
+                data[fact.id]["source_spans"] = fact.source_spans
+            if not fact.supported:
+                data[fact.id]["supported"] = fact.supported
+            if fact.support_confidence != 1.0:
+                data[fact.id]["support_confidence"] = fact.support_confidence
+            if fact.verification_source != "manual":
+                data[fact.id]["verification_source"] = fact.verification_source
+            if fact.access_intervals:
+                data[fact.id]["access_intervals"] = fact.access_intervals
 
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
         lock = _get_lock(snap_path)
@@ -184,7 +218,7 @@ class YAMLStorage:
 
         lock = _get_lock(snap_path)
         with lock:
-            raw = yaml.safe_load(snap_path.read_text(encoding="utf-8"))
+            raw = yaml.load(snap_path.read_text(encoding="utf-8"), Loader=_YamlLoader)
 
         if not raw:
             return []
@@ -202,6 +236,12 @@ class YAMLStorage:
                     tags=list(entry.get("tags", [])),
                     created_at=_parse_datetime(entry["created_at"]),
                     last_accessed=_parse_datetime(entry["last_accessed"]),
+                    source_snippets=list(entry.get("source_snippets", [])),
+                    source_spans=list(entry.get("source_spans", [])),
+                    supported=bool(entry.get("supported", True)),
+                    support_confidence=float(entry.get("support_confidence", 1.0)),
+                    verification_source=str(entry.get("verification_source", "legacy")),
+                    access_intervals=[float(x) for x in entry.get("access_intervals", [])],
                 )
             )
         return facts

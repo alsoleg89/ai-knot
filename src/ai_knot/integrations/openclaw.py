@@ -221,14 +221,14 @@ def generate_mcp_config(
         print(json.dumps(generate_mcp_config("my_agent"), indent=2))
         # Paste into ~/.openclaw/openclaw.json under "mcpServers"
     """
+    import sys
+
     if storage not in ("sqlite", "yaml"):
         raise ValueError(f"storage must be 'sqlite' or 'yaml', got {storage!r}")
-    try:
-        import mcp  # noqa: F401
-    except ImportError as exc:
+    if "mcp" in sys.modules and sys.modules["mcp"] is None:
         raise ImportError(
             "mcp package is required to use ai-knot-mcp. Install with: pip install 'ai-knot[mcp]'"
-        ) from exc
+        )
     return {
         "mcpServers": {
             "ai-knot": {

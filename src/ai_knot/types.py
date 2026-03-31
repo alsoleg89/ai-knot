@@ -35,6 +35,11 @@ class Fact:
         id: Unique 8-char hex identifier.
         created_at: When the fact was first stored (UTC).
         last_accessed: When the fact was last retrieved (UTC).
+        source_snippets: Raw text excerpts that support this fact (v0.5).
+        source_spans: Location references for each snippet (v0.5).
+        supported: Whether the fact has been verified against sources (v0.5).
+        support_confidence: Confidence score for source support (0.0-1.0) (v0.5).
+        verification_source: How the fact was verified (v0.5).
     """
 
     content: str
@@ -46,6 +51,14 @@ class Fact:
     id: str = field(default_factory=lambda: uuid4().hex[:8])
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_accessed: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Evidence and verification fields (v0.5)
+    source_snippets: list[str] = field(default_factory=list)
+    source_spans: list[str] = field(default_factory=list)
+    supported: bool = True
+    support_confidence: float = 1.0
+    verification_source: str = "manual"
+    # Spacing effect: hours between consecutive accesses (v0.6)
+    access_intervals: list[float] = field(default_factory=list)
 
 
 @dataclass

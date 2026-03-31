@@ -28,3 +28,4 @@ Thumbs.db
 *.swo
 *~
 .ai_knot/
+.claude/

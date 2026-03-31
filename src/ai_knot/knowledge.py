@@ -373,6 +373,10 @@ class KnowledgeBase:
         now = datetime.now(UTC)
         for fact in facts:
             if fact.id in returned_ids:
+                interval = (now - fact.last_accessed).total_seconds() / 3600.0
+                fact.access_intervals.append(interval)
+                if len(fact.access_intervals) > 20:
+                    fact.access_intervals = fact.access_intervals[-20:]
                 fact.access_count += 1
                 fact.last_accessed = now
         self._storage.save(self._agent_id, facts)
@@ -416,6 +420,10 @@ class KnowledgeBase:
         now = datetime.now(UTC)
         for fact in facts:
             if fact.id in returned_ids:
+                interval = (now - fact.last_accessed).total_seconds() / 3600.0
+                fact.access_intervals.append(interval)
+                if len(fact.access_intervals) > 20:
+                    fact.access_intervals = fact.access_intervals[-20:]
                 fact.access_count += 1
                 fact.last_accessed = now
         self._storage.save(self._agent_id, facts)
@@ -448,6 +456,10 @@ class KnowledgeBase:
         now = datetime.now(UTC)
         for fact in facts:
             if fact.id in returned_ids:
+                interval = (now - fact.last_accessed).total_seconds() / 3600.0
+                fact.access_intervals.append(interval)
+                if len(fact.access_intervals) > 20:
+                    fact.access_intervals = fact.access_intervals[-20:]
                 fact.access_count += 1
                 fact.last_accessed = now
         self._storage.save(self._agent_id, facts)

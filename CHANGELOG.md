@@ -18,6 +18,68 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] — 2026-03-31
+
+### Added
+
+- **Power-law forgetting curve** (Wixted & Ebbesen, 1997) — replaces exponential decay
+  with `R(t) = (1 + t/(9·S))^(-1)`. Empirically superior fit (R²=98.9% vs 96.3%).
+  Heavy tail means important facts persist realistically over months, not days.
+
+- **Shared tokenizer** (`ai_knot.tokenizer`) — zero-dependency leaf module with
+  camelCase splitting, Cyrillic support, and naive plural stemming. Used by both
+  the BM25 retriever and the ATC verifier.
+
+- **BM25 retrieval** (Robertson & Zaragoza, 2009) — replaces raw TF-IDF with
+  Okapi BM25 (`k1=1.5, b=0.75`). Handles term saturation and document length
+  normalization. P95-clip normalization bounds BM25 scores to [0, 1] before
+  blending with retention and importance. `BM25Retriever` is the new class name;
+  `TFIDFRetriever` is kept as a backward-compatible alias.
+
+- **ATC verification guardrail** (inspired by Broder, 1997) — every LLM-extracted
+  fact is verified against the source text via Asymmetric Token Containment:
+  `ATC = |tokens(snippet) ∩ tokens(source)| / |tokens(snippet)|`.
+  Facts with ATC < 0.6 are flagged `supported=False`, preventing hallucinated
+  facts from polluting the knowledge base.
+
+- **Fact evidence fields** — five new fields on `Fact`:
+  - `source_snippets: list[str]` — source text excerpts
+  - `source_spans: list[str]` — span references
+  - `supported: bool` — whether ATC ≥ threshold
+  - `support_confidence: float` — raw ATC score
+  - `verification_source: str` — `"atc"` | `"manual"` | `"legacy"`
+
+- **Offline eval framework** (`tests/eval/`) — zero-dependency retrieval quality
+  measurement with `precision_at_k`, `recall_at_k`, `mean_reciprocal_rank`,
+  `ndcg_at_k`, and `bootstrap_ci` (stdlib `random.choices`, no numpy).
+  30-case golden dataset covering semantic, procedural, and episodic memory types.
+  Measured: MRR=0.87, P@5=0.87, nDCG=0.88 on BM25 retriever.
+
+- **CI quality gates** — two new GitHub Actions jobs:
+  - `eval-smoke` (every push/PR): asserts MRR ≥ 0.50, P@5 ≥ 0.30
+  - `eval-full` (main/tags only): runs full eval suite
+
+### Changed
+
+- **Forgetting model** — switched from `exp(−t/S)` (exponential) to
+  `(1 + t/(9·S))^(-1)` (power-law). Retention thresholds in tests updated
+  to match the slower, empirically more accurate decay.
+
+- **YAML serialization** — evidence fields written only when non-default
+  (skip empty `source_snippets`, `supported=True`, etc.). Reduces YAML file
+  size and serialization overhead. CSafeLoader used when C extension available.
+
+### Fixed
+
+- `generate_mcp_config()` no longer requires `mcp` package installed — it just
+  builds a config dict. Import guard now only triggers when `sys.modules["mcp"]`
+  is explicitly set to `None`.
+
+- Storage migration for new evidence fields: SQLite uses `PRAGMA table_info`
+  for safe column addition; YAML uses `.get()` with backward-compatible defaults.
+
+---
+
 ## [0.4.0] — 2026-03-30
 
 ### Added
@@ -204,7 +266,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `BASE_STABILITY_HOURS` set to 336 (2 weeks retention baseline)
 - TF-IDF tokenizer: camelCase splitting + basic plural stemming
 
-[Unreleased]: https://github.com/alsoleg89/ai-knot/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/alsoleg89/ai-knot/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/alsoleg89/ai-knot/compare/v0.4.0...v0.5.0
 [0.3.0]: https://github.com/alsoleg89/ai-knot/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alsoleg89/ai-knot/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alsoleg89/ai-knot/releases/tag/v0.1.0

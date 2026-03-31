@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ai_knot.providers import LLMProvider, call_with_retry, create_provider
+from ai_knot.tokenizer import tokenize
 from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,51 @@ Return a JSON array. Example:
 
 If no meaningful facts exist, return an empty array: []
 Return ONLY the JSON array, no other text."""
+
+
+def _atc_score(snippet: str, source: str) -> float:
+    """Asymmetric Token Containment: fraction of snippet tokens found in source.
+
+    ATC = |tokens(snippet) ∩ tokens(source)| / |tokens(snippet)|
+
+    Returns 1.0 if snippet is empty (vacuously supported).
+    Inspired by Broder (1997) similarity estimation.
+    """
+    s_tokens = set(tokenize(snippet))
+    if not s_tokens:
+        return 1.0
+    src_tokens = set(tokenize(source))
+    return len(s_tokens & src_tokens) / len(s_tokens)
+
+
+def _verify_facts_atc(
+    facts: list[Fact],
+    source_text: str,
+    *,
+    threshold: float = 0.6,
+) -> list[Fact]:
+    """Verify facts against source text using ATC and annotate each fact.
+
+    For each fact, computes the ATC score of ``fact.content`` against
+    ``source_text``, then sets:
+    - ``fact.supported``: ``True`` if score >= threshold.
+    - ``fact.support_confidence``: the ATC score.
+    - ``fact.verification_source``: ``"atc"``.
+
+    Args:
+        facts: Facts to verify (modified in place).
+        source_text: The original text that the facts were extracted from.
+        threshold: Minimum ATC score to consider a fact supported.
+
+    Returns:
+        The same list, modified in place.
+    """
+    for fact in facts:
+        score = _atc_score(fact.content, source_text)
+        fact.supported = score >= threshold
+        fact.support_confidence = score
+        fact.verification_source = "atc"
+    return facts
 
 
 def _jaccard_similarity(a: str, b: str) -> float:
@@ -164,13 +210,17 @@ class Extractor:
         if not turns:
             return []
 
+        source_text = "\n".join(f"{t.role}: {t.content}" for t in turns)
+
         all_raw: list[dict[str, Any]] = []
         for i in range(0, len(turns), self._batch_size):
             chunk = turns[i : i + self._batch_size]
             all_raw.extend(self._call_llm(chunk))
 
         facts = [self._parse_fact(entry) for entry in all_raw if isinstance(entry, dict)]
-        return deduplicate_facts(facts)
+        facts = deduplicate_facts(facts)
+        _verify_facts_atc(facts, source_text)
+        return facts
 
     def _call_llm(self, turns: list[ConversationTurn]) -> list[dict[str, Any]]:
         """Call the LLM to extract facts. Returns parsed JSON array."""

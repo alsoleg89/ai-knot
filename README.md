@@ -25,9 +25,9 @@ ai-knot solves this by keeping a distilled knowledge base instead of a raw log.
 
 ```
 1000 messages  (~400k tokens)
-    ↓ LLM extraction
+    ↓ LLM extraction + ATC verification
 ~12 facts      (~300 tokens)
-    ↓ TF-IDF retrieval
+    ↓ BM25 retrieval
 3–5 facts injected into the next prompt
 ```
 
@@ -95,10 +95,10 @@ response = openai_client.chat(...,
 Benchmarks run on Ubuntu (`ubuntu-latest`, GitHub Actions).
 [Full benchmark history →](https://alsoleg89.github.io/ai-knot/dev/bench/)
 
-### Retrieval latency (TF-IDF, in-process)
+### Retrieval latency (BM25, in-process)
 
 Measured with `pytest-benchmark`, `pedantic` mode, 20 rounds after 3 warmups.
-`TFIDFRetriever.search()` is O(n) — IDF is recomputed on every call.
+`BM25Retriever.search()` is O(n) — IDF and BM25 scores are recomputed on every call.
 
 | Facts in memory | p50 | p95 | QPS |
 |----------------|-----|-----|-----|
@@ -108,7 +108,7 @@ Measured with `pytest-benchmark`, `pedantic` mode, 20 rounds after 3 warmups.
 
 > Numbers are indicative. Run `pytest tests/test_performance.py -m slow --benchmark-only` locally for hardware-accurate results.
 
-### Full-stack recall latency (storage I/O + decay + TF-IDF)
+### Full-stack recall latency (storage I/O + decay + BM25)
 
 `KnowledgeBase.recall()` reads storage on every call. YAML adds ~10–50 ms I/O overhead; SQLite is lower-variance at scale.
 
@@ -151,7 +151,8 @@ What happened in the conversation:         What ai-knot stores:
 "can you make it shorter please"           -> "User prefers concise responses"
 ```
 
-**Signal, not noise.** Importance scores, retention decay, deduplication — built in.
+**Signal, not noise.** Importance scores, power-law retention decay, ATC verification,
+deduplication — built in.
 
 ---
 
@@ -370,8 +371,8 @@ Mix and match: any storage backend with any LLM provider.
 ## Retrieval with relevance scores
 
 `recall_facts_with_scores()` returns each fact together with its numeric relevance score.
-The score is a **hybrid value** combining TF-IDF similarity to the query, Ebbinghaus
-retention, and the fact's importance — higher is more relevant.
+The score is a **hybrid value** combining BM25 similarity to the query, retention
+(power-law decay), and the fact's importance — higher is more relevant.
 
 Use it when you need to filter or rank facts programmatically rather than inject them
 directly into a prompt:
@@ -410,16 +411,19 @@ preferences and rules; `episodic` for dated events you might want to forget soon
 Accumulating everything makes agents **worse**, not better.
 Irrelevant facts pollute the context window — this is called **context rot**.
 
-ai-knot uses an Ebbinghaus-based decay curve:
+ai-knot uses a **power-law decay curve** (Wixted & Ebbesen, 1997) — empirically
+superior to exponential decay (R²=98.9% vs 96.3%):
 
 ```
-retention = e^(-time / stability)
+retention(t) = (1 + t / (9 × stability))^(-1)
 
 stability = 336h × importance × (1 + ln(1 + access_count))
 -> high importance + frequently accessed = remembered for months
--> low importance + never accessed     = forgotten in days
+-> low importance + never accessed     = forgotten in weeks
 ```
 
+Power-law has a **heavier tail** than exponential — important facts persist
+realistically over months instead of vanishing after days.
 Facts accessed often get **reinforced**. Stale facts **fade automatically**.
 
 **Do you need to call `decay()` manually?** No — decay is applied automatically inside
@@ -598,20 +602,26 @@ response = openai_client.chat.completions.create(
 Conversation Turns
        |
 [ Extractor ]         LLM-based distillation -> structured facts
-       |
-[ KnowledgeBase ]     importance scoring + deduplication + decay
+       |                 + ATC verification (Broder, 1997)
+[ KnowledgeBase ]     importance scoring + deduplication + power-law decay
        |
 [ Storage Adapter ]   YAML / SQLite / PostgreSQL (Mongo, Qdrant planned)
        |
-[ Retriever ]         TF-IDF (zero deps) + Embeddings (planned)
+[ BM25 Retriever ]    Okapi BM25 (zero deps) + Embeddings (planned)
        |
 Context String        injected into agent system prompt
 ```
 
-**Why TF-IDF instead of embeddings?** Embeddings need either an API call or a 500 MB local model just
-to recall which language the user prefers. For knowledge bases up to ~10k facts, TF-IDF with hybrid
-scoring (keyword match + retention + importance) is fast, deterministic, and requires zero extra setup.
-Semantic embeddings are on the roadmap for larger knowledge bases where keyword overlap isn't reliable.
+**Why BM25 instead of embeddings?** Embeddings need either an API call or a 500 MB local model just
+to recall which language the user prefers. For knowledge bases up to ~10k facts, BM25 with hybrid
+scoring (term relevance + retention + importance) is fast, deterministic, and requires zero extra setup.
+BM25 (Robertson & Zaragoza, 2009) handles term saturation and document length normalization better
+than raw TF-IDF. Semantic embeddings are on the roadmap for larger knowledge bases where keyword
+overlap isn't reliable.
+
+**ATC verification:** Every LLM-extracted fact is verified against the source text using Asymmetric
+Token Containment (ATC). Facts where fewer than 60% of tokens appear in the source are flagged as
+`supported=False`, preventing hallucinated facts from polluting the knowledge base.
 
 **Known limitation:** extraction quality depends on the LLM. GPT-4o extracts nuanced procedural
 facts reliably; smaller models (gpt-3.5-turbo, haiku) occasionally miss implicit preferences or
@@ -726,7 +736,7 @@ print(f"Facts: {stats['total_facts']}")
 print(f"Avg importance: {stats['avg_importance']:.2f}")
 print(f"By type: {stats['by_type']}")
 
-kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention score
+kb.decay()  # apply power-law forgetting curve — stale facts lose retention score
 ```
 
 ---
@@ -734,7 +744,7 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 ## Roadmap
 
 - [x] Core KnowledgeBase (extraction + storage + retrieval)
-- [x] Ebbinghaus forgetting curve
+- [x] Power-law forgetting curve (Wixted & Ebbesen, 1997)
 - [x] YAML + SQLite backends
 - [x] OpenAI integration
 - [x] CLI
@@ -745,6 +755,10 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 - [x] npm package (`npm install ai-knot`)
 - [x] OpenClaw integration (`OpenClawMemoryAdapter` + `generate_mcp_config`)
 - [x] Scored retrieval (`recall_facts_with_scores`)
+- [x] BM25 retrieval with p95-clip normalization (replaces TF-IDF)
+- [x] ATC fact verification guardrail (Broder, 1997)
+- [x] Offline eval framework (P@k, R@k, MRR, nDCG, bootstrap CI)
+- [x] CI quality gates (eval-smoke, eval-full)
 - [ ] MongoDB backend
 - [ ] Qdrant + Weaviate backends
 - [ ] Semantic embeddings (sentence-transformers / OpenAI)
@@ -764,7 +778,9 @@ kb.decay()  # apply Ebbinghaus forgetting curve — stale facts lose retention s
 | Human-readable store | Yes | No | No | No |
 | Setup time | 30 sec | 10 min | 30 min | 5 min |
 | Framework-agnostic | Yes | Partial | Partial | LangGraph only |
-| Forgetting curve | Yes | No | No | No |
+| Forgetting curve (power-law) | Yes | No | No | No |
+| Fact verification (ATC) | Yes | No | No | No |
+| Offline eval framework | Yes | No | No | No |
 | Snapshots + diff | Yes | No | No | No |
 | MCP server | Yes | No | No | No |
 | Free forever | Yes (MIT) | No | No | Yes |
