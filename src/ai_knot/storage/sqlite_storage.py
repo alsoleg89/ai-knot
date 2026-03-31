@@ -25,6 +25,11 @@ CREATE TABLE IF NOT EXISTS facts (
     tags        TEXT NOT NULL DEFAULT '[]',
     created_at  TEXT NOT NULL,
     last_accessed TEXT NOT NULL,
+    source_snippets TEXT NOT NULL DEFAULT '[]',
+    source_spans    TEXT NOT NULL DEFAULT '[]',
+    supported       INTEGER NOT NULL DEFAULT 1,
+    support_confidence REAL NOT NULL DEFAULT 1.0,
+    verification_source TEXT NOT NULL DEFAULT 'manual',
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -62,6 +67,23 @@ class SQLiteStorage:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_SNAPSHOTS_TABLE)
+        self._migrate_db()
+
+    def _migrate_db(self) -> None:
+        """Add new columns to existing databases (backward compat)."""
+        new_columns = {
+            "source_snippets": "TEXT NOT NULL DEFAULT '[]'",
+            "source_spans": "TEXT NOT NULL DEFAULT '[]'",
+            "supported": "INTEGER NOT NULL DEFAULT 1",
+            "support_confidence": "REAL NOT NULL DEFAULT 1.0",
+            "verification_source": "TEXT NOT NULL DEFAULT 'manual'",
+        }
+        with self._get_conn() as conn:
+            cur = conn.execute("PRAGMA table_info(facts)")
+            existing_cols = {row[1] for row in cur.fetchall()}
+            for col, definition in new_columns.items():
+                if col not in existing_cols:
+                    conn.execute(f"ALTER TABLE facts ADD COLUMN {col} {definition}")
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
         """Replace all facts for an agent."""
@@ -71,8 +93,10 @@ class SQLiteStorage:
                 conn.execute(
                     """INSERT INTO facts
                        (id, agent_id, content, type, importance, retention,
-                        access_count, tags, created_at, last_accessed)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        access_count, tags, created_at, last_accessed,
+                        source_snippets, source_spans, supported,
+                        support_confidence, verification_source)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         fact.id,
                         agent_id,
@@ -84,6 +108,11 @@ class SQLiteStorage:
                         json.dumps(fact.tags),
                         fact.created_at.isoformat(),
                         fact.last_accessed.isoformat(),
+                        json.dumps(fact.source_snippets),
+                        json.dumps(fact.source_spans),
+                        1 if fact.supported else 0,
+                        fact.support_confidence,
+                        fact.verification_source,
                     ),
                 )
         logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
@@ -93,7 +122,9 @@ class SQLiteStorage:
         with self._get_conn() as conn:
             rows = conn.execute(
                 """SELECT id, content, type, importance, retention,
-                          access_count, tags, created_at, last_accessed
+                          access_count, tags, created_at, last_accessed,
+                          source_snippets, source_spans, supported,
+                          support_confidence, verification_source
                    FROM facts WHERE agent_id = ?
                    ORDER BY created_at""",
                 (agent_id,),
@@ -110,6 +141,11 @@ class SQLiteStorage:
                 tags=json.loads(row[6]),
                 created_at=_parse_datetime(row[7]),
                 last_accessed=_parse_datetime(row[8]),
+                source_snippets=json.loads(row[9]),
+                source_spans=json.loads(row[10]),
+                supported=bool(row[11]),
+                support_confidence=float(row[12]),
+                verification_source=str(row[13]),
             )
             for row in rows
         ]
@@ -145,6 +181,11 @@ class SQLiteStorage:
                 "tags": f.tags,
                 "created_at": f.created_at.isoformat(),
                 "last_accessed": f.last_accessed.isoformat(),
+                "source_snippets": f.source_snippets,
+                "source_spans": f.source_spans,
+                "supported": f.supported,
+                "support_confidence": f.support_confidence,
+                "verification_source": f.verification_source,
             }
             for f in facts
         ]
@@ -183,6 +224,11 @@ class SQLiteStorage:
                 tags=list(entry["tags"]),
                 created_at=_parse_datetime(str(entry["created_at"])),
                 last_accessed=_parse_datetime(str(entry["last_accessed"])),
+                source_snippets=list(entry.get("source_snippets", [])),
+                source_spans=list(entry.get("source_spans", [])),
+                supported=bool(entry.get("supported", True)),
+                support_confidence=float(entry.get("support_confidence", 1.0)),
+                verification_source=str(entry.get("verification_source", "legacy")),
             )
             for entry in raw
         ]

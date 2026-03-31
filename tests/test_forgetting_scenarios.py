@@ -55,7 +55,7 @@ class TestMediumTermDecay:
             last_accessed=BASE_TIME,
         )
         r = calculate_retention(fact, now=BASE_TIME + timedelta(days=7))
-        assert r < 0.2
+        assert r < 0.85
 
 
 class TestLongTermDecay:
@@ -79,7 +79,7 @@ class TestLongTermDecay:
             last_accessed=BASE_TIME,
         )
         r = calculate_retention(fact, now=BASE_TIME + timedelta(days=30))
-        assert r < 0.05
+        assert r < 0.50
 
     def test_90_days_critical_fact_still_alive(self) -> None:
         fact = Fact(
@@ -99,7 +99,7 @@ class TestLongTermDecay:
             last_accessed=BASE_TIME,
         )
         r = calculate_retention(fact, now=BASE_TIME + timedelta(days=365))
-        assert r < 0.01
+        assert r < 0.40
 
 
 class TestReinforcementEffect:

@@ -19,6 +19,8 @@ from ai_knot.types import Fact
 # access_count=0 will retain ~37% after 2 weeks.
 BASE_STABILITY_HOURS: float = 336.0
 
+_POWER_LAW_FACTOR: float = 9.0
+
 
 def calculate_stability(importance: float, access_count: int) -> float:
     """Compute how long a fact resists forgetting (in hours).
@@ -36,8 +38,10 @@ def calculate_stability(importance: float, access_count: int) -> float:
 def calculate_retention(fact: Fact, *, now: datetime | None = None) -> float:
     """Compute current retention score for a fact.
 
-    Uses the Ebbinghaus exponential decay: retention = exp(-t / S)
-    where t is hours since last access and S is stability.
+    Uses a power-law forgetting curve (Wixted & Ebbesen, 1997):
+        retention = (1 + t / (c * S)) ** -1
+    where t is hours since last access, S is stability, and c is
+    _POWER_LAW_FACTOR.
 
     Args:
         fact: The fact to evaluate.
@@ -56,7 +60,7 @@ def calculate_retention(fact: Fact, *, now: datetime | None = None) -> float:
     if stability <= 0:
         return 0.0
 
-    return math.exp(-time_hours / stability)
+    return float((1.0 + time_hours / (_POWER_LAW_FACTOR * stability)) ** (-1.0))
 
 
 def apply_decay(facts: list[Fact], *, now: datetime | None = None) -> list[Fact]:

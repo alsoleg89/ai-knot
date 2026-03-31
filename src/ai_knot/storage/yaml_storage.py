@@ -60,6 +60,11 @@ class YAMLStorage:
                 "tags": fact.tags,
                 "created_at": fact.created_at.isoformat(),
                 "last_accessed": fact.last_accessed.isoformat(),
+                "source_snippets": fact.source_snippets,
+                "source_spans": fact.source_spans,
+                "supported": fact.supported,
+                "support_confidence": fact.support_confidence,
+                "verification_source": fact.verification_source,
             }
 
         yaml_path = agent_dir / "knowledge.yaml"
@@ -108,6 +113,11 @@ class YAMLStorage:
                     tags=list(entry.get("tags", [])),
                     created_at=_parse_datetime(entry["created_at"]),
                     last_accessed=_parse_datetime(entry["last_accessed"]),
+                    source_snippets=list(entry.get("source_snippets", [])),
+                    source_spans=list(entry.get("source_spans", [])),
+                    supported=bool(entry.get("supported", True)),
+                    support_confidence=float(entry.get("support_confidence", 1.0)),
+                    verification_source=str(entry.get("verification_source", "legacy")),
                 )
             )
         return facts
@@ -153,6 +163,11 @@ class YAMLStorage:
                 "tags": fact.tags,
                 "created_at": fact.created_at.isoformat(),
                 "last_accessed": fact.last_accessed.isoformat(),
+                "source_snippets": fact.source_snippets,
+                "source_spans": fact.source_spans,
+                "supported": fact.supported,
+                "support_confidence": fact.support_confidence,
+                "verification_source": fact.verification_source,
             }
 
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -202,6 +217,11 @@ class YAMLStorage:
                     tags=list(entry.get("tags", [])),
                     created_at=_parse_datetime(entry["created_at"]),
                     last_accessed=_parse_datetime(entry["last_accessed"]),
+                    source_snippets=list(entry.get("source_snippets", [])),
+                    source_spans=list(entry.get("source_spans", [])),
+                    supported=bool(entry.get("supported", True)),
+                    support_confidence=float(entry.get("support_confidence", 1.0)),
+                    verification_source=str(entry.get("verification_source", "legacy")),
                 )
             )
         return facts
