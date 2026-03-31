@@ -60,12 +60,18 @@ class YAMLStorage:
                 "tags": fact.tags,
                 "created_at": fact.created_at.isoformat(),
                 "last_accessed": fact.last_accessed.isoformat(),
-                "source_snippets": fact.source_snippets,
-                "source_spans": fact.source_spans,
-                "supported": fact.supported,
-                "support_confidence": fact.support_confidence,
-                "verification_source": fact.verification_source,
             }
+            # Only write evidence fields when non-default to keep YAML compact.
+            if fact.source_snippets:
+                data[fact.id]["source_snippets"] = fact.source_snippets
+            if fact.source_spans:
+                data[fact.id]["source_spans"] = fact.source_spans
+            if not fact.supported:
+                data[fact.id]["supported"] = fact.supported
+            if fact.support_confidence != 1.0:
+                data[fact.id]["support_confidence"] = fact.support_confidence
+            if fact.verification_source != "manual":
+                data[fact.id]["verification_source"] = fact.verification_source
 
         yaml_path = agent_dir / "knowledge.yaml"
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -163,12 +169,17 @@ class YAMLStorage:
                 "tags": fact.tags,
                 "created_at": fact.created_at.isoformat(),
                 "last_accessed": fact.last_accessed.isoformat(),
-                "source_snippets": fact.source_snippets,
-                "source_spans": fact.source_spans,
-                "supported": fact.supported,
-                "support_confidence": fact.support_confidence,
-                "verification_source": fact.verification_source,
             }
+            if fact.source_snippets:
+                data[fact.id]["source_snippets"] = fact.source_snippets
+            if fact.source_spans:
+                data[fact.id]["source_spans"] = fact.source_spans
+            if not fact.supported:
+                data[fact.id]["supported"] = fact.supported
+            if fact.support_confidence != 1.0:
+                data[fact.id]["support_confidence"] = fact.support_confidence
+            if fact.verification_source != "manual":
+                data[fact.id]["verification_source"] = fact.verification_source
 
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
         lock = _get_lock(snap_path)
