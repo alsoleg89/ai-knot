@@ -39,6 +39,46 @@ If no meaningful facts exist, return an empty array: []
 Return ONLY the JSON array, no other text."""
 
 
+# ---------------------------------------------------------------------------
+# Negation-aware ATC (Approximate Textual Consistency) verification
+# ---------------------------------------------------------------------------
+
+_NEGATION_TOKENS: frozenset[str] = frozenset(
+    {
+        # English
+        "not",
+        "no",
+        "never",
+        "dont",
+        "doesnt",
+        "didnt",
+        "wont",
+        "cant",
+        "cannot",
+        "isnt",
+        "arent",
+        "wasnt",
+        "werent",
+        "shouldnt",
+        "wouldnt",
+        "couldnt",
+        "hardly",
+        "rarely",
+        "seldom",
+        "neither",
+        "nor",
+        # Russian
+        "не",
+        "нет",
+        "никогда",
+        "ничего",
+        "никак",
+        "нельзя",
+        "ни",
+    }
+)
+
+
 def _atc_score(snippet: str, source: str) -> float:
     """Asymmetric Token Containment: fraction of snippet tokens found in source.
 
@@ -54,19 +94,46 @@ def _atc_score(snippet: str, source: str) -> float:
     return len(s_tokens & src_tokens) / len(s_tokens)
 
 
+def _has_negation_mismatch(snippet: str, source: str) -> bool:
+    """Detect if snippet and source disagree on negation.
+
+    Returns True if one contains negation tokens and the other doesn't,
+    suggesting a potential semantic contradiction.
+    """
+    snippet_tokens = set(tokenize(snippet))
+    source_tokens = set(tokenize(source))
+
+    snippet_negated = bool(snippet_tokens & _NEGATION_TOKENS)
+    source_negated = bool(source_tokens & _NEGATION_TOKENS)
+
+    # Only flag mismatch if there's substantial token overlap otherwise
+    # (to avoid false positives on unrelated content)
+    if snippet_negated == source_negated:
+        return False
+
+    # Check if the non-negation content overlaps significantly
+    snippet_content = snippet_tokens - _NEGATION_TOKENS
+    source_content = source_tokens - _NEGATION_TOKENS
+    if not snippet_content:
+        return False
+    overlap = len(snippet_content & source_content) / len(snippet_content)
+    # High content overlap + negation mismatch = likely contradiction
+    return overlap >= 0.5
+
+
 def _verify_facts_atc(
     facts: list[Fact],
     source_text: str,
     *,
     threshold: float = 0.6,
 ) -> list[Fact]:
-    """Verify facts against source text using ATC and annotate each fact.
+    """Verify facts against source text using ATC + negation check.
 
     For each fact, computes the ATC score of ``fact.content`` against
     ``source_text``, then sets:
     - ``fact.supported``: ``True`` if score >= threshold.
     - ``fact.support_confidence``: the ATC score.
-    - ``fact.verification_source``: ``"atc"``.
+    - ``fact.verification_source``: ``"atc"`` or ``"atc+negation"``.
 
     Args:
         facts: Facts to verify (modified in place).
@@ -78,9 +145,15 @@ def _verify_facts_atc(
     """
     for fact in facts:
         score = _atc_score(fact.content, source_text)
-        fact.supported = score >= threshold
         fact.support_confidence = score
         fact.verification_source = "atc"
+
+        # Check for negation mismatch even if ATC score is high
+        if _has_negation_mismatch(fact.content, source_text):
+            fact.supported = False
+            fact.verification_source = "atc+negation"
+        else:
+            fact.supported = score >= threshold
     return facts
 
 

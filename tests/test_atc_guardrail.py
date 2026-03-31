@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ai_knot.extractor import Extractor, _atc_score, _verify_facts_atc
+from ai_knot.extractor import Extractor, _atc_score, _has_negation_mismatch, _verify_facts_atc
 from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 # ---------------------------------------------------------------------------
@@ -141,6 +141,46 @@ class TestVerifyFactsAtc:
         facts = [self._make_fact(snippet)]
         _verify_facts_atc(facts, source, threshold=1.0)
         assert facts[0].supported is True
+
+
+# ---------------------------------------------------------------------------
+# Negation detection tests
+# ---------------------------------------------------------------------------
+
+
+class TestNegationDetection:
+    """Tests for negation-aware ATC verification."""
+
+    def test_negation_mismatch_english(self) -> None:
+        """Source says NOT, extracted fact omits NOT."""
+        assert _has_negation_mismatch("User uses Docker", "User does not use Docker")
+
+    def test_no_negation_mismatch_when_both_negative(self) -> None:
+        assert not _has_negation_mismatch("User never uses Docker", "User does not use Docker")
+
+    def test_no_negation_mismatch_when_both_positive(self) -> None:
+        assert not _has_negation_mismatch("User uses Docker", "User uses Docker regularly")
+
+    def test_negation_mismatch_russian(self) -> None:
+        assert _has_negation_mismatch(
+            "Пользователь использует Docker",
+            "Пользователь не использует Docker",
+        )
+
+    def test_no_false_positive_on_unrelated_content(self) -> None:
+        """'not' in source but about different topic -- no mismatch."""
+        assert not _has_negation_mismatch("User likes Python", "User does not use Docker")
+
+    def test_verify_flags_negation_contradiction(self) -> None:
+        fact = Fact(content="User uses Docker")
+        _verify_facts_atc([fact], "User does not use Docker containers")
+        assert not fact.supported
+        assert fact.verification_source == "atc+negation"
+
+    def test_verify_passes_when_both_positive(self) -> None:
+        fact = Fact(content="User uses Docker")
+        _verify_facts_atc([fact], "User uses Docker containers")
+        assert fact.supported
 
 
 # ---------------------------------------------------------------------------
