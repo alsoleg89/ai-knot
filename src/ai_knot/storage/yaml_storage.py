@@ -15,6 +15,9 @@ import yaml
 
 from ai_knot.types import Fact, MemoryType
 
+# Use C extension loader when available (10-20x faster than pure Python).
+_YamlLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 logger = logging.getLogger(__name__)
 
 # One lock per on-disk YAML file; keyed by resolved absolute path.
@@ -101,7 +104,7 @@ class YAMLStorage:
 
         lock = _get_lock(yaml_path)
         with lock:
-            raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+            raw = yaml.load(yaml_path.read_text(encoding="utf-8"), Loader=_YamlLoader)
 
         if not raw:
             return []
@@ -210,7 +213,7 @@ class YAMLStorage:
 
         lock = _get_lock(snap_path)
         with lock:
-            raw = yaml.safe_load(snap_path.read_text(encoding="utf-8"))
+            raw = yaml.load(snap_path.read_text(encoding="utf-8"), Loader=_YamlLoader)
 
         if not raw:
             return []
