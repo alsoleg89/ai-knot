@@ -1,4 +1,5 @@
 """Golden retrieval dataset for ai-knot eval."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -96,7 +97,10 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
         query="How does the user handle code reviews?",
         facts=[
             {"id": "p011", "content": "User reviews PRs the same day they are opened."},
-            {"id": "p012", "content": "User leaves comments with suggested alternatives, not just issues."},
+            {
+                "id": "p012",
+                "content": "User leaves comments with suggested alternatives, not just issues.",
+            },
             {"id": "p013", "content": "User requires at least two approvals before merging."},
             {"id": "p014", "content": "User uses GitHub for version control."},
             {"id": "p015", "content": "User prefers asynchronous communication over meetings."},
@@ -117,10 +121,19 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="How does the user prefer to document code?",
         facts=[
-            {"id": "p021", "content": "User writes docstrings for all public functions and classes."},
+            {
+                "id": "p021",
+                "content": "User writes docstrings for all public functions and classes.",
+            },
             {"id": "p022", "content": "User uses Google-style docstrings."},
-            {"id": "p023", "content": "User documents architecture decisions in DECISIONS.md files."},
-            {"id": "p024", "content": "User does not write inline comments unless logic is non-obvious."},
+            {
+                "id": "p023",
+                "content": "User documents architecture decisions in DECISIONS.md files.",
+            },
+            {
+                "id": "p024",
+                "content": "User does not write inline comments unless logic is non-obvious.",
+            },
             {"id": "p025", "content": "User's favorite keyboard shortcut is Ctrl+Shift+P."},
         ],
         relevant_ids=["p021", "p022", "p023"],
@@ -129,8 +142,14 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What happened at the last sprint retrospective?",
         facts=[
-            {"id": "e001", "content": "Sprint retrospective on Monday revealed deployment pipeline was slow."},
-            {"id": "e002", "content": "Team agreed to add caching to CI/CD pipeline in next sprint."},
+            {
+                "id": "e001",
+                "content": "Sprint retrospective on Monday revealed deployment pipeline was slow.",
+            },
+            {
+                "id": "e002",
+                "content": "Team agreed to add caching to CI/CD pipeline in next sprint.",
+            },
             {"id": "e003", "content": "User presented metrics showing 40% test suite speedup."},
             {"id": "e004", "content": "User is reading Clean Architecture by Robert Martin."},
             {"id": "e005", "content": "User's standup is at 10am every weekday."},
@@ -140,9 +159,18 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="When did the production deployment fail?",
         facts=[
-            {"id": "e006", "content": "Production deployment failed last Tuesday due to a config error."},
-            {"id": "e007", "content": "Deploy was rolled back within 15 minutes by the on-call engineer."},
-            {"id": "e008", "content": "Post-mortem identified missing environment variable as root cause."},
+            {
+                "id": "e006",
+                "content": "Production deployment failed last Tuesday due to a config error.",
+            },
+            {
+                "id": "e007",
+                "content": "Deploy was rolled back within 15 minutes by the on-call engineer.",
+            },
+            {
+                "id": "e008",
+                "content": "Post-mortem identified missing environment variable as root cause.",
+            },
             {"id": "e009", "content": "User completed the Python advanced course last month."},
             {"id": "e010", "content": "User's team uses Slack for communication."},
         ],
@@ -151,7 +179,10 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What did the user discuss with their manager last week?",
         facts=[
-            {"id": "e011", "content": "User met with manager last Thursday to discuss promotion timeline."},
+            {
+                "id": "e011",
+                "content": "User met with manager last Thursday to discuss promotion timeline.",
+            },
             {"id": "e012", "content": "Manager suggested user take on a tech lead role in Q3."},
             {"id": "e013", "content": "User expressed interest in moving to the ML platform team."},
             {"id": "e014", "content": "User drinks two cups of coffee per day."},
@@ -162,8 +193,14 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What new library did the user try recently?",
         facts=[
-            {"id": "e016", "content": "User tried Polars for data processing last week and was impressed."},
-            {"id": "e017", "content": "User benchmarked Polars against Pandas and found 3x speedup."},
+            {
+                "id": "e016",
+                "content": "User tried Polars for data processing last week and was impressed.",
+            },
+            {
+                "id": "e017",
+                "content": "User benchmarked Polars against Pandas and found 3x speedup.",
+            },
             {"id": "e018", "content": "User is considering migrating the data pipeline to Polars."},
             {"id": "e019", "content": "User's team has a book club that meets monthly."},
             {"id": "e020", "content": "User prefers tea in the afternoon."},
@@ -173,11 +210,23 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What bug was fixed in the authentication module?",
         facts=[
-            {"id": "e021", "content": "Fixed a race condition in the authentication token refresh logic."},
-            {"id": "e022", "content": "The bug caused occasional 401 errors for users after 1 hour."},
+            {
+                "id": "e021",
+                "content": "Fixed a race condition in the authentication token refresh logic.",
+            },
+            {
+                "id": "e022",
+                "content": "The bug caused occasional 401 errors for users after 1 hour.",
+            },
             {"id": "e023", "content": "Fix added a mutex lock around the token refresh operation."},
-            {"id": "e024", "content": "User attended a conference on distributed systems last month."},
-            {"id": "e025", "content": "User's favorite restaurant near the office serves Georgian food."},
+            {
+                "id": "e024",
+                "content": "User attended a conference on distributed systems last month.",
+            },
+            {
+                "id": "e025",
+                "content": "User's favorite restaurant near the office serves Georgian food.",
+            },
         ],
         relevant_ids=["e021", "e022", "e023"],
     ),
@@ -207,7 +256,10 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What happened at the system design interview?",
         facts=[
-            {"id": "m011", "content": "User did a system design interview at a tech company last Tuesday."},
+            {
+                "id": "m011",
+                "content": "User did a system design interview at a tech company last Tuesday.",
+            },
             {"id": "m012", "content": "Interview focused on designing a rate limiter for an API."},
             {"id": "m013", "content": "User explained token bucket and sliding window algorithms."},
             {"id": "m014", "content": "User received positive feedback and awaits second round."},
@@ -229,10 +281,19 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="How does the user handle secrets and credentials?",
         facts=[
-            {"id": "m021", "content": "User stores all secrets in environment variables, never in code."},
-            {"id": "m022", "content": "User uses HashiCorp Vault for secrets management in production."},
+            {
+                "id": "m021",
+                "content": "User stores all secrets in environment variables, never in code.",
+            },
+            {
+                "id": "m022",
+                "content": "User uses HashiCorp Vault for secrets management in production.",
+            },
             {"id": "m023", "content": "User rotates API keys every 90 days."},
-            {"id": "m024", "content": "User uses a password manager with a strong master password."},
+            {
+                "id": "m024",
+                "content": "User uses a password manager with a strong master password.",
+            },
             {"id": "m025", "content": "User likes jazz music while coding."},
         ],
         relevant_ids=["m021", "m022", "m023"],
@@ -241,7 +302,10 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What is the user's team size?",
         facts=[
-            {"id": "a001", "content": "User's engineering team has 6 developers and 2 product managers."},
+            {
+                "id": "a001",
+                "content": "User's engineering team has 6 developers and 2 product managers.",
+            },
             {"id": "a002", "content": "Team is split between Moscow and remote workers."},
             {"id": "a003", "content": "User leads a subteam of 3 engineers on the backend."},
             {"id": "a004", "content": "User's laptop is a MacBook Pro M2."},
@@ -252,7 +316,10 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What monitoring tools does the user use?",
         facts=[
-            {"id": "a006", "content": "User's team uses Grafana and Prometheus for metrics monitoring."},
+            {
+                "id": "a006",
+                "content": "User's team uses Grafana and Prometheus for metrics monitoring.",
+            },
             {"id": "a007", "content": "Sentry is used for error tracking and alerting."},
             {"id": "a008", "content": "User set up PagerDuty for on-call rotations last year."},
             {"id": "a009", "content": "User prefers 9-hour workdays with a long lunch break."},
@@ -263,9 +330,15 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What did the user learn at the conference?",
         facts=[
-            {"id": "a011", "content": "User attended PyCon Russia and learned about asyncio best practices."},
+            {
+                "id": "a011",
+                "content": "User attended PyCon Russia and learned about asyncio best practices.",
+            },
             {"id": "a012", "content": "A talk on Python performance profiling was the highlight."},
-            {"id": "a013", "content": "User connected with maintainers of several open source libraries."},
+            {
+                "id": "a013",
+                "content": "User connected with maintainers of several open source libraries.",
+            },
             {"id": "a014", "content": "User brought conference swag back for the team."},
             {"id": "a015", "content": "User's home office has a mechanical keyboard."},
         ],
@@ -274,8 +347,14 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="How does the user prefer to receive feedback?",
         facts=[
-            {"id": "a016", "content": "User prefers written feedback over verbal to have time to process it."},
-            {"id": "a017", "content": "User asks for specific examples when receiving critical feedback."},
+            {
+                "id": "a016",
+                "content": "User prefers written feedback over verbal to have time to process it.",
+            },
+            {
+                "id": "a017",
+                "content": "User asks for specific examples when receiving critical feedback.",
+            },
             {"id": "a018", "content": "User schedules 1:1 with manager every two weeks."},
             {"id": "a019", "content": "User's morning routine starts with 20 minutes of reading."},
             {"id": "a020", "content": "User tracks personal goals in Notion."},
@@ -287,9 +366,15 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
         facts=[
             {"id": "a021", "content": "Team uses GitHub Actions for continuous integration."},
             {"id": "a022", "content": "Deployments are automated via ArgoCD to Kubernetes."},
-            {"id": "a023", "content": "CI pipeline runs linting, type checks, and tests on every PR."},
+            {
+                "id": "a023",
+                "content": "CI pipeline runs linting, type checks, and tests on every PR.",
+            },
             {"id": "a024", "content": "User has a personal wiki written in Markdown."},
-            {"id": "a025", "content": "User's favorite programming book is Structure and Interpretation of Computer Programs."},
+            {
+                "id": "a025",
+                "content": "User's favorite book is SICP.",
+            },
         ],
         relevant_ids=["a021", "a022", "a023"],
     ),
@@ -297,8 +382,14 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
         query="What is the user's approach to refactoring?",
         facts=[
             {"id": "b001", "content": "User refactors code only when covered by tests."},
-            {"id": "b002", "content": "User applies the boy scout rule: leave code cleaner than found."},
-            {"id": "b003", "content": "User avoids large refactoring PRs, prefers incremental changes."},
+            {
+                "id": "b002",
+                "content": "User applies the boy scout rule: leave code cleaner than found.",
+            },
+            {
+                "id": "b003",
+                "content": "User avoids large refactoring PRs, prefers incremental changes.",
+            },
             {"id": "b004", "content": "User drinks matcha latte in the morning."},
             {"id": "b005", "content": "User's commute takes 35 minutes each way."},
         ],
@@ -308,8 +399,14 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
         query="How does the user stay up to date with technology?",
         facts=[
             {"id": "b006", "content": "User reads Hacker News daily for tech news."},
-            {"id": "b007", "content": "User follows several Python core developers on social media."},
-            {"id": "b008", "content": "User subscribes to Real Python and Python Weekly newsletters."},
+            {
+                "id": "b007",
+                "content": "User follows several Python core developers on social media.",
+            },
+            {
+                "id": "b008",
+                "content": "User subscribes to Real Python and Python Weekly newsletters.",
+            },
             {"id": "b009", "content": "User listens to technical podcasts during commute."},
             {"id": "b010", "content": "User's desk plant is a succulent."},
         ],
@@ -318,10 +415,22 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="What happened during the on-call incident last week?",
         facts=[
-            {"id": "b011", "content": "On-call incident: database connection pool exhausted last Wednesday at 2am."},
-            {"id": "b012", "content": "User was paged and resolved the incident by increasing pool size."},
-            {"id": "b013", "content": "Root cause analysis showed a sudden traffic spike from a batch job."},
-            {"id": "b014", "content": "User updated runbook to include connection pool tuning steps."},
+            {
+                "id": "b011",
+                "content": "On-call incident: DB connection pool exhausted last Wednesday at 2am.",
+            },
+            {
+                "id": "b012",
+                "content": "User was paged and resolved the incident by increasing pool size.",
+            },
+            {
+                "id": "b013",
+                "content": "Root cause analysis showed a sudden traffic spike from a batch job.",
+            },
+            {
+                "id": "b014",
+                "content": "User updated runbook to include connection pool tuning steps.",
+            },
             {"id": "b015", "content": "User ordered a new mechanical keyboard last week."},
         ],
         relevant_ids=["b011", "b012", "b013", "b014"],
@@ -330,9 +439,15 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
         query="What are the user's goals for this quarter?",
         facts=[
             {"id": "b016", "content": "User's Q1 goal is to ship the new memory indexing feature."},
-            {"id": "b017", "content": "User wants to improve test coverage from 75% to 90% this quarter."},
+            {
+                "id": "b017",
+                "content": "User wants to improve test coverage from 75% to 90% this quarter.",
+            },
             {"id": "b018", "content": "User plans to give one internal tech talk this quarter."},
-            {"id": "b019", "content": "User's personal goal is to run a 10k race in under 55 minutes."},
+            {
+                "id": "b019",
+                "content": "User's personal goal is to run a 10k race in under 55 minutes.",
+            },
             {"id": "b020", "content": "User checks personal finances every Sunday."},
         ],
         relevant_ids=["b016", "b017", "b018"],
@@ -340,11 +455,23 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
     RetrievalCase(
         query="How does the user handle technical debt?",
         facts=[
-            {"id": "b021", "content": "User tracks technical debt in a dedicated GitHub project board."},
+            {
+                "id": "b021",
+                "content": "User tracks technical debt in a dedicated GitHub project board.",
+            },
             {"id": "b022", "content": "Team allocates 20% of each sprint to debt reduction."},
-            {"id": "b023", "content": "User documents debt items with estimated effort and business impact."},
-            {"id": "b024", "content": "User prefers to address debt proactively rather than reactively."},
-            {"id": "b025", "content": "User's team celebrates when a long-standing debt item is closed."},
+            {
+                "id": "b023",
+                "content": "User documents debt items with estimated effort and business impact.",
+            },
+            {
+                "id": "b024",
+                "content": "User prefers to address debt proactively rather than reactively.",
+            },
+            {
+                "id": "b025",
+                "content": "User's team celebrates when a long-standing debt item is closed.",
+            },
         ],
         relevant_ids=["b021", "b022", "b023", "b024"],
     ),
