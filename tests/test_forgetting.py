@@ -8,24 +8,31 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from ai_knot.forgetting import (
+    _TYPE_STABILITY_MULTIPLIER,
     BASE_STABILITY_HOURS,
     apply_decay,
     calculate_retention,
     calculate_stability,
 )
-from ai_knot.types import Fact
+from ai_knot.types import Fact, MemoryType
 
 
 class TestCalculateStability:
-    """stability = base_hours * importance * (1 + log(1 + access_count))."""
+    """stability = base_hours * importance * type_mult * count_factor * spacing_factor."""
 
     def test_default_importance_no_access(self) -> None:
-        stability = calculate_stability(importance=0.8, access_count=0)
-        assert stability == pytest.approx(BASE_STABILITY_HOURS * 0.8 * 1.0, rel=1e-6)
+        stability = calculate_stability(importance=0.8, access_count=0, memory_type="semantic")
+        expected = BASE_STABILITY_HOURS * 0.8 * _TYPE_STABILITY_MULTIPLIER["semantic"]
+        assert stability == pytest.approx(expected, rel=1e-6)
 
     def test_high_importance_many_accesses(self) -> None:
-        stability = calculate_stability(importance=1.0, access_count=100)
-        expected = BASE_STABILITY_HOURS * 1.0 * (1.0 + math.log(101))
+        stability = calculate_stability(importance=1.0, access_count=100, memory_type="semantic")
+        expected = (
+            BASE_STABILITY_HOURS
+            * 1.0
+            * _TYPE_STABILITY_MULTIPLIER["semantic"]
+            * (1.0 + math.log(101))
+        )
         assert stability == pytest.approx(expected, rel=1e-6)
 
     def test_zero_importance(self) -> None:
@@ -43,9 +50,47 @@ class TestCalculateStability:
         s2 = calculate_stability(importance=0.9, access_count=5)
         assert s1 < s2
 
+    def test_spacing_effect_spaced_beats_cramped(self) -> None:
+        """Well-spaced accesses give higher stability than cramped ones."""
+        cramped = calculate_stability(
+            importance=0.8,
+            access_count=5,
+            access_intervals=[0.1, 0.1, 0.1, 0.1, 0.1],  # 6 minutes apart
+        )
+        spaced = calculate_stability(
+            importance=0.8,
+            access_count=5,
+            access_intervals=[48.0, 48.0, 48.0, 48.0, 48.0],  # 2 days apart
+        )
+        assert spaced > cramped
+
+    def test_spacing_factor_floor(self) -> None:
+        """Spacing factor never goes below 0.5."""
+        # Very tiny intervals
+        stability = calculate_stability(
+            importance=0.8,
+            access_count=5,
+            access_intervals=[0.001, 0.001, 0.001],
+        )
+        # Should still be positive and > 0
+        assert stability > 0
+
+    def test_no_intervals_same_as_no_spacing(self) -> None:
+        """Without intervals, spacing_factor defaults to 1.0."""
+        s1 = calculate_stability(importance=0.8, access_count=5, access_intervals=None)
+        s2 = calculate_stability(importance=0.8, access_count=5, access_intervals=[])
+        assert s1 == s2
+
+    def test_type_aware_stability(self) -> None:
+        """Semantic > procedural > episodic for same importance/access."""
+        sem = calculate_stability(importance=0.8, access_count=5, memory_type="semantic")
+        proc = calculate_stability(importance=0.8, access_count=5, memory_type="procedural")
+        epi = calculate_stability(importance=0.8, access_count=5, memory_type="episodic")
+        assert sem > proc > epi
+
 
 class TestCalculateRetention:
-    """retention = exp(-time_hours / stability)."""
+    """retention = (1 + t / (c * S)) ** -decay_exponent."""
 
     def test_just_accessed_is_full_retention(self) -> None:
         fact = Fact(content="fresh")
@@ -89,6 +134,46 @@ class TestCalculateRetention:
 
         assert calculate_retention(rarely, now=one_week_later) < calculate_retention(
             often, now=one_week_later
+        )
+
+    def test_episodic_decays_faster_than_semantic(self) -> None:
+        """Episodic memory type decays faster than semantic."""
+        base = datetime(2026, 1, 1, tzinfo=UTC)
+        one_week = base + timedelta(days=7)
+
+        episodic = Fact(
+            content="event happened", type=MemoryType.EPISODIC, importance=0.8, last_accessed=base
+        )
+        semantic = Fact(
+            content="core fact", type=MemoryType.SEMANTIC, importance=0.8, last_accessed=base
+        )
+
+        assert calculate_retention(episodic, now=one_week) < calculate_retention(
+            semantic, now=one_week
+        )
+
+    def test_spaced_accesses_improve_retention(self) -> None:
+        """Fact with spaced access intervals retains better."""
+        base = datetime(2026, 1, 1, tzinfo=UTC)
+        two_weeks = base + timedelta(days=14)
+
+        cramped = Fact(
+            content="cramped",
+            importance=0.8,
+            access_count=5,
+            access_intervals=[0.1, 0.1, 0.1, 0.1, 0.1],
+            last_accessed=base,
+        )
+        spaced = Fact(
+            content="spaced",
+            importance=0.8,
+            access_count=5,
+            access_intervals=[48.0, 48.0, 48.0, 48.0, 48.0],
+            last_accessed=base,
+        )
+
+        assert calculate_retention(cramped, now=two_weeks) < calculate_retention(
+            spaced, now=two_weeks
         )
 
 

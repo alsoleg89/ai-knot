@@ -75,6 +75,8 @@ class YAMLStorage:
                 data[fact.id]["support_confidence"] = fact.support_confidence
             if fact.verification_source != "manual":
                 data[fact.id]["verification_source"] = fact.verification_source
+            if fact.access_intervals:
+                data[fact.id]["access_intervals"] = fact.access_intervals
 
         yaml_path = agent_dir / "knowledge.yaml"
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -127,6 +129,7 @@ class YAMLStorage:
                     supported=bool(entry.get("supported", True)),
                     support_confidence=float(entry.get("support_confidence", 1.0)),
                     verification_source=str(entry.get("verification_source", "legacy")),
+                    access_intervals=[float(x) for x in entry.get("access_intervals", [])],
                 )
             )
         return facts
@@ -183,6 +186,8 @@ class YAMLStorage:
                 data[fact.id]["support_confidence"] = fact.support_confidence
             if fact.verification_source != "manual":
                 data[fact.id]["verification_source"] = fact.verification_source
+            if fact.access_intervals:
+                data[fact.id]["access_intervals"] = fact.access_intervals
 
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
         lock = _get_lock(snap_path)
@@ -236,6 +241,7 @@ class YAMLStorage:
                     supported=bool(entry.get("supported", True)),
                     support_confidence=float(entry.get("support_confidence", 1.0)),
                     verification_source=str(entry.get("verification_source", "legacy")),
+                    access_intervals=[float(x) for x in entry.get("access_intervals", [])],
                 )
             )
         return facts

@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS facts (
     supported       INTEGER NOT NULL DEFAULT 1,
     support_confidence REAL NOT NULL DEFAULT 1.0,
     verification_source TEXT NOT NULL DEFAULT 'manual',
+    access_intervals TEXT NOT NULL DEFAULT '[]',
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -77,6 +78,7 @@ class SQLiteStorage:
             "supported": "INTEGER NOT NULL DEFAULT 1",
             "support_confidence": "REAL NOT NULL DEFAULT 1.0",
             "verification_source": "TEXT NOT NULL DEFAULT 'manual'",
+            "access_intervals": "TEXT NOT NULL DEFAULT '[]'",
         }
         with self._get_conn() as conn:
             cur = conn.execute("PRAGMA table_info(facts)")
@@ -95,8 +97,9 @@ class SQLiteStorage:
                        (id, agent_id, content, type, importance, retention,
                         access_count, tags, created_at, last_accessed,
                         source_snippets, source_spans, supported,
-                        support_confidence, verification_source)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        support_confidence, verification_source,
+                        access_intervals)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         fact.id,
                         agent_id,
@@ -113,6 +116,7 @@ class SQLiteStorage:
                         1 if fact.supported else 0,
                         fact.support_confidence,
                         fact.verification_source,
+                        json.dumps(fact.access_intervals),
                     ),
                 )
         logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
@@ -124,7 +128,8 @@ class SQLiteStorage:
                 """SELECT id, content, type, importance, retention,
                           access_count, tags, created_at, last_accessed,
                           source_snippets, source_spans, supported,
-                          support_confidence, verification_source
+                          support_confidence, verification_source,
+                          access_intervals
                    FROM facts WHERE agent_id = ?
                    ORDER BY created_at""",
                 (agent_id,),
@@ -146,6 +151,7 @@ class SQLiteStorage:
                 supported=bool(row[11]),
                 support_confidence=float(row[12]),
                 verification_source=str(row[13]),
+                access_intervals=json.loads(row[14]),
             )
             for row in rows
         ]
@@ -186,6 +192,7 @@ class SQLiteStorage:
                 "supported": f.supported,
                 "support_confidence": f.support_confidence,
                 "verification_source": f.verification_source,
+                "access_intervals": f.access_intervals,
             }
             for f in facts
         ]
@@ -229,6 +236,7 @@ class SQLiteStorage:
                 supported=bool(entry.get("supported", True)),
                 support_confidence=float(entry.get("support_confidence", 1.0)),
                 verification_source=str(entry.get("verification_source", "legacy")),
+                access_intervals=[float(x) for x in entry.get("access_intervals", [])],
             )
             for entry in raw
         ]

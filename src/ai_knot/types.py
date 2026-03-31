@@ -57,6 +57,8 @@ class Fact:
     supported: bool = True
     support_confidence: float = 1.0
     verification_source: str = "manual"
+    # Spacing effect: hours between consecutive accesses (v0.6)
+    access_intervals: list[float] = field(default_factory=list)
 
 
 @dataclass
