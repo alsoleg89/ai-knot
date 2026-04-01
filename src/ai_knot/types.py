@@ -59,6 +59,9 @@ class Fact:
     verification_source: str = "manual"
     # Spacing effect: hours between consecutive accesses (v0.6)
     access_intervals: list[float] = field(default_factory=list)
+    # Multi-agent provenance fields (v0.6)
+    origin_agent_id: str = ""
+    visibility: str = "private"
 
 
 @dataclass

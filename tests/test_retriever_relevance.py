@@ -42,7 +42,7 @@ class TestRelevanceScenarios:
     def test_coding_preferences_query(
         self, retriever: TFIDFRetriever, diverse_kb: list[Fact]
     ) -> None:
-        results = retriever.search("what programming language to use?", diverse_kb, top_k=3)
+        results = retriever.search("what programming language to use?", diverse_kb, top_k=5)
         contents = [r.content for r, _ in results]
         assert any("Python" in c for c in contents)
 

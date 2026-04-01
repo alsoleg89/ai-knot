@@ -18,6 +18,46 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.0] — 2026-04-01
+
+### Added
+
+- **BM25F structured field weighting** (Robertson, Zaragoza & Taylor 2004) —
+  indexes `fact.tags` alongside `fact.content` as separate fields. Tags receive
+  2.0× weight with B_tags=0.3 length normalization, boosting domain-specific
+  matches.
+
+- **Pseudo-Relevance Feedback (PRF)** (Rocchio 1971, Lavrenko & Croft 2001) —
+  two-pass retrieval: initial BM25F → extract top-5 expansion terms from
+  top-3 feedback docs → re-score with expanded query at α=0.5 weight.
+  Bridges vocabulary gaps (e.g. query "database" → finds "PostgreSQL" facts).
+
+- **Reciprocal Rank Fusion (RRF)** (Cormack, Clarke & Buettcher 2009) —
+  replaces linear hybrid with `RRF(d) = Σ w_r/(60 + rank_r(d))` over four
+  rankers: BM25F (5× weight), importance, retention, recency.
+
+- **IDF-based stopword filtering** (Robertson 2004) — terms in >70% of docs
+  get zero IDF weight. Language-agnostic, no hardcoded word lists.
+
+- **Lightweight suffix stemmer** (Porter 1980 step-1 subset) — handles -ment,
+  -tion, -sion, -ing, -ed, -ly, -er, -est, -s with double-consonant
+  deduplication. Replaces naive plural stripping.
+
+- **Multi-agent shared memory pool** — `SharedMemoryPool` class for cross-agent
+  knowledge exchange via `__shared__` namespace. New `Fact` fields:
+  `origin_agent_id`, `visibility`. Provenance discount 0.8× for foreign facts.
+
+- **Eval dataset expansion** — 30 → 105 golden retrieval cases covering
+  variable haystack sizes, adversarial near-miss/synonym, query-length
+  variations, and high-noise topical clusters.
+
+### Changed
+
+- **Retriever architecture** — `InvertedIndex` indexes content + tags fields.
+  `score()` accepts `b` and `expansion_weights` parameters.
+
+---
+
 ## [0.5.0] — 2026-03-31
 
 ### Added
@@ -284,7 +324,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `BASE_STABILITY_HOURS` set to 336 (2 weeks retention baseline)
 - TF-IDF tokenizer: camelCase splitting + basic plural stemming
 
-[Unreleased]: https://github.com/alsoleg89/ai-knot/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/alsoleg89/ai-knot/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/alsoleg89/ai-knot/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/alsoleg89/ai-knot/compare/v0.4.0...v0.5.0
 [0.3.0]: https://github.com/alsoleg89/ai-knot/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alsoleg89/ai-knot/compare/v0.1.0...v0.2.0

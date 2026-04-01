@@ -17,6 +17,9 @@ from ai_knot.storage.base import SnapshotCapable, StorageBackend
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
 
+_SHARED_NAMESPACE = "__shared__"
+_PROVENANCE_DISCOUNT = 0.8
+
 logger = logging.getLogger(__name__)
 
 
@@ -614,3 +617,144 @@ class KnowledgeBase:
             "avg_importance": sum(f.importance for f in facts) / len(facts),
             "avg_retention": sum(f.retention_score for f in facts) / len(facts),
         }
+
+
+class SharedMemoryPool:
+    """Shared memory pool for multi-agent knowledge exchange.
+
+    Provides a shared namespace (``__shared__``) where agents can publish
+    facts for cross-agent retrieval. Each published fact retains its
+    ``origin_agent_id`` for provenance tracking.
+
+    Inspired by CommNet (Sukhbaatar et al., 2016): a shared communication
+    channel with selective read access. Facts from other agents receive a
+    provenance discount (0.8×) to reflect lower trust in external knowledge.
+
+    Usage::
+
+        pool = SharedMemoryPool(storage=SQLiteStorage("mem.db"))
+        pool.register("devops_agent")
+        pool.register("coding_agent")
+
+        # DevOps agent publishes a fact
+        pool.publish("devops_agent", [fact_id], kb=devops_kb)
+
+        # Coding agent queries the shared pool
+        results = pool.recall("what database?", "coding_agent", top_k=5)
+
+    Args:
+        storage: Backend used to persist the shared namespace.
+    """
+
+    def __init__(self, storage: StorageBackend | None = None) -> None:
+        self._storage: StorageBackend = storage or YAMLStorage()
+        self._retriever = TFIDFRetriever()
+        self._agents: set[str] = set()
+
+    def register(self, agent_id: str) -> None:
+        """Register an agent to participate in the shared pool.
+
+        Args:
+            agent_id: Unique identifier for the agent.
+        """
+        self._agents.add(agent_id)
+
+    @property
+    def agents(self) -> set[str]:
+        """Return the set of registered agent IDs."""
+        return set(self._agents)
+
+    def publish(
+        self,
+        agent_id: str,
+        fact_ids: list[str],
+        *,
+        kb: KnowledgeBase,
+    ) -> list[Fact]:
+        """Copy facts from an agent's private KB into the shared pool.
+
+        Each published fact gets ``visibility="pool"`` and
+        ``origin_agent_id`` set to the publishing agent.
+
+        Args:
+            agent_id: The agent publishing the facts.
+            fact_ids: IDs of facts to publish from the agent's KB.
+            kb: The agent's KnowledgeBase instance.
+
+        Returns:
+            List of facts that were published.
+
+        Raises:
+            ValueError: If agent_id is not registered.
+        """
+        if agent_id not in self._agents:
+            raise ValueError(f"Agent {agent_id!r} is not registered. Call register() first.")
+
+        private_facts = kb.list_facts()
+        id_set = set(fact_ids)
+        to_publish: list[Fact] = []
+
+        for fact in private_facts:
+            if fact.id in id_set:
+                fact.origin_agent_id = agent_id
+                fact.visibility = "pool"
+                to_publish.append(fact)
+
+        if to_publish:
+            shared = self._storage.load(_SHARED_NAMESPACE)
+            existing_ids = {f.id for f in shared}
+            new_facts = [f for f in to_publish if f.id not in existing_ids]
+            shared.extend(new_facts)
+            self._storage.save(_SHARED_NAMESPACE, shared)
+            logger.info(
+                "Agent '%s' published %d facts to shared pool",
+                agent_id,
+                len(new_facts),
+            )
+
+        return to_publish
+
+    def recall(
+        self,
+        query: str,
+        requesting_agent_id: str,
+        *,
+        top_k: int = 5,
+    ) -> list[tuple[Fact, float]]:
+        """Search the shared pool with provenance discount.
+
+        Facts originating from the requesting agent receive full score;
+        facts from other agents are discounted by ``_PROVENANCE_DISCOUNT``
+        (0.8×) to reflect lower trust in external knowledge.
+
+        Args:
+            query: The search query.
+            requesting_agent_id: Agent performing the query.
+            top_k: Maximum results to return.
+
+        Returns:
+            List of (Fact, score) pairs sorted by relevance.
+        """
+        shared = self._storage.load(_SHARED_NAMESPACE)
+        if not shared:
+            return []
+
+        pairs = self._retriever.search(query, shared, top_k=top_k)
+
+        # Apply provenance discount for foreign facts.
+        discounted: list[tuple[Fact, float]] = []
+        for fact, score in pairs:
+            if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
+                score *= _PROVENANCE_DISCOUNT
+            discounted.append((fact, score))
+
+        discounted.sort(key=lambda x: x[1], reverse=True)
+        return discounted[:top_k]
+
+    def list_shared_facts(self) -> list[Fact]:
+        """Return all facts in the shared pool.
+
+        Returns:
+            List of all shared Facts.
+        """
+        return self._storage.load(_SHARED_NAMESPACE)
