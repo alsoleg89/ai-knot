@@ -55,6 +55,23 @@ Versioning: [Semantic Versioning](https://semver.org/).
   30-case golden dataset covering semantic, procedural, and episodic memory types.
   Measured: MRR=0.87, P@5=0.87, nDCG=0.88 on BM25 retriever.
 
+- **FSRS-inspired spacing effect** — new `access_intervals` field on `Fact` tracks
+  hours between successive accesses. Spacing factor:
+  `0.7 + 0.3 · log(1 + mean_interval / 24)` (floor 0.5). Spaced recalls amplify
+  stability, mimicking the spacing effect from cognitive science (Cepeda et al., 2006).
+
+- **Type-aware decay** (Tulving, 1972) — stability multiplier varies by memory type:
+  semantic = 1.5×, procedural = 1.0×, episodic = 0.5×. Semantic facts (general
+  knowledge) decay slower; episodic facts (events) decay faster.
+
+- **Inverted index** — `InvertedIndex` class with posting lists for
+  O(Q · avg_postings) BM25 retrieval instead of O(N · Q) brute-force scan.
+  Built once per `search()` call, amortized across query terms.
+
+- **BCa bootstrap** (Efron, 1987) — `bootstrap_ci()` now uses bias-corrected and
+  accelerated confidence intervals. Adjusts for skewness and median-bias via
+  jackknife acceleration estimate. Stdlib-only, no numpy/scipy.
+
 - **CI quality gates** — two new GitHub Actions jobs:
   - `eval-smoke` (every push/PR): asserts MRR ≥ 0.50, P@5 ≥ 0.30
   - `eval-full` (main/tags only): runs full eval suite

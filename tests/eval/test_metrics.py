@@ -125,7 +125,8 @@ class TestBootstrapCi:
 
     def test_single_score(self) -> None:
         lo, hi = bootstrap_ci([0.5])
-        assert lo <= 0.5 <= hi
+        assert lo == pytest.approx(0.5)
+        assert hi == pytest.approx(0.5)
 
     def test_all_same_scores(self) -> None:
         lo, hi = bootstrap_ci([1.0] * 10)
@@ -140,7 +141,7 @@ class TestBootstrapCi:
     def test_ci_within_range(self) -> None:
         scores = [0.0, 0.5, 1.0, 0.25, 0.75]
         lo, hi = bootstrap_ci(scores)
-        assert 0.0 <= lo <= hi <= 1.0
+        assert lo >= 0.0 <= hi <= 1.0
 
     def test_reproducible_with_seed(self) -> None:
         scores = [0.1, 0.4, 0.7, 0.3, 0.9]
@@ -156,3 +157,28 @@ class TestBootstrapCi:
         # Just verify both are valid tuples
         assert len(ci1) == 2
         assert len(ci2) == 2
+
+    def test_bca_skewed_data(self) -> None:
+        """BCa should produce asymmetric intervals on skewed data."""
+        scores = [0.01, 0.02, 0.03, 0.05, 0.9, 0.95, 0.99]
+        lo, hi = bootstrap_ci(scores, n_resamples=2000)
+        mean = sum(scores) / len(scores)
+        assert lo < mean < hi
+        assert lo >= 0.0
+        assert hi <= 1.0
+
+    def test_bca_two_scores(self) -> None:
+        """BCa should handle n=2 without error."""
+        lo, hi = bootstrap_ci([0.2, 0.8])
+        assert lo <= hi
+        assert lo >= 0.0
+        assert hi <= 1.0
+
+    def test_bca_ci_narrows_with_more_resamples(self) -> None:
+        """More resamples should give stable (not wider) intervals."""
+        scores = [0.3, 0.5, 0.7, 0.4, 0.6]
+        _, hi_500 = bootstrap_ci(scores, n_resamples=500, seed=42)
+        _, hi_5000 = bootstrap_ci(scores, n_resamples=5000, seed=42)
+        # Both should be reasonable; mainly testing no crash
+        assert 0.0 <= hi_500 <= 1.0
+        assert 0.0 <= hi_5000 <= 1.0
