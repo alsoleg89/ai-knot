@@ -52,8 +52,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - **Offline eval framework** (`tests/eval/`) — zero-dependency retrieval quality
   measurement with `precision_at_k`, `recall_at_k`, `mean_reciprocal_rank`,
   `ndcg_at_k`, and `bootstrap_ci` (stdlib `random.choices`, no numpy).
-  30-case golden dataset covering semantic, procedural, and episodic memory types.
-  Measured: MRR=0.87, P@5=0.87, nDCG=0.88 on BM25 retriever.
+  105-case golden dataset with variable haystack sizes (3/5/10/20 facts) and
+  adversarial scenarios (near-miss distractors, short/long queries, high-noise
+  topical clusters). Measured: MRR=0.77, P@5=0.47, nDCG=0.77 on BM25 retriever.
 
 - **FSRS-inspired spacing effect** — new `access_intervals` field on `Fact` tracks
   hours between successive accesses. Spacing factor:
