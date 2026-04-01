@@ -994,4 +994,230 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
         ],
         relevant_ids=["t028", "t029"],
     ),
+    # ================================================================
+    # Adversarial: near-miss / keyword-overlap distractors — prefix n
+    # ================================================================
+    RetrievalCase(
+        query="What database does the user's project use?",
+        facts=[
+            {"id": "n001", "content": "Production backend runs on PostgreSQL 15."},
+            {"id": "n002", "content": "User studied database theory in university."},
+            {"id": "n003", "content": "User read a blog post about database sharding."},
+            {"id": "n004", "content": "Team discussed migrating the database last month."},
+            {"id": "n005", "content": "User bookmarked a database optimization guide."},
+        ],
+        relevant_ids=["n001"],
+    ),
+    RetrievalCase(
+        query="What testing framework does the user prefer?",
+        facts=[
+            {"id": "n006", "content": "User runs all Python tests with pytest."},
+            {"id": "n007", "content": "User read an article comparing testing frameworks."},
+            {"id": "n008", "content": "User attended a talk about testing best practices."},
+            {"id": "n009", "content": "Testing new features takes extra sprint time."},
+            {"id": "n010", "content": "User bookmarked a testing patterns cheat sheet."},
+        ],
+        relevant_ids=["n006"],
+    ),
+    RetrievalCase(
+        query="Where does the user deploy applications?",
+        facts=[
+            {"id": "n011", "content": "All services deploy to AWS EKS clusters."},
+            {"id": "n012", "content": "User wrote a blog post about deployment strategies."},
+            {"id": "n013", "content": "Deploy pipeline takes about 12 minutes."},
+            {"id": "n014", "content": "User presented on blue-green deployment patterns."},
+            {"id": "n015", "content": "Team debated deploy frequency at the retro."},
+        ],
+        relevant_ids=["n011"],
+    ),
+    RetrievalCase(
+        query="What monitoring does the team have?",
+        facts=[
+            {"id": "n016", "content": "Grafana dashboards show service health metrics."},
+            {"id": "n017", "content": "Prometheus scrapes metrics every 15 seconds."},
+            {"id": "n018", "content": "User compared monitoring tools at a conference."},
+            {"id": "n019", "content": "Team discussed expanding monitoring coverage."},
+            {"id": "n020", "content": "Monitoring alert fatigue was raised at the retro."},
+        ],
+        relevant_ids=["n016", "n017"],
+    ),
+    RetrievalCase(
+        query="How does the user handle code reviews?",
+        facts=[
+            {"id": "n021", "content": "User reviews every PR within one business day."},
+            {"id": "n022", "content": "User read a guide about effective code reviews."},
+            {"id": "n023", "content": "Code review backlog was discussed at standup."},
+            {"id": "n024", "content": "User suggested pairing instead of async reviews."},
+            {"id": "n025", "content": "Review turnaround is tracked as a team metric."},
+        ],
+        relevant_ids=["n021"],
+    ),
+    RetrievalCase(
+        query="What CI system does the team use?",
+        facts=[
+            {"id": "n026", "content": "GitHub Actions runs all CI checks on every PR."},
+            {"id": "n027", "content": "CI build times have increased by 30% this quarter."},
+            {"id": "n028", "content": "Team wants to migrate CI to a faster platform."},
+            {"id": "n029", "content": "CI flakiness was the top retro complaint."},
+            {"id": "n030", "content": "User investigated CI caching improvements."},
+        ],
+        relevant_ids=["n026"],
+    ),
+    RetrievalCase(
+        query="What Python version does the project require?",
+        facts=[
+            {"id": "n031", "content": "Project requires Python 3.11 or newer."},
+            {"id": "n032", "content": "User tested Python 3.12 but found a compatibility bug."},
+            {"id": "n033", "content": "Python packaging ecosystem has many tools."},
+            {"id": "n034", "content": "User's Python learning started ten years ago."},
+            {"id": "n035", "content": "Python 3.13 release notes look promising."},
+        ],
+        relevant_ids=["n031"],
+    ),
+    RetrievalCase(
+        query="What is the user's approach to error handling?",
+        facts=[
+            {"id": "n036", "content": "User wraps external API calls in try-except blocks."},
+            {"id": "n037", "content": "Custom exception hierarchy inherits from AppError."},
+            {"id": "n038", "content": "Error messages should include context for debugging."},
+            {"id": "n039", "content": "User read about error handling in Go vs Python."},
+            {"id": "n040", "content": "Error rates spiked during the last deploy."},
+        ],
+        relevant_ids=["n036", "n037", "n038"],
+    ),
+    RetrievalCase(
+        query="What linter does the user use for Python?",
+        facts=[
+            {"id": "n041", "content": "User runs ruff for both linting and formatting."},
+            {"id": "n042", "content": "User considered switching linters last year."},
+            {"id": "n043", "content": "Linting rules are configured in pyproject.toml."},
+            {"id": "n044", "content": "User blogged about linter comparison results."},
+            {"id": "n045", "content": "Lint warnings are treated as errors in CI."},
+        ],
+        relevant_ids=["n041", "n043"],
+    ),
+    RetrievalCase(
+        query="How does the user structure Python packages?",
+        facts=[
+            {"id": "n046", "content": "User uses src-layout with pyproject.toml."},
+            {"id": "n047", "content": "Each module has an __init__.py with public API."},
+            {"id": "n048", "content": "User discussed package structure at a meetup."},
+            {"id": "n049", "content": "Package naming follows PEP 8 conventions."},
+            {"id": "n050", "content": "User reviewed several package templates on GitHub."},
+        ],
+        relevant_ids=["n046", "n047"],
+    ),
+    # ================================================================
+    # Adversarial: synonym / paraphrase — prefix n (continued)
+    # ================================================================
+    RetrievalCase(
+        query="Where is the user employed?",
+        facts=[
+            {"id": "n051", "content": "User works as an engineer at a large bank."},
+            {"id": "n052", "content": "User attended an employment law workshop."},
+            {"id": "n053", "content": "User's employer provides free lunch."},
+            {"id": "n054", "content": "User helped a friend with a job search."},
+            {"id": "n055", "content": "Employment market for developers is strong."},
+        ],
+        relevant_ids=["n051"],
+    ),
+    RetrievalCase(
+        query="What does the user do for exercise?",
+        facts=[
+            {"id": "n056", "content": "User runs 5km three times a week."},
+            {"id": "n057", "content": "User does strength training on Tuesdays."},
+            {"id": "n058", "content": "Exercise equipment takes up half the balcony."},
+            {"id": "n059", "content": "User read about exercise and sleep quality."},
+            {"id": "n060", "content": "User's gym buddy moved to another city."},
+        ],
+        relevant_ids=["n056", "n057"],
+    ),
+    RetrievalCase(
+        query="What is the user's job title?",
+        facts=[
+            {"id": "n061", "content": "User holds the position of senior engineer."},
+            {"id": "n062", "content": "User's previous role was mid-level developer."},
+            {"id": "n063", "content": "Job title conventions differ across companies."},
+            {"id": "n064", "content": "User discussed career titles with the manager."},
+            {"id": "n065", "content": "User updated LinkedIn profile with new title."},
+        ],
+        relevant_ids=["n061", "n062"],
+    ),
+    RetrievalCase(
+        query="How does the user manage time?",
+        facts=[
+            {"id": "n066", "content": "User blocks focused work in 90-minute slots."},
+            {"id": "n067", "content": "User batches meetings on Tuesday and Thursday."},
+            {"id": "n068", "content": "Time tracking shows 6 hours of deep work daily."},
+            {"id": "n069", "content": "User read a book about managing time better."},
+            {"id": "n070", "content": "Time zone differences complicate team syncs."},
+        ],
+        relevant_ids=["n066", "n067", "n068"],
+    ),
+    RetrievalCase(
+        query="What does the user think about AI coding tools?",
+        facts=[
+            {"id": "n071", "content": "User uses Copilot for autocomplete daily."},
+            {"id": "n072", "content": "User finds AI tools helpful for boilerplate."},
+            {"id": "n073", "content": "AI coding assistants were a conference topic."},
+            {"id": "n074", "content": "User worries about AI-generated code quality."},
+            {"id": "n075", "content": "AI tools market is growing rapidly."},
+        ],
+        relevant_ids=["n071", "n072", "n074"],
+    ),
+    RetrievalCase(
+        query="What does the user read for fun?",
+        facts=[
+            {"id": "n076", "content": "User enjoys science fiction by Lem and Asimov."},
+            {"id": "n077", "content": "User reads one non-fiction book per month."},
+            {"id": "n078", "content": "User's reading list is tracked in Goodreads."},
+            {"id": "n079", "content": "Reading comprehension research is fascinating."},
+            {"id": "n080", "content": "User's reading lamp is adjustable."},
+        ],
+        relevant_ids=["n076", "n077"],
+    ),
+    RetrievalCase(
+        query="What is the user's salary expectation?",
+        facts=[
+            {"id": "n081", "content": "User expects compensation above market median."},
+            {"id": "n082", "content": "User discussed salary bands with HR."},
+            {"id": "n083", "content": "Salary transparency law passed in the region."},
+            {"id": "n084", "content": "User compared salaries on levels.fyi."},
+            {"id": "n085", "content": "Salary negotiations happen during annual review."},
+        ],
+        relevant_ids=["n081", "n082"],
+    ),
+    RetrievalCase(
+        query="What music does the user listen to while coding?",
+        facts=[
+            {"id": "n086", "content": "User plays lo-fi hip-hop playlists while coding."},
+            {"id": "n087", "content": "User switches to classical music for deep focus."},
+            {"id": "n088", "content": "Music streaming costs about $10 per month."},
+            {"id": "n089", "content": "User discussed coding music in the team chat."},
+            {"id": "n090", "content": "Music taste varies widely across the team."},
+        ],
+        relevant_ids=["n086", "n087"],
+    ),
+    RetrievalCase(
+        query="How does the user learn new technologies?",
+        facts=[
+            {"id": "n091", "content": "User builds small prototype projects to learn."},
+            {"id": "n092", "content": "User watches conference talks on YouTube."},
+            {"id": "n093", "content": "Learning new tech is part of the career plan."},
+            {"id": "n094", "content": "User set a learning budget of 5 hours per week."},
+            {"id": "n095", "content": "Team discusses new technologies at Friday demos."},
+        ],
+        relevant_ids=["n091", "n092", "n094"],
+    ),
+    RetrievalCase(
+        query="What does the user eat for lunch?",
+        facts=[
+            {"id": "n096", "content": "User usually brings a homemade salad to work."},
+            {"id": "n097", "content": "On Fridays the team orders sushi for lunch."},
+            {"id": "n098", "content": "Lunch break is from 1pm to 2pm."},
+            {"id": "n099", "content": "Lunch delivery services are popular at the office."},
+            {"id": "n100", "content": "User discussed lunch options with the new hire."},
+        ],
+        relevant_ids=["n096", "n097"],
+    ),
 ]
