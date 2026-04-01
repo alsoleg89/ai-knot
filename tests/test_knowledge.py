@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pathlib
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -375,3 +377,118 @@ class TestAsyncAPI:
         storage = YAMLStorage(base_dir=str(tmp_path))
         kb = KnowledgeBase(agent_id="async_agent", storage=storage)
         assert asyncio.run(kb.arecall("anything")) == ""
+
+
+class TestLLMFeatures:
+    """Tests for LLM-enhanced features: query expansion, decay_config."""
+
+    def test_recall_with_llm_expands_query(self, tmp_path: pathlib.Path) -> None:
+        """When llm_recall=True and provider set, query is expanded before search."""
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            provider=provider,
+            llm_recall=True,
+        )
+        kb.add("User uses PostgreSQL for data storage")
+
+        with patch(
+            "ai_knot.query_expander.call_with_retry",
+            return_value="database PostgreSQL SQL storage relational",
+        ):
+            result = kb.recall("what database?", top_k=1)
+
+        assert "PostgreSQL" in result
+
+    def test_recall_without_llm_skips_expansion(self, tmp_path: pathlib.Path) -> None:
+        """llm_recall=False (default) never calls the provider at recall time."""
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            provider=provider,
+            llm_recall=False,
+        )
+        kb.add("Some fact")
+        kb.recall("query")
+
+        # call_with_retry should never be invoked for query expansion
+        provider.call.assert_not_called()
+
+    def test_expand_query_no_provider_warns(
+        self, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """llm_recall=True without provider logs a warning and returns original query."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            llm_recall=True,
+        )
+        kb.add("Some fact about databases")
+
+        with caplog.at_level(logging.WARNING, logger="ai_knot.knowledge"):
+            kb.recall("what database?")
+
+        assert "llm_recall=True but no provider configured" in caplog.text
+
+    def test_decay_config_changes_retention(self, tmp_path: pathlib.Path) -> None:
+        """Custom decay_config produces different retention than default."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+
+        # KB with aggressive decay for semantic facts (higher exponent = faster decay)
+        kb_fast = KnowledgeBase(
+            agent_id="fast",
+            storage=storage,
+            decay_config={"semantic": 5.0},
+        )
+        kb_fast.add("Old semantic fact", type=MemoryType.SEMANTIC)
+
+        # KB with default decay
+        kb_default = KnowledgeBase(
+            agent_id="default",
+            storage=storage,
+        )
+        kb_default.add("Old semantic fact", type=MemoryType.SEMANTIC)
+
+        # Age the facts identically
+        old_time = datetime(2025, 1, 1, tzinfo=UTC)
+        for agent_id in ("fast", "default"):
+            facts = storage.load(agent_id)
+            facts[0].last_accessed = old_time
+            storage.save(agent_id, facts)
+
+        kb_fast.decay()
+        kb_default.decay()
+
+        fast_retention = storage.load("fast")[0].retention_score
+        default_retention = storage.load("default")[0].retention_score
+
+        # Aggressive decay (exponent=5.0) should produce lower retention than default (0.8)
+        assert fast_retention < default_retention
+
+    def test_decay_config_default_unchanged(self, tmp_path: pathlib.Path) -> None:
+        """KB without decay_config uses standard retention calculation."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="agent", storage=storage)
+        kb.add("Test fact", type=MemoryType.SEMANTIC)
+
+        # Age the fact
+        facts = storage.load("agent")
+        facts[0].last_accessed = datetime(2025, 1, 1, tzinfo=UTC)
+        storage.save("agent", facts)
+
+        kb.decay()
+
+        retention = storage.load("agent")[0].retention_score
+        # Should be between 0 and 1 (decayed but not zero)
+        assert 0.0 < retention < 1.0

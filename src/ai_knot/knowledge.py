@@ -360,7 +360,13 @@ class KnowledgeBase:
         Returns the original query unchanged when ``llm_recall=False``
         or no provider is configured.
         """
-        if not self._llm_recall or not self._default_provider:
+        if not self._llm_recall:
+            return query
+        if not self._default_provider:
+            logger.warning(
+                "llm_recall=True but no provider configured — "
+                "query expansion skipped, returning original query"
+            )
             return query
         if self._query_expander is None:
             provider = self._default_provider
