@@ -1220,4 +1220,213 @@ RETRIEVAL_DATASET: list[RetrievalCase] = [
         ],
         relevant_ids=["n096", "n097"],
     ),
+    # ================================================================
+    # Adversarial: very short queries (1-3 words) — prefix q
+    # ================================================================
+    RetrievalCase(
+        query="Python",
+        facts=[
+            {"id": "q001", "content": "User's primary language is Python 3.11."},
+            {"id": "q002", "content": "User enjoys cooking pasta on Saturdays."},
+            {"id": "q003", "content": "User's cat naps on the windowsill."},
+            {"id": "q004", "content": "User reads the news on an iPad."},
+            {"id": "q005", "content": "User's backpack is waterproof."},
+        ],
+        relevant_ids=["q001"],
+    ),
+    RetrievalCase(
+        query="dog name",
+        facts=[
+            {"id": "q006", "content": "User's dog is called Pushkin, a labrador."},
+            {"id": "q007", "content": "User walks the dog twice a day."},
+            {"id": "q008", "content": "User's neighbor also has a labrador."},
+            {"id": "q009", "content": "User bought dog food in bulk."},
+            {"id": "q010", "content": "User's vet is on the next street."},
+        ],
+        relevant_ids=["q006"],
+    ),
+    RetrievalCase(
+        query="salary",
+        facts=[
+            {"id": "q011", "content": "User's annual salary is above market median."},
+            {"id": "q012", "content": "User negotiated a raise last quarter."},
+            {"id": "q013", "content": "User tracks expenses in a spreadsheet."},
+            {"id": "q014", "content": "User's bonus is performance-based."},
+            {"id": "q015", "content": "User donates to charity monthly."},
+        ],
+        relevant_ids=["q011", "q012", "q014"],
+    ),
+    RetrievalCase(
+        query="IDE",
+        facts=[
+            {"id": "q016", "content": "User codes in VS Code with vim keybindings."},
+            {"id": "q017", "content": "User tried IntelliJ but returned to VS Code."},
+            {"id": "q018", "content": "User's monitor is ultrawide."},
+            {"id": "q019", "content": "User prefers dark themes in all editors."},
+            {"id": "q020", "content": "User uses split panes when reviewing code."},
+        ],
+        relevant_ids=["q016", "q017"],
+    ),
+    RetrievalCase(
+        query="vacation",
+        facts=[
+            {"id": "q021", "content": "User took vacation in Tbilisi last August."},
+            {"id": "q022", "content": "User plans a ski trip for the winter."},
+            {"id": "q023", "content": "User's passport expires next year."},
+            {"id": "q024", "content": "User prefers direct flights."},
+            {"id": "q025", "content": "User's suitcase is carry-on size."},
+        ],
+        relevant_ids=["q021", "q022"],
+    ),
+    RetrievalCase(
+        query="team",
+        facts=[
+            {"id": "q026", "content": "User's team has 6 backend engineers."},
+            {"id": "q027", "content": "Team standup is at 10am daily."},
+            {"id": "q028", "content": "Team uses Slack for daily communication."},
+            {"id": "q029", "content": "User's desk is near the window."},
+            {"id": "q030", "content": "User's calendar is always color-coded."},
+        ],
+        relevant_ids=["q026", "q027", "q028"],
+    ),
+    RetrievalCase(
+        query="Docker",
+        facts=[
+            {"id": "q031", "content": "All services run in Docker containers."},
+            {"id": "q032", "content": "Docker Compose is used for local development."},
+            {"id": "q033", "content": "User's bike tire went flat yesterday."},
+            {"id": "q034", "content": "User prefers vinyl records over streaming."},
+            {"id": "q035", "content": "User's plant needs more sunlight."},
+        ],
+        relevant_ids=["q031", "q032"],
+    ),
+    RetrievalCase(
+        query="meetings",
+        facts=[
+            {"id": "q036", "content": "User keeps meetings under 30 minutes."},
+            {"id": "q037", "content": "User declines meetings without an agenda."},
+            {"id": "q038", "content": "User batches meetings on two days a week."},
+            {"id": "q039", "content": "User's headset is Jabra Evolve2."},
+            {"id": "q040", "content": "User's screen background is a forest."},
+        ],
+        relevant_ids=["q036", "q037", "q038"],
+    ),
+    # ================================================================
+    # Adversarial: very long queries (20+ words) — prefix q continued
+    # ================================================================
+    RetrievalCase(
+        query=(
+            "I remember the user mentioned something about how they"
+            " manage configuration and environment variables in their"
+            " production deployment pipeline"
+        ),
+        facts=[
+            {"id": "q041", "content": "Env vars are injected via Vault at deploy time."},
+            {"id": "q042", "content": "Config files live in a separate Git repo."},
+            {"id": "q043", "content": "User prefers decaf coffee in the evening."},
+            {"id": "q044", "content": "User's lunch is usually leftovers."},
+            {"id": "q045", "content": "User keeps an umbrella at the office."},
+            {"id": "q046", "content": "Pipeline deploys to staging first automatically."},
+            {"id": "q047", "content": "User's phone wallpaper is a sunset."},
+        ],
+        relevant_ids=["q041", "q042", "q046"],
+    ),
+    RetrievalCase(
+        query=(
+            "Can you tell me everything the user has said about"
+            " their approach to writing automated tests, including"
+            " unit tests, integration tests, and end-to-end tests?"
+        ),
+        facts=[
+            {"id": "q048", "content": "User writes pytest unit tests before every PR."},
+            {"id": "q049", "content": "Integration tests run against a local Postgres."},
+            {"id": "q050", "content": "E2E tests use Playwright for browser checks."},
+            {"id": "q051", "content": "User prefers almond milk in smoothies."},
+            {"id": "q052", "content": "User's running shoes are Nike Pegasus."},
+            {"id": "q053", "content": "Test coverage must exceed 80% for merge."},
+            {"id": "q054", "content": "User does not like cilantro."},
+        ],
+        relevant_ids=["q048", "q049", "q050", "q053"],
+    ),
+    RetrievalCase(
+        query=(
+            "What was the situation when the user's team experienced"
+            " that major production outage that affected customers"
+            " and required an emergency fix late at night?"
+        ),
+        facts=[
+            {"id": "q055", "content": "P1 outage on March 5th lasted three hours."},
+            {"id": "q056", "content": "Root cause was a failed database migration."},
+            {"id": "q057", "content": "User rolled back the migration at 2am."},
+            {"id": "q058", "content": "Post-mortem led to mandatory rollback scripts."},
+            {"id": "q059", "content": "User's favorite snack is dried mango."},
+            {"id": "q060", "content": "User subscribes to a magazine."},
+        ],
+        relevant_ids=["q055", "q056", "q057", "q058"],
+    ),
+    RetrievalCase(
+        query=(
+            "I want to know about the user's opinions and preferences"
+            " regarding the use of type annotations and static type"
+            " checking in Python codebases"
+        ),
+        facts=[
+            {"id": "q061", "content": "User enables mypy strict mode on all projects."},
+            {"id": "q062", "content": "Type hints are required on every function."},
+            {"id": "q063", "content": "User prefers Protocol over ABC for interfaces."},
+            {"id": "q064", "content": "User's tea brand is Ahmad."},
+            {"id": "q065", "content": "User walks to the bakery on Sundays."},
+            {"id": "q066", "content": "User prefers explicit types over type inference."},
+        ],
+        relevant_ids=["q061", "q062", "q063", "q066"],
+    ),
+    RetrievalCase(
+        query=(
+            "How does the user typically go about debugging a"
+            " difficult issue in production that is hard to"
+            " reproduce locally in the development environment?"
+        ),
+        facts=[
+            {"id": "q067", "content": "User checks Sentry traces for the error context."},
+            {"id": "q068", "content": "User reproduces bugs using production log replay."},
+            {"id": "q069", "content": "User adds temporary debug logging to staging."},
+            {"id": "q070", "content": "User's favorite park bench is under an oak."},
+            {"id": "q071", "content": "User prefers wired internet over WiFi."},
+            {"id": "q072", "content": "User pairs with a colleague for tricky bugs."},
+        ],
+        relevant_ids=["q067", "q068", "q069", "q072"],
+    ),
+    RetrievalCase(
+        query=(
+            "What are all the things the user has mentioned about"
+            " how their team communicates, collaborates, and shares"
+            " information on a daily and weekly basis?"
+        ),
+        facts=[
+            {"id": "q073", "content": "Daily standup is async in a Slack thread."},
+            {"id": "q074", "content": "Weekly sync is a 30-minute video call."},
+            {"id": "q075", "content": "Design docs are shared via Google Docs."},
+            {"id": "q076", "content": "User prefers text over voice messages."},
+            {"id": "q077", "content": "User's desk plant is a fern."},
+            {"id": "q078", "content": "Decisions are recorded in an ADR log."},
+        ],
+        relevant_ids=["q073", "q074", "q075", "q076", "q078"],
+    ),
+    RetrievalCase(
+        query=(
+            "Tell me about the user's experience, thoughts, and"
+            " current usage of various cloud services including"
+            " compute, storage, networking, and managed databases"
+        ),
+        facts=[
+            {"id": "q079", "content": "EC2 instances run behind an ALB load balancer."},
+            {"id": "q080", "content": "S3 stores all media uploads and backups."},
+            {"id": "q081", "content": "RDS manages the PostgreSQL database."},
+            {"id": "q082", "content": "VPC peering connects staging and production."},
+            {"id": "q083", "content": "User's umbrella is compact and black."},
+            {"id": "q084", "content": "User's favorite museum is Tretyakov Gallery."},
+            {"id": "q085", "content": "CloudFront CDN serves static assets."},
+        ],
+        relevant_ids=["q079", "q080", "q081", "q082", "q085"],
+    ),
 ]
