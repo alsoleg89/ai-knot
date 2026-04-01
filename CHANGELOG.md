@@ -18,6 +18,24 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.0] — 2026-04-01
+
+### Added
+
+- **LLM auto-tagging during extraction** — `learn()` instructs the LLM to
+  generate 1-3 domain tags per fact. Zero extra LLM calls (piggybacks on
+  existing extraction call). BM25F tag weighting activates automatically.
+
+- **Configurable decay exponents** — `KnowledgeBase(decay_config={...})`
+  allows per-type decay customization. `apply_decay()` and `calculate_retention()`
+  accept optional `type_exponents` parameter override.
+
+- **LLM query expansion at recall** (opt-in) — `KnowledgeBase(llm_recall=True)`
+  expands queries with LLM-generated synonyms before BM25 search. LRU cache
+  (128 entries) prevents repeated calls. Disabled by default.
+
+---
+
 ## [0.6.0] — 2026-04-01
 
 ### Added
