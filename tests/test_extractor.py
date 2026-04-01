@@ -8,9 +8,24 @@ from ai_knot.extractor import Extractor, deduplicate_facts
 from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 MOCK_LLM_RESPONSE = [
-    {"content": "User deploys in Docker", "type": "semantic", "importance": 0.8},
-    {"content": "User dislikes async code", "type": "procedural", "importance": 0.85},
-    {"content": "User works at Sber", "type": "semantic", "importance": 0.95},
+    {
+        "content": "User deploys in Docker",
+        "type": "semantic",
+        "importance": 0.8,
+        "tags": ["docker", "devops"],
+    },
+    {
+        "content": "User dislikes async code",
+        "type": "procedural",
+        "importance": 0.85,
+        "tags": ["async", "preferences"],
+    },
+    {
+        "content": "User works at Sber",
+        "type": "semantic",
+        "importance": 0.95,
+        "tags": ["employer", "company"],
+    },
 ]
 
 
@@ -26,7 +41,22 @@ class TestExtractor:
         assert len(facts) == 3
         assert all(isinstance(f, Fact) for f in facts)
         assert facts[0].content == "User deploys in Docker"
+        assert facts[0].tags == ["docker", "devops"]
         assert facts[2].importance == 0.95
+        assert facts[2].tags == ["employer", "company"]
+
+    def test_extract_tags_graceful_degradation(self, sample_turns: list[ConversationTurn]) -> None:
+        """Tags are empty when LLM omits them (backward compat)."""
+        extractor = Extractor(api_key="fake-key", provider="openai")
+        response_without_tags = [
+            {"content": "User prefers pytest", "type": "procedural", "importance": 0.8},
+        ]
+
+        with patch.object(extractor, "_call_llm", return_value=response_without_tags):
+            facts = extractor.extract(sample_turns)
+
+        assert len(facts) == 1
+        assert facts[0].tags == []
 
     def test_extract_handles_empty_response(self, sample_turns: list[ConversationTurn]) -> None:
         extractor = Extractor(api_key="fake-key", provider="openai")

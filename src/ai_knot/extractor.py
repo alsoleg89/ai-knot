@@ -28,11 +28,15 @@ Rules:
 - Classify each fact as: semantic (about user/world), procedural (preferences/how-to),
   episodic (specific events).
 - Rate importance from 0.0 to 1.0.
+- Include 1-3 short domain tags per fact (lowercase, single words).
 
 Return a JSON array. Example:
 [
-  {"content": "User works at Sber", "type": "semantic", "importance": 0.9},
-  {"content": "User prefers Python over Java", "type": "procedural", "importance": 0.85}
+  {"content": "User works at Sber", "type": "semantic",
+   "importance": 0.9, "tags": ["employer", "company"]},
+  {"content": "User prefers Python over Java",
+   "type": "procedural", "importance": 0.85,
+   "tags": ["python", "preferences"]}
 ]
 
 If no meaningful facts exist, return an empty array: []
@@ -268,8 +272,15 @@ class Extractor:
         # Clamp importance to valid range regardless of what LLM returned.
         importance = max(0.0, min(1.0, float(entry.get("importance", 0.8))))
 
+        # Parse tags from LLM response (graceful degradation if missing).
+        raw_tags = entry.get("tags", [])
+        tags: list[str] = []
+        if isinstance(raw_tags, list):
+            tags = [str(t).lower().strip() for t in raw_tags if isinstance(t, str)][:5]
+
         return Fact(
             content=str(entry.get("content", "")),
             type=memory_type,
             importance=importance,
+            tags=tags,
         )

@@ -11,7 +11,8 @@ from typing import Any
 
 from ai_knot.extractor import Extractor, resolve_against_existing
 from ai_knot.forgetting import apply_decay
-from ai_knot.providers import LLMProvider
+from ai_knot.providers import LLMProvider, create_provider
+from ai_knot.query_expander import LLMQueryExpander
 from ai_knot.retriever import TFIDFRetriever
 from ai_knot.storage.base import SnapshotCapable, StorageBackend
 from ai_knot.storage.yaml_storage import YAMLStorage
@@ -59,6 +60,8 @@ class KnowledgeBase:
         provider: str | LLMProvider | None = None,
         api_key: str | None = None,
         model: str | None = None,
+        decay_config: dict[str, float] | None = None,
+        llm_recall: bool = False,
         **provider_kwargs: str,
     ) -> None:
         self._agent_id = agent_id
@@ -67,6 +70,9 @@ class KnowledgeBase:
         self._default_provider = provider
         self._default_api_key = api_key
         self._default_model = model
+        self._decay_config = decay_config
+        self._llm_recall = llm_recall
+        self._query_expander: LLMQueryExpander | None = None
         self._default_provider_kwargs: dict[str, str] = dict(provider_kwargs)
 
     def add(
@@ -348,6 +354,23 @@ class KnowledgeBase:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.recall_facts(query, top_k=top_k))
 
+    def _expand_query(self, query: str) -> str:
+        """Optionally expand a query using the configured LLM provider.
+
+        Returns the original query unchanged when ``llm_recall=False``
+        or no provider is configured.
+        """
+        if not self._llm_recall or not self._default_provider:
+            return query
+        if self._query_expander is None:
+            provider = self._default_provider
+            if isinstance(provider, str):
+                provider = create_provider(
+                    provider, self._default_api_key, **self._default_provider_kwargs
+                )
+            self._query_expander = LLMQueryExpander(provider, self._default_model)
+        return self._query_expander.expand(query)
+
     def recall(self, query: str, *, top_k: int = 5) -> str:
         """Retrieve relevant facts as a formatted string for prompt injection.
 
@@ -363,9 +386,10 @@ class KnowledgeBase:
             return ""
 
         # Apply decay before searching.
-        facts = apply_decay(facts)
+        facts = apply_decay(facts, type_exponents=self._decay_config)
 
-        pairs = self._retriever.search(query, facts, top_k=top_k)
+        expanded = self._expand_query(query)
+        pairs = self._retriever.search(expanded, facts, top_k=top_k)
         if not pairs:
             return ""
 
@@ -413,8 +437,9 @@ class KnowledgeBase:
         if not facts:
             return []
 
-        facts = apply_decay(facts)
-        pairs = self._retriever.search(query, facts, top_k=top_k)
+        facts = apply_decay(facts, type_exponents=self._decay_config)
+        expanded = self._expand_query(query)
+        pairs = self._retriever.search(expanded, facts, top_k=top_k)
         if not pairs:
             return []
 
@@ -450,8 +475,9 @@ class KnowledgeBase:
         if not facts:
             return []
 
-        facts = apply_decay(facts)
-        pairs = self._retriever.search(query, facts, top_k=top_k)
+        facts = apply_decay(facts, type_exponents=self._decay_config)
+        expanded = self._expand_query(query)
+        pairs = self._retriever.search(expanded, facts, top_k=top_k)
         if not pairs:
             return []
 
@@ -504,7 +530,7 @@ class KnowledgeBase:
         facts = self._storage.load(self._agent_id)
         if not facts:
             return
-        apply_decay(facts)
+        apply_decay(facts, type_exponents=self._decay_config)
         self._storage.save(self._agent_id, facts)
         logger.debug("Applied decay to %d facts for agent '%s'", len(facts), self._agent_id)
 

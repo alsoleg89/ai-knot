@@ -86,7 +86,12 @@ def calculate_stability(
     return base * count_factor * spacing_factor
 
 
-def calculate_retention(fact: Fact, *, now: datetime | None = None) -> float:
+def calculate_retention(
+    fact: Fact,
+    *,
+    now: datetime | None = None,
+    type_exponents: dict[str, float] | None = None,
+) -> float:
     """Compute current retention score for a fact.
 
     Uses a power-law forgetting curve (Wixted & Ebbesen, 1997):
@@ -97,6 +102,8 @@ def calculate_retention(fact: Fact, *, now: datetime | None = None) -> float:
     Args:
         fact: The fact to evaluate.
         now: Current time (defaults to UTC now).
+        type_exponents: Optional per-type decay exponent overrides.
+            When ``None``, uses the built-in defaults.
 
     Returns:
         Retention score between 0.0 and 1.0.
@@ -113,11 +120,17 @@ def calculate_retention(fact: Fact, *, now: datetime | None = None) -> float:
     if stability <= 0:
         return 0.0
 
-    decay_exp = _TYPE_DECAY_EXPONENT.get(fact.type.value, _DEFAULT_DECAY_EXPONENT)
+    exponents = type_exponents or _TYPE_DECAY_EXPONENT
+    decay_exp = exponents.get(fact.type.value, _DEFAULT_DECAY_EXPONENT)
     return float((1.0 + time_hours / (_POWER_LAW_FACTOR * stability)) ** (-decay_exp))
 
 
-def apply_decay(facts: list[Fact], *, now: datetime | None = None) -> list[Fact]:
+def apply_decay(
+    facts: list[Fact],
+    *,
+    now: datetime | None = None,
+    type_exponents: dict[str, float] | None = None,
+) -> list[Fact]:
     """Update retention_score on all facts using the forgetting curve.
 
     This is a bulk operation — call it periodically or before recall.
@@ -125,11 +138,13 @@ def apply_decay(facts: list[Fact], *, now: datetime | None = None) -> list[Fact]
     Args:
         facts: Facts to update (modified in place).
         now: Current time (defaults to UTC now).
+        type_exponents: Optional per-type decay exponent overrides.
+            When ``None``, uses the built-in defaults.
 
     Returns:
         The same list of facts with updated retention_score values.
     """
     now = now or datetime.now(UTC)
     for fact in facts:
-        fact.retention_score = calculate_retention(fact, now=now)
+        fact.retention_score = calculate_retention(fact, now=now, type_exponents=type_exponents)
     return facts

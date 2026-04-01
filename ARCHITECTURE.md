@@ -113,19 +113,48 @@ CREATE TABLE facts (
 
 ## Forgetting curve (`ai_knot.forgetting`)
 
-Power-law decay (Wixted & Ebbesen, 1997):
+Power-law decay (Wixted & Ebbesen, 1997) with type-aware exponents (Tulving 1972):
 
 ```
-retention(t) = (1 + t / (9 × stability))^(-1)
+retention(t) = (1 + t / (9 × stability))^(-decay_exp)
 
 stability = 336h × importance × (1 + ln(1 + access_count))
+decay_exp = { semantic: 0.8, procedural: 1.0, episodic: 1.3 }
 ```
 
 - `t` = hours since `last_accessed`
 - Base stability = 336 h (2 weeks) for `importance=1.0, access_count=0`
+- Decay exponent varies by memory type: semantic facts decay slower, episodic faster
 - Power-law has heavier tail than exponential — important facts persist for months
+- Exponents are configurable via `KnowledgeBase(decay_config={"semantic": 0.5})`
 - Applied via `apply_decay(facts)` **before** every retrieval in `KnowledgeBase.recall()`
 - After retrieval, `access_count` is incremented and `last_accessed` is updated → reinforcement
+
+---
+
+## LLM-enhanced features
+
+ai-knot follows a **base + enhanced** pattern: core features work without an LLM,
+but when a provider is configured, additional capabilities activate automatically.
+
+| Feature | Base (no LLM) | Enhanced (with LLM) |
+|---------|---------------|---------------------|
+| Tags | User-supplied via `add(tags=[...])` | Auto-generated during `learn()` |
+| Decay config | Hardcoded defaults | `decay_config={}` (no LLM needed) |
+| Query expansion | Raw query → BM25 | `llm_recall=True` expands with synonyms |
+
+### Auto-tagging
+
+The extraction prompt includes `"tags"` in the JSON schema. The LLM generates
+1-3 domain tags per fact during `learn()`. Tags activate BM25F field weighting
+(`_W_TAGS=2.0`). No extra LLM calls — piggybacks on the existing extraction call.
+
+### Query expansion (`ai_knot.query_expander`)
+
+`LLMQueryExpander.expand(query)` adds 2-4 synonyms before BM25 search.
+Opt-in via `KnowledgeBase(llm_recall=True)`. LRU cache (128 entries) avoids
+repeated calls. Bridges vocabulary gaps (e.g. "database" → "database PostgreSQL
+SQL storage").
 
 ---
 

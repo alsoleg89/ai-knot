@@ -130,3 +130,87 @@ The downside is write amplification: saving 1 changed fact writes all N facts.
 At the scale ai-knot targets (hundreds, not millions of facts per agent) this
 is not a bottleneck. If it becomes one, the storage backend can implement
 internal diffing transparently — the protocol doesn't need to change.
+
+---
+
+## 6. Type-aware decay exponents instead of uniform forgetting
+
+v0.5 used a single decay exponent (`-1`) for all memory types. This means
+semantic facts ("user prefers Python") and episodic facts ("discussed deployment
+on Monday") forgot at the same rate — which doesn't match how memory works.
+
+Tulving (1972) distinguished episodic and semantic memory as fundamentally
+different systems. FSRS (Ye 2022-2024) showed adaptive decay scheduling
+improves retention prediction. v0.6 applies per-type exponents:
+
+```
+decay_exp = { semantic: 0.8, procedural: 1.0, episodic: 1.3 }
+retention(t) = (1 + t / (9 × stability))^(-decay_exp)
+```
+
+Semantic facts (core preferences, tool choices) decay 20% slower.
+Episodic facts (events, meetings) decay 30% faster. This means after 30 days,
+a semantic fact retains ~63% vs ~47% for episodic — matching the intuition
+that "user prefers pytest" should outlast "discussed CI on Tuesday".
+
+---
+
+## 7. Per-agent trust instead of flat provenance discount
+
+v0.5 applied a flat 0.8× discount to all facts from other agents. This treats
+every agent as equally (un)trustworthy — a monitoring agent's alerts get the
+same discount as an untested third-party agent's suggestions.
+
+v0.6 adds a **per-agent trust matrix** (Marsh 1994) to `SharedMemoryPool`:
+
+```python
+pool.update_trust("monitoring-agent", +0.1)   # reliable source
+pool.update_trust("experimental-bot", -0.15)  # often wrong
+```
+
+Trust scores are clamped to [0.1, 1.0] and applied during `recall()` as
+score multipliers. New agents start at the default 0.8. This lets the system
+learn which agents produce reliable knowledge over time.
+
+---
+
+## 8. Stemmed Jaccard instead of raw token overlap
+
+The `extractor._jaccard_similarity()` function originally used `str.split()`
+for tokenization, while the retriever used the shared `tokenize()` (with
+stemming). This created inconsistencies: "caching" and "cached" were different
+tokens in the extractor but the same stem (`cach`) in the retriever.
+
+v0.6 aligns both to use `tokenize()` (Broder 1997). This ensures deduplication
+and retrieval agree on what counts as a "matching" term.
+
+---
+
+## 9. LLM auto-tagging instead of manual tag entry
+
+BM25F gives tags 2× weight (`_W_TAGS=2.0`), but `Fact.tags` was always empty
+after `learn()`. Users had to manually supply tags via `add(tags=[...])` — most
+didn't bother. The entire BM25F tags field was dead weight.
+
+v0.6 adds `"tags"` to the extraction system prompt. The LLM generates 1-3
+domain tags per fact during the same call it already makes for content, type,
+and importance. **Zero extra LLM calls.** When the LLM omits tags (older models,
+edge cases), `_parse_fact()` falls back to an empty list.
+
+This follows the **base + enhanced** pattern: `add()` accepts user-supplied tags,
+`learn()` generates them automatically.
+
+---
+
+## 10. Opt-in LLM query expansion instead of multilingual stemmer
+
+The English stemmer in `tokenizer.py` doesn't help for Russian, Chinese, or
+other languages. Instead of building a multilingual stemmer (which would add
+dependencies and complexity), v0.6 offers LLM-based query expansion.
+
+`KnowledgeBase(llm_recall=True)` expands queries with LLM-generated synonyms
+before BM25 search. This covers vocabulary gaps across any language without
+touching the tokenizer. Results are cached (LRU, 128 entries).
+
+The feature is opt-in because it adds an LLM round-trip to every `recall()`.
+Default behavior (`llm_recall=False`) is unchanged — zero latency added.
