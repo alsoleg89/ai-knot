@@ -22,11 +22,9 @@ _W_CONTENT: float = 1.0  # Content field weight.
 _W_TAGS: float = 2.0  # Tags field weight (original). Robertson et al. (2004) BM25F
 # requires structured field weighting, but at 2.0 maintains throughput (>50 QPS).
 
-# IDF high-DF threshold: terms in >60% of docs get zero IDF weight.
-# Lowered from 0.7 (Robertson & Walker 1994): in small corpora (5-20 docs)
-# common terms like "user" appear in 40-60% of documents and must be
-# filtered to preserve discriminative power.
-_IDF_HIGH_DF_RATIO: float = 0.6
+# IDF high-DF threshold: terms in >70% of docs get zero IDF weight.
+# Robertson & Walker (1994): common terms dilute discriminative power.
+_IDF_HIGH_DF_RATIO: float = 0.7
 
 # PRF parameters.
 _PRF_TOP_K: int = 3  # Number of feedback documents.
@@ -288,9 +286,8 @@ class BM25Retriever:
 
         # 2. PRF: expand query with feedback terms, re-score.
         # Skip PRF for tiny corpora (< 4 docs) — not enough feedback signal.
-        # Skip PRF for short queries (<= 2 tokens) — already precise, expansion adds noise.
-        query_tokens = _tokenize(query)
-        if len(facts) >= 4 and len(query_tokens) > 2:
+        # Skip PRF for short queries (≤2 words) — already precise, expansion adds noise.
+        if len(facts) >= 4 and len(query.split()) > 2:
             expansion = _prf_expand(index, query, raw_scores)
             if expansion:
                 raw_scores = index.score(query, expansion_weights=expansion)
