@@ -18,6 +18,26 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.0] — 2026-04-02
+
+### Added
+- **Cyrillic stemmer** — zero-dependency Snowball-lite Russian stemmer in `tokenizer.py`.
+  Auto-detects script via Unicode block check; English rules unchanged.
+- **Weighted LLM expansion** — expansion tokens now use `expansion_weights` (0.4 weight)
+  instead of replacing the query. Merged with PRF expansion for stable recall.
+- **Multilingual expansion prompt** — `_EXPAND_PROMPT` now instructs the LLM to keep
+  the same language as the input query, with a Russian example.
+- **`now` parameter** on `recall()`, `recall_facts()`, `recall_facts_with_scores()`,
+  `arecall()`, `arecall_facts()`, and `decay()` for clock injection (DDD pattern).
+- **Configurable RRF weights** via `KnowledgeBase(rrf_weights=...)` and
+  `BM25Retriever(rrf_weights=...)`. Default remains `(5.0, 1.0, 1.0, 1.0)`.
+
+### Changed
+- `_expand_query()` returns `(query, expansion_weights)` tuple instead of flat string.
+- Access tracking variables renamed to `access_time` to avoid shadowing `now` parameter.
+
+---
+
 ## [0.7.0] — 2026-04-01
 
 ### Added

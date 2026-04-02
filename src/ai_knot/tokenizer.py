@@ -8,17 +8,231 @@ import re
 _CAMEL_RE = re.compile(r"([a-z])([A-Z])")
 _TOKEN_RE = re.compile(r"[^\W_]+")
 
+# Russian vowels (used by Snowball-lite stemmer for region detection).
+_RU_VOWELS = frozenset("аеёиоуыэюя")
 
-def _stem(token: str) -> str:
-    """Lightweight suffix stemmer (Porter 1980 step-1/2 subset).
 
-    Handles common English suffixes without any hardcoded word lists.
-    Rules are applied in order; first match wins.  All inflectional
-    variants of a word must converge to the same stem (Porter invariant).
+def _is_cyrillic(token: str) -> bool:
+    """Check if token contains Cyrillic characters."""
+    return any("\u0400" <= ch <= "\u04ff" for ch in token)
+
+
+def _stem_ru(token: str) -> str:
+    """Lightweight Russian suffix stemmer (Snowball-lite, zero-dep).
+
+    Implements a simplified version of the Snowball Russian stemming
+    algorithm (Krovetz-style suffix stripping).  Covers the most
+    frequent inflectional suffixes to normalise morphological variants
+    to a common stem.  Rules are ordered longest-suffix-first within
+    each group to avoid partial matches.
     """
     if len(token) <= 3:
         return token
 
+    # Normalize ё → е for consistent matching.
+    token = token.replace("ё", "е")
+
+    # Find R1 region (after first vowel-consonant pair).
+    # Snowball Russian stems only within R1 to avoid over-stemming.
+    r1 = len(token)
+    for i in range(1, len(token)):
+        if token[i - 1] in _RU_VOWELS and token[i] not in _RU_VOWELS:
+            r1 = i + 1
+            break
+
+    def _try_remove(suffixes: tuple[str, ...]) -> str | None:
+        """Try to remove a suffix that falls within R1."""
+        for suf in suffixes:
+            if token.endswith(suf) and len(token) - len(suf) >= r1:
+                return token[: -len(suf)]
+        return None
+
+    # Step 1: Perfective gerund (-вшись, -вши, -ав, -ив, etc.)
+    result = _try_remove(("ившись", "ывшись", "вшись", "авши", "ивши", "ывши", "вши", "ав", "ив"))
+    if result is not None:
+        return result if len(result) > 2 else token
+
+    # Step 2: Reflexive (-ся, -сь)
+    working = token
+    for suf in ("ся", "сь"):
+        if working.endswith(suf) and len(working) - len(suf) >= r1:
+            working = working[: -len(suf)]
+            break
+
+    # Step 3: Adjectival endings (adjective + optional participle suffix).
+    _adj_suffixes = (
+        "ими",
+        "ыми",
+        "его",
+        "ого",
+        "ему",
+        "ому",
+        "ее",
+        "ие",
+        "ые",
+        "ое",
+        "ей",
+        "ий",
+        "ый",
+        "ой",
+        "ем",
+        "им",
+        "ым",
+        "ом",
+        "их",
+        "ых",
+        "ую",
+        "юю",
+        "ая",
+        "яя",
+        "ею",
+        "ию",
+    )
+    _part_suffixes = (
+        "ивш",
+        "ывш",
+        "ующ",
+        "ем",
+        "нн",
+        "вш",
+        "ющ",
+        "щ",
+    )
+
+    adj_removed = False
+    for adj in _adj_suffixes:
+        if working.endswith(adj) and len(working) - len(adj) >= r1:
+            candidate = working[: -len(adj)]
+            # Try participle suffix before adjective ending.
+            for part in _part_suffixes:
+                if candidate.endswith(part) and len(candidate) - len(part) >= r1:
+                    candidate = candidate[: -len(part)]
+                    break
+            working = candidate
+            adj_removed = True
+            break
+
+    if not adj_removed:
+        # Step 4: Verb endings.
+        _verb_suffixes = (
+            "ейте",
+            "уйте",
+            "ите",
+            "ать",
+            "ять",
+            "ить",
+            "ует",
+            "уют",
+            "ает",
+            "ают",
+            "ешь",
+            "ишь",
+            "ете",
+            "яет",
+            "ала",
+            "яла",
+            "ила",
+            "али",
+            "яли",
+            "или",
+            "ало",
+            "яло",
+            "ило",
+            "ана",
+            "ано",
+            "ей",
+            "уй",
+            "ал",
+            "ял",
+            "ил",
+            "ет",
+            "ит",
+            "ат",
+            "ят",
+            "ен",
+            "на",
+            "ла",
+            "ли",
+            "ло",
+            "ть",
+            "ут",
+            "ют",
+            "ны",
+            "ну",
+        )
+        verb_removed = False
+        for suf in _verb_suffixes:
+            if working.endswith(suf) and len(working) - len(suf) >= r1:
+                working = working[: -len(suf)]
+                verb_removed = True
+                break
+
+        if not verb_removed:
+            # Step 5: Noun endings.
+            _noun_suffixes = (
+                "ениям",
+                "ениях",
+                "ений",
+                "ения",
+                "ение",
+                "ями",
+                "ами",
+                "ией",
+                "иям",
+                "иях",
+                "ов",
+                "ев",
+                "ей",
+                "ий",
+                "ия",
+                "ие",
+                "ью",
+                "ом",
+                "ем",
+                "ах",
+                "ям",
+                "ию",
+                "ии",
+                "ые",
+                "ых",
+                "ой",
+                "ам",
+                "а",
+                "е",
+                "и",
+                "о",
+                "у",
+                "ы",
+                "ь",
+                "я",
+                "ю",
+            )
+            for suf in _noun_suffixes:
+                if working.endswith(suf) and len(working) - len(suf) >= r1:
+                    working = working[: -len(suf)]
+                    break
+
+    # Step 6: Superlative (-ейш, -ейше).
+    for suf in ("ейше", "ейш"):
+        if working.endswith(suf) and len(working) - len(suf) >= r1:
+            working = working[: -len(suf)]
+            break
+
+    # Step 7: Derivational (-ость, -ост).
+    for suf in ("ость", "ост"):
+        if working.endswith(suf) and len(working) - len(suf) >= r1:
+            working = working[: -len(suf)]
+            break
+
+    # Step 8: Clean up trailing double consonant (нн → н).
+    if len(working) >= 2 and working[-1] == working[-2] and working[-1] == "н":
+        working = working[:-1]
+
+    return working if len(working) > 2 else token
+
+
+def _stem_en(token: str) -> str:
+    """Lightweight English suffix stemmer (Porter 1980 subset)."""
     # -ment → remove (deployment → deploy)
     if token.endswith("ment") and len(token) > 6:
         return token[:-4]
@@ -98,6 +312,15 @@ def _stem(token: str) -> str:
         return token[:-1]
 
     return token
+
+
+def _stem(token: str) -> str:
+    """Dispatch stemming by detected script."""
+    if len(token) <= 3:
+        return token
+    if _is_cyrillic(token):
+        return _stem_ru(token)
+    return _stem_en(token)
 
 
 def tokenize(text: str) -> list[str]:

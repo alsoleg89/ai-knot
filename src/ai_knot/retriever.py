@@ -27,7 +27,8 @@ _IDF_HIGH_DF_RATIO: float = 0.7
 # PRF parameters.
 _PRF_TOP_K: int = 3  # Number of feedback documents.
 _PRF_EXPANSION_TERMS: int = 5  # Max expansion terms.
-_PRF_ALPHA: float = 0.5  # Expansion term weight discount.
+_PRF_ALPHA: float = 0.5  # PRF expansion term weight (statistical fallback).
+# When LLM expansion is active, PRF is skipped entirely (see search()).
 
 # RRF parameter.
 _RRF_K: int = 60  # Rank smoothing constant (Cormack et al., 2009).
@@ -258,12 +259,20 @@ class BM25Retriever:
          and recency into a single ranking.
     """
 
+    def __init__(
+        self,
+        *,
+        rrf_weights: tuple[float, ...] = (5.0, 1.0, 1.0, 1.0),
+    ) -> None:
+        self._rrf_weights = rrf_weights
+
     def search(
         self,
         query: str,
         facts: list[Fact],
         *,
         top_k: int = 5,
+        expansion_weights: dict[str, float] | None = None,
     ) -> list[tuple[Fact, float]]:
         """Find the most relevant facts for a query.
 
@@ -271,6 +280,8 @@ class BM25Retriever:
             query: The search query string.
             facts: Facts to search through.
             top_k: Maximum number of results to return.
+            expansion_weights: Optional LLM expansion terms with weights.
+                Merged with PRF expansion; original query terms keep weight 1.0.
 
         Returns:
             List of (Fact, score) pairs sorted by relevance (most relevant first).
@@ -282,12 +293,15 @@ class BM25Retriever:
         index = InvertedIndex(facts)
         raw_scores = index.score(query)
 
-        # 2. PRF: expand query with feedback terms, re-score.
-        # Skip PRF for tiny corpora (< 4 docs) — not enough feedback signal.
-        if len(facts) >= 4:
-            expansion = _prf_expand(index, query, raw_scores)
-            if expansion:
-                raw_scores = index.score(query, expansion_weights=expansion)
+        # 2. Query expansion: LLM (explicit) OR PRF (statistical fallback).
+        # When LLM provides semantic expansion, skip PRF to avoid
+        # reinforcing initial retrieval bias (Xu & Croft 1996).
+        if expansion_weights:
+            raw_scores = index.score(query, expansion_weights=expansion_weights)
+        elif len(facts) >= 4:
+            prf = _prf_expand(index, query, raw_scores)
+            if prf:
+                raw_scores = index.score(query, expansion_weights=prf)
 
         # 3. Build four ranked lists for RRF.
         # Use BM25 score as secondary sort key to break ties deterministically.
@@ -321,11 +335,10 @@ class BM25Retriever:
             reverse=True,
         )
 
-        # 4. RRF fusion — BM25 gets 5x weight (≈62% influence, matching
-        # the original 0.6 linear weight for content relevance).
+        # 4. RRF fusion — default weights give BM25 5x weight (≈62% influence).
         fused = _rrf_fuse(
             [bm25_ranked, importance_ranked, retention_ranked, recency_ranked],
-            weights=[5.0, 1.0, 1.0, 1.0],
+            weights=list(self._rrf_weights),
         )
 
         results: list[tuple[Fact, float]] = []

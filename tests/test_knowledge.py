@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pathlib
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -375,3 +377,410 @@ class TestAsyncAPI:
         storage = YAMLStorage(base_dir=str(tmp_path))
         kb = KnowledgeBase(agent_id="async_agent", storage=storage)
         assert asyncio.run(kb.arecall("anything")) == ""
+
+
+class TestLLMFeatures:
+    """Tests for LLM-enhanced features: query expansion, decay_config."""
+
+    def test_recall_with_llm_expands_query(self, tmp_path: pathlib.Path) -> None:
+        """When llm_recall=True and provider set, query is expanded before search."""
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            provider=provider,
+            llm_recall=True,
+        )
+        kb.add("User uses PostgreSQL for data storage")
+
+        with patch(
+            "ai_knot.query_expander.call_with_retry",
+            return_value="database PostgreSQL SQL storage relational",
+        ):
+            result = kb.recall("what database?", top_k=1)
+
+        assert "PostgreSQL" in result
+
+    def test_recall_without_llm_skips_expansion(self, tmp_path: pathlib.Path) -> None:
+        """llm_recall=False (default) never calls the provider at recall time."""
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            provider=provider,
+            llm_recall=False,
+        )
+        kb.add("Some fact")
+        kb.recall("query")
+
+        # call_with_retry should never be invoked for query expansion
+        provider.call.assert_not_called()
+
+    def test_expand_query_no_provider_warns(
+        self, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """llm_recall=True without provider logs a warning and returns original query."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            llm_recall=True,
+        )
+        kb.add("Some fact about databases")
+
+        with caplog.at_level(logging.WARNING, logger="ai_knot.knowledge"):
+            kb.recall("what database?")
+
+        assert "llm_recall=True but no provider configured" in caplog.text
+
+    def test_decay_config_changes_retention(self, tmp_path: pathlib.Path) -> None:
+        """Custom decay_config produces different retention than default."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+
+        # KB with aggressive decay for semantic facts (higher exponent = faster decay)
+        kb_fast = KnowledgeBase(
+            agent_id="fast",
+            storage=storage,
+            decay_config={"semantic": 5.0},
+        )
+        kb_fast.add("Old semantic fact", type=MemoryType.SEMANTIC)
+
+        # KB with default decay
+        kb_default = KnowledgeBase(
+            agent_id="default",
+            storage=storage,
+        )
+        kb_default.add("Old semantic fact", type=MemoryType.SEMANTIC)
+
+        # Age the facts identically
+        old_time = datetime(2025, 1, 1, tzinfo=UTC)
+        for agent_id in ("fast", "default"):
+            facts = storage.load(agent_id)
+            facts[0].last_accessed = old_time
+            storage.save(agent_id, facts)
+
+        kb_fast.decay()
+        kb_default.decay()
+
+        fast_retention = storage.load("fast")[0].retention_score
+        default_retention = storage.load("default")[0].retention_score
+
+        # Aggressive decay (exponent=5.0) should produce lower retention than default (0.8)
+        assert fast_retention < default_retention
+
+    def test_decay_config_default_unchanged(self, tmp_path: pathlib.Path) -> None:
+        """KB without decay_config uses standard retention calculation."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="agent", storage=storage)
+        kb.add("Test fact", type=MemoryType.SEMANTIC)
+
+        # Age the fact
+        facts = storage.load("agent")
+        facts[0].last_accessed = datetime(2025, 1, 1, tzinfo=UTC)
+        storage.save("agent", facts)
+
+        kb.decay()
+
+        retention = storage.load("agent")[0].retention_score
+        # Should be between 0 and 1 (decayed but not zero)
+        assert 0.0 < retention < 1.0
+
+
+class TestLLMVsBaseDifferences:
+    """Measurable differences between LLM-enhanced and base behavior.
+
+    Each test demonstrates a concrete scenario where LLM features produce
+    objectively different (better) results than the base pipeline.
+
+    Key insight: the retriever uses RRF (rank fusion), so we need multiple
+    competing facts for rank differences to manifest in scores.
+    """
+
+    def test_expansion_changes_top_result(self, tmp_path: pathlib.Path) -> None:
+        """Query expansion promotes a fact to #1 when it has no base overlap."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+
+        # Target fact has NO overlap with raw query "relational storage"
+        target = "User relies on PostgreSQL for data persistence"
+        # Distractors share some tokens with query
+        distractors = [
+            "Team stores config in a relational format",
+            "Data storage costs increased last quarter",
+            "Relational models are taught in CS courses",
+            "User prefers local storage over cloud",
+        ]
+
+        # Base KB
+        kb_base = KnowledgeBase(agent_id="base", storage=storage)
+        kb_base.add(target)
+        for d in distractors:
+            kb_base.add(d)
+
+        # LLM KB
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+        kb_llm = KnowledgeBase(
+            agent_id="llm",
+            storage=storage,
+            provider=provider,
+            llm_recall=True,
+        )
+        kb_llm.add(target)
+        for d in distractors:
+            kb_llm.add(d)
+
+        query = "relational storage"
+
+        # Base: PostgreSQL fact has zero BM25 match → ranked last
+        base_results = kb_base.recall_facts_with_scores(query, top_k=5)
+        base_rank = next(i for i, (f, _) in enumerate(base_results) if "PostgreSQL" in f.content)
+        assert base_rank == len(distractors), "Base should rank PostgreSQL last"
+
+        # LLM: expansion adds domain-relevant terms → target promoted to #1
+        with patch(
+            "ai_knot.query_expander.call_with_retry",
+            return_value="relational storage PostgreSQL data persistence",
+        ):
+            llm_results = kb_llm.recall_facts_with_scores(query, top_k=5)
+        llm_rank = next(i for i, (f, _) in enumerate(llm_results) if "PostgreSQL" in f.content)
+
+        assert llm_rank == 0, f"Expansion should promote PostgreSQL to #1 (got rank {llm_rank})"
+
+    def test_expansion_adds_fact_to_top_results(self, tmp_path: pathlib.Path) -> None:
+        """Query expansion surfaces a fact into top-2 that base ranks last."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+
+        # Target: no overlap with raw query "cloud tools"
+        target = "Team uses Docker for container orchestration"
+        # Distractors: match "cloud" or "tools" in content
+        distractors = [
+            "Cloud migration project started last month",
+            "DevOps tools inventory was updated recently",
+            "Cloud computing costs are rising each quarter",
+            "Tools for monitoring are essential for ops",
+        ]
+
+        for agent_id in ("base", "llm"):
+            if agent_id == "llm":
+                provider = MagicMock()
+                provider.name = "mock"
+                provider.default_model = "gpt-4o"
+                kb = KnowledgeBase(
+                    agent_id=agent_id,
+                    storage=storage,
+                    provider=provider,
+                    llm_recall=True,
+                )
+            else:
+                kb = KnowledgeBase(agent_id=agent_id, storage=storage)
+            kb.add(target)
+            for d in distractors:
+                kb.add(d)
+
+        query = "cloud tools"
+
+        # Base: Docker fact ranked last (no token overlap)
+        kb_base = KnowledgeBase(agent_id="base", storage=storage)
+        base_all = kb_base.recall_facts_with_scores(query, top_k=5)
+        base_rank = next(i for i, (f, _) in enumerate(base_all) if "Docker" in f.content)
+        assert base_rank == len(distractors), "Base should rank Docker last"
+
+        # LLM: expansion adds Docker-related terms → Docker in top-2
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+        kb_llm = KnowledgeBase(
+            agent_id="llm",
+            storage=storage,
+            provider=provider,
+            llm_recall=True,
+        )
+        with patch(
+            "ai_knot.query_expander.call_with_retry",
+            return_value="cloud tools Docker container orchestration",
+        ):
+            llm_all = kb_llm.recall_facts_with_scores(query, top_k=5)
+        llm_rank = next(i for i, (f, _) in enumerate(llm_all) if "Docker" in f.content)
+
+        assert llm_rank <= 1, f"Expansion should promote Docker to top-2 (got rank {llm_rank})"
+
+    def test_auto_tags_change_ranking(self, tmp_path: pathlib.Path) -> None:
+        """Tags from auto-tagging boost a fact above untagged competitors.
+
+        BM25F gives tags 2x weight. When the query matches a tag, the
+        tagged fact ranks higher than untagged facts with similar content.
+        """
+        storage = YAMLStorage(base_dir=str(tmp_path))
+
+        # KB with tagged fact among untagged competitors
+        kb_tagged = KnowledgeBase(agent_id="tagged", storage=storage)
+        # Target: same content as competitor, but has tags
+        kb_tagged.add(
+            "User develops backend services",
+            tags=["python", "backend"],
+        )
+        # Competitors: mention python in content but have no tags
+        kb_tagged.add("Python is a popular programming language")
+        kb_tagged.add("Many teams use Python for scripting")
+        kb_tagged.add("Python ecosystem has many frameworks")
+        kb_tagged.add("Development tools improve productivity")
+
+        # KB without tags — same facts, no tags on any
+        kb_plain = KnowledgeBase(agent_id="plain", storage=storage)
+        kb_plain.add("User develops backend services")
+        kb_plain.add("Python is a popular programming language")
+        kb_plain.add("Many teams use Python for scripting")
+        kb_plain.add("Python ecosystem has many frameworks")
+        kb_plain.add("Development tools improve productivity")
+
+        query = "python"
+
+        tagged_pairs = kb_tagged.recall_facts_with_scores(query, top_k=5)
+        plain_pairs = kb_plain.recall_facts_with_scores(query, top_k=5)
+
+        # In tagged KB, "User develops backend services" has ["python"] tag
+        # → gets 2x BM25F boost for "python" → should rank higher
+        def _rank_of(pairs: list[tuple[Fact, float]], substr: str) -> int:
+            for i, (f, _) in enumerate(pairs):
+                if substr in f.content:
+                    return i
+            return len(pairs)
+
+        tagged_rank = _rank_of(tagged_pairs, "backend services")
+        plain_rank = _rank_of(plain_pairs, "backend services")
+
+        assert tagged_rank < plain_rank, (
+            f"Tagged fact rank ({tagged_rank}) should be better (lower) "
+            f"than untagged ({plain_rank})"
+        )
+
+    def test_decay_config_flips_retention_hierarchy(self, tmp_path: pathlib.Path) -> None:
+        """Custom decay_config flips the retention order between memory types.
+
+        Default: episodic (exponent 1.3) decays faster than semantic (0.8).
+        Custom: episodic (exponent 0.1) decays much slower → episodic retention
+        becomes HIGHER than semantic, reversing the default Tulving hierarchy.
+        """
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        old_time = datetime(2025, 1, 1, tzinfo=UTC)
+
+        for agent_id, decay_cfg in [("default", None), ("custom", {"episodic": 0.1})]:
+            kb = KnowledgeBase(
+                agent_id=agent_id,
+                storage=storage,
+                decay_config=decay_cfg,
+            )
+            kb.add("Team deployed on Friday", type=MemoryType.EPISODIC, importance=0.8)
+            kb.add("Team uses Python daily", type=MemoryType.SEMANTIC, importance=0.8)
+
+            # Age both facts
+            facts = storage.load(agent_id)
+            for f in facts:
+                f.last_accessed = old_time
+            storage.save(agent_id, facts)
+
+        # Apply decay with each config
+        KnowledgeBase(agent_id="default", storage=storage).decay()
+        KnowledgeBase(
+            agent_id="custom",
+            storage=storage,
+            decay_config={"episodic": 0.1},
+        ).decay()
+
+        default_facts = storage.load("default")
+        default_epi = next(f for f in default_facts if f.type == MemoryType.EPISODIC)
+        default_sem = next(f for f in default_facts if f.type == MemoryType.SEMANTIC)
+
+        custom_facts = storage.load("custom")
+        custom_epi = next(f for f in custom_facts if f.type == MemoryType.EPISODIC)
+        custom_sem = next(f for f in custom_facts if f.type == MemoryType.SEMANTIC)
+
+        # Default: episodic decays faster → lower retention
+        assert default_epi.retention_score < default_sem.retention_score, (
+            "Default: episodic should retain less than semantic"
+        )
+
+        # Custom: episodic exponent 0.1 vs semantic 0.8 → episodic retains MORE
+        assert custom_epi.retention_score > custom_sem.retention_score, (
+            f"Custom: episodic ({custom_epi.retention_score:.4f}) should exceed "
+            f"semantic ({custom_sem.retention_score:.4f}) with exponent 0.1 vs 0.8"
+        )
+
+        # Episodic retention is dramatically different between configs
+        assert custom_epi.retention_score > default_epi.retention_score, (
+            "Custom decay preserves episodic retention far better than default"
+        )
+
+    def test_all_llm_features_combined(self, tmp_path: pathlib.Path) -> None:
+        """End-to-end: expansion + tags + slow decay together outperform base."""
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        old_time = datetime(2025, 6, 1, tzinfo=UTC)
+
+        # Target fact — no token overlap with raw query "relational storage"
+        target = "User relies on PostgreSQL for data persistence"
+        distractors = [
+            "Team stores config in a relational format",
+            "Data storage costs increased last quarter",
+            "Relational models are taught in CS courses",
+            "User prefers local storage over cloud",
+        ]
+
+        # --- Base KB: no LLM, no tags, default decay ---
+        kb_base = KnowledgeBase(agent_id="base", storage=storage)
+        kb_base.add(target)
+        for d in distractors:
+            kb_base.add(d)
+        # Age all facts
+        facts = storage.load("base")
+        for f in facts:
+            f.last_accessed = old_time
+        storage.save("base", facts)
+
+        # --- Full LLM KB: expansion + tags + slow decay ---
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+        kb_full = KnowledgeBase(
+            agent_id="full",
+            storage=storage,
+            provider=provider,
+            llm_recall=True,
+            decay_config={"semantic": 0.3},
+        )
+        # Target fact has auto-tags from learn()
+        kb_full.add(target, tags=["database", "postgresql"])
+        for d in distractors:
+            kb_full.add(d)
+        facts = storage.load("full")
+        for f in facts:
+            f.last_accessed = old_time
+        storage.save("full", facts)
+
+        query = "relational storage"
+
+        # Base: no expansion, no tags, default decay → PostgreSQL ranked last
+        base_results = kb_base.recall_facts_with_scores(query, top_k=5)
+        base_rank = next(i for i, (f, _) in enumerate(base_results) if "PostgreSQL" in f.content)
+
+        # Full LLM: expanded query + tag boost + slow decay → PostgreSQL #1
+        with patch(
+            "ai_knot.query_expander.call_with_retry",
+            return_value="relational storage PostgreSQL data persistence",
+        ):
+            full_results = kb_full.recall_facts_with_scores(query, top_k=5)
+        full_rank = next(i for i, (f, _) in enumerate(full_results) if "PostgreSQL" in f.content)
+
+        # Full LLM pipeline promotes PostgreSQL to #1 via expansion + tags + retention
+        assert base_rank == len(distractors), "Base should rank PostgreSQL last"
+        assert full_rank == 0, (
+            f"Full LLM pipeline should promote PostgreSQL to #1 (got rank {full_rank})"
+        )

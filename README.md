@@ -457,15 +457,64 @@ kb = KnowledgeBase("agent", provider="openai", api_key="sk-...")
 kb.learn(turns)
 # → Fact(content="User prefers Python", tags=["python", "preferences"])
 
-# Query expansion: LLM adds synonyms before BM25 search (opt-in)
+# Query expansion: LLM adds weighted synonyms before BM25 search (opt-in)
 kb = KnowledgeBase("agent", provider="openai", api_key="sk-...",
                    llm_recall=True)
 kb.recall("what database?")
-# → internally expands to "database PostgreSQL SQL storage" → better recall
+# → expansion tokens "PostgreSQL", "SQL", "storage" added with weight 0.4
+# → original query tokens keep weight 1.0 — no dilution
 ```
 
 Without an LLM, everything works as before — tags via `add(tags=[...])`,
 raw queries via BM25.
+
+---
+
+## Multilingual support (Russian)
+
+ai-knot includes a zero-dependency Russian stemmer. No configuration needed —
+the tokenizer auto-detects Cyrillic script and applies Snowball-lite stemming:
+
+```python
+kb = KnowledgeBase(agent_id="agent")
+kb.add("Пользователь предпочитает Python для бэкенда")
+kb.add("Развёртывание через Docker Compose")
+
+# Morphological variants match automatically:
+# "запрещённые" and "запрещённых" → same stem
+context = kb.recall("запрещённые слова")
+```
+
+With `llm_recall=True`, the expansion prompt preserves the query language —
+Russian queries get Russian synonyms, English queries get English synonyms.
+
+---
+
+## Clock injection and configurable RRF
+
+All recall and decay methods accept a `now` parameter for deterministic testing
+and time-travel scenarios:
+
+```python
+from datetime import datetime, UTC
+
+# Test how facts would rank at a specific point in time
+future = datetime(2026, 12, 1, tzinfo=UTC)
+context = kb.recall("deployment", now=future)
+kb.decay(now=future)
+```
+
+RRF (Reciprocal Rank Fusion) weights are configurable:
+
+```python
+# Default: BM25 dominates (62% influence)
+kb = KnowledgeBase("agent", rrf_weights=(5.0, 1.0, 1.0, 1.0))
+
+# Boost importance and retention signals
+kb = KnowledgeBase("agent", rrf_weights=(3.0, 2.0, 2.0, 1.0))
+```
+
+Weights correspond to: `(bm25, importance, retention, recency)`.
 
 ---
 

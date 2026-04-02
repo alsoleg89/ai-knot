@@ -214,3 +214,24 @@ touching the tokenizer. Results are cached (LRU, 128 entries).
 
 The feature is opt-in because it adds an LLM round-trip to every `recall()`.
 Default behavior (`llm_recall=False`) is unchanged — zero latency added.
+
+## 11. Cyrillic stemmer + weighted LLM expansion (revising #10)
+
+Benchmarking against mem0 and qdrant showed that LLM expansion alone does not
+work for non-Latin scripts. The root cause: expansion only changes the query
+side, but documents are indexed with unstemmed tokens. BM25 requires symmetric
+normalization at both index and query time (Robertson & Zaragoza, 2009).
+
+v0.8 adds a zero-dependency Cyrillic (Russian) stemmer in `tokenizer.py` using
+a Snowball-lite algorithm. The tokenizer auto-detects script via Unicode block
+check and dispatches to the appropriate stemmer. English rules are unchanged.
+
+Additionally, LLM expansion now uses weighted tokens via `expansion_weights`
+(new terms get weight 0.4, original query terms keep 1.0). This prevents
+expansion from diluting the original query signal — a known issue with blind
+query expansion (Xu & Croft, 1996). PRF and LLM expansions are merged.
+
+Other changes in this revision:
+- `now` parameter on all recall/decay methods (clock injection for testing)
+- Configurable RRF weights via `rrf_weights` parameter
+- Multilingual expansion prompt with Russian example

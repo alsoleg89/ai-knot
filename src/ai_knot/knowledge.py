@@ -18,6 +18,10 @@ from ai_knot.storage.base import SnapshotCapable, StorageBackend
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
 
+# LLM expansion token weight — higher than PRF (0.5) to reflect
+# the semantic advantage of LLM-based query understanding.
+_LLM_EXPANSION_WEIGHT: float = 0.6
+
 _SHARED_NAMESPACE = "__shared__"
 _PROVENANCE_DISCOUNT = 0.8
 
@@ -62,16 +66,21 @@ class KnowledgeBase:
         model: str | None = None,
         decay_config: dict[str, float] | None = None,
         llm_recall: bool = False,
+        rrf_weights: tuple[float, ...] | None = None,
+        expansion_weight: float | None = None,
         **provider_kwargs: str,
     ) -> None:
         self._agent_id = agent_id
         self._storage: StorageBackend = storage or YAMLStorage()
-        self._retriever = TFIDFRetriever()
+        self._retriever = TFIDFRetriever(
+            rrf_weights=rrf_weights or (5.0, 1.0, 1.0, 1.0),
+        )
         self._default_provider = provider
         self._default_api_key = api_key
         self._default_model = model
         self._decay_config = decay_config
         self._llm_recall = llm_recall
+        self._expansion_weight = expansion_weight
         self._query_expander: LLMQueryExpander | None = None
         self._default_provider_kwargs: dict[str, str] = dict(provider_kwargs)
 
@@ -328,40 +337,53 @@ class KnowledgeBase:
             ),
         )
 
-    async def arecall(self, query: str, *, top_k: int = 5) -> str:
+    async def arecall(self, query: str, *, top_k: int = 5, now: datetime | None = None) -> str:
         """Async variant of :meth:`recall` — non-blocking for asyncio applications.
 
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
 
         Returns:
             Formatted multi-line string, or "" if no facts found.
         """
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: self.recall(query, top_k=top_k))
+        return await loop.run_in_executor(None, lambda: self.recall(query, top_k=top_k, now=now))
 
-    async def arecall_facts(self, query: str, *, top_k: int = 5) -> list[Fact]:
+    async def arecall_facts(
+        self, query: str, *, top_k: int = 5, now: datetime | None = None
+    ) -> list[Fact]:
         """Async variant of :meth:`recall_facts` — non-blocking for asyncio applications.
 
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
 
         Returns:
             List of relevant Facts (may be empty), sorted by relevance.
         """
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: self.recall_facts(query, top_k=top_k))
+        return await loop.run_in_executor(
+            None, lambda: self.recall_facts(query, top_k=top_k, now=now)
+        )
 
-    def _expand_query(self, query: str) -> str:
+    def _expand_query(self, query: str) -> tuple[str, dict[str, float] | None]:
         """Optionally expand a query using the configured LLM provider.
 
-        Returns the original query unchanged when ``llm_recall=False``
-        or no provider is configured.
+        Returns ``(original_query, expansion_weights)`` where expansion_weights
+        maps new tokens to their BM25 weight (0.4).  When expansion is disabled
+        or unavailable, returns ``(query, None)``.
         """
-        if not self._llm_recall or not self._default_provider:
-            return query
+        if not self._llm_recall:
+            return query, None
+        if not self._default_provider:
+            logger.warning(
+                "llm_recall=True but no provider configured — "
+                "query expansion skipped, returning original query"
+            )
+            return query, None
         if self._query_expander is None:
             provider = self._default_provider
             if isinstance(provider, str):
@@ -369,14 +391,25 @@ class KnowledgeBase:
                     provider, self._default_api_key, **self._default_provider_kwargs
                 )
             self._query_expander = LLMQueryExpander(provider, self._default_model)
-        return self._query_expander.expand(query)
+        expanded_text = self._query_expander.expand(query)
 
-    def recall(self, query: str, *, top_k: int = 5) -> str:
+        from ai_knot.tokenizer import tokenize
+
+        original_tokens = set(tokenize(query))
+        expanded_tokens = tokenize(expanded_text)
+        expansion: dict[str, float] = {}
+        for token in expanded_tokens:
+            if token not in original_tokens:
+                expansion[token] = self._expansion_weight or _LLM_EXPANSION_WEIGHT
+        return query, expansion if expansion else None
+
+    def recall(self, query: str, *, top_k: int = 5, now: datetime | None = None) -> str:
         """Retrieve relevant facts as a formatted string for prompt injection.
 
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
 
         Returns:
             Formatted multi-line string, or "" if no facts found.
@@ -386,10 +419,10 @@ class KnowledgeBase:
             return ""
 
         # Apply decay before searching.
-        facts = apply_decay(facts, type_exponents=self._decay_config)
+        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
 
-        expanded = self._expand_query(query)
-        pairs = self._retriever.search(expanded, facts, top_k=top_k)
+        query, expansion = self._expand_query(query)
+        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
         if not pairs:
             return ""
 
@@ -397,15 +430,15 @@ class KnowledgeBase:
 
         # Increment access_count on returned facts and persist.
         returned_ids = {r.id for r in results}
-        now = datetime.now(UTC)
+        access_time = datetime.now(UTC)
         for fact in facts:
             if fact.id in returned_ids:
-                interval = (now - fact.last_accessed).total_seconds() / 3600.0
+                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
                 fact.access_intervals.append(interval)
                 if len(fact.access_intervals) > 20:
                     fact.access_intervals = fact.access_intervals[-20:]
                 fact.access_count += 1
-                fact.last_accessed = now
+                fact.last_accessed = access_time
         self._storage.save(self._agent_id, facts)
 
         # Format for prompt injection.
@@ -420,7 +453,9 @@ class KnowledgeBase:
         """
         return self._storage.load(self._agent_id)
 
-    def recall_facts(self, query: str, *, top_k: int = 5) -> list[Fact]:
+    def recall_facts(
+        self, query: str, *, top_k: int = 5, now: datetime | None = None
+    ) -> list[Fact]:
         """Structured alternative to recall() — returns Fact objects.
 
         Use when you need IDs, types, importance scores, or other metadata.
@@ -429,6 +464,7 @@ class KnowledgeBase:
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
 
         Returns:
             List of relevant Facts (may be empty), sorted by relevance.
@@ -437,27 +473,29 @@ class KnowledgeBase:
         if not facts:
             return []
 
-        facts = apply_decay(facts, type_exponents=self._decay_config)
-        expanded = self._expand_query(query)
-        pairs = self._retriever.search(expanded, facts, top_k=top_k)
+        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
+        query, expansion = self._expand_query(query)
+        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
         if not pairs:
             return []
 
         results = [f for f, _ in pairs]
         returned_ids = {r.id for r in results}
-        now = datetime.now(UTC)
+        access_time = datetime.now(UTC)
         for fact in facts:
             if fact.id in returned_ids:
-                interval = (now - fact.last_accessed).total_seconds() / 3600.0
+                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
                 fact.access_intervals.append(interval)
                 if len(fact.access_intervals) > 20:
                     fact.access_intervals = fact.access_intervals[-20:]
                 fact.access_count += 1
-                fact.last_accessed = now
+                fact.last_accessed = access_time
         self._storage.save(self._agent_id, facts)
         return results
 
-    def recall_facts_with_scores(self, query: str, *, top_k: int = 5) -> list[tuple[Fact, float]]:
+    def recall_facts_with_scores(
+        self, query: str, *, top_k: int = 5, now: datetime | None = None
+    ) -> list[tuple[Fact, float]]:
         """Like recall_facts() but also returns the relevance score for each fact.
 
         The score is a hybrid value (TF-IDF + retention + importance). Use it
@@ -466,6 +504,7 @@ class KnowledgeBase:
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
 
         Returns:
             List of (Fact, score) pairs sorted by relevance (most relevant first).
@@ -475,22 +514,22 @@ class KnowledgeBase:
         if not facts:
             return []
 
-        facts = apply_decay(facts, type_exponents=self._decay_config)
-        expanded = self._expand_query(query)
-        pairs = self._retriever.search(expanded, facts, top_k=top_k)
+        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
+        query, expansion = self._expand_query(query)
+        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
         if not pairs:
             return []
 
         returned_ids = {f.id for f, _ in pairs}
-        now = datetime.now(UTC)
+        access_time = datetime.now(UTC)
         for fact in facts:
             if fact.id in returned_ids:
-                interval = (now - fact.last_accessed).total_seconds() / 3600.0
+                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
                 fact.access_intervals.append(interval)
                 if len(fact.access_intervals) > 20:
                     fact.access_intervals = fact.access_intervals[-20:]
                 fact.access_count += 1
-                fact.last_accessed = now
+                fact.last_accessed = access_time
         self._storage.save(self._agent_id, facts)
         return pairs
 
@@ -525,12 +564,16 @@ class KnowledgeBase:
         self._storage.delete(self._agent_id, fact_id)
         logger.info("Forgot fact '%s' from agent '%s'", fact_id, self._agent_id)
 
-    def decay(self) -> None:
-        """Apply Ebbinghaus forgetting curve to all stored facts."""
+    def decay(self, *, now: datetime | None = None) -> None:
+        """Apply Ebbinghaus forgetting curve to all stored facts.
+
+        Args:
+            now: Point-in-time for decay calculation (default: current UTC).
+        """
         facts = self._storage.load(self._agent_id)
         if not facts:
             return
-        apply_decay(facts, type_exponents=self._decay_config)
+        apply_decay(facts, type_exponents=self._decay_config, now=now)
         self._storage.save(self._agent_id, facts)
         logger.debug("Applied decay to %d facts for agent '%s'", len(facts), self._agent_id)
 

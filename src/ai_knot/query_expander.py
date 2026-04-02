@@ -12,11 +12,17 @@ from __future__ import annotations
 from ai_knot.providers import LLMProvider, call_with_retry
 
 _EXPAND_PROMPT = """Given a search query, add 2-4 synonyms or closely related terms.
+IMPORTANT: Keep the SAME LANGUAGE as the input query.
+Include morphological variants (different word forms of the same root).
 Return ONLY the expanded query as a single line. Do not explain.
 
-Example:
+Example (English):
 Input: "what database?"
 Output: "what database PostgreSQL SQL storage relational"
+
+Example (Russian):
+Input: "запрещённые слова"
+Output: "запрещённые запретить слова слово стоп-слова ограничения"
 """
 
 _MAX_CACHE_SIZE = 128
