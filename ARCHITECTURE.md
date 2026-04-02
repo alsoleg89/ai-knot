@@ -141,7 +141,10 @@ but when a provider is configured, additional capabilities activate automaticall
 |---------|---------------|---------------------|
 | Tags | User-supplied via `add(tags=[...])` | Auto-generated during `learn()` |
 | Decay config | Hardcoded defaults | `decay_config={}` (no LLM needed) |
-| Query expansion | Raw query → BM25 | `llm_recall=True` expands with synonyms |
+| Query expansion | Raw query → BM25 | `llm_recall=True` expands with weighted synonyms |
+| Stemming | English Porter subset | + Cyrillic (Russian) Snowball-lite |
+| RRF weights | Default `(5.0, 1.0, 1.0, 1.0)` | `rrf_weights=(...)` tunable |
+| Clock injection | `now=None` (real time) | `now=datetime(...)` for testing |
 
 ### Auto-tagging
 
@@ -153,15 +156,31 @@ The extraction prompt includes `"tags"` in the JSON schema. The LLM generates
 
 `LLMQueryExpander.expand(query)` adds 2-4 synonyms before BM25 search.
 Opt-in via `KnowledgeBase(llm_recall=True)`. LRU cache (128 entries) avoids
-repeated calls. Bridges vocabulary gaps (e.g. "database" → "database PostgreSQL
-SQL storage").
+repeated calls.
+
+v0.8 changes: expansion tokens now receive weight 0.4 via `expansion_weights`
+(original query tokens keep 1.0). This prevents expansion from diluting the
+original query signal. LLM expansion and PRF expansion are merged — LLM tokens
+take priority for overlapping terms. The expansion prompt is multilingual
+(keeps the same language as the input query).
+
+### Cyrillic stemmer (`ai_knot.tokenizer`)
+
+v0.8 adds a zero-dependency Russian stemmer using a Snowball-lite algorithm.
+The tokenizer auto-detects script via Unicode block check (`\u0400`–`\u04ff`)
+and dispatches to `_stem_ru()` (Cyrillic) or `_stem_en()` (Latin).
+
+This provides **symmetric normalization** at both index and query time —
+critical for BM25 to match morphological variants (e.g. "запрещённые" and
+"запрещённых" → same stem "запреще").
 
 ---
 
 ## Retrieval (`ai_knot.retriever`)
 
-`BM25Retriever.search(query, facts, top_k)` — zero external dependencies.
-Returns `list[tuple[Fact, float]]` — each tuple is `(fact, hybrid_score)`.
+`BM25Retriever.search(query, facts, top_k, expansion_weights)` — zero
+external dependencies. Returns `list[tuple[Fact, float]]` — each tuple is
+`(fact, rrf_score)`.
 
 Okapi BM25 scoring (Robertson & Zaragoza, 2009):
 ```
@@ -171,13 +190,18 @@ IDF(t) = log((N - df + 0.5) / (df + 0.5) + 1)
 k1 = 1.5,  b = 0.75
 ```
 
-P95-clip normalization: raw BM25 scores clipped to 95th percentile, then
-normalized to [0, 1] before hybrid blending:
-```
-hybrid_score = 0.6 × bm25_normalized + 0.2 × retention_score + 0.2 × importance
-```
+Scoring pipeline:
+1. **BM25F** — dual-field scoring (content weight 1.0, tags weight 2.0).
+   High-DF filter: terms in >70% of docs get zero IDF.
+2. **PRF** (Pseudo-Relevance Feedback) — top-3 docs expand query with
+   up to 5 feedback terms at weight 0.5. Skipped for corpora < 4 docs.
+3. **LLM expansion** (optional) — merged with PRF; LLM tokens weight 0.4.
+4. **RRF** (Reciprocal Rank Fusion) — combines 4 ranked lists:
+   BM25, importance, retention, recency. Default weights `(5.0, 1.0, 1.0, 1.0)`,
+   configurable via `BM25Retriever(rrf_weights=(...))`.
 
-BM25 is computed fresh per query (no index) — suitable for knowledge bases up to ~10k facts.
+BM25 is computed fresh per query (inverted index rebuilt each call) —
+suitable for knowledge bases up to ~10k facts.
 `TFIDFRetriever` is kept as a backward-compatible alias for `BM25Retriever`.
 
 `KnowledgeBase.recall_facts_with_scores()` exposes `(Fact, float)` pairs to callers that need

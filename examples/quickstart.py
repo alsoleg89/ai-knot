@@ -1,10 +1,12 @@
 """ai-knot quickstart — minimal working example."""
 
 import shutil
+from datetime import UTC, datetime
 
 from ai_knot import KnowledgeBase, MemoryType
 
 # Create a knowledge base (stores in .ai_knot/ by default).
+# Optional: rrf_weights tune the balance between BM25, importance, retention, recency.
 kb = KnowledgeBase(agent_id="demo")
 
 # Add facts manually.
@@ -35,7 +37,14 @@ print(f"Avg importance: {stats['avg_importance']:.2f}")
 print(f"Avg retention: {stats['avg_retention']:.2f}")
 
 # Apply decay (in real usage, this happens automatically on recall).
+# The `now` parameter allows testing how facts look at a future point in time.
 kb.decay()
+
+# Clock injection: see how facts rank 6 months from now.
+future = datetime(2026, 10, 1, tzinfo=UTC)
+print("\n=== Same query, 6 months later (episodic facts decay faster) ===")
+context = kb.recall("deployment", now=future)
+print(context)
 
 # Clean up demo data.
 shutil.rmtree(".ai_knot", ignore_errors=True)
