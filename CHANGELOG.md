@@ -18,6 +18,26 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.1] — 2026-04-02
+
+### Fixed
+- **S5 importance ranking** — BM25 scores now boosted by `0.5 + 0.5 × importance`,
+  making the dominant ranker carry importance information.  Default RRF weights
+  changed from `(5, 1, 1, 1)` to `(5, 2, 2, 1)` giving importance+retention 40%.
+- **S1/S3 faithfulness** — added BM25 score floor: when enough lexical matches
+  exist to fill `top_k`, facts with zero BM25 relevance are excluded.  Prevents
+  importance/recency from pushing unrelated facts into results.
+- **S4 deduplication** — added asymmetric token containment metric alongside
+  Jaccard.  `_dedup_similarity = max(jaccard, containment)` catches subset
+  duplicates (e.g. "User works at Sber" ⊂ "User works at Sber as Director").
+  Extraction threshold lowered from 0.8 to 0.7; resolve threshold from 0.7 to 0.6.
+- **S2 Russian recall** — expanded Snowball-lite stemmer with borrowed-word verb
+  patterns (`-ировать`, `-овать`, `-евать`), nominalization noun suffixes
+  (`-ация`, `-ование`, `-изация`), and participial adjective suffixes
+  (`-ированн`, `-ованн`).
+
+---
+
 ## [0.8.0] — 2026-04-02
 
 ### Added
@@ -30,7 +50,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - **`now` parameter** on `recall()`, `recall_facts()`, `recall_facts_with_scores()`,
   `arecall()`, `arecall_facts()`, and `decay()` for clock injection (DDD pattern).
 - **Configurable RRF weights** via `KnowledgeBase(rrf_weights=...)` and
-  `BM25Retriever(rrf_weights=...)`. Default remains `(5.0, 1.0, 1.0, 1.0)`.
+  `BM25Retriever(rrf_weights=...)`.
 
 ### Changed
 - `_expand_query()` returns `(query, expansion_weights)` tuple instead of flat string.

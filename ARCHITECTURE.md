@@ -143,7 +143,7 @@ but when a provider is configured, additional capabilities activate automaticall
 | Decay config | Hardcoded defaults | `decay_config={}` (no LLM needed) |
 | Query expansion | Raw query → BM25 | `llm_recall=True` expands with weighted synonyms |
 | Stemming | English Porter subset | + Cyrillic (Russian) Snowball-lite |
-| RRF weights | Default `(5.0, 1.0, 1.0, 1.0)` | `rrf_weights=(...)` tunable |
+| RRF weights | Default `(5.0, 2.0, 2.0, 1.0)` | `rrf_weights=(...)` tunable |
 | Clock injection | `now=None` (real time) | `now=datetime(...)` for testing |
 
 ### Auto-tagging
@@ -197,7 +197,7 @@ Scoring pipeline:
    up to 5 feedback terms at weight 0.5. Skipped for corpora < 4 docs.
 3. **LLM expansion** (optional) — merged with PRF; LLM tokens weight 0.4.
 4. **RRF** (Reciprocal Rank Fusion) — combines 4 ranked lists:
-   BM25, importance, retention, recency. Default weights `(5.0, 1.0, 1.0, 1.0)`,
+   BM25, importance, retention, recency. Default weights `(5.0, 2.0, 2.0, 1.0)`,
    configurable via `BM25Retriever(rrf_weights=(...))`.
 
 BM25 is computed fresh per query (inverted index rebuilt each call) —

@@ -262,7 +262,7 @@ class BM25Retriever:
     def __init__(
         self,
         *,
-        rrf_weights: tuple[float, ...] = (5.0, 1.0, 1.0, 1.0),
+        rrf_weights: tuple[float, ...] = (5.0, 2.0, 2.0, 1.0),
     ) -> None:
         self._rrf_weights = rrf_weights
 
@@ -307,10 +307,18 @@ class BM25Retriever:
         # Use BM25 score as secondary sort key to break ties deterministically.
         all_ids = [f.id for f in facts]
 
-        # Ranker 1: BM25F score (descending), importance tie-break.
+        # Boost BM25 scores by importance so that equally relevant facts
+        # are differentiated by their importance.  This ensures the dominant
+        # ranker (BM25) carries an importance signal, fixing S5 benchmarks.
+        boosted: dict[str, float] = {}
+        for doc_id, score in raw_scores.items():
+            imp = index.facts[doc_id].importance
+            boosted[doc_id] = score * (0.5 + 0.5 * imp)
+
+        # Ranker 1: BM25F score × importance boost (descending).
         bm25_ranked = sorted(
             all_ids,
-            key=lambda i: (raw_scores.get(i, 0.0), index.facts[i].importance),
+            key=lambda i: (boosted.get(i, 0.0), index.facts[i].importance),
             reverse=True,
         )
 
@@ -335,15 +343,27 @@ class BM25Retriever:
             reverse=True,
         )
 
-        # 4. RRF fusion — default weights give BM25 5x weight (≈62% influence).
+        # 4. RRF fusion — default weights (5,2,2,1) give BM25 50% influence,
+        #    importance+retention 40%, recency 10%.
         fused = _rrf_fuse(
             [bm25_ranked, importance_ranked, retention_ranked, recency_ranked],
             weights=list(self._rrf_weights),
         )
 
+        # 5. Faithfulness floor: when there are enough BM25 matches to fill
+        # top_k, only return facts that have lexical relevance.  This prevents
+        # importance/recency from pushing unrelated facts into results (S1/S3).
+        # When there aren't enough matches, fall back to full RRF ranking.
+        scored_ids = set(raw_scores.keys())
+
         results: list[tuple[Fact, float]] = []
-        for fact in facts:
-            results.append((fact, fused.get(fact.id, 0.0)))
+        if len(scored_ids) >= top_k:
+            for fact in facts:
+                if fact.id in scored_ids:
+                    results.append((fact, fused.get(fact.id, 0.0)))
+        else:
+            for fact in facts:
+                results.append((fact, fused.get(fact.id, 0.0)))
 
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:top_k]

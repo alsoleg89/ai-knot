@@ -507,8 +507,8 @@ kb.decay(now=future)
 RRF (Reciprocal Rank Fusion) weights are configurable:
 
 ```python
-# Default: BM25 dominates (62% influence)
-kb = KnowledgeBase("agent", rrf_weights=(5.0, 1.0, 1.0, 1.0))
+# Default: BM25 dominates (50% influence), importance+retention 40%
+kb = KnowledgeBase("agent", rrf_weights=(5.0, 2.0, 2.0, 1.0))
 
 # Boost importance and retention signals
 kb = KnowledgeBase("agent", rrf_weights=(3.0, 2.0, 2.0, 1.0))

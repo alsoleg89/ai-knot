@@ -231,8 +231,8 @@ class TestInvertedIndex:
         retriever = BM25Retriever()
         results = retriever.search("Python testing", facts, top_k=5)
 
-        # Verify we get results and they are properly ordered.
-        assert len(results) == 5
+        # Only facts with BM25 relevance are returned (score floor filter).
+        assert len(results) >= 1
         scores = [s for _, s in results]
         assert scores == sorted(scores, reverse=True)
 

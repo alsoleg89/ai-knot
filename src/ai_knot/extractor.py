@@ -104,8 +104,34 @@ def _jaccard_similarity(a: str, b: str) -> float:
     return len(intersection) / len(union)
 
 
-def deduplicate_facts(facts: list[Fact], *, threshold: float = 0.8) -> list[Fact]:
-    """Remove near-duplicate facts by Jaccard word similarity.
+def _containment_similarity(a: str, b: str) -> float:
+    """Max asymmetric token containment between two strings.
+
+    containment(A, B) = |A ∩ B| / min(|A|, |B|)
+
+    Catches cases where a short fact is a subset of a longer one, or
+    two facts express the same idea with different amounts of detail.
+    Jaccard penalises length asymmetry; containment does not.
+    """
+    words_a = set(tokenize(a))
+    words_b = set(tokenize(b))
+    if not words_a or not words_b:
+        return 0.0
+    intersection = len(words_a & words_b)
+    return intersection / min(len(words_a), len(words_b))
+
+
+def _dedup_similarity(a: str, b: str) -> float:
+    """Combined dedup similarity: max(jaccard, containment).
+
+    Using the max of both metrics catches both symmetric overlap
+    (Jaccard) and asymmetric subset relationships (containment).
+    """
+    return max(_jaccard_similarity(a, b), _containment_similarity(a, b))
+
+
+def deduplicate_facts(facts: list[Fact], *, threshold: float = 0.7) -> list[Fact]:
+    """Remove near-duplicate facts by combined similarity (Jaccard + containment).
 
     Args:
         facts: List of facts to deduplicate.
@@ -121,7 +147,7 @@ def deduplicate_facts(facts: list[Fact], *, threshold: float = 0.8) -> list[Fact
     for fact in facts:
         is_dup = False
         for existing in unique:
-            if _jaccard_similarity(fact.content, existing.content) >= threshold:
+            if _dedup_similarity(fact.content, existing.content) >= threshold:
                 is_dup = True
                 break
         if not is_dup:
@@ -133,19 +159,19 @@ def resolve_against_existing(
     new_facts: list[Fact],
     existing: list[Fact],
     *,
-    threshold: float = 0.7,
+    threshold: float = 0.6,
 ) -> tuple[list[Fact], list[Fact]]:
     """Separate new facts into inserts and updates relative to existing facts.
 
-    For each new fact, if a similar existing fact is found (Jaccard >= threshold),
-    the existing fact is updated in-place: importance is bumped by 0.05 (capped
-    at 1.0) and ``last_accessed`` is set to UTC now. Otherwise the new fact is
-    collected for insertion.
+    For each new fact, if a similar existing fact is found
+    (combined similarity >= threshold), the existing fact is updated in-place:
+    importance is bumped by 0.05 (capped at 1.0) and ``last_accessed`` is set
+    to UTC now. Otherwise the new fact is collected for insertion.
 
     Args:
         new_facts: Facts extracted from the latest conversation.
         existing: Facts already stored for this agent.
-        threshold: Jaccard similarity threshold to consider two facts duplicates.
+        threshold: Combined similarity threshold to consider two facts duplicates.
 
     Returns:
         A 2-tuple ``(to_insert, updated_existing)`` where:
@@ -157,10 +183,12 @@ def resolve_against_existing(
 
     for new in new_facts:
         matched: Fact | None = None
+        best_sim = 0.0
         for old in existing:
-            if _jaccard_similarity(new.content, old.content) >= threshold:
+            sim = _dedup_similarity(new.content, old.content)
+            if sim >= threshold and sim > best_sim:
+                best_sim = sim
                 matched = old
-                break
         if matched is not None:
             matched.importance = min(1.0, matched.importance + 0.05)
             matched.last_accessed = datetime.now(UTC)

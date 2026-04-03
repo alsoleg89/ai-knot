@@ -77,9 +77,9 @@ class TestResolveAgainstExisting:
         assert existing_fact.last_accessed > before
 
     def test_threshold_parameter_high_no_merge(self) -> None:
-        existing = [_fact("User works at Sber")]
-        new = [_fact("User works at Sber as a Director")]
-        # With very high threshold these won't merge.
+        existing = [_fact("User works at Sber in Moscow")]
+        new = [_fact("User prefers Python for backend development")]
+        # With very high threshold these clearly different facts won't merge.
         to_insert, updated = resolve_against_existing(new, existing, threshold=0.99)
         assert len(to_insert) == 1
         assert updated == []

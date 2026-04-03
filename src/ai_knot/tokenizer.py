@@ -48,7 +48,21 @@ def _stem_ru(token: str) -> str:
         return None
 
     # Step 1: Perfective gerund (-вшись, -вши, -ав, -ив, etc.)
-    result = _try_remove(("ившись", "ывшись", "вшись", "авши", "ивши", "ывши", "вши", "ав", "ив"))
+    result = _try_remove(
+        (
+            "ировавшись",
+            "ировавши",
+            "ившись",
+            "ывшись",
+            "вшись",
+            "авши",
+            "ивши",
+            "ывши",
+            "вши",
+            "ав",
+            "ив",
+        )
+    )
     if result is not None:
         return result if len(result) > 2 else token
 
@@ -89,6 +103,8 @@ def _stem_ru(token: str) -> str:
         "ию",
     )
     _part_suffixes = (
+        "ированн",
+        "ованн",
         "ивш",
         "ывш",
         "ующ",
@@ -115,6 +131,30 @@ def _stem_ru(token: str) -> str:
     if not adj_removed:
         # Step 4: Verb endings.
         _verb_suffixes = (
+            # Borrowed-word verb patterns (-ировать, -овать, -евать)
+            "ировать",
+            "ируют",
+            "ирует",
+            "ировал",
+            "ировала",
+            "ировали",
+            "ировало",
+            "ирован",
+            "ирована",
+            "ировано",
+            "ированы",
+            "ируя",
+            "овать",
+            "евать",
+            "овал",
+            "овала",
+            "овали",
+            "овало",
+            "ован",
+            "евал",
+            "евала",
+            "евали",
+            # Standard verb endings
             "ейте",
             "уйте",
             "ите",
@@ -170,6 +210,26 @@ def _stem_ru(token: str) -> str:
         if not verb_removed:
             # Step 5: Noun endings.
             _noun_suffixes = (
+                # Nominalization patterns (-ование, -ация, -изация)
+                "изациям",
+                "изациях",
+                "изацией",
+                "изации",
+                "изация",
+                "изацию",
+                "ованиям",
+                "ованиях",
+                "ований",
+                "ования",
+                "ование",
+                "ованию",
+                "ациям",
+                "ациях",
+                "ацией",
+                "ации",
+                "ация",
+                "ацию",
+                # Standard noun endings
                 "ениям",
                 "ениях",
                 "ений",
