@@ -5,7 +5,8 @@ Changes from ContentOs version:
   - Yandex text-search-doc (256-dim) → Ollama llama3.2:3b (3072-dim)
   - No hash-embedding fallback (Ollama is always local)
   - insert(text) interface instead of insert_facts(list[str])
-  - Collection name: "ai_knot_bench" (won't conflict with ContentOs)
+  - Per-instance unique collection name prevents reset() collisions when
+    multiple backends run in parallel (asyncio.gather in runner.py)
   - Semaphore: 5 → 3 (GPU memory limited on Ollama)
 """
 
@@ -13,13 +14,13 @@ from __future__ import annotations
 
 import contextlib
 import time
+import uuid
 
 from tests.eval.benchmark.backends.qdrant_emulator import embed_text
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
 QDRANT_HOST = "localhost"
 QDRANT_PORT = 6333
-COLLECTION_NAME = "ai_knot_bench"
 VECTOR_SIZE = 3072  # llama3.2:3b via Ollama
 
 
@@ -27,11 +28,14 @@ class QdrantRealBackend(MemoryBackend):
     """Real Qdrant vector search via AsyncQdrantClient + Ollama embeddings.
 
     No LLM extraction: raw text stored and retrieved directly.
+    Each instance gets a unique collection name so parallel benchmark runs
+    don't clobber each other's data via reset().
     """
 
     def __init__(self) -> None:
         self._client: object | None = None
         self._point_id_counter = 0
+        self._collection = f"ai_knot_bench_{uuid.uuid4().hex[:8]}"
 
     @property
     def name(self) -> str:
@@ -56,7 +60,7 @@ class QdrantRealBackend(MemoryBackend):
         )
         with contextlib.suppress(Exception):
             await self._client.create_collection(  # type: ignore[union-attr]
-                collection_name=COLLECTION_NAME,
+                collection_name=self._collection,
                 vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
             )
 
@@ -65,9 +69,9 @@ class QdrantRealBackend(MemoryBackend):
         with contextlib.suppress(Exception):
             from qdrant_client.models import Distance, VectorParams  # type: ignore[import-untyped]
 
-            await client.delete_collection(COLLECTION_NAME)  # type: ignore[union-attr]
+            await client.delete_collection(self._collection)  # type: ignore[union-attr]
             await client.create_collection(  # type: ignore[union-attr]
-                collection_name=COLLECTION_NAME,
+                collection_name=self._collection,
                 vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
             )
         self._point_id_counter = 0
@@ -82,7 +86,7 @@ class QdrantRealBackend(MemoryBackend):
             vector = await embed_text(text)
             self._point_id_counter += 1
             await client.upsert(  # type: ignore[union-attr]
-                collection_name=COLLECTION_NAME,
+                collection_name=self._collection,
                 points=[PointStruct(
                     id=self._point_id_counter,
                     vector=vector,
@@ -105,7 +109,7 @@ class QdrantRealBackend(MemoryBackend):
         try:
             q_vec = await embed_text(query)
             results = await client.search(  # type: ignore[union-attr]
-                collection_name=COLLECTION_NAME,
+                collection_name=self._collection,
                 query_vector=q_vec,
                 limit=top_k,
             )
@@ -123,7 +127,7 @@ class QdrantRealBackend(MemoryBackend):
     async def count_stored(self) -> int | None:
         client = await self._get_client()
         try:
-            info = await client.get_collection(COLLECTION_NAME)  # type: ignore[union-attr]
+            info = await client.get_collection(self._collection)  # type: ignore[union-attr]
             return info.points_count  # type: ignore[no-any-return]
         except Exception:
             return None
