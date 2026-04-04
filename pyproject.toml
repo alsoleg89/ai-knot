@@ -30,6 +30,7 @@ dependencies = [
 mcp = ["mcp>=1.0"]
 openai = ["openai>=1.0"]
 postgres = ["psycopg[binary]>=3.1"]
+benchmark = ["qdrant-client>=1.8", "mem0ai>=0.1", "chromadb>=0.5", "ollama>=0.3"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -56,12 +57,13 @@ packages = ["src/ai_knot"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=ai_knot --cov-report=term-missing --cov-fail-under=80 -v"
+addopts = "--cov=ai_knot --cov-report=term-missing --cov-fail-under=80 -v --ignore=tests/eval/benchmark --ignore=tests/test_benchmark_smoke.py"
 markers = [
     "unit: fast, isolated unit tests",
     "integration: tests that touch storage or multiple layers",
     "slow: tests that are intentionally slow (benchmarks, large data)",
     "requires_api_key: tests that call real LLM APIs (skipped in CI)",
+    "benchmark: comparative backend benchmark suite (requires Ollama for full run)",
 ]
 
 [tool.ruff]
