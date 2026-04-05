@@ -15,23 +15,28 @@ from __future__ import annotations
 import statistics
 
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, ScenarioResult
-from tests.eval.benchmark.fixtures import PROFILE
+from tests.eval.benchmark.fixtures import BUNDLE_EN, LanguageBundle
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s1_profile_retrieval"
 TOP_K = 5
 
 
-async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -> ScenarioResult:
+async def run(
+    backend: MemoryBackend,
+    judge: BaseJudge,
+    *,
+    bundle: LanguageBundle = BUNDLE_EN,
+    top_k: int = TOP_K,
+) -> ScenarioResult:
     """Insert profile facts, retrieve for each query, score with judge."""
     await backend.reset()
 
-    # Insert all profile facts
     last_insert: InsertResult | None = None
-    for fact in PROFILE.raw_facts:
+    for fact in bundle.profile.raw_facts:
         last_insert = await backend.insert(fact)
 
-    raw_token_count = sum(len(f.split()) for f in PROFILE.raw_facts)
+    raw_token_count = sum(len(f.split()) for f in bundle.profile.raw_facts)
 
     judge_runs: dict[str, list[float]] = {
         "relevance": [],
@@ -39,7 +44,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         "token_reduction": [],
     }
 
-    for query in PROFILE.queries:
+    for query in bundle.profile.queries:
         result = await backend.retrieve(query, top_k=top_k)
         retrieved_tokens = sum(len(t.split()) for t in result.texts)
         reduction = max(0.0, (raw_token_count - retrieved_tokens) / max(raw_token_count, 1))
@@ -51,12 +56,13 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
             judge_runs[metric].append(med)
 
     notes = (
+        f"lang={bundle.language}, "
         f"raw_tokens={raw_token_count}, "
         f"avg_token_reduction={statistics.mean(judge_runs['token_reduction']):.1%}, "
         f"facts_stored={last_insert.facts_stored if last_insert else 0}"
     )
 
-    return ScenarioResult(
+    result_obj = ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores=judge_runs,
@@ -64,3 +70,5 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         retrieval_result=None,
         notes=notes,
     )
+    result_obj.language = bundle.language
+    return result_obj

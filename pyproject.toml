@@ -74,6 +74,10 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# Fixture data files contain intentionally long string literals (benchmark content).
+"tests/eval/benchmark/fixtures.py" = ["E501"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["ai_knot"]
 

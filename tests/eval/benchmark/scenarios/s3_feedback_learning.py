@@ -16,22 +16,11 @@ import statistics
 
 from tests.eval.benchmark.backends.qdrant_emulator import _cosine, embed_batch
 from tests.eval.benchmark.base import MemoryBackend, RetrievalResult, ScenarioResult
-from tests.eval.benchmark.fixtures import (
-    FEEDBACK_EXPECTED_RULES,
-    FEEDBACK_HISTORY,
-    FEEDBACK_QUERIES,
-)
+from tests.eval.benchmark.fixtures import BUNDLE_EN, LanguageBundle
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s3_feedback_learning"
 TOP_K = 5
-
-# Keywords expected in the retrieved facts for each query
-_EXPECTED_KEYWORDS: dict[str, list[str]] = {
-    FEEDBACK_QUERIES[0]: ["long", "question", "emoji", "words", "300"],
-    FEEDBACK_QUERIES[1]: ["code", "fenced", "block", "inline", "backtick"],
-    FEEDBACK_QUERIES[2]: ["cta", "call", "action", "end", "summary"],
-}
 
 # 0.72: qwen2.5:7b cosine of paraphrases of the same rule clusters ~0.75–0.90;
 # unrelated texts fall below 0.65.
@@ -71,11 +60,16 @@ async def _semantic_coverage(
         return _rule_coverage(retrieved, keywords)
 
 
-async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -> ScenarioResult:
+async def run(
+    backend: MemoryBackend,
+    judge: BaseJudge,
+    *,
+    bundle: LanguageBundle = BUNDLE_EN,
+    top_k: int = TOP_K,
+) -> ScenarioResult:
     await backend.reset()
 
-    # Insert feedback as "Query: ... \nFeedback: ..." text blocks
-    for q, fb in FEEDBACK_HISTORY:
+    for q, fb in bundle.feedback.history:
         await backend.insert(f"Query: {q}\nFeedback: {fb}")
 
     judge_runs: dict[str, list[float]] = {
@@ -85,14 +79,14 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
     }
     last_result: RetrievalResult | None = None
 
-    for query in FEEDBACK_QUERIES:
+    for query in bundle.feedback.queries:
         result = await backend.retrieve(query, top_k=top_k)
         last_result = result
 
-        keywords = _EXPECTED_KEYWORDS.get(query, [])
+        keywords = bundle.feedback.expected_keywords.get(query, [])
         judge_runs["rule_coverage"].append(_rule_coverage(result.texts, keywords))
 
-        expected_rules = FEEDBACK_EXPECTED_RULES.get(query, [])
+        expected_rules = bundle.feedback.expected_rules.get(query, [])
         # semantic_coverage (embed) and judge (LLM) use independent resource pools —
         # run concurrently to overlap embed + LLM inference time.
         sem_score, scores = await asyncio.gather(
@@ -104,12 +98,13 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         judge_runs["completeness"].append(med)
 
     notes = (
+        f"lang={bundle.language}, "
         f"avg_rule_coverage={statistics.mean(judge_runs['rule_coverage']):.2f}, "
         f"avg_semantic_coverage={statistics.mean(judge_runs['semantic_coverage']):.2f}, "
-        f"feedback_items={len(FEEDBACK_HISTORY)}"
+        f"feedback_items={len(bundle.feedback.history)}"
     )
 
-    return ScenarioResult(
+    result_obj = ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores=judge_runs,
@@ -117,3 +112,5 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         retrieval_result=last_result,
         notes=notes,
     )
+    result_obj.language = bundle.language
+    return result_obj

@@ -403,120 +403,37 @@ class KnowledgeBase:
                 expansion[token] = self._expansion_weight or _LLM_EXPANSION_WEIGHT
         return query, expansion if expansion else None
 
-    def recall(self, query: str, *, top_k: int = 5, now: datetime | None = None) -> str:
-        """Retrieve relevant facts as a formatted string for prompt injection.
-
-        Args:
-            query: What the agent needs to know right now.
-            top_k: Maximum number of facts to return.
-            now: Point-in-time for decay calculation (default: current UTC).
-
-        Returns:
-            Formatted multi-line string, or "" if no facts found.
-        """
-        facts = self._storage.load(self._agent_id)
-        if not facts:
-            return ""
-
-        # Apply decay before searching.
-        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
-
-        query, expansion = self._expand_query(query)
-        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
-        if not pairs:
-            return ""
-
-        results = [f for f, _ in pairs]
-
-        # Increment access_count on returned facts and persist.
-        returned_ids = {r.id for r in results}
-        access_time = datetime.now(UTC)
-        for fact in facts:
-            if fact.id in returned_ids:
-                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
-                fact.access_intervals.append(interval)
-                if len(fact.access_intervals) > 20:
-                    fact.access_intervals = fact.access_intervals[-20:]
-                fact.access_count += 1
-                fact.last_accessed = access_time
-        self._storage.save(self._agent_id, facts)
-
-        # Format for prompt injection.
-        lines = [f"[{r.type.value}] {r.content}" for r in results]
-        return "\n".join(lines)
-
-    def list_facts(self) -> list[Fact]:
-        """Return all stored facts for this agent.
-
-        Returns:
-            List of all Facts, in storage order.
-        """
-        return self._storage.load(self._agent_id)
-
-    def recall_facts(
-        self, query: str, *, top_k: int = 5, now: datetime | None = None
-    ) -> list[Fact]:
-        """Structured alternative to recall() — returns Fact objects.
-
-        Use when you need IDs, types, importance scores, or other metadata.
-        Use recall() when you only need a formatted string for prompt injection.
-
-        Args:
-            query: What the agent needs to know right now.
-            top_k: Maximum number of facts to return.
-            now: Point-in-time for decay calculation (default: current UTC).
-
-        Returns:
-            List of relevant Facts (may be empty), sorted by relevance.
-        """
-        facts = self._storage.load(self._agent_id)
-        if not facts:
-            return []
-
-        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
-        query, expansion = self._expand_query(query)
-        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
-        if not pairs:
-            return []
-
-        results = [f for f, _ in pairs]
-        returned_ids = {r.id for r in results}
-        access_time = datetime.now(UTC)
-        for fact in facts:
-            if fact.id in returned_ids:
-                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
-                fact.access_intervals.append(interval)
-                if len(fact.access_intervals) > 20:
-                    fact.access_intervals = fact.access_intervals[-20:]
-                fact.access_count += 1
-                fact.last_accessed = access_time
-        self._storage.save(self._agent_id, facts)
-        return results
-
-    def recall_facts_with_scores(
-        self, query: str, *, top_k: int = 5, now: datetime | None = None
+    def _execute_recall(
+        self,
+        query: str,
+        *,
+        top_k: int,
+        now: datetime | None,
+        excluded_ids: set[str] | None = None,
     ) -> list[tuple[Fact, float]]:
-        """Like recall_facts() but also returns the relevance score for each fact.
+        """Core recall logic shared by recall(), recall_facts(), recall_facts_with_scores().
 
-        The score is a hybrid value (TF-IDF + retention + importance). Use it
-        to rank or filter results in integration adapters.
+        Loads facts, applies decay, runs retrieval, updates access metadata, and
+        persists.  Returns (Fact, score) pairs in relevance order.
 
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
             now: Point-in-time for decay calculation (default: current UTC).
-
-        Returns:
-            List of (Fact, score) pairs sorted by relevance (most relevant first).
-            Empty list if no facts stored or none match.
+            excluded_ids: Fact IDs to exclude from results (e.g. already-seen facts
+                in a novelty-aware retrieval loop).  ``None`` means no exclusion.
         """
         facts = self._storage.load(self._agent_id)
         if not facts:
             return []
 
         facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
-        query, expansion = self._expand_query(query)
-        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
+        expanded_query, expansion = self._expand_query(query)
+
+        candidate_facts = [f for f in facts if f.id not in excluded_ids] if excluded_ids else facts
+        pairs = self._retriever.search(
+            expanded_query, candidate_facts, top_k=top_k, expansion_weights=expansion
+        )
         if not pairs:
             return []
 
@@ -532,6 +449,83 @@ class KnowledgeBase:
                 fact.last_accessed = access_time
         self._storage.save(self._agent_id, facts)
         return pairs
+
+    def recall(self, query: str, *, top_k: int = 5, now: datetime | None = None) -> str:
+        """Retrieve relevant facts as a formatted string for prompt injection.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
+
+        Returns:
+            Formatted multi-line string, or "" if no facts found.
+        """
+        pairs = self._execute_recall(query, top_k=top_k, now=now)
+        if not pairs:
+            return ""
+        lines = [f"[{f.type.value}] {f.content}" for f, _ in pairs]
+        return "\n".join(lines)
+
+    def list_facts(self) -> list[Fact]:
+        """Return all stored facts for this agent.
+
+        Returns:
+            List of all Facts, in storage order.
+        """
+        return self._storage.load(self._agent_id)
+
+    def recall_facts(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        excluded_ids: set[str] | None = None,
+    ) -> list[Fact]:
+        """Structured alternative to recall() — returns Fact objects.
+
+        Use when you need IDs, types, importance scores, or other metadata.
+        Use recall() when you only need a formatted string for prompt injection.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
+            excluded_ids: Fact IDs to omit from results (novelty-aware retrieval).
+
+        Returns:
+            List of relevant Facts (may be empty), sorted by relevance.
+        """
+        return [
+            f
+            for f, _ in self._execute_recall(query, top_k=top_k, now=now, excluded_ids=excluded_ids)
+        ]
+
+    def recall_facts_with_scores(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        excluded_ids: set[str] | None = None,
+    ) -> list[tuple[Fact, float]]:
+        """Like recall_facts() but also returns the relevance score for each fact.
+
+        The score is a hybrid value (TF-IDF + retention + importance). Use it
+        to rank or filter results in integration adapters.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
+            excluded_ids: Fact IDs to omit from results (novelty-aware retrieval).
+
+        Returns:
+            List of (Fact, score) pairs sorted by relevance (most relevant first).
+            Empty list if no facts stored or none match.
+        """
+        return self._execute_recall(query, top_k=top_k, now=now, excluded_ids=excluded_ids)
 
     def recall_by_tag(self, tag: str) -> list[Fact]:
         """Return all facts that carry the given tag.

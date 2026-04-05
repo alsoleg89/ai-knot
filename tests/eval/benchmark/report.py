@@ -33,6 +33,7 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
         ("s4_deduplication", "S4 — Deduplication"),
         ("s5_decay", "S5 — Decay"),
         ("s6_load", "S6 — Load & Reliability"),
+        ("s7_consolidation", "S7 — Temporal Consolidation"),
     ]:
         section = _scenario_section(results, sid, title)
         if section:
@@ -62,21 +63,27 @@ def _cell(metrics: BenchmarkMetrics, sid: str, metric: str, **fmt_kwargs: bool) 
 def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
     lines: list[str] = []
     lines.append(
-        "| Backend | S1 Relevance | S1 Token↓ | S4 Dedup% | S4 Retain% | S5 Δ Retain | S6 P95ms |"
+        "| Backend | Lang | S1 Relevance | S1 Token↓ | S4 Dedup% | S4 Retain%"
+        " | S5 Δ Retain | S6 P95ms | S7 Consol% | S7 SemRecall |"
     )
     lines.append(
-        "|---------|-------------|-----------|-----------|------------|-------------|----------|"
+        "|---------|------|-------------|-----------|-----------|------------"
+        "|-------------|----------|------------|-------------|"
     )
 
     for m in results:
+        lang = getattr(m, "language", "en")
         row = (
             f"| {m.backend_name} "
+            f"| {lang} "
             f"| {_cell(m, 's1_profile_retrieval', 'relevance')} "
             f"| {_cell(m, 's1_profile_retrieval', 'token_reduction', pct=True)} "
             f"| {_cell(m, 's4_deduplication', 'dedup_ratio', pct=True)} "
             f"| {_cell(m, 's4_deduplication', 'retention_ratio', pct=True)} "
             f"| {_cell(m, 's5_decay', 'retention_delta')} "
-            f"| {_cell(m, 's6_load', 'p95_latency_ms', ms=True)} |"
+            f"| {_cell(m, 's6_load', 'p95_latency_ms', ms=True)} "
+            f"| {_cell(m, 's7_consolidation', 'consolidation_ratio', pct=True)} "
+            f"| {_cell(m, 's7_consolidation', 'semantic_latest_recall')} |"
         )
         lines.append(row)
 
