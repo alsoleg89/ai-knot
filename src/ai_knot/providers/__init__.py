@@ -16,6 +16,7 @@ _ENV_VARS: dict[str, str] = {
     "yandex": "YANDEX_API_KEY",
     "qwen": "QWEN_API_KEY",
     "openai-compat": "OPENAI_API_KEY",
+    "ollama": "",  # no env var needed — Ollama is always local
 }
 
 
@@ -58,13 +59,17 @@ def create_provider(
         return _create_anthropic(resolved_key, model=model)
     if provider == "yandex":
         return _create_yandex(resolved_key, model=model, **kwargs)
+    if provider == "ollama":
+        return _create_ollama(model=model)
 
-    supported = "openai, anthropic, gigachat, yandex, qwen, openai-compat"
+    supported = "openai, anthropic, gigachat, yandex, qwen, openai-compat, ollama"
     raise ValueError(f"Unknown provider {provider!r}. Choose from: {supported}")
 
 
 def _resolve_api_key(provider: str) -> str | None:
     """Try provider-specific env var, then LLM_API_KEY fallback."""
+    if provider == "ollama":
+        return "ollama"  # Ollama ignores the key; return sentinel to pass validation
     env_var = _ENV_VARS.get(provider)
     if env_var:
         val = os.environ.get(env_var)
@@ -110,6 +115,12 @@ def _create_anthropic(api_key: str, *, model: str | None) -> LLMProvider:
     if model:
         return AnthropicProvider(api_key, default_model=model)
     return AnthropicProvider(api_key)
+
+
+def _create_ollama(*, model: str | None) -> LLMProvider:
+    from ai_knot.providers.ollama import OLLAMA_DEFAULT_MODEL, OllamaProvider
+
+    return OllamaProvider(model=model or OLLAMA_DEFAULT_MODEL)
 
 
 def _create_yandex(api_key: str, *, model: str | None, **kwargs: str) -> LLMProvider:

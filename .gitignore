@@ -29,3 +29,12 @@ Thumbs.db
 *~
 .ai_knot/
 .claude/
+
+# Claude Code local settings
+.claude/settings.local.json
+benchmark_raw.json
+benchmark_raw_bilingual.json
+benchmark_report.md
+benchmark_report_bilingual.md
+benchmark_s7_raw.json
+benchmark_s7_report.md
