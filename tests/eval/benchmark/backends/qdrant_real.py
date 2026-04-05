@@ -1,13 +1,13 @@
-"""Real Qdrant backend: AsyncQdrantClient + Ollama embeddings (llama3.2:3b, 3072-dim).
+"""Real Qdrant backend: AsyncQdrantClient + Ollama embeddings.
 
 Ported from ContentOs/scripts/ai_knot_eval/backends/qdrant_backend.py.
 Changes from ContentOs version:
-  - Yandex text-search-doc (256-dim) → Ollama llama3.2:3b (3072-dim)
+  - Yandex text-search-doc (256-dim) → Ollama qwen2.5:7b (auto-detected dim)
   - No hash-embedding fallback (Ollama is always local)
   - insert(text) interface instead of insert_facts(list[str])
   - Per-instance unique collection name prevents reset() collisions when
     multiple backends run in parallel (asyncio.gather in runner.py)
-  - Semaphore: 5 → 3 (GPU memory limited on Ollama)
+  - Vector size auto-detected from a probe embed call — no hardcoded dimension
 """
 
 from __future__ import annotations
@@ -16,12 +16,17 @@ import contextlib
 import time
 import uuid
 
+import httpx
+
 from tests.eval.benchmark.backends.qdrant_emulator import embed_text
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
 QDRANT_HOST = "localhost"
 QDRANT_PORT = 6333
-VECTOR_SIZE = 3072  # llama3.2:3b via Ollama
+_QDRANT_BASE = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
+# Reuse a single HTTP client for all Qdrant REST calls — avoids per-call TCP handshake.
+# search() was dropped in qdrant-client 1.7+; the REST endpoint still exists in server 1.8.0.
+_HTTP = httpx.AsyncClient(timeout=30.0)
 
 
 class QdrantRealBackend(MemoryBackend):
@@ -36,6 +41,7 @@ class QdrantRealBackend(MemoryBackend):
         self._client: object | None = None
         self._point_id_counter = 0
         self._collection = f"ai_knot_bench_{uuid.uuid4().hex[:8]}"
+        self._vector_size: int | None = None  # auto-detected on first setup
 
     @property
     def name(self) -> str:
@@ -58,10 +64,14 @@ class QdrantRealBackend(MemoryBackend):
         self._client = AsyncQdrantClient(
             host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False
         )
+        # Auto-detect embedding dimension from the active model — no hardcoded size.
+        # Avoids breakage when switching models (3072 for llama3.2:3b, 3584 for qwen2.5:7b, etc.)
+        probe = await embed_text("_")
+        self._vector_size = len(probe)
         with contextlib.suppress(Exception):
             await self._client.create_collection(  # type: ignore[union-attr]
                 collection_name=self._collection,
-                vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=self._vector_size, distance=Distance.COSINE),
             )
 
     async def reset(self) -> None:
@@ -72,7 +82,7 @@ class QdrantRealBackend(MemoryBackend):
             await client.delete_collection(self._collection)  # type: ignore[union-attr]
             await client.create_collection(  # type: ignore[union-attr]
                 collection_name=self._collection,
-                vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=self._vector_size, distance=Distance.COSINE),
             )
         self._point_id_counter = 0
 
@@ -103,18 +113,19 @@ class QdrantRealBackend(MemoryBackend):
         )
 
     async def retrieve(self, query: str, *, top_k: int = 5) -> RetrievalResult:
-        client = await self._get_client()
+        await self._get_client()  # ensure collection exists before timing
         t0 = time.perf_counter()
 
         try:
             q_vec = await embed_text(query)
-            results = await client.search(  # type: ignore[union-attr]
-                collection_name=self._collection,
-                query_vector=q_vec,
-                limit=top_k,
+            resp = await _HTTP.post(
+                f"{_QDRANT_BASE}/collections/{self._collection}/points/search",
+                json={"vector": q_vec, "limit": top_k, "with_payload": True},
             )
-            texts = [r.payload.get("text", "") for r in results if r.payload]
-            scores = [r.score for r in results]
+            resp.raise_for_status()
+            hits = resp.json().get("result", [])
+            texts = [h["payload"].get("text", "") for h in hits if h.get("payload")]
+            scores = [h["score"] for h in hits]
         except Exception:
             texts, scores = [], []
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from ai_knot.providers.openai_compat import OpenAICompatProvider
 
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
-OLLAMA_DEFAULT_MODEL = "llama3.2:3b"
+OLLAMA_DEFAULT_MODEL = "qwen2.5:7b"
 OLLAMA_EMBED_URL = "http://localhost:11434/v1/embeddings"
 
 
@@ -20,7 +20,7 @@ class OllamaProvider(OpenAICompatProvider):
     No API key required — Ollama is always local.
 
     Args:
-        model: Model to use (default: ``llama3.2:3b``).
+        model: Model to use (default: ``qwen2.5:7b``).
         timeout: Request timeout in seconds. Local models can be slow
             on first token generation; default is 120 s.
     """
