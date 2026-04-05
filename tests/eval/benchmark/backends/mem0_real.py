@@ -34,6 +34,7 @@ def _normalize_mem0_results(response: object) -> list[dict[str, object]]:
         return response.get("results", [])  # type: ignore[return-value]
     return []
 
+
 _DEFAULT_CHROMA_PATH = str(Path(tempfile.gettempdir()) / "mem0_bench_chroma")
 _SEM = asyncio.Semaphore(1)  # Chroma/SQLite not safe for concurrent writes
 
@@ -87,9 +88,7 @@ class Mem0RealBackend(MemoryBackend):
         try:
             from mem0 import Memory  # type: ignore[import-untyped]
         except ImportError as e:
-            raise ImportError(
-                "mem0ai not installed. Run: pip install -e '.[benchmark]'"
-            ) from e
+            raise ImportError("mem0ai not installed. Run: pip install -e '.[benchmark]'") from e
 
         config = self._build_config()
         self._memory = Memory.from_config(config)

@@ -97,11 +97,13 @@ class QdrantRealBackend(MemoryBackend):
             self._point_id_counter += 1
             await client.upsert(  # type: ignore[union-attr]
                 collection_name=self._collection,
-                points=[PointStruct(
-                    id=self._point_id_counter,
-                    vector=vector,
-                    payload={"text": text},
-                )],
+                points=[
+                    PointStruct(
+                        id=self._point_id_counter,
+                        vector=vector,
+                        payload={"text": text},
+                    )
+                ],
             )
         except Exception:
             pass

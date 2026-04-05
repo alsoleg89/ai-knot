@@ -138,9 +138,7 @@ class OllamaJudge(BaseJudge):
             raw = str(resp.json()["choices"][0]["message"]["content"])
             return _parse_score(raw)
 
-    async def _score_metric_async(
-        self, query: str, context: str, metric: str
-    ) -> list[float]:
+    async def _score_metric_async(self, query: str, context: str, metric: str) -> list[float]:
         """Fire JUDGE_RUNS calls concurrently and return raw scores."""
         user_content = _USER_TEMPLATE.format(query=query, context=context, metric=metric)
         # M5 Pro Metal: run all judge calls concurrently

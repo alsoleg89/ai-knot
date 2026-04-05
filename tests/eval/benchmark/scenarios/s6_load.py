@@ -30,8 +30,8 @@ from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s6_load"
 TOP_K = 5
-CONCURRENT_TASKS_DEFAULT = 50   # M5 Pro: 14 perf cores + Metal
-CONCURRENT_TASKS_QUICK = 20     # CI / low-resource environments
+CONCURRENT_TASKS_DEFAULT = 50  # M5 Pro: 14 perf cores + Metal
+CONCURRENT_TASKS_QUICK = 20  # CI / low-resource environments
 
 
 def _percentile(data: list[float], p: float) -> float:

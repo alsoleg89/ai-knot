@@ -40,7 +40,7 @@ from tests.eval.benchmark.base import BenchmarkMetrics, MemoryBackend
 from tests.eval.benchmark.report import render_markdown
 
 _BACKEND_CHOICES = ("ai_knot", "qdrant", "mem0", "baseline", "qdrant_real", "mem0_real")
-_SCENARIO_CHOICES = ("s1", "s2", "s3", "s4", "s5", "s6")
+_SCENARIO_CHOICES = ("s1", "s2", "s3", "s4", "s5", "s6", "s7")
 _MODE_CHOICES = ("basic", "extended", "auto")
 
 
@@ -50,10 +50,7 @@ _MODE_CHOICES = ("basic", "extended", "auto")
     default="auto",
     type=click.Choice(_MODE_CHOICES),
     show_default=True,
-    help=(
-        "basic=emulators only, extended=real services, "
-        "auto=detect services and packages"
-    ),
+    help=("basic=emulators only, extended=real services, auto=detect services and packages"),
 )
 @click.option(
     "--backends",
