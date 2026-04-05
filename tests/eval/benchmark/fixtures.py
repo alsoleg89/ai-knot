@@ -672,3 +672,720 @@ CONSOLIDATION = ConsolidationFixture(
     n_topics=N_CONSOLIDATION_TOPICS,
     n_versions=N_CONSOLIDATION_VERSIONS,
 )
+
+# ===========================================================================
+# Bilingual bundle infrastructure
+# ===========================================================================
+# Two independent personas used for EN and RU benchmark runs:
+#   EN — Alex Chen, Staff Data Engineer @ FinServe Capital, San Francisco
+#   RU — Максим Петров, Senior Backend Engineer @ Яндекс, Москва
+# Each bundle provides all fixture data needed for S1–S5 + S7.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AvoidRepeatsFixture:
+    titles: list[str]
+    queries: list[str]
+    expected_seen: dict[str, list[str]]
+
+
+@dataclass
+class FeedbackFixture:
+    history: list[tuple[str, str]]
+    queries: list[str]
+    expected_rules: dict[str, list[str]]
+    expected_keywords: dict[str, list[str]]
+
+
+@dataclass
+class LanguageBundle:
+    language: str  # "en" | "ru"
+    profile: ProfileFixture
+    avoid_repeats: AvoidRepeatsFixture
+    feedback: FeedbackFixture
+    dedup: DeduplicationFixture
+    consolidation: ConsolidationFixture
+
+
+# ===========================================================================
+# EN Bundle — Alex Chen, Staff Data Engineer @ FinServe Capital
+# ===========================================================================
+
+_EN_PROFILE_FACTS: list[str] = [
+    "Alex Chen is a Staff Data Engineer at FinServe Capital, based in San Francisco.",
+    "Alex's primary language is Python 3.12; uses Go for high-throughput pipeline components.",
+    "Alex uses Apache Kafka for event streaming between data domains.",
+    "Alex's transformation layer is dbt on Databricks; pipeline orchestration runs on Prefect 2.",
+    "Alex runs all infrastructure on Kubernetes 1.30 with Helm charts.",
+    "Alex's analytical warehouse is Snowflake; operational database is PostgreSQL 16.",
+    "Alex requires type annotations on all public functions and methods (mypy strict mode).",
+    "Alex's team uses trunk-based development with feature flags for in-progress work.",
+    "Alex's work hours are 09:00–18:00 PST; weekly data review meeting on Thursdays.",
+    "Alex enforces schema versioning for all Avro and Protobuf event schemas in Confluent Schema Registry.",
+    "Alex keeps secrets in AWS Secrets Manager; never in environment variables or config files.",
+    "Alex uses pytest with pytest-datadir for all pipeline unit tests.",
+    "Alex recently migrated orchestration from Apache Airflow 2.6 to Prefect 2.",
+    "Alex's team follows a 'data contract first' policy: schema agreed before implementation.",
+    "Alex's manager is Sarah Lin; skip-level is David Park, VP of Engineering.",
+]
+
+_EN_PROFILE_QUERIES: list[str] = [
+    "What programming language does Alex prefer?",
+    "How does Alex manage secrets and credentials?",
+    "What orchestration tool does the team use?",
+    "What is the team's primary analytical warehouse?",
+    "What is the team's branching and development strategy?",
+]
+
+_EN_AVOID_REPEATS_TITLES: list[str] = [
+    "Building fault-tolerant Kafka consumers with Python",
+    "dbt best practices for large-scale data transformations",
+    "Migrating from Apache Airflow to Prefect 2: lessons learned",
+    "Confluent Schema Registry with Avro: a practical guide",
+    "Snowflake cost optimization: 10 strategies that work",
+    "Delta Lake on Databricks: ACID transactions for your data lake",
+    "Incremental dbt models: from full refresh to stream-like updates",
+    "Data contracts in practice: schema agreements before code",
+    "Exactly-once Kafka delivery: guarantees and trade-offs",
+    "Partition pruning in Snowflake: write queries that skip data",
+    "Prefect 2 deployments: from local runs to production flows",
+    "How we cut Databricks job costs by 40% with spot instances",
+    "Writing testable dbt macros",
+    "Kafka consumer group rebalancing: causes and mitigations",
+    "PostgreSQL 16 for analytics: when to stay and when to move to Snowflake",
+    "Data quality with dbt-expectations: beyond not-null tests",
+    "Schema evolution strategies: backward and forward compatibility",
+    "Dead letter queues for Kafka: design patterns",
+    "Orchestrating dbt with Prefect: a step-by-step guide",
+    "TimescaleDB vs InfluxDB: choosing a time-series database",
+    "Streaming ingestion into Snowflake with Kafka connectors",
+    "Building a data observability platform from scratch",
+    "Fivetran vs Airbyte: a 2025 ELT comparison",
+    "Column-level lineage in dbt: tracking data provenance",
+    "Spark vs dbt: choosing the right transformation engine",
+    "Kubernetes for data pipelines: stateful workloads done right",
+    "AWS Glue vs Databricks: total cost of ownership analysis",
+    "Event-driven data pipelines with Kafka and Flink",
+    "Materialized views in Snowflake: when they help and when they hurt",
+    "Data mesh principles applied to a fintech data platform",
+    "Testing Kafka consumers without a running broker",
+    "Go for data engineering: when Python is too slow",
+    "dbt snapshots: tracking slowly changing dimensions",
+    "Iceberg vs Delta Lake vs Hudi: open table format comparison",
+    "Pipeline retries and idempotency: getting it right",
+    "Monitoring dbt pipeline SLAs with Prefect and PagerDuty",
+    "ClickHouse for real-time analytics: a fintech case study",
+    "Airflow to Prefect migration: what nobody tells you",
+    "The hidden costs of Kafka: partition sizing and storage",
+    "Data versioning with lakeFS: git for your data lake",
+    "Building a CI pipeline for dbt models",
+    "PostgreSQL logical replication for real-time data sync",
+    "Trino vs Spark SQL for ad-hoc analytics",
+    "Schema-on-read vs schema-on-write in modern data platforms",
+    "Prefect agents on Kubernetes: scaling horizontally",
+    "Handling late-arriving events in streaming pipelines",
+    "Avro vs Parquet vs ORC: when to use which format",
+    "Data platform reliability: SLOs for pipelines",
+    "Type-safe data pipelines with Pydantic and dbt",
+    "Zero-downtime schema migrations in Snowflake",
+]
+
+_EN_AVOID_REPEATS_QUERIES: list[str] = [
+    "Write an article about Apache Kafka and event streaming",
+    "Suggest a topic about dbt and data transformation",
+    "What should I write about data pipeline orchestration?",
+]
+
+_EN_AVOID_REPEATS_EXPECTED_SEEN: dict[str, list[str]] = {
+    _EN_AVOID_REPEATS_QUERIES[0]: [
+        "Building fault-tolerant Kafka consumers with Python",
+        "Exactly-once Kafka delivery: guarantees and trade-offs",
+        "Kafka consumer group rebalancing: causes and mitigations",
+        "Dead letter queues for Kafka: design patterns",
+        "Streaming ingestion into Snowflake with Kafka connectors",
+    ],
+    _EN_AVOID_REPEATS_QUERIES[1]: [
+        "dbt best practices for large-scale data transformations",
+        "Incremental dbt models: from full refresh to stream-like updates",
+        "Writing testable dbt macros",
+        "Data quality with dbt-expectations: beyond not-null tests",
+        "Column-level lineage in dbt: tracking data provenance",
+    ],
+    _EN_AVOID_REPEATS_QUERIES[2]: [
+        "Migrating from Apache Airflow to Prefect 2: lessons learned",
+        "Orchestrating dbt with Prefect: a step-by-step guide",
+        "Prefect 2 deployments: from local runs to production flows",
+        "Airflow to Prefect migration: what nobody tells you",
+    ],
+}
+
+_EN_FEEDBACK_HISTORY: list[tuple[str, str]] = [
+    (
+        "How long should data engineering posts be?",
+        "Keep posts under 400 words — data engineers scan, not read.",
+    ),
+    (
+        "Should I include code snippets?",
+        "Always show code. No theory without a concrete implementation example.",
+    ),
+    (
+        "What about SQL formatting in articles?",
+        "Format SQL with uppercase keywords and consistent indentation; never inline snippets for multi-line queries.",
+    ),
+    (
+        "Should I compare tools by name?",
+        "Compare tools with benchmarks and numbers, not opinions. Show query plans and timing.",
+    ),
+    (
+        "How should I end a post?",
+        "End with one practical takeaway — a command or snippet the reader can run today.",
+    ),
+    (
+        "What tone to use?",
+        "Technical and direct. Skip adjectives like 'powerful', 'amazing', and 'seamless'.",
+    ),
+    (
+        "What kind of diagrams?",
+        "Data flow diagrams only — no vague architecture boxes or generic cloud icons.",
+    ),
+    (
+        "Should I mention cloud providers?",
+        "Stay cloud-agnostic unless the post is specifically about that provider.",
+    ),
+    (
+        "How many examples should I use?",
+        "One deep example beats three shallow ones. Pick the hardest edge case to illustrate.",
+    ),
+    (
+        "What about performance numbers?",
+        "Always include query plan output or benchmark results, never just narrative claims.",
+    ),
+]
+
+_EN_FEEDBACK_QUERIES: list[str] = [
+    "What are the content and style rules for writing technical posts?",
+    "How should code and SQL be formatted in data engineering articles?",
+    "What makes a good ending for a data engineering article?",
+]
+
+_EN_FEEDBACK_EXPECTED_RULES: dict[str, list[str]] = {
+    _EN_FEEDBACK_QUERIES[0]: [
+        "Keep posts under 400 words — data engineers scan, not read.",
+        "Technical and direct. Skip adjectives like 'powerful', 'amazing', and 'seamless'.",
+        "Stay cloud-agnostic unless the post is specifically about that provider.",
+        "One deep example beats three shallow ones. Pick the hardest edge case to illustrate.",
+    ],
+    _EN_FEEDBACK_QUERIES[1]: [
+        "Always show code. No theory without a concrete implementation example.",
+        "Format SQL with uppercase keywords and consistent indentation; never inline snippets for multi-line queries.",
+        "Always include query plan output or benchmark results, never just narrative claims.",
+    ],
+    _EN_FEEDBACK_QUERIES[2]: [
+        "End with one practical takeaway — a command or snippet the reader can run today.",
+        "One deep example beats three shallow ones. Pick the hardest edge case to illustrate.",
+    ],
+}
+
+_EN_FEEDBACK_EXPECTED_KEYWORDS: dict[str, list[str]] = {
+    _EN_FEEDBACK_QUERIES[0]: ["400", "scan", "adjective", "cloud", "agnostic"],
+    _EN_FEEDBACK_QUERIES[1]: ["sql", "code", "uppercase", "benchmark", "query"],
+    _EN_FEEDBACK_QUERIES[2]: ["takeaway", "command", "snippet", "example"],
+}
+
+_EN_DEDUP_CANONICAL_RULE = (
+    "Always version all Avro and Protobuf schemas in the Schema Registry before deployment."
+)
+
+_EN_DEDUP_PARAPHRASES: list[str] = [
+    "Always version all Avro and Protobuf schemas in the Schema Registry before deployment.",
+    "All Avro and Protobuf schemas must be versioned in the Schema Registry prior to deployment.",
+    "Register and version every Avro and Protobuf schema in the Schema Registry before deploying.",
+    "Schema versioning in the Schema Registry is mandatory for Avro and Protobuf before any deployment.",
+    "Before deploying, ensure all Avro and Protobuf schemas are versioned in the registry.",
+    "Every Avro and Protobuf schema must be stored with a version in the Schema Registry before going live.",
+    "Versioned Avro and Protobuf schemas are required in the Schema Registry ahead of deployment.",
+    "Register all Avro and Protobuf schemas with explicit versions in the Schema Registry prior to rollout.",
+    "Schema Registry versioning is required for all Avro and Protobuf schemas before deployment.",
+    "Do not deploy until all Avro and Protobuf schemas are versioned in the Schema Registry.",
+    "Always add a versioned entry to the Schema Registry for every Avro and Protobuf schema.",
+    "Avro and Protobuf schemas must carry a Schema Registry version number before any production deployment.",
+    "You must version your Avro and Protobuf schemas in the registry before deploying.",
+    "Require Schema Registry versioning for Avro and Protobuf schemas as a deployment prerequisite.",
+    "Bump the schema version in the Schema Registry for every Avro and Protobuf change before deploying.",
+    "Schema Registry entries for Avro and Protobuf schemas must be versioned before release.",
+    "Enforce version registration in the Schema Registry for all Avro and Protobuf schemas pre-deploy.",
+    "All schema changes for Avro and Protobuf must be committed to the Schema Registry with a new version.",
+    "New Avro and Protobuf schema versions must be registered before the corresponding code is deployed.",
+    "Schema Registry versioning is a hard requirement for Avro and Protobuf schemas before any deploy.",
+    "Never deploy Avro or Protobuf schema changes without first versioning them in the Schema Registry.",
+    "Avro and Protobuf schema versions must exist in the Schema Registry prior to service deployment.",
+    "Each Avro and Protobuf schema change requires a new version registered in the Schema Registry.",
+    "Pre-deployment checklist: Avro and Protobuf schemas versioned in the Schema Registry.",
+    "Version registration in the Schema Registry is mandatory for Avro and Protobuf before deployment.",
+    "Always register a schema version for Avro and Protobuf in the Schema Registry before deploying services.",
+    "Schema Registry version bump required for all Avro and Protobuf schema updates before deploying.",
+    "Enforce Schema Registry versioning on every Avro and Protobuf schema ahead of production rollout.",
+    "Avro and Protobuf schemas must be versioned in the Schema Registry as part of the deploy process.",
+    "No deployment proceeds until all Avro and Protobuf schemas have been versioned in the Schema Registry.",
+    "Register schema versions in the Schema Registry for Avro and Protobuf before deploying pipeline code.",
+    "Schema versioning for Avro and Protobuf in the Schema Registry is a deployment gate.",
+    "All new Avro and Protobuf schemas need a version in the Schema Registry before any rollout.",
+    "Schema Registry: always add a version for Avro and Protobuf schemas before you deploy.",
+    "Avro and Protobuf schema versioning in the registry is required; check before every deployment.",
+    "Bump and register the schema version for Avro and Protobuf before promoting to production.",
+    "Deploying without versioning Avro and Protobuf schemas in the Schema Registry is not allowed.",
+    "Schema version registration must precede deployment for all Avro and Protobuf schemas.",
+    "Every Avro and Protobuf schema deployed to production must have a Schema Registry version.",
+    "Schema Registry version entry for Avro and Protobuf is required before merging deployment PRs.",
+    "Add schema version to the Schema Registry for Avro and Protobuf before triggering deploy.",
+    "Avro and Protobuf schemas must have explicit version records in the Schema Registry before deployment.",
+    "A Schema Registry version is mandatory for Avro and Protobuf schemas before every production deploy.",
+    "Register the schema version in the Schema Registry for all Avro and Protobuf schemas pre-deployment.",
+    "Schema Registry versioning must be completed for Avro and Protobuf schemas before deployment runs.",
+    "No Avro or Protobuf schema should go to production without a version in the Schema Registry.",
+    "Always ensure Avro and Protobuf schema versions are committed to the Schema Registry before deployment.",
+    "Versioning Avro and Protobuf schemas in the Schema Registry is required as a deploy prerequisite.",
+    "All Avro and Protobuf schemas require a Schema Registry version before the deploy gate passes.",
+    "Schema Registry: version every Avro and Protobuf schema before deploying the consuming service.",
+]
+
+_EN_DEDUP_DISTINCT_RULES: list[str] = [
+    "Always version all Avro and Protobuf schemas in the Schema Registry before deployment.",
+    "Use incremental dbt models with unique keys instead of full refreshes on large tables.",
+    "All Kafka consumers must have a dedicated dead letter queue configured.",
+    "Run EXPLAIN ANALYZE on all Snowflake queries before promoting to production.",
+    "Pin dbt package versions in packages.yml; never use the 'latest' tag.",
+    "Partition all large fact tables by created_at for efficient time-range queries.",
+    "Write dbt-expectations data quality tests for every critical dbt model.",
+    "All pipeline code must be testable in isolation with mock data fixtures.",
+    "Use connection pooling on all PostgreSQL connections; default pool size is 10.",
+    "Log structured JSON with correlation IDs in every pipeline step.",
+    "Validate input schemas at pipeline entry points; reject malformed records early.",
+    "Store raw ingested data in an immutable landing zone before any transformation.",
+    "Use Delta Lake format for all large fact tables on Databricks.",
+    "Pipeline SLAs are defined per dataset; alert when p95 processing latency exceeds the target.",
+    "All secrets are fetched from AWS Secrets Manager at runtime, never baked into images.",
+    "Idempotent writes require a unique pipeline run ID in every upsert statement.",
+    "Data contracts are reviewed and signed off by consuming teams before schema changes.",
+    "Never write raw SQL in application code; use dbt models or parameterized queries.",
+    "Tag all Kafka events with schema version and producer service name.",
+    "Document every dbt model with a description field in schema.yml.",
+]
+
+_EN_CONSOLIDATION_FACTS: list[str] = [
+    # Round 1 (v1 — starting state)
+    "Alex uses Apache Airflow 2.2 for pipeline orchestration on a self-hosted cluster.",
+    "Alex is the sole data engineer on the team.",
+    "The analytical warehouse is Amazon Redshift with manual VACUUM scheduling.",
+    "Pipeline deployments happen manually after team sign-off.",
+    "Event schemas are stored as plain JSON files in a Git repository.",
+    # Round 2 (v2)
+    "Team migrated orchestration to Apache Airflow 2.6 with the Celery executor.",
+    "Alex hired a junior data engineer; the team is now 2 people.",
+    "The team evaluated Snowflake as a replacement for Redshift.",
+    "Deployment process moved to a CI-gated shell script triggered on merge.",
+    "Schemas moved to a shared Confluence wiki page maintained by the team.",
+    # Round 3 (v3)
+    "Alex piloted Prefect 2 for new pipelines alongside legacy Airflow DAGs.",
+    "The data team grew to 4 engineers after Series A funding.",
+    "Snowflake is now the primary warehouse for all analytics workloads.",
+    "Deployments run via a GitHub Actions workflow on every merge to the main branch.",
+    "Team adopted Confluent Schema Registry with Avro for all Kafka topics.",
+    # Round 4 (v4)
+    "All new pipelines are built in Prefect 2; Airflow handles only legacy DAGs.",
+    "Alex leads a team of 6 data engineers.",
+    "All analytical workloads run on Snowflake; Delta Lake on Databricks handles streaming ingestion.",
+    "The CI pipeline deploys to production automatically after integration tests pass.",
+    "Schema Registry enforces backward compatibility checks on all Avro schema updates.",
+    # Round 5 (v5 — latest state)
+    "Alex's team runs all orchestration on Prefect 2 with Temporal for long-running workflows.",
+    "Alex manages an 8-person data engineering team spread across San Francisco and London.",
+    "The warehouse stack is Snowflake for OLAP and PostgreSQL 16 with TimescaleDB for operational analytics.",
+    "Every merged PR to the pipeline repo triggers automated deployment via GitHub Actions to production.",
+    "All event schemas are governed by a data contract registry; breaking changes require a 30-day deprecation period.",
+]
+
+_EN_CONSOLIDATION_QUERIES: list[str] = [
+    "What orchestration tool does Alex's team currently use?",
+    "How large is Alex's data engineering team?",
+    "What data warehouse and storage technology does the team use?",
+    "How are pipeline changes deployed to production?",
+    "How does the team manage event schemas and data contracts?",
+]
+
+_EN_CONSOLIDATION_LATEST_FACTS: list[str] = [
+    "Alex's team runs all orchestration on Prefect 2 with Temporal for long-running workflows.",
+    "Alex manages an 8-person data engineering team spread across San Francisco and London.",
+    "The warehouse stack is Snowflake for OLAP and PostgreSQL 16 with TimescaleDB for operational analytics.",
+    "Every merged PR to the pipeline repo triggers automated deployment via GitHub Actions to production.",
+    "All event schemas are governed by a data contract registry; breaking changes require a 30-day deprecation period.",
+]
+
+BUNDLE_EN = LanguageBundle(
+    language="en",
+    profile=ProfileFixture(raw_facts=_EN_PROFILE_FACTS, queries=_EN_PROFILE_QUERIES),
+    avoid_repeats=AvoidRepeatsFixture(
+        titles=_EN_AVOID_REPEATS_TITLES,
+        queries=_EN_AVOID_REPEATS_QUERIES,
+        expected_seen=_EN_AVOID_REPEATS_EXPECTED_SEEN,
+    ),
+    feedback=FeedbackFixture(
+        history=_EN_FEEDBACK_HISTORY,
+        queries=_EN_FEEDBACK_QUERIES,
+        expected_rules=_EN_FEEDBACK_EXPECTED_RULES,
+        expected_keywords=_EN_FEEDBACK_EXPECTED_KEYWORDS,
+    ),
+    dedup=DeduplicationFixture(
+        paraphrases=_EN_DEDUP_PARAPHRASES,
+        distinct_rules=_EN_DEDUP_DISTINCT_RULES,
+        canonical_rule=_EN_DEDUP_CANONICAL_RULE,
+    ),
+    consolidation=ConsolidationFixture(
+        facts=_EN_CONSOLIDATION_FACTS,
+        queries=_EN_CONSOLIDATION_QUERIES,
+        latest_facts=_EN_CONSOLIDATION_LATEST_FACTS,
+        n_topics=5,
+        n_versions=5,
+    ),
+)
+
+# ===========================================================================
+# RU Bundle — Максим Петров, Senior Backend Engineer @ Яндекс
+# ===========================================================================
+
+_RU_PROFILE_FACTS: list[str] = [
+    "Максим Петров — senior backend-инженер в Яндексе, Москва.",
+    "Максим пишет преимущественно на Python 3.11; использует Go для высоконагруженных сервисов.",
+    "Максим использует ClickHouse для аналитических запросов и YDB для транзакционных данных.",
+    "Вся инфраструктура команды работает на Kubernetes в Яндекс.Облаке.",
+    "Максим использует Kafka для стриминга событий между сервисами.",
+    "Основной фреймворк для Python-сервисов — FastAPI; для Go — стандартная библиотека с роутером chi.",
+    "Максим требует полную типизацию всех публичных функций: mypy strict для Python, go vet для Go.",
+    "Команда Максима использует trunk-based development с feature-флагами через LaunchDarkly.",
+    "Рабочие часы Максима: 10:00–19:00 МСК; ежедневный стендап в 10:15.",
+    "Максим хранит секреты в HashiCorp Vault; в переменных окружения только ссылки на секреты.",
+    "Максим использует pytest с parametrize для unit-тестов и testcontainers для интеграционных.",
+    "Команда мигрировала с Jenkins на GitHub Actions шесть месяцев назад.",
+    "Максим ведёт внутренний технический блог на Habr на тему системного дизайна и highload.",
+    "Правило ревью в команде: минимум два аппрувала для изменений в core-сервисах.",
+    "Менеджер Максима — Сергей Иванов; skip-level — Елена Смирнова, директор разработки.",
+]
+
+_RU_PROFILE_QUERIES: list[str] = [
+    "Какой язык программирования предпочитает Максим?",
+    "Как в команде хранятся секреты?",
+    "Какую базу данных использует Максим для аналитики?",
+    "Какой CI/CD использует команда?",
+    "Какой фреймворк используется для Python-сервисов?",
+]
+
+_RU_AVOID_REPEATS_TITLES: list[str] = [
+    "ClickHouse vs PostgreSQL: когда стоит переходить на аналитическую базу",
+    "YDB в продакшене: транзакции в распределённой системе",
+    "Kafka для новичков: от топиков до consumer groups",
+    "Как мы мигрировали с Jenkins на GitHub Actions без боли",
+    "FastAPI в highload: оптимизация async-эндпоинтов",
+    "Kubernetes в Яндекс.Облаке: наш опыт за два года",
+    "Trunk-based development: почему мы отказались от feature-веток",
+    "HashiCorp Vault: управление секретами в микросервисной архитектуре",
+    "Типизация Python-кода: mypy strict в реальном проекте",
+    "Go vs Python в highload: сравниваем производительность на реальных задачах",
+    "Testcontainers для интеграционных тестов: никаких моков для баз данных",
+    "Feature-флаги через LaunchDarkly: опыт внедрения",
+    "gRPC vs REST в внутренних сервисах: что выбрать в 2025",
+    "ClickHouse: оптимизация запросов с материализованными вью",
+    "Мониторинг микросервисов: от логов до трейсов",
+    "Kubernetes HPA и VPA: автоскейлинг на практике",
+    "Kafka Schema Registry: как мы перестали ломать консьюмеры",
+    "YDB vs ClickHouse: когда нужна аналитика, а когда — транзакции",
+    "Как писать идемпотентные обработчики Kafka-сообщений",
+    "GitHub Actions: кэширование зависимостей для ускорения CI",
+    "Graceful shutdown в Go: паттерны и подводные камни",
+    "Python asyncio в продакшене: ловушки и как их избежать",
+    "ClickHouse MergeTree: выбор ключа сортировки под запросы",
+    "Деплой без даунтайма: rolling update в Kubernetes",
+    "Observability в 2025: OpenTelemetry как стандарт",
+    "Distributed tracing с Jaeger: от инструментации до анализа",
+    "Как мы снизили latency Kafka-консьюмеров на 60%",
+    "Параллельное тестирование в Python: pytest-xdist в CI",
+    "Секреты Kubernetes: Vault Agent Injector vs External Secrets Operator",
+    "Go routines и каналы: паттерны конкурентности",
+    "ClickHouse ReplicatedMergeTree: репликация без боли",
+    "Как мы организовали внутреннюю документацию для 50+ сервисов",
+    "Структурированное логирование: почему JSON лучше plain text",
+    "FastAPI Depends: инъекция зависимостей без фреймворков",
+    "Профилирование Python в продакшене: py-spy и scalene",
+    "YDB: работа с таблицами через Python SDK",
+    "Rate limiting на уровне API Gateway: алгоритмы и реализация",
+    "Как тестировать Kafka без реального брокера",
+    "PostgreSQL vs YDB: выбор хранилища для транзакционных данных",
+    "Мониторинг ClickHouse: метрики, которые важны на самом деле",
+    "Kubernetes Network Policies: минимум привилегий для подов",
+    "CI/CD для монорепо: стратегии и инструменты",
+    "Pydantic v2: типизация данных на уровне рантайма",
+    "Graceful degradation в микросервисах: circuit breaker на практике",
+    "ClickHouse Kafka engine: потоковая запись без Flink",
+    "Как мы избавились от технического долга в core-сервисах",
+    "GitHub Actions матрицы: параллельный запуск тестов по несколько окружений",
+    "Оптимизация Docker-образов: от 2 ГБ до 200 МБ",
+    "Эффективные код-ревью: правила, которые экономят время",
+    "Секреты высоконагруженных FastAPI-приложений",
+]
+
+_RU_AVOID_REPEATS_QUERIES: list[str] = [
+    "Напиши статью про ClickHouse и аналитические базы данных",
+    "Предложи тему про Kafka и потоковую обработку",
+    "О чём написать статью про Kubernetes и деплой?",
+]
+
+_RU_AVOID_REPEATS_EXPECTED_SEEN: dict[str, list[str]] = {
+    _RU_AVOID_REPEATS_QUERIES[0]: [
+        "ClickHouse vs PostgreSQL: когда стоит переходить на аналитическую базу",
+        "ClickHouse: оптимизация запросов с материализованными вью",
+        "ClickHouse MergeTree: выбор ключа сортировки под запросы",
+        "ClickHouse ReplicatedMergeTree: репликация без боли",
+        "Мониторинг ClickHouse: метрики, которые важны на самом деле",
+    ],
+    _RU_AVOID_REPEATS_QUERIES[1]: [
+        "Kafka для новичков: от топиков до consumer groups",
+        "Kafka Schema Registry: как мы перестали ломать консьюмеры",
+        "Как мы снизили latency Kafka-консьюмеров на 60%",
+        "Как писать идемпотентные обработчики Kafka-сообщений",
+        "Как тестировать Kafka без реального брокера",
+    ],
+    _RU_AVOID_REPEATS_QUERIES[2]: [
+        "Kubernetes в Яндекс.Облаке: наш опыт за два года",
+        "Kubernetes HPA и VPA: автоскейлинг на практике",
+        "Деплой без даунтайма: rolling update в Kubernetes",
+        "Kubernetes Network Policies: минимум привилегий для подов",
+    ],
+}
+
+_RU_FEEDBACK_HISTORY: list[tuple[str, str]] = [
+    (
+        "Какой должна быть длина статьи на Habr?",
+        "Оптимальная длина — 1500–2500 слов. Короче — нет пользы читателю, длиннее — теряют.",
+    ),
+    (
+        "Стоит ли использовать заголовки?",
+        "Обязательно H2 и H3. Читатели Habr сканируют статью по заголовкам, не читают линейно.",
+    ),
+    (
+        "Как оформлять код в статьях?",
+        "Всегда fenced code blocks с указанием языка. Никаких инлайн-блоков для многострочного кода.",
+    ),
+    (
+        "Сравнивать ли инструменты по именам?",
+        "Сравнения только с цифрами и бенчмарками, не мнениями. Покажи числа, а не 'лучше'.",
+    ),
+    (
+        "Как заканчивать статью?",
+        "Заканчивай конкретным выводом или командой, которую читатель может запустить сразу.",
+    ),
+    (
+        "Какой тон использовать?",
+        "Технический и прямой. Без маркетинговых слов: 'мощный', 'удобный', 'революционный'.",
+    ),
+    (
+        "Какие схемы добавлять?",
+        "Только диаграммы потоков данных. Никаких размытых 'архитектурных' квадратиков без деталей.",
+    ),
+    (
+        "Упоминать ли облачных провайдеров?",
+        "Сохраняй нейтральность, если статья не специфична для провайдера. Не пиши рекламу.",
+    ),
+    (
+        "Сколько примеров использовать?",
+        "Один глубокий пример лучше трёх поверхностных. Разбери самый сложный кейс.",
+    ),
+    (
+        "Что делать с метриками производительности?",
+        "Всегда публикуй EXPLAIN ANALYZE или benchmark-вывод, а не просто утверждения.",
+    ),
+]
+
+_RU_FEEDBACK_QUERIES: list[str] = [
+    "Какие правила стиля и содержания для технических статей на Habr?",
+    "Как оформлять код и SQL в статьях по бэкенду?",
+    "Как правильно завершить техническую статью?",
+]
+
+_RU_FEEDBACK_EXPECTED_RULES: dict[str, list[str]] = {
+    _RU_FEEDBACK_QUERIES[0]: [
+        "Оптимальная длина — 1500–2500 слов. Короче — нет пользы читателю, длиннее — теряют.",
+        "Технический и прямой. Без маркетинговых слов: 'мощный', 'удобный', 'революционный'.",
+        "Сохраняй нейтральность, если статья не специфична для провайдера. Не пиши рекламу.",
+        "Один глубокий пример лучше трёх поверхностных. Разбери самый сложный кейс.",
+    ],
+    _RU_FEEDBACK_QUERIES[1]: [
+        "Всегда fenced code blocks с указанием языка. Никаких инлайн-блоков для многострочного кода.",
+        "Сравнения только с цифрами и бенчмарками, не мнениями. Покажи числа, а не 'лучше'.",
+        "Всегда публикуй EXPLAIN ANALYZE или benchmark-вывод, а не просто утверждения.",
+    ],
+    _RU_FEEDBACK_QUERIES[2]: [
+        "Заканчивай конкретным выводом или командой, которую читатель может запустить сразу.",
+        "Один глубокий пример лучше трёх поверхностных. Разбери самый сложный кейс.",
+    ],
+}
+
+_RU_FEEDBACK_EXPECTED_KEYWORDS: dict[str, list[str]] = {
+    _RU_FEEDBACK_QUERIES[0]: ["2500", "слов", "маркетинговых", "нейтральность", "пример"],
+    _RU_FEEDBACK_QUERIES[1]: ["code", "block", "языка", "benchmark", "explain"],
+    _RU_FEEDBACK_QUERIES[2]: ["вывод", "команд", "пример", "сложный"],
+}
+
+_RU_DEDUP_CANONICAL_RULE = "Все публичные функции и методы должны иметь полную типизацию аргументов и возвращаемых значений."
+
+_RU_DEDUP_PARAPHRASES: list[str] = [
+    "Все публичные функции и методы должны иметь полную типизацию аргументов и возвращаемых значений.",
+    "Все публичные функции и методы обязаны быть типизированы — параметры и возвращаемые типы.",
+    "Полная типизация обязательна для всех публичных функций и методов.",
+    "Каждая публичная функция и метод должны иметь аннотации типов для всех параметров и возвращаемого значения.",
+    "Аннотации типов обязательны для публичных функций: параметры и возвращаемое значение.",
+    "Каждая публичная функция должна быть полностью типизирована.",
+    "Типизируй все параметры и возвращаемые значения публичных функций без исключений.",
+    "Все методы и функции публичного API требуют полной типизации.",
+    "Публичные функции без аннотаций типов недопустимы.",
+    "Обязательная типизация параметров и возвращаемых значений для всех публичных функций.",
+    "Каждая экспортируемая функция должна иметь типы параметров и возвращаемого значения.",
+    "Без полной типизации не должно быть ни одной публичной функции.",
+    "Все сигнатуры публичных функций должны включать аннотации типов.",
+    "Требуй аннотации типов на всех публичных функциях и методах.",
+    "Публичные методы классов обязаны иметь типизированные параметры и возвращаемые значения.",
+    "Аннотации типов для всех параметров и возвращаемых значений — обязательное требование для публичных функций.",
+    "Каждая публично доступная функция должна иметь полные аннотации типов.",
+    "Все функции публичного интерфейса должны быть полностью типизированы.",
+    "Присваивай аннотации типов всем параметрам и возвращаемым значениям публичных функций.",
+    "Никакой публичной функции без полной типизации параметров и возвращаемого типа.",
+    "Публичный API: обязательная аннотация типов для каждой функции и метода.",
+    "Все параметры и возвращаемые значения публичных функций должны быть явно типизированы.",
+    "Типизация — обязательна для всех публичных функций и методов.",
+    "Каждая публичная функция должна иметь явные аннотации типов без исключений.",
+    "Указывай типы для всех параметров и возвращаемых значений публичных функций.",
+    "Публичные функции без явных типов — нарушение стандарта кодирования.",
+    "Все публично видимые функции обязаны иметь полную типизацию.",
+    "Всегда добавляй аннотации типов к параметрам и возвращаемым значениям публичных функций.",
+    "Требование: каждая публичная функция должна быть полностью аннотирована типами.",
+    "Аннотируй типы для всех публичных методов и функций без исключений.",
+    "Полная аннотация типов — обязательное условие для публичных функций.",
+    "Типы параметров и возвращаемые типы обязательны для публичных функций и методов.",
+    "Все публичные функции должны иметь типы: параметры и возвращаемое значение.",
+    "Типизация параметров и возвращаемых значений обязательна для публичного API.",
+    "Каждый публичный метод должен иметь полную типизацию без исключений.",
+    "Типы для всех параметров и возвращаемых значений публичных функций — не опция, а требование.",
+    "Всегда указывай типы параметров и возвращаемых значений для публичных функций.",
+    "Без аннотации типов нет публичных функций.",
+    "Публичные функции требуют полной типизации параметров и возвращаемых значений.",
+    "Все публичные методы и функции должны быть покрыты аннотациями типов.",
+    "Обязательная аннотация типов для всех параметров и возвращаемых значений публичных функций.",
+    "Типизируй все публичные функции и методы без исключений.",
+    "Аннотации типов обязательны на всех публичных функциях — аргументы и возвращаемое значение.",
+    "Все публичные функции проекта должны иметь полные аннотации типов.",
+    "Требуй полную типизацию для каждой публичной функции и метода.",
+    "Аннотации типов должны охватывать все параметры и возвращаемые значения публичных функций.",
+    "Публичные функции без аннотаций типов — нарушение правил проекта.",
+    "Полная типизация публичных функций — обязательное условие.",
+    "Все экспортируемые функции должны иметь типы параметров и возвращаемое значение.",
+    "Каждый публичный метод обязан иметь аннотации типов на аргументах и возвращаемом значении.",
+]
+
+_RU_DEDUP_DISTINCT_RULES: list[str] = [
+    "Все публичные функции и методы должны иметь полную типизацию аргументов и возвращаемых значений.",
+    "Используй pytest с parametrize для всех юнит-тестов.",
+    "Никогда не используй print() для отладки; только logging.",
+    "Храни секреты в HashiCorp Vault; никогда в переменных окружения напрямую.",
+    "Trunk-based development: ветки живут не дольше одного рабочего дня.",
+    "Документируй каждый публичный метод однострочным docstring.",
+    "Запускай миграции базы данных отдельным шагом деплоя, не вместе с кодом приложения.",
+    "Максимальная длина функции — 40 строк; выноси логику в хелперы.",
+    "Каждый сервис должен предоставлять эндпоинт /healthz.",
+    "Используй структурированное JSON-логирование во всех продакшен-сервисах.",
+    "Пиши интеграционные тесты для каждой внешней зависимости через testcontainers.",
+    "Требуй минимум два аппрувала для мержа в main в core-сервисах.",
+    "Закрепляй версии зависимостей в pyproject.toml.",
+    "Тегируй Docker-образы хешем git-коммита.",
+    "Устанавливай resource requests и limits для всех контейнеров в Kubernetes.",
+    "Используй пулы соединений для всех подключений к базам данных.",
+    "Инструментируй все HTTP-эндпоинты гистограммами латентности.",
+    "Вся конфигурация должна передаваться через переменные окружения.",
+    "P99 latency не должна превышать 200 мс.",
+    "Все datetime хранятся в UTC с явным указанием timezone.",
+]
+
+_RU_CONSOLIDATION_FACTS: list[str] = [
+    # Round 1 (v1 — начальное состояние)
+    "Максим использует vim с минимальным vimrc для редактирования кода.",
+    "Максим — единственный backend-инженер в своей команде.",
+    "Деплой в продакшен происходит раз в месяц после спринт-ревью.",
+    "Максим использует SQLite для хранения данных в прототипах.",
+    "Максим мержит свои пулл-реквесты без внешнего ревью.",
+    # Round 2 (v2)
+    "Максим переехал на Neovim и использует lazy.nvim для плагинов.",
+    "Максим нанял джуниор-разработчика; команда теперь 2 человека.",
+    "Команда перешла на еженедельные релизы по пятницам.",
+    "Максим мигрировал с SQLite на PostgreSQL для продакшен-окружения.",
+    "Команда ввела ревью: один аппрувал обязателен перед мержем.",
+    # Round 3 (v3)
+    "Максим перешёл на VS Code с плагинами для Python и Go.",
+    "Команда Максима выросла до 5 инженеров после раунда финансирования.",
+    "Частота деплоев увеличилась до ежедневных релизов после настройки CI.",
+    "Максим перевёл команду с PostgreSQL 13 на PostgreSQL 15.",
+    "Политика ревью обновилась: теперь требуется два аппрувала.",
+    # Round 4 (v4)
+    "Максим использует VS Code с расширением GitHub Copilot.",
+    "Максим руководит командой из 8 инженеров.",
+    "Команда деплоится несколько раз в день в продакшен.",
+    "Продакшен-база данных работает на PostgreSQL 16 с репликацией.",
+    "Для изменений в core-сервисах требуется аппрувал senior-инженера.",
+    # Round 5 (v5 — актуальное состояние)
+    "Основной редактор Максима — Cursor с интегрированным GitHub Copilot и vim-режимом.",
+    "Максим руководит командой из 10 инженеров в двух часовых поясах.",
+    "Каждый смерженный PR автоматически деплоится в продакшен через GitHub Actions.",
+    "Продакшен-стек использует PostgreSQL 16 с расширением TimescaleDB для временных рядов.",
+    "Политика PR: два аппрувала, зелёный CI и автоматический security-скан обязательны.",
+]
+
+_RU_CONSOLIDATION_QUERIES: list[str] = [
+    "Какой редактор или IDE сейчас использует Максим?",
+    "Какой размер инженерной команды у Максима?",
+    "Как часто команда деплоится в продакшен?",
+    "Какую базу данных использует команда?",
+    "Какова политика ревью и мержа пулл-реквестов?",
+]
+
+_RU_CONSOLIDATION_LATEST_FACTS: list[str] = [
+    "Основной редактор Максима — Cursor с интегрированным GitHub Copilot и vim-режимом.",
+    "Максим руководит командой из 10 инженеров в двух часовых поясах.",
+    "Каждый смерженный PR автоматически деплоится в продакшен через GitHub Actions.",
+    "Продакшен-стек использует PostgreSQL 16 с расширением TimescaleDB для временных рядов.",
+    "Политика PR: два аппрувала, зелёный CI и автоматический security-скан обязательны.",
+]
+
+BUNDLE_RU = LanguageBundle(
+    language="ru",
+    profile=ProfileFixture(raw_facts=_RU_PROFILE_FACTS, queries=_RU_PROFILE_QUERIES),
+    avoid_repeats=AvoidRepeatsFixture(
+        titles=_RU_AVOID_REPEATS_TITLES,
+        queries=_RU_AVOID_REPEATS_QUERIES,
+        expected_seen=_RU_AVOID_REPEATS_EXPECTED_SEEN,
+    ),
+    feedback=FeedbackFixture(
+        history=_RU_FEEDBACK_HISTORY,
+        queries=_RU_FEEDBACK_QUERIES,
+        expected_rules=_RU_FEEDBACK_EXPECTED_RULES,
+        expected_keywords=_RU_FEEDBACK_EXPECTED_KEYWORDS,
+    ),
+    dedup=DeduplicationFixture(
+        paraphrases=_RU_DEDUP_PARAPHRASES,
+        distinct_rules=_RU_DEDUP_DISTINCT_RULES,
+        canonical_rule=_RU_DEDUP_CANONICAL_RULE,
+    ),
+    consolidation=ConsolidationFixture(
+        facts=_RU_CONSOLIDATION_FACTS,
+        queries=_RU_CONSOLIDATION_QUERIES,
+        latest_facts=_RU_CONSOLIDATION_LATEST_FACTS,
+        n_topics=5,
+        n_versions=5,
+    ),
+)

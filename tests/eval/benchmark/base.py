@@ -35,6 +35,7 @@ class ScenarioResult:
     insert_result: InsertResult | None
     retrieval_result: RetrievalResult | None
     notes: str = ""
+    language: str = "en"  # fixture language used for this run ("en" | "ru")
 
 
 @dataclass
@@ -42,6 +43,7 @@ class BenchmarkMetrics:
     """Aggregated results for a single backend across all scenarios."""
 
     backend_name: str
+    language: str = "en"  # fixture language used for this run ("en" | "ru")
     scenario_results: list[ScenarioResult] = field(default_factory=list)
 
     def median_score(self, scenario_id: str, metric: str) -> float:

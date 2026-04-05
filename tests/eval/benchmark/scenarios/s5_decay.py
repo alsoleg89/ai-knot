@@ -16,7 +16,7 @@ from __future__ import annotations
 import statistics
 
 from tests.eval.benchmark.base import MemoryBackend, RetrievalResult, ScenarioResult
-from tests.eval.benchmark.fixtures import PROFILE
+from tests.eval.benchmark.fixtures import BUNDLE_EN, LanguageBundle
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s5_decay"
@@ -24,13 +24,19 @@ TOP_K = 5
 DECAY_HOURS = 336.0  # 2 weeks
 
 
-async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -> ScenarioResult:
+async def run(
+    backend: MemoryBackend,
+    judge: BaseJudge,
+    *,
+    bundle: LanguageBundle = BUNDLE_EN,
+    top_k: int = TOP_K,
+) -> ScenarioResult:
     await backend.reset()
 
-    for fact in PROFILE.raw_facts:
+    for fact in bundle.profile.raw_facts:
         await backend.insert(fact)
 
-    query = PROFILE.queries[0]  # "What language does the user prefer?"
+    query = bundle.profile.queries[0]
 
     # Pre-decay retrieval
     pre_result: RetrievalResult = await backend.retrieve(query, top_k=top_k)
@@ -48,6 +54,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
     retention_delta = post_relevance - pre_relevance
 
     notes = (
+        f"lang={bundle.language}, "
         f"pre_relevance={pre_relevance:.2f}, "
         f"post_relevance={post_relevance:.2f}, "
         f"retention_delta={retention_delta:+.2f}, "
@@ -55,7 +62,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         f"decay_supported={'yes' if hasattr(backend, 'tick_decay') else 'no'}"
     )
 
-    return ScenarioResult(
+    result_obj = ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
@@ -66,3 +73,5 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         retrieval_result=post_result,
         notes=notes,
     )
+    result_obj.language = bundle.language
+    return result_obj

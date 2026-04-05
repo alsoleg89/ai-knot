@@ -29,6 +29,8 @@ Rules:
   episodic (specific events).
 - Rate importance from 0.0 to 1.0.
 - Include 1-3 short domain tags per fact (lowercase, single words).
+- Preserve key phrases and exact wording from the original text where possible.
+  Do not paraphrase or generalize unless necessary for clarity.
 
 Return a JSON array. Example:
 [
@@ -130,7 +132,14 @@ def _dedup_similarity(a: str, b: str) -> float:
     return max(_jaccard_similarity(a, b), _containment_similarity(a, b))
 
 
-def deduplicate_facts(facts: list[Fact], *, threshold: float = 0.7) -> list[Fact]:
+# Unified dedup threshold for both within-batch and cross-store deduplication.
+# 0.85 avoids false-positive merges of short but semantically distinct rules
+# (e.g. "keep posts under 300 words" vs "use fenced code blocks"), which occur
+# at the original 0.7 threshold when containment similarity exceeds min-token ratio.
+_DEDUP_THRESHOLD: float = 0.85
+
+
+def deduplicate_facts(facts: list[Fact], *, threshold: float = _DEDUP_THRESHOLD) -> list[Fact]:
     """Remove near-duplicate facts by combined similarity (Jaccard + containment).
 
     Args:
@@ -159,7 +168,7 @@ def resolve_against_existing(
     new_facts: list[Fact],
     existing: list[Fact],
     *,
-    threshold: float = 0.6,
+    threshold: float = _DEDUP_THRESHOLD,
 ) -> tuple[list[Fact], list[Fact]]:
     """Separate new facts into inserts and updates relative to existing facts.
 

@@ -28,7 +28,7 @@ import httpx
 
 from tests.eval.benchmark.backends.qdrant_emulator import _cosine, embed_batch
 from tests.eval.benchmark.base import MemoryBackend, ScenarioResult
-from tests.eval.benchmark.fixtures import CONSOLIDATION
+from tests.eval.benchmark.fixtures import BUNDLE_EN, LanguageBundle
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s7_consolidation"
@@ -60,7 +60,9 @@ async def _semantic_latest_recall(retrieved_texts: list[str], latest_fact: str) 
     return max(scores) if scores else 0.0
 
 
-async def _estimate_stored_count(backend: MemoryBackend, n_total: int) -> int:
+async def _estimate_stored_count(
+    backend: MemoryBackend, n_total: int, queries: list[str]
+) -> int:
     """Return number of stored facts.
 
     Prefers count_stored() (exact).  Fallback: union of unique texts retrieved
@@ -72,30 +74,37 @@ async def _estimate_stored_count(backend: MemoryBackend, n_total: int) -> int:
         return exact
     oversized_k = n_total + 5
     all_texts: set[str] = set()
-    for q in CONSOLIDATION.queries:
+    for q in queries:
         r = await backend.retrieve(q, top_k=oversized_k)
         all_texts.update(t.strip().lower() for t in r.texts)
     return len(all_texts)
 
 
-async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -> ScenarioResult:
+async def run(
+    backend: MemoryBackend,
+    judge: BaseJudge,
+    *,
+    bundle: LanguageBundle = BUNDLE_EN,
+    top_k: int = TOP_K,
+) -> ScenarioResult:
     await backend.reset()
 
+    consolidation = bundle.consolidation
     last_insert = None
-    for fact in CONSOLIDATION.facts:
+    for fact in consolidation.facts:
         last_insert = await backend.insert(fact)
 
-    n_total = CONSOLIDATION.n_topics * CONSOLIDATION.n_versions  # 25
+    n_total = consolidation.n_topics * consolidation.n_versions  # 25
 
     # --- Consolidation ratio (deterministic) ---
-    stored_count = await _estimate_stored_count(backend, n_total)
+    stored_count = await _estimate_stored_count(backend, n_total, consolidation.queries)
     consolidation_ratio = max(0.0, 1.0 - stored_count / n_total)
 
     # --- Per-query: semantic_latest_recall + judge faithfulness ---
     sem_scores: list[float] = []
     faithfulness_runs: list[float] = []
 
-    for query, latest_fact in zip(CONSOLIDATION.queries, CONSOLIDATION.latest_facts, strict=True):
+    for query, latest_fact in zip(consolidation.queries, consolidation.latest_facts, strict=True):
         result = await backend.retrieve(query, top_k=top_k)
 
         # semantic_latest_recall (embed) and judge (LLM) use independent
@@ -111,6 +120,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
     med_faithfulness = statistics.median(faithfulness_runs) if faithfulness_runs else 3.0
 
     notes = (
+        f"lang={bundle.language}, "
         f"facts_inserted={n_total}, "
         f"estimated_stored={stored_count}, "
         f"consolidation_ratio={consolidation_ratio:.2%}, "
@@ -118,7 +128,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         f"faithfulness_median={med_faithfulness:.2f}"
     )
 
-    return ScenarioResult(
+    result_obj = ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
@@ -132,3 +142,5 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         retrieval_result=None,
         notes=notes,
     )
+    result_obj.language = bundle.language
+    return result_obj

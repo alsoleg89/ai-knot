@@ -336,10 +336,13 @@ class BM25Retriever:
             reverse=True,
         )
 
-        # Ranker 4: recency — last_accessed (newest first), BM25 tie-break.
+        # Ranker 4: recency — created_at (newest first), BM25 tie-break.
+        # Use created_at, not last_accessed: last_accessed reflects when a fact was
+        # *read*, which is identical for all facts inserted in a batch (S7 scenario).
+        # created_at is immutable and correctly orders v1 → v5 temporal versions.
         recency_ranked = sorted(
             all_ids,
-            key=lambda i: (index.facts[i].last_accessed, raw_scores.get(i, 0.0)),
+            key=lambda i: (index.facts[i].created_at, raw_scores.get(i, 0.0)),
             reverse=True,
         )
 

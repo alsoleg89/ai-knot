@@ -29,6 +29,7 @@ Backends run in parallel (asyncio.gather) since they use separate stores/temp di
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import sys
 from datetime import UTC, datetime
@@ -39,9 +40,18 @@ from tests.eval.benchmark._check_ollama import check_ollama_available
 from tests.eval.benchmark.base import BenchmarkMetrics, MemoryBackend
 from tests.eval.benchmark.report import render_markdown
 
-_BACKEND_CHOICES = ("ai_knot", "qdrant", "mem0", "baseline", "qdrant_real", "mem0_real")
+_BACKEND_CHOICES = (
+    "ai_knot",
+    "ai_knot_no_llm",
+    "qdrant",
+    "mem0",
+    "baseline",
+    "qdrant_real",
+    "mem0_real",
+)
 _SCENARIO_CHOICES = ("s1", "s2", "s3", "s4", "s5", "s6", "s7")
 _MODE_CHOICES = ("basic", "extended", "auto")
+_LANGUAGE_CHOICES = ("en", "ru", "both")
 
 
 @click.command()
@@ -89,6 +99,16 @@ _MODE_CHOICES = ("basic", "extended", "auto")
     default=False,
     help="Reduce S6 concurrent tasks from 50 → 20. Useful for CI / low-resource envs.",
 )
+@click.option(
+    "--language",
+    default="en",
+    type=click.Choice(_LANGUAGE_CHOICES),
+    show_default=True,
+    help=(
+        "Fixture language: 'en' (Alex Chen / FinServe Capital), "
+        "'ru' (Максим Петров / Яндекс), or 'both' to run both sequentially."
+    ),
+)
 def main(
     mode: str,
     backends: str | None,
@@ -97,9 +117,10 @@ def main(
     raw_output: str,
     mock_judge: bool,
     quick: bool,
+    language: str,
 ) -> None:
     """Run the ai-knot benchmark suite."""
-    asyncio.run(_run(mode, backends, scenarios, output, raw_output, mock_judge, quick))
+    asyncio.run(_run(mode, backends, scenarios, output, raw_output, mock_judge, quick, language))
 
 
 async def _run(
@@ -110,6 +131,7 @@ async def _run(
     raw_output: str,
     mock_judge: bool,
     quick: bool,
+    language: str = "en",
 ) -> None:
     if not mock_judge and not check_ollama_available():
         click.echo(
@@ -144,28 +166,38 @@ async def _run(
             backends_override, provider, mock_judge=mock_judge
         )
 
-    selected_scenarios = _build_scenarios(scenarios_arg, quick=quick)
+    base_scenarios = _build_scenarios(scenarios_arg, quick=quick)
+    bundles = _build_bundles(language)
 
     if not selected_backends:
         click.echo("No backends selected.", err=True)
         sys.exit(1)
 
     click.echo(
-        f"Running {len(selected_scenarios)} scenario(s) × {len(selected_backends)} backend(s)"
+        f"Running {len(base_scenarios)} scenario(s) × {len(selected_backends)} backend(s)"
+        f" × {len(bundles)} language(s)"
         f" [{', '.join(b.name for b in selected_backends)}]"
     )
 
-    # Run all backends in parallel — each uses an isolated store (temp dir / collection)
-    all_metrics = await asyncio.gather(
-        *[_run_backend(backend, selected_scenarios, judge) for backend in selected_backends]
-    )
+    all_metrics: list[BenchmarkMetrics] = []
+    for bundle in bundles:
+        # Bind bundle to every scenario that accepts it; S6 has no bundle parameter.
+        bound_scenarios = _bind_bundle(base_scenarios, bundle)
+        click.echo(f"\n=== Language: {bundle.language.upper()} ===")
+        lang_metrics = await asyncio.gather(
+            *[
+                _run_backend(backend, bound_scenarios, judge, language=bundle.language)
+                for backend in selected_backends
+            ]
+        )
+        all_metrics.extend(lang_metrics)
 
-    md = render_markdown(list(all_metrics))
+    md = render_markdown(all_metrics)
     with open(output, "w", encoding="utf-8") as f:
         f.write(md)
     click.echo(f"\nReport written to {output}")
 
-    raw = _to_raw_json(list(all_metrics))
+    raw = _to_raw_json(all_metrics)
     with open(raw_output, "w", encoding="utf-8") as f:
         json.dump(raw, f, indent=2)
     click.echo(f"Raw JSON written to {raw_output}")
@@ -175,9 +207,11 @@ async def _run_backend(
     backend: MemoryBackend,
     scenarios: list[object],
     judge: object,
+    *,
+    language: str = "en",
 ) -> BenchmarkMetrics:
-    click.echo(f"\n>>> Backend: {backend.name}")
-    metrics = BenchmarkMetrics(backend_name=backend.name)
+    click.echo(f"\n>>> Backend: {backend.name} [{language}]")
+    metrics = BenchmarkMetrics(backend_name=backend.name, language=language)
 
     for sid, scenario_fn in scenarios:  # type: ignore[misc]
         click.echo(f"    {sid} ...", nl=False)
@@ -210,11 +244,12 @@ def _resolve_mode(mode: str) -> str:
 def _build_backends_for_mode(
     mode: str, provider: object, *, mock_judge: bool
 ) -> list[MemoryBackend]:
-    from tests.eval.benchmark.backends.ai_knot_backend import AiKnotBackend
+    from tests.eval.benchmark.backends.ai_knot_backend import AiKnotBackend, AiKnotNoLlmBackend
     from tests.eval.benchmark.backends.baseline import BaselineBackend
 
-    base = [
+    base: list[MemoryBackend] = [
         BaselineBackend(),
+        AiKnotNoLlmBackend(),
         AiKnotBackend(provider, use_add=mock_judge),  # type: ignore[arg-type]
     ]
 
@@ -234,7 +269,7 @@ def _build_backends_for_mode(
 def _build_backends_from_names(
     backends_arg: str, provider: object, *, mock_judge: bool
 ) -> list[MemoryBackend]:
-    from tests.eval.benchmark.backends.ai_knot_backend import AiKnotBackend
+    from tests.eval.benchmark.backends.ai_knot_backend import AiKnotBackend, AiKnotNoLlmBackend
     from tests.eval.benchmark.backends.baseline import BaselineBackend
     from tests.eval.benchmark.backends.mem0_emulator import Mem0Emulator
     from tests.eval.benchmark.backends.qdrant_emulator import QdrantEmulator
@@ -242,11 +277,11 @@ def _build_backends_from_names(
     all_map: dict[str, MemoryBackend] = {
         "baseline": BaselineBackend(),
         "ai_knot": AiKnotBackend(provider, use_add=mock_judge),  # type: ignore[arg-type]
+        "ai_knot_no_llm": AiKnotNoLlmBackend(),
         "qdrant": QdrantEmulator(),
         "mem0": Mem0Emulator(provider),  # type: ignore[arg-type]
     }
 
-    # Lazy-load real backends only if requested
     result: list[MemoryBackend] = []
     for name in backends_arg.split(","):
         name = name.strip()
@@ -265,6 +300,35 @@ def _build_backends_from_names(
     return result
 
 
+def _build_bundles(language: str) -> list[object]:
+    """Return list of LanguageBundle instances for the given language flag."""
+    from tests.eval.benchmark.fixtures import BUNDLE_EN, BUNDLE_RU
+
+    if language == "en":
+        return [BUNDLE_EN]
+    if language == "ru":
+        return [BUNDLE_RU]
+    return [BUNDLE_EN, BUNDLE_RU]  # "both"
+
+
+def _bind_bundle(scenarios: list[object], bundle: object) -> list[object]:
+    """Return scenarios with bundle bound via functools.partial.
+
+    Scenarios that don't accept a ``bundle`` keyword (e.g. S6 load) are
+    passed through unchanged; others get the bundle pre-filled.
+    """
+    import inspect
+
+    bound: list[object] = []
+    for sid, fn in scenarios:  # type: ignore[misc]
+        sig = inspect.signature(fn)
+        if "bundle" in sig.parameters:
+            bound.append((sid, functools.partial(fn, bundle=bundle)))
+        else:
+            bound.append((sid, fn))
+    return bound
+
+
 def _build_scenarios(scenarios_arg: str, *, quick: bool = False) -> list[object]:
     from tests.eval.benchmark.scenarios import get_scenario_runners
 
@@ -281,8 +345,6 @@ def _build_scenarios(scenarios_arg: str, *, quick: bool = False) -> list[object]
     wrapped = []
     for sid, fn in runners:  # type: ignore[misc]
         if sid == "s6_load":
-            import functools
-
             wrapped.append((sid, functools.partial(fn, quick=True)))
         else:
             wrapped.append((sid, fn))
@@ -295,7 +357,8 @@ def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
         "backends": {},
     }
     for m in metrics:
-        backend_data: dict[str, object] = {}
+        key = f"{m.backend_name}:{m.language}"
+        backend_data: dict[str, object] = {"language": m.language}
         for sr in m.scenario_results:
             backend_data[sr.scenario_id] = {
                 "judge_scores": sr.judge_scores,
@@ -308,7 +371,7 @@ def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
                 if sr.insert_result
                 else None,
             }
-        out["backends"][m.backend_name] = backend_data  # type: ignore[index]
+        out["backends"][key] = backend_data  # type: ignore[index]
     return out
 
 

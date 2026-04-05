@@ -18,11 +18,7 @@ import statistics
 
 from tests.eval.benchmark.backends.qdrant_emulator import _cosine, embed_batch
 from tests.eval.benchmark.base import MemoryBackend, RetrievalResult, ScenarioResult
-from tests.eval.benchmark.fixtures import (
-    AVOID_REPEATS_EXPECTED_SEEN,
-    AVOID_REPEATS_QUERIES,
-    PUBLISHED_TITLES,
-)
+from tests.eval.benchmark.fixtures import BUNDLE_EN, LanguageBundle
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s2_avoid_repeats"
@@ -68,10 +64,16 @@ async def _semantic_recall(
         return _recall(retrieved, expected)
 
 
-async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -> ScenarioResult:
+async def run(
+    backend: MemoryBackend,
+    judge: BaseJudge,
+    *,
+    bundle: LanguageBundle = BUNDLE_EN,
+    top_k: int = TOP_K,
+) -> ScenarioResult:
     await backend.reset()
 
-    for title in PUBLISHED_TITLES:
+    for title in bundle.avoid_repeats.titles:
         await backend.insert(title)
 
     judge_runs: dict[str, list[float]] = {
@@ -82,18 +84,16 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
     }
     last_result: RetrievalResult | None = None
 
-    for query in AVOID_REPEATS_QUERIES:
-        # First retrieval
+    for query in bundle.avoid_repeats.queries:
         r1 = await backend.retrieve(query, top_k=top_k)
         seen_set = set(r1.texts)
 
-        # Second retrieval (same query — novelty check)
         r2 = await backend.retrieve(query, top_k=top_k)
         overlap = len(seen_set & set(r2.texts))
         novelty = max(0.0, 1.0 - overlap / max(top_k, 1))
         judge_runs["novelty"].append(round(novelty, 4))
 
-        expected = AVOID_REPEATS_EXPECTED_SEEN.get(query, [])
+        expected = bundle.avoid_repeats.expected_seen.get(query, [])
         judge_runs["recall"].append(_recall(r1.texts, expected))
         # semantic_recall (embed semaphore) and judge (LLM, no semaphore) use independent
         # resource pools — run them concurrently to overlap embed + LLM inference time.
@@ -107,12 +107,13 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         last_result = r1
 
     notes = (
+        f"lang={bundle.language}, "
         f"avg_recall={statistics.mean(judge_runs['recall']):.2f}, "
         f"avg_semantic_recall={statistics.mean(judge_runs['semantic_recall']):.2f}, "
         f"avg_novelty={statistics.mean(judge_runs['novelty']):.2f}"
     )
 
-    return ScenarioResult(
+    result_obj = ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores=judge_runs,
@@ -120,3 +121,5 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         retrieval_result=last_result,
         notes=notes,
     )
+    result_obj.language = bundle.language
+    return result_obj

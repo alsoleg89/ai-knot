@@ -19,7 +19,7 @@ Counting strategy:
 from __future__ import annotations
 
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, ScenarioResult
-from tests.eval.benchmark.fixtures import DEDUP
+from tests.eval.benchmark.fixtures import BUNDLE_EN, LanguageBundle
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s4_deduplication"
@@ -35,42 +35,49 @@ async def _count_unique_stored(backend: MemoryBackend, query: str, n_inserted: i
     return len(set(t.strip().lower() for t in r.texts))
 
 
-async def run(backend: MemoryBackend, judge: BaseJudge) -> ScenarioResult:
+async def run(
+    backend: MemoryBackend,
+    judge: BaseJudge,
+    *,
+    bundle: LanguageBundle = BUNDLE_EN,
+) -> ScenarioResult:
+    dedup = bundle.dedup
+
     # --- Sub-test A: true-positive dedup ---
     await backend.reset()
     last_insert_a: InsertResult | None = None
-    for para in DEDUP.paraphrases:
+    for para in dedup.paraphrases:
         last_insert_a = await backend.insert(para)
 
     unique_stored = await _count_unique_stored(
-        backend, DEDUP.canonical_rule, len(DEDUP.paraphrases)
+        backend, dedup.canonical_rule, len(dedup.paraphrases)
     )
-    dedup_ratio = 1.0 - unique_stored / max(len(DEDUP.paraphrases), 1)
+    dedup_ratio = 1.0 - unique_stored / max(len(dedup.paraphrases), 1)
     dedup_ratio = max(0.0, min(1.0, dedup_ratio))
 
     # --- Sub-test B: false-positive guard ---
     await backend.reset()
-    for rule in DEDUP.distinct_rules:
+    for rule in dedup.distinct_rules:
         await backend.insert(rule)
 
-    # Use retrieve as proxy here — we want to check recallability, not just storage
-    r_b = await backend.retrieve("software engineering rules", top_k=len(DEDUP.distinct_rules) + 10)
+    r_b = await backend.retrieve("software engineering rules", top_k=len(dedup.distinct_rules) + 10)
     found = 0
-    for rule in DEDUP.distinct_rules:
+    for rule in dedup.distinct_rules:
         rule_lower = rule.lower()
         if any(rule_lower in t.lower() or t.lower() in rule_lower for t in r_b.texts):
             found += 1
-    retention_ratio = found / max(len(DEDUP.distinct_rules), 1)
+    retention_ratio = found / max(len(dedup.distinct_rules), 1)
 
     notes = (
-        f"paraphrases_inserted={len(DEDUP.paraphrases)}, "
+        f"lang={bundle.language}, "
+        f"paraphrases_inserted={len(dedup.paraphrases)}, "
         f"unique_after_dedup={unique_stored}, "
         f"dedup_ratio={dedup_ratio:.2%}, "
-        f"distinct_rules_retained={found}/{len(DEDUP.distinct_rules)}, "
+        f"distinct_rules_retained={found}/{len(dedup.distinct_rules)}, "
         f"retention_ratio={retention_ratio:.2%}"
     )
 
-    return ScenarioResult(
+    result_obj = ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
@@ -81,3 +88,5 @@ async def run(backend: MemoryBackend, judge: BaseJudge) -> ScenarioResult:
         retrieval_result=r_b,
         notes=notes,
     )
+    result_obj.language = bundle.language
+    return result_obj

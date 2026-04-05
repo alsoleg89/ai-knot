@@ -116,3 +116,22 @@ class AiKnotBackend(MemoryBackend):
     def __del__(self) -> None:
         if self._tmp_dir:
             shutil.rmtree(self._tmp_dir, ignore_errors=True)
+
+
+class AiKnotNoLlmBackend(AiKnotBackend):
+    """ai-knot with direct kb.add() — no LLM extraction.
+
+    Stores facts verbatim via add() instead of going through the Extractor.
+    This isolates the contribution of BM25 retrieval from LLM extraction,
+    making it a clean control condition between raw-storage backends (baseline,
+    qdrant) and the full extraction pipeline (ai_knot).
+    """
+
+    def __init__(self) -> None:
+        from tests.eval.benchmark._stub_provider import StubProvider
+
+        super().__init__(StubProvider(), use_add=True)
+
+    @property
+    def name(self) -> str:
+        return "ai_knot_no_llm"
