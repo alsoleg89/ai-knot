@@ -2,24 +2,37 @@
 
 Ported from ContentOs/scripts/ai_knot_eval/backends/mem0_backend.py.
 Changes from ContentOs version:
-  - Yandex GPT + Yandex embedder → Ollama llama3.2:3b (LLM + embedder)
+  - Yandex GPT + Yandex embedder → Ollama qwen2.5:7b (LLM + embedder)
   - No API key required (Ollama is local)
   - insert(text) interface instead of insert_facts(list[str])
   - collection_name: "mem0_bench", path: /tmp/mem0_bench_chroma
   - Kept Semaphore(1) for Chroma writes (SQLite not thread-safe)
   - Kept role=user fix (mem0 extraction ignores assistant messages)
-  - Kept response_format=None patch (Ollama may not support JSON mode)
+  - Removed response_format=None patch (qwen2.5:7b supports Ollama JSON mode natively)
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import tempfile
 import time
 from pathlib import Path
 
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
+
+
+def _normalize_mem0_results(response: object) -> list[dict[str, object]]:
+    """Normalize mem0 API response across versions.
+
+    ≤0.1.x returns {"results": [...]}, ≥0.1.y returns [...] directly.
+    """
+    if isinstance(response, list):
+        return response  # type: ignore[return-value]
+    if isinstance(response, dict):
+        return response.get("results", [])  # type: ignore[return-value]
+    return []
 
 _DEFAULT_CHROMA_PATH = str(Path(tempfile.gettempdir()) / "mem0_bench_chroma")
 _SEM = asyncio.Semaphore(1)  # Chroma/SQLite not safe for concurrent writes
@@ -43,7 +56,7 @@ class Mem0RealBackend(MemoryBackend):
             "llm": {
                 "provider": "ollama",
                 "config": {
-                    "model": "llama3.2:3b",
+                    "model": "qwen2.5:7b",
                     "ollama_base_url": "http://localhost:11434",
                     "temperature": 0.1,
                     "max_tokens": 2000,
@@ -52,7 +65,7 @@ class Mem0RealBackend(MemoryBackend):
             "embedder": {
                 "provider": "ollama",
                 "config": {
-                    "model": "llama3.2:3b",
+                    "model": "qwen2.5:7b",
                     "ollama_base_url": "http://localhost:11434",
                 },
             },
@@ -80,22 +93,11 @@ class Mem0RealBackend(MemoryBackend):
 
         config = self._build_config()
         self._memory = Memory.from_config(config)
-
-        # Patch out response_format — Ollama may not support JSON mode.
-        # mem0 v1.0.9+ always passes response_format={"type":"json_object"} internally.
-        _orig = self._memory.llm.generate_response  # type: ignore[union-attr]
-
-        def _generate_no_response_format(  # noqa: ANN202
-            messages: object, response_format: object = None, **kwargs: object
-        ) -> object:
-            return _orig(messages, response_format=None, **kwargs)
-
-        self._memory.llm.generate_response = _generate_no_response_format  # type: ignore[union-attr]
+        # qwen2.5:7b via Ollama supports response_format={"type":"json_object"} natively.
+        # Do NOT patch it out — JSON mode is what makes mem0 extraction reliable.
 
     async def reset(self) -> None:
         memory = await self._get_memory()
-        import contextlib
-
         with contextlib.suppress(Exception):
             memory.delete_all(user_id=self._user_id)  # type: ignore[union-attr]
         self._stored_count = 0
@@ -118,9 +120,9 @@ class Mem0RealBackend(MemoryBackend):
                             user_id=self._user_id,
                         ),
                     ),
-                    timeout=60.0,
+                    timeout=120.0,
                 )
-                facts_extracted = len(result.get("results", [])) if result else 0
+                facts_extracted = len(_normalize_mem0_results(result))
                 self._stored_count += facts_extracted
             except Exception:
                 facts_extracted = 0
@@ -147,10 +149,11 @@ class Mem0RealBackend(MemoryBackend):
                         limit=top_k,
                     ),
                 ),
-                timeout=30.0,
+                timeout=60.0,
             )
-            texts = [r.get("memory", str(r)) for r in (results or [])]
-            scores = [r.get("score", 0.0) for r in (results or [])]
+            hits = _normalize_mem0_results(results)
+            texts = [r.get("memory", str(r)) for r in hits]
+            scores = [r.get("score", 0.0) for r in hits]
         except Exception:
             texts, scores = [], []
 

@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import re
 import statistics
 
 import httpx
 
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
-JUDGE_MODEL = "llama3.2:3b"
+JUDGE_MODEL = "qwen2.5:7b"
 JUDGE_RUNS = 3
 
 _SYSTEM_PROMPT = """You are an evaluation judge for a memory retrieval system.
@@ -40,12 +41,25 @@ ALL_METRICS = ("relevance", "completeness", "faithfulness")
 
 
 def _parse_score(raw: str) -> float:
-    """Extract a 1-5 score from raw LLM output. Returns 1.0 on parse failure."""
+    """Extract a 1-5 score from raw LLM output.
+
+    Handles common LLM response styles:
+      "4"  /  "4."  /  "Score: 4"  /  "The retrieval scores 4 out of 5."
+    Falls back to neutral 3.0 (not 1.0) when no digit is found, so parse
+    failures don't systematically bias rankings downward.
+    """
+    # Fast path: first token is already a bare digit
     try:
         val = float(raw.strip().split()[0].rstrip(".,:"))
-        return max(1.0, min(5.0, val))
+        if 1.0 <= val <= 5.0:
+            return val
     except (ValueError, IndexError):
-        return 1.0
+        pass
+    # Regex fallback: find the first standalone 1-5 digit in the response
+    m = re.search(r"\b([1-5])\b", raw)
+    if m:
+        return float(m.group(1))
+    return 3.0  # neutral — no score found
 
 
 def score_stats(scores: list[float]) -> tuple[float, float]:

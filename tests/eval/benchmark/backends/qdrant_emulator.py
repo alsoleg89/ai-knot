@@ -1,7 +1,7 @@
 """Qdrant emulator: pure Python in-memory cosine similarity vector store.
 
 No external Qdrant server or Docker required.
-Embeddings via Ollama's OpenAI-compat endpoint (llama3.2:3b, 3072-dim).
+Embeddings via Ollama's OpenAI-compat endpoint (qwen2.5:7b, 3584-dim).
 Falls back to TF-IDF cosine if Ollama is not reachable.
 
 Key difference from ai-knot: dense vector retrieval vs BM25/TF-IDF.
@@ -20,8 +20,8 @@ import httpx
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
 EMBED_URL = "http://localhost:11434/v1/embeddings"
-EMBED_MODEL = "llama3.2:3b"
-_SEM = asyncio.Semaphore(3)  # max 3 concurrent embed calls — avoids Ollama overload
+EMBED_MODEL = "qwen2.5:7b"
+_SEM = asyncio.Semaphore(1)  # serialize embed calls — qwen2.5:7b fills GPU, no benefit to parallel
 
 
 # ---------------------------------------------------------------------------
@@ -70,8 +70,8 @@ def _tfidf_cosine(query: str, texts: list[str], top_k: int) -> list[tuple[str, f
 
 
 async def embed_text(text: str) -> list[float]:
-    """Call Ollama embeddings API for a single text. Returns list[float] (dim 3072)."""
-    async with _SEM, httpx.AsyncClient(timeout=30.0) as client:
+    """Call Ollama embeddings API for a single text. Dimension depends on model."""
+    async with _SEM, httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(
             EMBED_URL,
             headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"},
