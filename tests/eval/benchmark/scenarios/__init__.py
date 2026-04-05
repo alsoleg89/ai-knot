@@ -11,6 +11,7 @@ from tests.eval.benchmark.scenarios.s3_feedback_learning import run as s3
 from tests.eval.benchmark.scenarios.s4_deduplication import run as s4
 from tests.eval.benchmark.scenarios.s5_decay import run as s5
 from tests.eval.benchmark.scenarios.s6_load import run as s6
+from tests.eval.benchmark.scenarios.s7_consolidation import run as s7
 
 ScenarioFn = Callable[..., Coroutine[Any, Any, Any]]
 
@@ -21,6 +22,7 @@ _ALL: list[tuple[str, ScenarioFn]] = [
     ("s4", s4),
     ("s5", s5),
     ("s6", s6),
+    ("s7", s7),
 ]
 
 
