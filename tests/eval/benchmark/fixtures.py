@@ -175,6 +175,28 @@ FEEDBACK_QUERIES: list[str] = [
     "How should I handle calls-to-action?",
 ]
 
+# Full feedback texts semantically reachable for each query.
+# Used by S3 semantic_coverage to give dense backends a fair evaluation
+# (keyword matching misses paraphrased extractions from mem0/ai-knot).
+# Keyed by FEEDBACK_QUERIES[i] to prevent string-key drift.
+FEEDBACK_EXPECTED_RULES: dict[str, list[str]] = {
+    FEEDBACK_QUERIES[0]: [
+        "Posts were too long last time — keep it under 300 words for LinkedIn.",
+        "Avoid ending with a question, it looks clickbait-y. State things directly.",
+        "No emojis in technical posts. They distract from the content.",
+        "Never compare to competitors by name. Focus on our approach.",
+    ],
+    FEEDBACK_QUERIES[1]: [
+        "Always use fenced code blocks with language tags, never inline backticks for multi-line.",
+        "Three to five sections max. More than that and readers drop off.",
+        "Use diagrams over screenshots. Screenshots go stale; diagrams stay relevant.",
+    ],
+    FEEDBACK_QUERIES[2]: [
+        "One CTA per post, at the end. No mid-article CTAs.",
+        "End with a concrete takeaway or action item, not a summary of what was covered.",
+    ],
+}
+
 # ---------------------------------------------------------------------------
 # S4 — Deduplication
 # ---------------------------------------------------------------------------
