@@ -11,6 +11,7 @@ Metrics:
 
 from __future__ import annotations
 
+import asyncio
 import statistics
 
 from tests.eval.benchmark.backends.qdrant_emulator import _cosine, embed_batch
@@ -61,9 +62,7 @@ async def _semantic_coverage(
         r_embs = all_embs[: len(retrieved)]
         e_embs = all_embs[len(retrieved) :]
         hits = sum(
-            1
-            for e_emb in e_embs
-            if any(_cosine(e_emb, r_emb) >= threshold for r_emb in r_embs)
+            1 for e_emb in e_embs if any(_cosine(e_emb, r_emb) >= threshold for r_emb in r_embs)
         )
         return hits / len(expected_rules)
     except Exception:
@@ -94,11 +93,13 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
         judge_runs["rule_coverage"].append(_rule_coverage(result.texts, keywords))
 
         expected_rules = FEEDBACK_EXPECTED_RULES.get(query, [])
-        judge_runs["semantic_coverage"].append(
-            await _semantic_coverage(result.texts, expected_rules)
+        # semantic_coverage (embed) and judge (LLM) use independent resource pools —
+        # run concurrently to overlap embed + LLM inference time.
+        sem_score, scores = await asyncio.gather(
+            _semantic_coverage(result.texts, expected_rules),
+            judge.score_all_async(query, result.texts),
         )
-
-        scores = await judge.score_all_async(query, result.texts)
+        judge_runs["semantic_coverage"].append(sem_score)
         med = statistics.median(scores.get("completeness", [3.0]))
         judge_runs["completeness"].append(med)
 

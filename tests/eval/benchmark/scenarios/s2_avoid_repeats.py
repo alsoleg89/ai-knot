@@ -13,6 +13,7 @@ Metrics:
 
 from __future__ import annotations
 
+import asyncio
 import statistics
 
 from tests.eval.benchmark.backends.qdrant_emulator import _cosine, embed_batch
@@ -60,9 +61,7 @@ async def _semantic_recall(
         r_embs = all_embs[: len(retrieved)]
         e_embs = all_embs[len(retrieved) :]
         hits = sum(
-            1
-            for e_emb in e_embs
-            if any(_cosine(e_emb, r_emb) >= threshold for r_emb in r_embs)
+            1 for e_emb in e_embs if any(_cosine(e_emb, r_emb) >= threshold for r_emb in r_embs)
         )
         return hits / len(expected)
     except Exception:
@@ -96,11 +95,13 @@ async def run(backend: MemoryBackend, judge: BaseJudge, *, top_k: int = TOP_K) -
 
         expected = AVOID_REPEATS_EXPECTED_SEEN.get(query, [])
         judge_runs["recall"].append(_recall(r1.texts, expected))
-        judge_runs["semantic_recall"].append(
-            await _semantic_recall(r1.texts, expected)
+        # semantic_recall (embed semaphore) and judge (LLM, no semaphore) use independent
+        # resource pools — run them concurrently to overlap embed + LLM inference time.
+        sem_score, scores = await asyncio.gather(
+            _semantic_recall(r1.texts, expected),
+            judge.score_all_async(query, r1.texts),
         )
-
-        scores = await judge.score_all_async(query, r1.texts)
+        judge_runs["semantic_recall"].append(sem_score)
         med = statistics.median(scores.get("relevance", [3.0]))
         judge_runs["relevance"].append(med)
         last_result = r1

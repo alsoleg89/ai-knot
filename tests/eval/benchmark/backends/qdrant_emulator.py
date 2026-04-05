@@ -22,6 +22,7 @@ from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResu
 EMBED_URL = "http://localhost:11434/v1/embeddings"
 EMBED_MODEL = "qwen2.5:7b"
 _SEM = asyncio.Semaphore(1)  # serialize embed calls — qwen2.5:7b fills GPU, no benefit to parallel
+_HTTP = httpx.AsyncClient(timeout=120.0)  # reuse connection pool across all embed calls
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +72,8 @@ def _tfidf_cosine(query: str, texts: list[str], top_k: int) -> list[tuple[str, f
 
 async def embed_text(text: str) -> list[float]:
     """Call Ollama embeddings API for a single text. Dimension depends on model."""
-    async with _SEM, httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
+    async with _SEM:
+        resp = await _HTTP.post(
             EMBED_URL,
             headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"},
             json={"model": EMBED_MODEL, "input": text},
@@ -91,8 +92,8 @@ async def embed_batch(texts: list[str]) -> list[list[float]]:
     """
     if not texts:
         return []
-    async with _SEM, httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
+    async with _SEM:
+        resp = await _HTTP.post(
             EMBED_URL,
             headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"},
             json={"model": EMBED_MODEL, "input": texts},

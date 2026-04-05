@@ -25,7 +25,7 @@ from ai_knot.providers.base import LLMProvider
 from ai_knot.types import ConversationTurn
 from tests.eval.benchmark.backends.qdrant_emulator import (
     QdrantEmulator,
-    embed_text,
+    embed_batch,
 )
 from tests.eval.benchmark.base import InsertResult
 
@@ -57,13 +57,15 @@ class Mem0Emulator(QdrantEmulator):
         # If extraction returns nothing, store raw text as fallback
         fact_texts = [f.content for f in facts] if facts else [text]
 
-        for ft in fact_texts:
-            emb: list[float] = []
-            if self._ollama_ok:
-                try:
-                    emb = await embed_text(ft)
-                except (httpx.ConnectError, httpx.TimeoutException, httpx.ConnectTimeout):
-                    self._ollama_ok = False
+        embs: list[list[float]] = [[] for _ in fact_texts]
+        if self._ollama_ok:
+            try:
+                # Single batch call instead of N individual embed_text() calls.
+                # Ollama processes all facts in one forward pass — N× fewer round-trips.
+                embs = await embed_batch(fact_texts)
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.ConnectTimeout):
+                self._ollama_ok = False
+        for ft, emb in zip(fact_texts, embs, strict=True):
             self._store.append((ft, emb))
 
         return InsertResult(
