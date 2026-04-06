@@ -17,26 +17,13 @@ from collections import Counter
 
 import httpx
 
+from ai_knot.embedder import cosine as _cosine
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
 EMBED_URL = "http://localhost:11434/v1/embeddings"
 EMBED_MODEL = "qwen2.5:7b"
 _SEM = asyncio.Semaphore(1)  # serialize embed calls — qwen2.5:7b fills GPU, no benefit to parallel
 _HTTP = httpx.AsyncClient(timeout=120.0)  # reuse connection pool across all embed calls
-
-
-# ---------------------------------------------------------------------------
-# Math helpers
-# ---------------------------------------------------------------------------
-
-
-def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b, strict=False))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0.0 or norm_b == 0.0:
-        return 0.0
-    return dot / (norm_a * norm_b)
 
 
 def _tfidf_cosine(query: str, texts: list[str], top_k: int) -> list[tuple[str, float]]:

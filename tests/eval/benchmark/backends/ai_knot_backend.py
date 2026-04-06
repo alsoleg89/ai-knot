@@ -11,7 +11,6 @@ M5 Pro optimizations:
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 import sqlite3
 import tempfile
@@ -40,6 +39,7 @@ class AiKnotBackend(MemoryBackend):
         self._use_add = use_add
         self._tmp_dir: str = ""
         self._kb: KnowledgeBase | None = None
+        self._session_seen: set[str] = set()
 
     @property
     def name(self) -> str:
@@ -60,6 +60,7 @@ class AiKnotBackend(MemoryBackend):
 
         storage = SQLiteStorage(db_path)
         self._kb = KnowledgeBase("bench", storage=storage, provider=self._provider)
+        self._session_seen = set()
 
     async def insert(self, text: str) -> InsertResult:
         assert self._kb is not None, "call reset() before insert()"
@@ -74,12 +75,8 @@ class AiKnotBackend(MemoryBackend):
                 insert_ms=(time.perf_counter() - t0) * 1000,
             )
 
-        # Wrap learn() in executor: Extractor.extract() makes blocking HTTP calls.
-        # On M5 Pro with 14 performance cores, the thread pool uses idle cores
-        # while the event loop continues serving other coroutines.
         turns = [ConversationTurn(role="user", content=text)]
-        loop = asyncio.get_running_loop()
-        new_facts = await loop.run_in_executor(None, self._kb.learn, turns)
+        new_facts = await self._kb.learn_async(turns)
         stored = len(self._kb.list_facts())
         return InsertResult(
             facts_stored=stored,
@@ -90,18 +87,25 @@ class AiKnotBackend(MemoryBackend):
     async def retrieve(self, query: str, *, top_k: int = 5) -> RetrievalResult:
         assert self._kb is not None, "call reset() before retrieve()"
         t0 = time.perf_counter()
-        pairs = self._kb.recall_facts_with_scores(query, top_k=top_k)
+        pairs = self._kb.recall_facts_with_scores(
+            query, top_k=top_k, excluded_ids=self._session_seen
+        )
+        self._session_seen.update(f.id for f, _ in pairs)
         return RetrievalResult(
-            texts=[f.content for f, _ in pairs],
+            texts=[f.source_verbatim or f.content for f, _ in pairs],
             scores=[s for _, s in pairs],
             retrieve_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def count_stored(self) -> int | None:
-        """Return exact number of facts stored — used by S4 for accurate dedup measurement."""
+        """Return count of currently valid facts — used by S4 for accurate dedup measurement."""
         if self._kb is None:
             return 0
-        return len(self._kb.list_facts())
+        return sum(1 for f in self._kb.list_facts() if f.is_active())
+
+    async def reset_session(self) -> None:
+        """Clear session_seen so the next retrieval starts with no exclusions."""
+        self._session_seen = set()
 
     async def tick_decay(self, *, hours: float) -> None:
         """Simulate passage of `hours` by backdating last_accessed on all facts."""

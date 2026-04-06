@@ -48,8 +48,11 @@ _BACKEND_CHOICES = (
     "baseline",
     "qdrant_real",
     "mem0_real",
+    "memvid",
 )
+_MA_BACKEND_CHOICES = ("ai_knot_multi_agent",)
 _SCENARIO_CHOICES = ("s1", "s2", "s3", "s4", "s5", "s6", "s7")
+_MA_SCENARIO_CHOICES = ("s8", "s9", "s10", "s11")
 _MODE_CHOICES = ("basic", "extended", "auto")
 _LANGUAGE_CHOICES = ("en", "ru", "both")
 
@@ -109,6 +112,25 @@ _LANGUAGE_CHOICES = ("en", "ru", "both")
         "'ru' (Максим Петров / Яндекс), or 'both' to run both sequentially."
     ),
 )
+@click.option(
+    "--fast",
+    is_flag=True,
+    default=False,
+    help=(
+        "Fast dev mode: mini fixtures (S2×15, S7×9), "
+        "2 backends (ai_knot+baseline), mock judge. Target ≤5 min."
+    ),
+)
+@click.option(
+    "--multi-agent",
+    "multi_agent",
+    is_flag=True,
+    default=False,
+    help=(
+        "Run multi-agent scenarios (S8–S11) instead of standard scenarios. "
+        "Uses AiKnotMultiAgentBackend only."
+    ),
+)
 def main(
     mode: str,
     backends: str | None,
@@ -118,9 +140,24 @@ def main(
     mock_judge: bool,
     quick: bool,
     language: str,
+    fast: bool,
+    multi_agent: bool,
 ) -> None:
     """Run the ai-knot benchmark suite."""
-    asyncio.run(_run(mode, backends, scenarios, output, raw_output, mock_judge, quick, language))
+    asyncio.run(
+        _run(
+            mode,
+            backends,
+            scenarios,
+            output,
+            raw_output,
+            mock_judge,
+            quick,
+            language,
+            fast,
+            multi_agent=multi_agent,
+        )
+    )
 
 
 async def _run(
@@ -132,7 +169,27 @@ async def _run(
     mock_judge: bool,
     quick: bool,
     language: str = "en",
+    fast: bool = False,
+    multi_agent: bool = False,
 ) -> None:
+    # --fast: mini fixtures + 2 backends. Real LLM still used (tests actual system).
+    # Add --mock-judge explicitly if you need an offline/instant run (~20s, no LLM).
+    if fast:
+        from tests.eval.benchmark.fixtures import BUNDLE_EN_FAST
+
+        if scenarios_arg == "all":
+            scenarios_arg = "s2,s7"
+        if backends_override is None:
+            backends_override = "ai_knot,baseline"
+        if output == "benchmark_report.md":
+            output = "benchmark_fast.md"
+        if raw_output == "benchmark_raw.json":
+            raw_output = "benchmark_fast_raw.json"
+        # Replace bundle resolution: always use BUNDLE_EN_FAST regardless of --language
+        _fast_bundle = BUNDLE_EN_FAST
+    else:
+        _fast_bundle = None
+
     if not mock_judge and not check_ollama_available():
         click.echo(
             "ERROR: Ollama not running at http://localhost:11434. "
@@ -154,6 +211,16 @@ async def _run(
 
         provider = OllamaProvider()
 
+    # --- Multi-agent path ---
+    if multi_agent:
+        await _run_multi_agent(
+            scenarios_arg=scenarios_arg,
+            output=output,
+            raw_output=raw_output,
+            judge=judge,
+        )
+        return
+
     # Resolve effective mode when backends are not explicitly overridden
     if backends_override is None:
         effective_mode = _resolve_mode(mode)
@@ -167,7 +234,7 @@ async def _run(
         )
 
     base_scenarios = _build_scenarios(scenarios_arg, quick=quick)
-    bundles = _build_bundles(language)
+    bundles = [_fast_bundle] if _fast_bundle is not None else _build_bundles(language)
 
     if not selected_backends:
         click.echo("No backends selected.", err=True)
@@ -192,15 +259,7 @@ async def _run(
         )
         all_metrics.extend(lang_metrics)
 
-    md = render_markdown(all_metrics)
-    with open(output, "w", encoding="utf-8") as f:
-        f.write(md)
-    click.echo(f"\nReport written to {output}")
-
-    raw = _to_raw_json(all_metrics)
-    with open(raw_output, "w", encoding="utf-8") as f:
-        json.dump(raw, f, indent=2)
-    click.echo(f"Raw JSON written to {raw_output}")
+    _write_reports(all_metrics, output, raw_output)
 
 
 async def _run_backend(
@@ -223,6 +282,64 @@ async def _run_backend(
             click.echo(f" ERROR: {exc}")
 
     return metrics
+
+
+async def _run_multi_agent(
+    *,
+    scenarios_arg: str,
+    output: str,
+    raw_output: str,
+    judge: object,
+) -> None:
+    """Run multi-agent scenarios (S8–S11) against AiKnotMultiAgentBackend."""
+    from tests.eval.benchmark.backends.ai_knot_multi_agent_backend import (
+        AiKnotMultiAgentBackend,
+    )
+    from tests.eval.benchmark.base import BenchmarkMetrics
+    from tests.eval.benchmark.scenarios import get_ma_scenario_runners
+
+    backend = AiKnotMultiAgentBackend()
+
+    if scenarios_arg in ("all", "ma"):
+        runners = get_ma_scenario_runners()
+    else:
+        names = [s.strip() for s in scenarios_arg.split(",")]
+        runners = get_ma_scenario_runners(names=names)
+        if not runners:
+            click.echo(
+                f"No multi-agent scenarios matched {names!r}. Valid prefixes: s8, s9, s10, s11.",
+                err=True,
+            )
+            sys.exit(1)
+
+    click.echo(
+        f"Running {len(runners)} multi-agent scenario(s) [{', '.join(sid for sid, _ in runners)}]"
+    )
+    click.echo(f"\n>>> Backend: {backend.name}")
+
+    metrics = BenchmarkMetrics(backend_name=backend.name, language="en")
+    for sid, scenario_fn in runners:
+        click.echo(f"    {sid} ...", nl=False)
+        try:
+            result = await scenario_fn(backend, judge)
+            metrics.scenario_results.append(result)
+            click.echo(f" done  ({result.notes[:80]})" if result.notes else " done")
+        except Exception as exc:
+            click.echo(f" ERROR: {exc}")
+
+    _write_reports([metrics], output, raw_output)
+
+
+def _write_reports(metrics: list[BenchmarkMetrics], output: str, raw_output: str) -> None:
+    md = render_markdown(metrics)
+    with open(output, "w", encoding="utf-8") as f:
+        f.write(md)
+    click.echo(f"\nReport written to {output}")
+
+    raw = _to_raw_json(metrics)
+    with open(raw_output, "w", encoding="utf-8") as f:
+        json.dump(raw, f, indent=2)
+    click.echo(f"Raw JSON written to {raw_output}")
 
 
 def _resolve_mode(mode: str) -> str:
@@ -261,9 +378,10 @@ def _build_backends_for_mode(
 
     # basic
     from tests.eval.benchmark.backends.mem0_emulator import Mem0Emulator
+    from tests.eval.benchmark.backends.memvid_backend import MemvidBackend
     from tests.eval.benchmark.backends.qdrant_emulator import QdrantEmulator
 
-    return base + [QdrantEmulator(), Mem0Emulator(provider)]  # type: ignore[arg-type]
+    return base + [QdrantEmulator(), Mem0Emulator(provider), MemvidBackend()]  # type: ignore[arg-type]
 
 
 def _build_backends_from_names(
@@ -295,6 +413,10 @@ def _build_backends_from_names(
             from tests.eval.benchmark.backends.mem0_real import Mem0RealBackend
 
             result.append(Mem0RealBackend())
+        elif name == "memvid":
+            from tests.eval.benchmark.backends.memvid_backend import MemvidBackend
+
+            result.append(MemvidBackend())
         else:
             click.echo(f"Unknown backend {name!r}, skipping.", err=True)
     return result

@@ -60,9 +60,7 @@ async def _semantic_latest_recall(retrieved_texts: list[str], latest_fact: str) 
     return max(scores) if scores else 0.0
 
 
-async def _estimate_stored_count(
-    backend: MemoryBackend, n_total: int, queries: list[str]
-) -> int:
+async def _estimate_stored_count(backend: MemoryBackend, n_total: int, queries: list[str]) -> int:
     """Return number of stored facts.
 
     Prefers count_stored() (exact).  Fallback: union of unique texts retrieved
@@ -95,10 +93,16 @@ async def run(
         last_insert = await backend.insert(fact)
 
     n_total = consolidation.n_topics * consolidation.n_versions  # 25
+    n_topics = consolidation.n_topics  # 5
 
     # --- Consolidation ratio (deterministic) ---
+    # Ideal: one fact per topic (n_topics). Worst: all n_total facts stored.
+    # ratio = how much of the max possible compression was achieved:
+    #   (n_total - stored) / (n_total - n_topics)
+    # 0.0 = no compression, 1.0 = perfect (one fact per topic), clamped [0, 1].
     stored_count = await _estimate_stored_count(backend, n_total, consolidation.queries)
-    consolidation_ratio = max(0.0, 1.0 - stored_count / n_total)
+    _max_compression = max(1, n_total - n_topics)
+    consolidation_ratio = min(1.0, max(0.0, (n_total - stored_count) / _max_compression))
 
     # --- Per-query: semantic_latest_recall + judge faithfulness ---
     sem_scores: list[float] = []

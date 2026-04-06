@@ -708,6 +708,109 @@ class LanguageBundle:
     consolidation: ConsolidationFixture
 
 
+@dataclass
+class MultiAgentFixture:
+    """Fixture data for multi-agent benchmark scenarios (S8–S11).
+
+    Contains two semantically distinct fact sets (DevOps vs Python) for
+    isolation testing, shared pool facts, and structured entity+attribute
+    data for MESI CAS and lazy-sync testing.
+    """
+
+    # S8 — private namespace isolation
+    agent_a_facts: list[str]  # DevOps / infra domain
+    agent_b_facts: list[str]  # Python / coding domain
+    agent_a_queries: list[str]  # queries answered by agent_a's facts
+    agent_b_queries: list[str]  # queries answered by agent_b's facts
+
+    # S9 — shared pool publish + recall
+    pool_facts: list[str]
+    pool_queries: list[tuple[str, str]]  # (query_text, expected_keyword_in_result)
+
+    # S10 — MESI entity CAS (two agents publish same entity+attribute)
+    cas_entity: str  # e.g. "Alex Chen"
+    cas_attribute: str  # e.g. "salary"
+    cas_fact_v1: str  # older version (Agent A publishes)
+    cas_fact_v2: str  # newer version (Agent B publishes)
+    cas_query: str  # query to retrieve the fact
+    cas_v2_keyword: str  # keyword that must appear in retrieved result
+
+    # S11 — MESI lazy sync (incremental dirty pull)
+    sync_initial_facts: list[str]  # initial pool population (5 facts)
+    sync_update_entity: str  # entity for the updated fact
+    sync_update_attribute: str  # attribute for the updated fact
+    sync_fact_v1: str  # initial version of the updatable fact
+    sync_fact_v2: str  # updated version (triggers dirty flag)
+    sync_v2_keyword: str  # word present only in v2 (used to confirm v2 was synced)
+
+
+# ---------------------------------------------------------------------------
+# Multi-agent fixture data (EN)
+# ---------------------------------------------------------------------------
+
+MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
+    # S8: Agent A knows DevOps; Agent B knows Python/coding.
+    # Queries are designed to be unambiguous about which domain answers them.
+    agent_a_facts=[
+        "All services are deployed via Helm charts on Kubernetes 1.30.",
+        "Grafana dashboards track per-service P99 latency; alert threshold is 200 ms.",
+        "Postgres read replicas are promoted automatically by Patroni when primary fails.",
+        "Container image builds use Docker BuildKit with layer caching on the CI runner.",
+        "Terraform modules for cloud infrastructure are version-pinned in a separate repo.",
+    ],
+    agent_b_facts=[
+        "All public Python functions must carry mypy-compatible type annotations.",
+        "pytest is the only allowed test runner; unittest is prohibited.",
+        "Async functions are only permitted in I/O-bound hot paths.",
+        "Dataclasses are preferred over plain dicts for structured internal data.",
+        "f-strings are the canonical string formatting method; %-formatting is banned.",
+    ],
+    agent_a_queries=[
+        "How are services deployed to Kubernetes?",
+        "What happens when the Postgres primary goes down?",
+    ],
+    agent_b_queries=[
+        "What are the rules for type annotations in Python?",
+        "Which test runner must be used for Python projects?",
+    ],
+    # S9: A set of general technical facts that Agent A publishes to the pool.
+    # Agent B (no private KB) should be able to find them via pool_retrieve.
+    pool_facts=[
+        "The on-call rotation follows a 7-day shift; handoff happens every Monday at 09:00.",
+        "Production incidents are classified P1–P3; P1 requires acknowledgement within 5 minutes.",
+        "All API changes must be backwards-compatible for at least two release cycles.",
+        "Database schema migrations run in a canary deploy before full rollout.",
+        "Security scanning (Trivy) runs on every pull request targeting the main branch.",
+    ],
+    pool_queries=[
+        ("How quickly must P1 incidents be acknowledged?", "5 minutes"),
+        ("How long must APIs remain backwards-compatible?", "two release cycles"),
+        ("When do security scans run?", "pull request"),
+    ],
+    # S10: MESI CAS — two agents publish conflicting salary facts for the same entity.
+    cas_entity="Jordan Lee",
+    cas_attribute="annual_salary",
+    cas_fact_v1="Jordan Lee earns $95,000 per year as a backend engineer.",
+    cas_fact_v2="Jordan Lee's salary was updated to $140,000 after their promotion.",
+    cas_query="Jordan Lee salary compensation",
+    cas_v2_keyword="140",
+    # S11: MESI lazy sync — initial 5 facts published, then 1 fact is updated.
+    # sync_dirty() should return only the 1 changed fact on the second call.
+    sync_initial_facts=[
+        "The deployment pipeline has four stages: build, test, stage, and production.",
+        "All microservices expose a /metrics endpoint in Prometheus exposition format.",
+        "Feature flags are managed centrally via LaunchDarkly SDK.",
+        "Cache invalidation uses a write-through strategy with a 60-second TTL.",
+        "Service discovery relies on Kubernetes DNS and CoreDNS.",
+    ],
+    sync_update_entity="deployment_pipeline",
+    sync_update_attribute="stage_count",
+    sync_fact_v1="The deployment pipeline has four stages: build, test, stage, and production.",
+    sync_fact_v2="The deployment pipeline was expanded to five stages: build, test, stage, canary, and production.",
+    sync_v2_keyword="canary",  # present only in v2, absent in v1
+)
+
+
 # ===========================================================================
 # EN Bundle — Alex Chen, Staff Data Engineer @ FinServe Capital
 # ===========================================================================
@@ -975,35 +1078,36 @@ _EN_DEDUP_DISTINCT_RULES: list[str] = [
 
 _EN_CONSOLIDATION_FACTS: list[str] = [
     # Round 1 (v1 — starting state)
-    "Alex uses Apache Airflow 2.2 for pipeline orchestration on a self-hosted cluster.",
+    # Entity names are stable per topic so entity-addressed CAS can match across versions.
+    "Alex's team uses Apache Airflow 2.2 for pipeline orchestration on a self-hosted cluster.",
     "Alex is the sole data engineer on the team.",
-    "The analytical warehouse is Amazon Redshift with manual VACUUM scheduling.",
-    "Pipeline deployments happen manually after team sign-off.",
-    "Event schemas are stored as plain JSON files in a Git repository.",
+    "Alex's team runs the analytical warehouse on Amazon Redshift with manual VACUUM scheduling.",
+    "Alex's team deploys pipeline changes manually after team sign-off.",
+    "Alex's team stores event schemas as plain JSON files in a Git repository.",
     # Round 2 (v2)
-    "Team migrated orchestration to Apache Airflow 2.6 with the Celery executor.",
-    "Alex hired a junior data engineer; the team is now 2 people.",
-    "The team evaluated Snowflake as a replacement for Redshift.",
-    "Deployment process moved to a CI-gated shell script triggered on merge.",
-    "Schemas moved to a shared Confluence wiki page maintained by the team.",
+    "Alex's team migrated orchestration to Apache Airflow 2.6 with the Celery executor.",
+    "Alex hired a junior data engineer; Alex now leads a team of 2 people.",
+    "Alex's team evaluated Snowflake as a replacement for Redshift.",
+    "Alex's team moved deployments to a CI-gated shell script triggered on merge.",
+    "Alex's team moved schemas to a shared Confluence wiki page.",
     # Round 3 (v3)
-    "Alex piloted Prefect 2 for new pipelines alongside legacy Airflow DAGs.",
-    "The data team grew to 4 engineers after Series A funding.",
-    "Snowflake is now the primary warehouse for all analytics workloads.",
-    "Deployments run via a GitHub Actions workflow on every merge to the main branch.",
-    "Team adopted Confluent Schema Registry with Avro for all Kafka topics.",
+    "Alex's team piloted Prefect 2 for new pipelines alongside legacy Airflow DAGs.",
+    "Alex grew the data team to 4 engineers after Series A funding.",
+    "Alex's team now uses Snowflake as the primary warehouse for all analytics workloads.",
+    "Alex's team runs deployments via a GitHub Actions workflow on every merge to main.",
+    "Alex's team adopted Confluent Schema Registry with Avro for all Kafka topics.",
     # Round 4 (v4)
-    "All new pipelines are built in Prefect 2; Airflow handles only legacy DAGs.",
+    "Alex's team builds all new pipelines in Prefect 2; Airflow handles only legacy DAGs.",
     "Alex leads a team of 6 data engineers.",
-    "All analytical workloads run on Snowflake; Delta Lake on Databricks handles streaming ingestion.",
-    "The CI pipeline deploys to production automatically after integration tests pass.",
-    "Schema Registry enforces backward compatibility checks on all Avro schema updates.",
+    "Alex's team runs all analytical workloads on Snowflake; Delta Lake on Databricks handles streaming.",
+    "Alex's team deploys to production automatically via CI after integration tests pass.",
+    "Alex's team enforces backward compatibility checks on all Avro schema updates in Schema Registry.",
     # Round 5 (v5 — latest state)
     "Alex's team runs all orchestration on Prefect 2 with Temporal for long-running workflows.",
     "Alex manages an 8-person data engineering team spread across San Francisco and London.",
-    "The warehouse stack is Snowflake for OLAP and PostgreSQL 16 with TimescaleDB for operational analytics.",
-    "Every merged PR to the pipeline repo triggers automated deployment via GitHub Actions to production.",
-    "All event schemas are governed by a data contract registry; breaking changes require a 30-day deprecation period.",
+    "Alex's team uses Snowflake for OLAP and PostgreSQL 16 with TimescaleDB for operational analytics.",
+    "Alex's team deploys every merged PR to production automatically via GitHub Actions.",
+    "Alex's team governs all event schemas via a data contract registry; breaking changes require a 30-day deprecation period.",
 ]
 
 _EN_CONSOLIDATION_QUERIES: list[str] = [
@@ -1017,9 +1121,9 @@ _EN_CONSOLIDATION_QUERIES: list[str] = [
 _EN_CONSOLIDATION_LATEST_FACTS: list[str] = [
     "Alex's team runs all orchestration on Prefect 2 with Temporal for long-running workflows.",
     "Alex manages an 8-person data engineering team spread across San Francisco and London.",
-    "The warehouse stack is Snowflake for OLAP and PostgreSQL 16 with TimescaleDB for operational analytics.",
-    "Every merged PR to the pipeline repo triggers automated deployment via GitHub Actions to production.",
-    "All event schemas are governed by a data contract registry; breaking changes require a 30-day deprecation period.",
+    "Alex's team uses Snowflake for OLAP and PostgreSQL 16 with TimescaleDB for operational analytics.",
+    "Alex's team deploys every merged PR to production automatically via GitHub Actions.",
+    "Alex's team governs all event schemas via a data contract registry; breaking changes require a 30-day deprecation period.",
 ]
 
 BUNDLE_EN = LanguageBundle(
@@ -1387,5 +1491,46 @@ BUNDLE_RU = LanguageBundle(
         latest_facts=_RU_CONSOLIDATION_LATEST_FACTS,
         n_topics=5,
         n_versions=5,
+    ),
+)
+
+# ===========================================================================
+# BUNDLE_EN_FAST — mini slice of BUNDLE_EN for ≤5-min dev iteration cycles
+#
+# Reuses existing EN content (no new data):
+#   S2: first 15 titles instead of 50  (3× fewer LLM inserts)
+#   S3: first 5 feedback pairs instead of 10
+#   S7: 3 topics × 3 versions = 9 facts instead of 25
+# ===========================================================================
+
+# S7 fast: pick topics 0,1,2 × versions 1,2,3
+# _EN_CONSOLIDATION_FACTS layout: [v1_t0..v1_t4, v2_t0..v2_t4, ..., v5_t0..v5_t4]
+_FAST_CONSOLIDATION_FACTS: list[str] = [
+    *_EN_CONSOLIDATION_FACTS[0:3],  # v1: topics 0,1,2
+    *_EN_CONSOLIDATION_FACTS[5:8],  # v2: topics 0,1,2
+    *_EN_CONSOLIDATION_FACTS[10:13],  # v3: topics 0,1,2
+]
+
+BUNDLE_EN_FAST = LanguageBundle(
+    language="en",
+    profile=BUNDLE_EN.profile,
+    avoid_repeats=AvoidRepeatsFixture(
+        titles=BUNDLE_EN.avoid_repeats.titles[:15],
+        queries=BUNDLE_EN.avoid_repeats.queries,
+        expected_seen=BUNDLE_EN.avoid_repeats.expected_seen,
+    ),
+    feedback=FeedbackFixture(
+        history=BUNDLE_EN.feedback.history[:5],
+        queries=BUNDLE_EN.feedback.queries,
+        expected_rules=BUNDLE_EN.feedback.expected_rules,
+        expected_keywords=BUNDLE_EN.feedback.expected_keywords,
+    ),
+    dedup=BUNDLE_EN.dedup,
+    consolidation=ConsolidationFixture(
+        facts=_FAST_CONSOLIDATION_FACTS,
+        queries=_EN_CONSOLIDATION_QUERIES[:3],
+        latest_facts=_EN_CONSOLIDATION_LATEST_FACTS[:3],
+        n_topics=3,
+        n_versions=3,
     ),
 )

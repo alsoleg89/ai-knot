@@ -13,7 +13,8 @@ from typing import Any
 
 import yaml
 
-from ai_knot.types import Fact, MemoryType
+from ai_knot.storage.base import parse_datetime as _parse_datetime
+from ai_knot.types import Fact, MemoryType, MESIState
 
 # Use C extension loader when available (10-20x faster than pure Python).
 _YamlLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
@@ -77,6 +78,23 @@ class YAMLStorage:
                 data[fact.id]["verification_source"] = fact.verification_source
             if fact.access_intervals:
                 data[fact.id]["access_intervals"] = fact.access_intervals
+            if fact.origin_agent_id:
+                data[fact.id]["origin_agent_id"] = fact.origin_agent_id
+            if fact.visibility != "private":
+                data[fact.id]["visibility"] = fact.visibility
+            if fact.source_verbatim:
+                data[fact.id]["source_verbatim"] = fact.source_verbatim
+            data[fact.id]["valid_from"] = fact.valid_from.isoformat()
+            if fact.valid_until is not None:
+                data[fact.id]["valid_until"] = fact.valid_until.isoformat()
+            if fact.entity:
+                data[fact.id]["entity"] = fact.entity
+            if fact.attribute:
+                data[fact.id]["attribute"] = fact.attribute
+            if fact.version:
+                data[fact.id]["version"] = fact.version
+            if fact.mesi_state != "E":
+                data[fact.id]["mesi_state"] = fact.mesi_state
 
         yaml_path = agent_dir / "knowledge.yaml"
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -130,6 +148,19 @@ class YAMLStorage:
                     support_confidence=float(entry.get("support_confidence", 1.0)),
                     verification_source=str(entry.get("verification_source", "legacy")),
                     access_intervals=[float(x) for x in entry.get("access_intervals", [])],
+                    origin_agent_id=str(entry.get("origin_agent_id", "")),
+                    visibility=str(entry.get("visibility", "private")),
+                    source_verbatim=str(entry.get("source_verbatim", "")),
+                    valid_from=_parse_datetime(entry["valid_from"])
+                    if "valid_from" in entry
+                    else datetime.now(UTC),
+                    valid_until=_parse_datetime(entry["valid_until"])
+                    if "valid_until" in entry
+                    else None,
+                    entity=str(entry.get("entity", "")),
+                    attribute=str(entry.get("attribute", "")),
+                    version=int(entry.get("version", 0)),
+                    mesi_state=MESIState(str(entry.get("mesi_state", "E"))),
                 )
             )
         return facts
@@ -188,6 +219,23 @@ class YAMLStorage:
                 data[fact.id]["verification_source"] = fact.verification_source
             if fact.access_intervals:
                 data[fact.id]["access_intervals"] = fact.access_intervals
+            if fact.origin_agent_id:
+                data[fact.id]["origin_agent_id"] = fact.origin_agent_id
+            if fact.visibility != "private":
+                data[fact.id]["visibility"] = fact.visibility
+            if fact.source_verbatim:
+                data[fact.id]["source_verbatim"] = fact.source_verbatim
+            data[fact.id]["valid_from"] = fact.valid_from.isoformat()
+            if fact.valid_until is not None:
+                data[fact.id]["valid_until"] = fact.valid_until.isoformat()
+            if fact.entity:
+                data[fact.id]["entity"] = fact.entity
+            if fact.attribute:
+                data[fact.id]["attribute"] = fact.attribute
+            if fact.version:
+                data[fact.id]["version"] = fact.version
+            if fact.mesi_state != "E":
+                data[fact.id]["mesi_state"] = fact.mesi_state
 
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
         lock = _get_lock(snap_path)
@@ -242,6 +290,19 @@ class YAMLStorage:
                     support_confidence=float(entry.get("support_confidence", 1.0)),
                     verification_source=str(entry.get("verification_source", "legacy")),
                     access_intervals=[float(x) for x in entry.get("access_intervals", [])],
+                    origin_agent_id=str(entry.get("origin_agent_id", "")),
+                    visibility=str(entry.get("visibility", "private")),
+                    source_verbatim=str(entry.get("source_verbatim", "")),
+                    valid_from=_parse_datetime(entry["valid_from"])
+                    if "valid_from" in entry
+                    else datetime.now(UTC),
+                    valid_until=_parse_datetime(entry["valid_until"])
+                    if "valid_until" in entry
+                    else None,
+                    entity=str(entry.get("entity", "")),
+                    attribute=str(entry.get("attribute", "")),
+                    version=int(entry.get("version", 0)),
+                    mesi_state=MESIState(str(entry.get("mesi_state", "E"))),
                 )
             )
         return facts
@@ -259,11 +320,3 @@ class YAMLStorage:
         snap_path = self._snapshot_dir(agent_id) / f"{name}.yaml"
         with contextlib.suppress(FileNotFoundError):
             snap_path.unlink()
-
-
-def _parse_datetime(value: str) -> datetime:
-    """Parse an ISO-format datetime string, ensuring UTC timezone."""
-    dt = datetime.fromisoformat(value)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt

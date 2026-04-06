@@ -8,6 +8,21 @@ from enum import StrEnum
 from uuid import uuid4
 
 
+class MESIState(StrEnum):
+    """MESI cache coherence state for shared pool facts (v1.0).
+
+    EXCLUSIVE  — single private owner, no coordination needed.
+    SHARED     — new fact published to pool (no prior for this entity+attribute).
+    MODIFIED   — replaced an existing active fact via entity-addressed CAS.
+    INVALID    — fact has been superseded; valid_until is set.
+    """
+
+    EXCLUSIVE = "E"
+    SHARED = "S"
+    MODIFIED = "M"
+    INVALID = "I"
+
+
 class MemoryType(StrEnum):
     """Classification of stored knowledge.
 
@@ -62,6 +77,28 @@ class Fact:
     # Multi-agent provenance fields (v0.6)
     origin_agent_id: str = ""
     visibility: str = "private"
+    # Verbatim source preservation (v0.8): exact original phrase before LLM normalisation.
+    # When non-empty, recall() surfaces this instead of the normalised content.
+    source_verbatim: str = ""
+    # Temporal validity (v0.9): mono-temporal model (Allen's Interval Logic).
+    # valid_from: when this version of the fact became true (insertion time by default).
+    # valid_until: when this fact was superseded; None = currently valid.
+    valid_from: datetime = field(default_factory=lambda: datetime.now(UTC))
+    valid_until: datetime | None = None
+    # Structured addressing (v0.9): entity+attribute for deterministic dedup.
+    # Empty strings = general statement (falls back to cosine-based dedup).
+    entity: str = ""  # "Alex Chen"
+    attribute: str = ""  # "salary"
+    # MESI cache coherence (v1.0): for shared pool invalidation.
+    # version: monotonic counter incremented on every update.
+    # mesi_state: E=Exclusive, S=Shared, M=Modified, I=Invalid.
+    version: int = 0
+    mesi_state: MESIState = MESIState.EXCLUSIVE
+
+    def is_active(self, at: datetime | None = None) -> bool:
+        """Return True if this fact is valid at *at* (default: now UTC)."""
+        t = at or datetime.now(UTC)
+        return self.valid_until is None or self.valid_until > t
 
 
 @dataclass

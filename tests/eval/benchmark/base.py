@@ -101,6 +101,15 @@ class MemoryBackend(abc.ABC):
         Intentionally not abstract: other backends silently skip decay.
         """
 
+    async def reset_session(self) -> None:  # noqa: B027
+        """Clear per-session novelty state without wiping the KB.
+
+        Called by S2 before each query pair so recall is measured on a fresh
+        session (no excluded_ids bias), while novelty is still tested within
+        r1 → r2 of the same query. Default no-op; override in backends that
+        track session-level deduplication.
+        """
+
     async def count_stored(self) -> int | None:  # noqa: B027
         """Return the exact number of facts currently stored, or None if unsupported.
 
@@ -109,3 +118,75 @@ class MemoryBackend(abc.ABC):
         Backends that can cheaply count stored facts should override this.
         """
         return None
+
+
+class MultiAgentMemoryBackend(abc.ABC):
+    """Abstract base for backends that support multi-agent knowledge sharing.
+
+    Provides isolated private namespaces per agent plus a shared pool for
+    cross-agent retrieval.  Used by S8–S11 multi-agent benchmark scenarios.
+    """
+
+    @property
+    @abc.abstractmethod
+    def name(self) -> str:
+        """Human-readable backend identifier."""
+        ...
+
+    @abc.abstractmethod
+    async def reset(self) -> None:
+        """Clear all state (private namespaces + shared pool)."""
+        ...
+
+    @abc.abstractmethod
+    async def insert_for_agent(self, agent_id: str, text: str) -> InsertResult:
+        """Store a text chunk in the agent's private namespace."""
+        ...
+
+    @abc.abstractmethod
+    async def add_structured(
+        self, agent_id: str, content: str, *, entity: str, attribute: str
+    ) -> None:
+        """Add a fact with entity+attribute addressing to an agent's private namespace."""
+        ...
+
+    @abc.abstractmethod
+    async def retrieve_for_agent(
+        self, agent_id: str, query: str, *, top_k: int = 5
+    ) -> RetrievalResult:
+        """Retrieve from an agent's private namespace only."""
+        ...
+
+    @abc.abstractmethod
+    async def publish_to_pool(self, agent_id: str) -> int:
+        """Publish all of agent's active facts to the shared pool.
+
+        Returns:
+            Number of facts published.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def pool_retrieve(
+        self, requesting_agent_id: str, query: str, *, top_k: int = 5
+    ) -> RetrievalResult:
+        """Retrieve from the shared pool with provenance discounting."""
+        ...
+
+    @abc.abstractmethod
+    async def pool_count_active_for_entity(self, entity: str, attribute: str) -> int:
+        """Count active facts in the shared pool for a given entity+attribute pair.
+
+        Used by S10 to verify MESI CAS prevents duplicates.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def sync_dirty(self, agent_id: str) -> list[str]:
+        """Return text of facts changed in the pool since the last sync for agent_id.
+
+        Implements MESI lazy invalidation: only returns facts with version >
+        the last-seen version for this agent, from agents other than agent_id.
+        Used by S11 to verify token-efficient incremental sync.
+        """
+        ...

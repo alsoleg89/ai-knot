@@ -85,6 +85,10 @@ async def run(
     last_result: RetrievalResult | None = None
 
     for query in bundle.avoid_repeats.queries:
+        # Reset per-session novelty state so recall is measured on a fresh
+        # retrieval (no excluded_ids from previous queries), while novelty
+        # is still tested within r1 → r2 of this same query.
+        await backend.reset_session()
         r1 = await backend.retrieve(query, top_k=top_k)
         seen_set = set(r1.texts)
 

@@ -31,14 +31,23 @@ Rules:
 - Include 1-3 short domain tags per fact (lowercase, single words).
 - Preserve key phrases and exact wording from the original text where possible.
   Do not paraphrase or generalize unless necessary for clarity.
+- Add "verbatim": copy the key phrase or rule EXACTLY as it appears in the source
+  text. If the user stated a rule or preference word-for-word, preserve it unchanged.
+  Omit this field only when no distinct quotable phrase exists.
+- For facts about a person, organization, or object: add "entity" (the subject,
+  e.g. "Alex Chen") and "attribute" (the property, e.g. "salary", "job_title",
+  "employer"). Omit these fields for general statements where entity/attribute
+  don't apply.
 
 Return a JSON array. Example:
 [
   {"content": "User works at Sber", "type": "semantic",
-   "importance": 0.9, "tags": ["employer", "company"]},
+   "importance": 0.9, "tags": ["employer", "company"],
+   "entity": "User", "attribute": "employer"},
   {"content": "User prefers Python over Java",
    "type": "procedural", "importance": 0.85,
-   "tags": ["python", "preferences"]}
+   "tags": ["python", "preferences"],
+   "verbatim": "I prefer Python over Java"}
 ]
 
 If no meaningful facts exist, return an empty array: []
@@ -199,6 +208,9 @@ def resolve_against_existing(
                 best_sim = sim
                 matched = old
         if matched is not None:
+            # Temporal update: replace stored content with the newer version.
+            matched.content = new.content
+            matched.source_verbatim = new.source_verbatim
             matched.importance = min(1.0, matched.importance + 0.05)
             matched.last_accessed = datetime.now(UTC)
             updated.append(matched)
@@ -206,6 +218,51 @@ def resolve_against_existing(
             to_insert.append(new)
 
     return to_insert, updated
+
+
+_PRONOUNS = frozenset({"he", "she", "it", "they", "i", "we", "you", "him", "her", "them"})
+
+
+def entity_match(a: str, b: str) -> bool:
+    """Return True if two entity strings refer to the same real-world entity.
+
+    Uses containment (substring in both directions) and Jaccard similarity.
+    Guards against pronoun-based false matches (e.g. "he" != "Alex Chen").
+    """
+    a, b = a.lower().strip(), b.lower().strip()
+    if not a or not b:
+        return False
+    if a in _PRONOUNS or b in _PRONOUNS:
+        return False
+    if a in b or b in a:
+        return True
+    return _jaccard_similarity(a, b) > 0.5
+
+
+def resolve_structured(
+    new_fact: Fact,
+    existing: list[Fact],
+) -> Fact | None:
+    """Entity-addressed dedup: find existing fact with same entity+attribute.
+
+    Returns the existing Fact if a match is found, or None if no match
+    (meaning this fact should be treated as a new insert).
+
+    Only fires when both new_fact.entity and new_fact.attribute are non-empty.
+    Falls back to cosine-based dedup otherwise.
+    """
+    if not new_fact.entity or not new_fact.attribute:
+        return None
+    for existing_fact in existing:
+        if not existing_fact.entity or not existing_fact.attribute:
+            continue
+        if (
+            entity_match(new_fact.entity, existing_fact.entity)
+            and new_fact.attribute.lower().strip() == existing_fact.attribute.lower().strip()
+            and existing_fact.is_active()
+        ):
+            return existing_fact
+    return None
 
 
 class Extractor:
@@ -320,4 +377,7 @@ class Extractor:
             type=memory_type,
             importance=importance,
             tags=tags,
+            source_verbatim=str(entry.get("verbatim", "")),
+            entity=str(entry.get("entity", "")),
+            attribute=str(entry.get("attribute", "")),
         )
