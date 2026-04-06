@@ -44,6 +44,7 @@ _BACKEND_CHOICES = (
     "ai_knot",
     "ai_knot_no_llm",
     "qdrant",
+    "qdrant_extraction",
     "mem0",
     "baseline",
     "qdrant_real",
@@ -51,8 +52,25 @@ _BACKEND_CHOICES = (
     "memvid",
 )
 _MA_BACKEND_CHOICES = ("ai_knot_multi_agent",)
-_SCENARIO_CHOICES = ("s1", "s2", "s3", "s4", "s5", "s6", "s7")
-_MA_SCENARIO_CHOICES = ("s8", "s9", "s10", "s11")
+_SCENARIO_CHOICES = (
+    "s1",
+    "s2",
+    "s3",
+    "s4",
+    "s5",
+    "s6",
+    "s7",
+    "s8",
+    # legacy (prefix-selectable)
+    "s1_profile_retrieval",
+    "s2_avoid_repeats",
+    "s3_feedback_learning",
+    "s4_deduplication",
+    "s5_decay",
+    "s6_load",
+    "s7_consolidation",
+)
+_MA_SCENARIO_CHOICES = ("s8_ma", "s9", "s10", "s11")
 _MODE_CHOICES = ("basic", "extended", "auto")
 _LANGUAGE_CHOICES = ("en", "ru", "both")
 
@@ -76,7 +94,10 @@ _LANGUAGE_CHOICES = ("en", "ru", "both")
 @click.option(
     "--scenarios",
     default="all",
-    help=f"Comma-separated scenario prefixes. Options: {', '.join(_SCENARIO_CHOICES)}, all",
+    help=(
+        f"Comma-separated scenario prefixes. Options: {', '.join(_SCENARIO_CHOICES[:8])}, all. "
+        "Use '--scenarios legacy' to run the original S1–S7 scenarios."
+    ),
 )
 @click.option(
     "--output",
@@ -175,18 +196,15 @@ async def _run(
     # --fast: mini fixtures + 2 backends. Real LLM still used (tests actual system).
     # Add --mock-judge explicitly if you need an offline/instant run (~20s, no LLM).
     if fast:
-        from tests.eval.benchmark.fixtures import BUNDLE_EN_FAST
-
         if scenarios_arg == "all":
-            scenarios_arg = "s2,s7"
+            scenarios_arg = "s1,s4,s7"
         if backends_override is None:
-            backends_override = "ai_knot,baseline"
+            backends_override = "ai_knot,baseline,qdrant"
         if output == "benchmark_report.md":
             output = "benchmark_fast.md"
         if raw_output == "benchmark_raw.json":
             raw_output = "benchmark_fast_raw.json"
-        # Replace bundle resolution: always use BUNDLE_EN_FAST regardless of --language
-        _fast_bundle = BUNDLE_EN_FAST
+        _fast_bundle = None  # professional scenarios use standalone fixtures, not LanguageBundle
     else:
         _fast_bundle = None
 
@@ -380,8 +398,14 @@ def _build_backends_for_mode(
     from tests.eval.benchmark.backends.mem0_emulator import Mem0Emulator
     from tests.eval.benchmark.backends.memvid_backend import MemvidBackend
     from tests.eval.benchmark.backends.qdrant_emulator import QdrantEmulator
+    from tests.eval.benchmark.backends.qdrant_extraction_backend import QdrantWithExtractionBackend
 
-    return base + [QdrantEmulator(), Mem0Emulator(provider), MemvidBackend()]  # type: ignore[arg-type]
+    return base + [
+        QdrantEmulator(),
+        QdrantWithExtractionBackend(provider),
+        Mem0Emulator(provider),
+        MemvidBackend(),
+    ]  # type: ignore[arg-type]
 
 
 def _build_backends_from_names(
@@ -391,12 +415,14 @@ def _build_backends_from_names(
     from tests.eval.benchmark.backends.baseline import BaselineBackend
     from tests.eval.benchmark.backends.mem0_emulator import Mem0Emulator
     from tests.eval.benchmark.backends.qdrant_emulator import QdrantEmulator
+    from tests.eval.benchmark.backends.qdrant_extraction_backend import QdrantWithExtractionBackend
 
     all_map: dict[str, MemoryBackend] = {
         "baseline": BaselineBackend(),
         "ai_knot": AiKnotBackend(provider, use_add=mock_judge),  # type: ignore[arg-type]
         "ai_knot_no_llm": AiKnotNoLlmBackend(),
         "qdrant": QdrantEmulator(),
+        "qdrant_extraction": QdrantWithExtractionBackend(provider),  # type: ignore[arg-type]
         "mem0": Mem0Emulator(provider),  # type: ignore[arg-type]
     }
 
@@ -456,14 +482,19 @@ def _build_scenarios(scenarios_arg: str, *, quick: bool = False) -> list[object]
 
     if scenarios_arg == "all":
         runners = get_scenario_runners()
+    elif scenarios_arg == "legacy":
+        runners = get_scenario_runners(legacy=True)
     else:
         names = [s.strip() for s in scenarios_arg.split(",")]
+        # Try professional scenarios first, fall back to legacy if needed
         runners = get_scenario_runners(names=names)
+        if not runners:
+            runners = get_scenario_runners(names=names, legacy=True)
 
     if not quick:
         return runners
 
-    # Wrap S6 run() to inject quick=True
+    # Wrap legacy S6 run() to inject quick=True
     wrapped = []
     for sid, fn in runners:  # type: ignore[misc]
         if sid == "s6_load":

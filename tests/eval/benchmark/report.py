@@ -2,7 +2,7 @@
 
 Generates a single Markdown document with:
   1. Summary table (all backends × key metrics)
-  2. Per-scenario detail sections
+  2. Per-scenario detail sections (professional S1–S8, then legacy if present)
 """
 
 from __future__ import annotations
@@ -26,15 +26,29 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
     lines.append("\n---\n")
     lines.append("## Per-Scenario Results\n")
 
-    for sid, title in [
-        ("s1_profile_retrieval", "S1 — Profile Retrieval"),
-        ("s2_avoid_repeats", "S2 — Avoid Repeats"),
-        ("s3_feedback_learning", "S3 — Feedback Learning"),
-        ("s4_deduplication", "S4 — Deduplication"),
-        ("s5_decay", "S5 — Decay"),
-        ("s6_load", "S6 — Load & Reliability"),
-        ("s7_consolidation", "S7 — Temporal Consolidation"),
-    ]:
+    # Professional S1–S8 scenarios
+    pro_scenarios = [
+        ("s1_mrr", "S1 — MRR & Precision@k"),
+        ("s2_semantic_gap", "S2 — Semantic Gap"),
+        ("s3_staleness", "S3 — Staleness Resistance"),
+        ("s4_compression_f1", "S4 — Memory Compression F1"),
+        ("s5_noise", "S5 — Noise Tolerance"),
+        ("s6_token_economy", "S6 — Context Economy"),
+        ("s7_grounding", "S7 — Grounding Rate"),
+        ("s8_throughput", "S8 — Latency & Throughput"),
+    ]
+    # Legacy S1–S7 scenarios (shown if present)
+    legacy_scenarios = [
+        ("s1_profile_retrieval", "S1-legacy — Profile Retrieval"),
+        ("s2_avoid_repeats", "S2-legacy — Avoid Repeats"),
+        ("s3_feedback_learning", "S3-legacy — Feedback Learning"),
+        ("s4_deduplication", "S4-legacy — Deduplication"),
+        ("s5_decay", "S5-legacy — Decay"),
+        ("s6_load", "S6-legacy — Load & Reliability"),
+        ("s7_consolidation", "S7-legacy — Temporal Consolidation"),
+    ]
+
+    for sid, title in pro_scenarios + legacy_scenarios:
         section = _scenario_section(results, sid, title)
         if section:
             lines += section
@@ -63,27 +77,48 @@ def _cell(metrics: BenchmarkMetrics, sid: str, metric: str, **fmt_kwargs: bool) 
 def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
     lines: list[str] = []
     lines.append(
-        "| Backend | Lang | S1 Relevance | S1 Token↓ | S4 Dedup% | S4 Retain%"
-        " | S5 Δ Retain | S6 P95ms | S7 Consol% | S7 SemRecall |"
+        "| Backend | Lang"
+        " | S1 MRR | S1 P@3"
+        " | S2 SemGap"
+        " | S3 Fresh@1 | S3 Stale"
+        " | S4 Dedup% | S4 Retain% | S4 F1"
+        " | S5 Signal@3 | S5 SNR"
+        " | S6 TokComp | S6 Q/Tok"
+        " | S7 Grounding | S7 HalluRate"
+        " | S8 P95ms | S8 QPS |"
     )
     lines.append(
-        "|---------|------|-------------|-----------|-----------|------------"
-        "|-------------|----------|------------|-------------|"
+        "|---------|-----"
+        "|--------|-------"
+        "|----------"
+        "|------------|----------"
+        "|-----------|------------|-------"
+        "|------------|--------"
+        "|------------|----------"
+        "|--------------|-------------"
+        "|----------|--------|"
     )
 
     for m in results:
         lang = getattr(m, "language", "en")
         row = (
-            f"| {m.backend_name} "
-            f"| {lang} "
-            f"| {_cell(m, 's1_profile_retrieval', 'relevance')} "
-            f"| {_cell(m, 's1_profile_retrieval', 'token_reduction', pct=True)} "
-            f"| {_cell(m, 's4_deduplication', 'dedup_ratio', pct=True)} "
-            f"| {_cell(m, 's4_deduplication', 'retention_ratio', pct=True)} "
-            f"| {_cell(m, 's5_decay', 'retention_delta')} "
-            f"| {_cell(m, 's6_load', 'p95_latency_ms', ms=True)} "
-            f"| {_cell(m, 's7_consolidation', 'consolidation_ratio', pct=True)} "
-            f"| {_cell(m, 's7_consolidation', 'semantic_latest_recall')} |"
+            f"| {m.backend_name} | {lang}"
+            f" | {_cell(m, 's1_mrr', 'mrr')}"
+            f" | {_cell(m, 's1_mrr', 'p_at_3')}"
+            f" | {_cell(m, 's2_semantic_gap', 'semantic_gap')}"
+            f" | {_cell(m, 's3_staleness', 'freshness_at1')}"
+            f" | {_cell(m, 's3_staleness', 'staleness_rate')}"
+            f" | {_cell(m, 's4_compression_f1', 'dedup_ratio', pct=True)}"
+            f" | {_cell(m, 's4_compression_f1', 'retention_ratio', pct=True)}"
+            f" | {_cell(m, 's4_compression_f1', 'compression_f1')}"
+            f" | {_cell(m, 's5_noise', 'signal_recall_at3')}"
+            f" | {_cell(m, 's5_noise', 'snr')}"
+            f" | {_cell(m, 's6_token_economy', 'token_compression', pct=True)}"
+            f" | {_cell(m, 's6_token_economy', 'quality_per_token')}"
+            f" | {_cell(m, 's7_grounding', 'mean_grounding')}"
+            f" | {_cell(m, 's7_grounding', 'hallucination_rate')}"
+            f" | {_cell(m, 's8_throughput', 'p95_ms', ms=True)}"
+            f" | {_cell(m, 's8_throughput', 'throughput')} |"
         )
         lines.append(row)
 
@@ -122,7 +157,7 @@ def _scenario_section(results: list[BenchmarkMetrics], sid: str, title: str) -> 
                         cells.append(_fmt(med))
                     else:
                         cells.append("—")
-                notes_short = sr.notes[:60] + "…" if len(sr.notes) > 60 else sr.notes
+                notes_short = sr.notes[:80] + "…" if len(sr.notes) > 80 else sr.notes
                 lines.append(f"| {m.backend_name} | " + " | ".join(cells) + f" | {notes_short} |")
 
     return lines

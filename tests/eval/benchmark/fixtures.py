@@ -1534,3 +1534,139 @@ BUNDLE_EN_FAST = LanguageBundle(
         n_versions=3,
     ),
 )
+
+# ===========================================================================
+# Professional benchmark fixtures (new S1–S8 scenarios)
+# ===========================================================================
+
+
+@dataclass
+class RetrievalAccuracyFixture:
+    """Ground truth for S1 MRR & Precision@k."""
+
+    facts: list[str]  # facts to insert verbatim
+    queries: list[str]  # queries to evaluate
+    relevant_fact_per_query: dict[str, str]  # query → exact relevant fact text
+
+
+@dataclass
+class ParaphraseFixture:
+    """Ground truth for S2 Semantic Gap. paraphrase_queries[i] ↔ verbatim_facts[i]."""
+
+    verbatim_facts: list[str]
+    paraphrase_queries: list[str]
+
+
+@dataclass
+class NoiseToleranceFixture:
+    """Ground truth for S5 Noise Tolerance."""
+
+    signal_facts: list[str]  # 5 target facts
+    signal_queries: list[str]  # 5 queries to signal facts
+    noise_facts: list[str]  # 200 semantically unrelated facts
+
+
+# ---------------------------------------------------------------------------
+# EN data — Alex Chen, Staff Data Engineer @ FinServe Capital
+# ---------------------------------------------------------------------------
+
+_EN_RETRIEVAL_QUERIES: list[str] = [
+    "What programming language does Alex primarily use?",
+    "How does Alex store secrets and credentials?",
+    "What is Alex's pipeline orchestration tool?",
+    "What is Alex's primary analytical warehouse?",
+    "What branching strategy does Alex's team use?",
+    "What testing framework does Alex use for pipelines?",
+    "What event streaming technology does Alex use?",
+    "What schema management does Alex enforce?",
+    "Who is Alex's manager?",
+    "What orchestration migration did Alex recently complete?",
+]
+
+_EN_RETRIEVAL_RELEVANT: dict[str, str] = {
+    _EN_RETRIEVAL_QUERIES[
+        0
+    ]: "Alex's primary language is Python 3.12; uses Go for high-throughput pipeline components.",
+    _EN_RETRIEVAL_QUERIES[
+        1
+    ]: "Alex keeps secrets in AWS Secrets Manager; never in environment variables or config files.",
+    _EN_RETRIEVAL_QUERIES[
+        2
+    ]: "Alex's transformation layer is dbt on Databricks; pipeline orchestration runs on Prefect 2.",
+    _EN_RETRIEVAL_QUERIES[
+        3
+    ]: "Alex's analytical warehouse is Snowflake; operational database is PostgreSQL 16.",
+    _EN_RETRIEVAL_QUERIES[
+        4
+    ]: "Alex's team uses trunk-based development with feature flags for in-progress work.",
+    _EN_RETRIEVAL_QUERIES[5]: "Alex uses pytest with pytest-datadir for all pipeline unit tests.",
+    _EN_RETRIEVAL_QUERIES[6]: "Alex uses Apache Kafka for event streaming between data domains.",
+    _EN_RETRIEVAL_QUERIES[
+        7
+    ]: "Alex enforces schema versioning for all Avro and Protobuf event schemas in Confluent Schema Registry.",
+    _EN_RETRIEVAL_QUERIES[
+        8
+    ]: "Alex's manager is Sarah Lin; skip-level is David Park, VP of Engineering.",
+    _EN_RETRIEVAL_QUERIES[
+        9
+    ]: "Alex recently migrated orchestration from Apache Airflow 2.6 to Prefect 2.",
+}
+
+EN_RETRIEVAL_ACCURACY = RetrievalAccuracyFixture(
+    facts=_EN_PROFILE_FACTS,
+    queries=_EN_RETRIEVAL_QUERIES,
+    relevant_fact_per_query=_EN_RETRIEVAL_RELEVANT,
+)
+
+_EN_PARAPHRASE_FACTS: list[str] = [
+    "Alex's primary language is Python 3.12; uses Go for high-throughput pipeline components.",
+    "Alex keeps secrets in AWS Secrets Manager; never in environment variables or config files.",
+    "Alex uses Apache Kafka for event streaming between data domains.",
+    "Alex's analytical warehouse is Snowflake; operational database is PostgreSQL 16.",
+    "Alex's team uses trunk-based development with feature flags for in-progress work.",
+    "Alex uses pytest with pytest-datadir for all pipeline unit tests.",
+    "Alex's transformation layer is dbt on Databricks; pipeline orchestration runs on Prefect 2.",
+    "Alex requires type annotations on all public functions and methods (mypy strict mode).",
+    "Alex's team follows a 'data contract first' policy: schema agreed before implementation.",
+    "Alex enforces schema versioning for all Avro and Protobuf event schemas in Confluent Schema Registry.",
+]
+
+_EN_PARAPHRASE_QUERIES: list[str] = [
+    "Which coding language does Alex mainly work with?",
+    "Where does Alex's team store sensitive credentials?",
+    "What messaging system does Alex rely on for data streaming?",
+    "What database does Alex use for analytics workloads?",
+    "How does Alex's team manage code branches?",
+    "What testing tool does Alex run for unit tests?",
+    "What does Alex use to orchestrate data pipelines?",
+    "What are Alex's requirements for Python type checking?",
+    "What is Alex's team's policy when implementing new data schemas?",
+    "How does Alex manage event schema versions?",
+]
+
+EN_PARAPHRASE = ParaphraseFixture(
+    verbatim_facts=_EN_PARAPHRASE_FACTS,
+    paraphrase_queries=_EN_PARAPHRASE_QUERIES,
+)
+
+_EN_SIGNAL_FACTS: list[str] = [
+    "Alex's primary language is Python 3.12; uses Go for high-throughput pipeline components.",
+    "Alex keeps secrets in AWS Secrets Manager; never in environment variables or config files.",
+    "Alex uses Apache Kafka for event streaming between data domains.",
+    "Alex's analytical warehouse is Snowflake; operational database is PostgreSQL 16.",
+    "Alex's team uses trunk-based development with feature flags for in-progress work.",
+]
+
+_EN_SIGNAL_QUERIES: list[str] = [
+    "What programming language does Alex use?",
+    "How does Alex manage secrets?",
+    "What event streaming technology does Alex use?",
+    "What is Alex's data warehouse?",
+    "What branching strategy does Alex's team follow?",
+]
+
+EN_NOISE_TOLERANCE = NoiseToleranceFixture(
+    signal_facts=_EN_SIGNAL_FACTS,
+    signal_queries=_EN_SIGNAL_QUERIES,
+    noise_facts=LOAD_FACTS,  # 200 semantically distinct infra facts
+)
