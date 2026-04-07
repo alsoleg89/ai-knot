@@ -1,0 +1,3 @@
+# One substring per line.
+# Lines starting with "#" are ignored.
+# Add only deliberate, reviewed exceptions here.

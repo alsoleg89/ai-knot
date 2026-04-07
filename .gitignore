@@ -35,3 +35,4 @@ Thumbs.db
 # Benchmark output files (all variants)
 benchmark_*.json
 benchmark_*.md
+MEMORY_ACTION_PLAN.md
