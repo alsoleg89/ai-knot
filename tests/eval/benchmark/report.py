@@ -34,6 +34,7 @@ _SA_SCENARIO_IDS = frozenset(
         "s6_load",
         "s7_consolidation",
         "s16_update_correctness",
+        "s_locomo",
     }
 )
 
@@ -128,6 +129,7 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
         ("s14_trust_drift", "S14 — Trust Drift"),
         ("s15_topic_leakage", "S15 — Topic Leakage"),
         ("s16_update_correctness", "S16 — Update Semantics"),
+        ("s_locomo", "S-LoCoMo — Long-Context Memory QA"),
     ]
     for sid, title in sync_scenarios:
         section = _scenario_section(results, sid, title)
@@ -187,7 +189,8 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
         " | S7 Grounding | S7 HalluRate"
         " | S8 P95ms | S8 QPS"
         " | S9 MRR@0 | S9 MRR@1k | S9 Degrad"
-        " | S16 Del | S16 Noop | S16 Upd |"
+        " | S16 Del | S16 Noop | S16 Upd"
+        " | LoCoMo F1 | LoCoMo 1-hop | LoCoMo Multi | LoCoMo Temp |"
     )
     lines.append(
         "|---------|-----"
@@ -201,6 +204,7 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
         "|----------|--------"
         "|----------|-----------|-----------|"
         "---------|----------|---------|"
+        "-----------|-------------|-------------|------------|"
     )
 
     for m in results:
@@ -230,7 +234,11 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
             f" | {_cell(m, 's9_scale', 'mrr_degradation')}"
             f" | {_cell(m, 's16_update_correctness', 'delete_correctness', pct=True)}"
             f" | {_cell(m, 's16_update_correctness', 'noop_correctness', pct=True)}"
-            f" | {_cell(m, 's16_update_correctness', 'update_correctness', pct=True)} |"
+            f" | {_cell(m, 's16_update_correctness', 'update_correctness', pct=True)}"
+            f" | {_cell(m, 's_locomo', 'overall_f1')}"
+            f" | {_cell(m, 's_locomo', 'single_hop_f1')}"
+            f" | {_cell(m, 's_locomo', 'multi_hop_f1')}"
+            f" | {_cell(m, 's_locomo', 'temporal_f1')} |"
         )
         lines.append(row)
 

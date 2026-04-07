@@ -40,6 +40,7 @@ from tests.eval.benchmark.scenarios.s13_concurrent_writers import run as s13_con
 from tests.eval.benchmark.scenarios.s14_trust_drift import run as s14_trust_drift
 from tests.eval.benchmark.scenarios.s15_topic_leakage import run as s15_topic_leakage
 from tests.eval.benchmark.scenarios.s16_update_correctness import run as s16_update_correctness
+from tests.eval.benchmark.scenarios.s_locomo import run as s_locomo
 
 ScenarioFn = Callable[..., Coroutine[Any, Any, Any]]
 
@@ -54,6 +55,7 @@ _ALL: list[tuple[str, ScenarioFn]] = [
     ("s8_throughput", s8_throughput),
     ("s9_scale", s9_scale),
     ("s16_update_correctness", s16_update_correctness),
+    ("s_locomo", s_locomo),
 ]
 
 _LEGACY: list[tuple[str, ScenarioFn]] = [
