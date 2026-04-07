@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write
+      id-token: write   # required for OIDC trusted publishing
 
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +25,16 @@ jobs:
 
       - name: Install build tools
         run: pip install hatch
+
+      - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(python -c "import tomllib; d=tomllib.loads(open('pyproject.toml').read()); print(d['project']['version'])")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "Version mismatch: tag=$TAG pyproject.toml=$PKG"
+            exit 1
+          fi
 
       - name: Build package
         run: hatch build
