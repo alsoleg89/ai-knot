@@ -210,6 +210,48 @@ def test_mcp_types_and_snapshot(tmp_path: Any) -> None:
 
 @requires_mcp
 @pytest.mark.integration
+def test_mcp_recall_json_and_learn(tmp_path: Any) -> None:
+    """recall_json returns valid JSON; learn stores last user message in degraded mode."""
+    session = McpSession(str(tmp_path))
+    try:
+        session.initialize()
+
+        # recall_json on empty KB returns empty JSON array
+        empty = session.tool_call("recall_json", {"query": "anything"})
+        assert json.loads(empty) == []
+
+        # add some facts
+        session.tool_call("add", {"content": "User deploys on Kubernetes"})
+        session.tool_call("add", {"content": "User uses Python 3.12"})
+
+        # recall_json returns structured objects
+        result_json = session.tool_call("recall_json", {"query": "Kubernetes deployment"})
+        items = json.loads(result_json)
+        assert isinstance(items, list)
+        assert len(items) >= 1
+        assert all("id" in item and "memory" in item for item in items)
+        assert any("Kubernetes" in item["memory"] for item in items)
+
+        # learn in degraded mode (no LLM env vars) stores last user message
+        messages = [
+            {"role": "user", "content": "Tell me about databases."},
+            {"role": "assistant", "content": "Sure! PostgreSQL is great."},
+            {"role": "user", "content": "User prefers PostgreSQL 16 as the main DB."},
+        ]
+        learn_resp = session.tool_call("learn", {"messages": messages})
+        learn_data = json.loads(learn_resp)
+        assert learn_data["stored"] >= 1
+        assert len(learn_data["ids"]) >= 1
+
+        # verify learned fact is recalled
+        recall = session.tool_call("recall", {"query": "database"})
+        assert "PostgreSQL" in recall or "database" in recall.lower()
+    finally:
+        session.close()
+
+
+@requires_mcp
+@pytest.mark.integration
 def test_mcp_resilience(tmp_path: Any) -> None:
     """Unicode, large content, invalid tool, recall relevance, graceful exit."""
     session = McpSession(str(tmp_path))
