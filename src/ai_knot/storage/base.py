@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
@@ -83,6 +84,29 @@ class TemporalStorageCapable(Protocol):
         interleaving between the DELETE and INSERT operations.  YAML backends
         can fall back to the regular ``save()`` but should be documented as
         degraded (single-writer only).
+        """
+        ...
+
+
+@runtime_checkable
+class AtomicUpdateCapable(Protocol):
+    """Optional extension for backends that support cross-process atomic load+save.
+
+    Implementations must guarantee that the load, callback, and save execute
+    as a single exclusive transaction, preventing lost updates when multiple
+    processes share the same storage file.
+    """
+
+    def atomic_update(
+        self,
+        agent_id: str,
+        fn: Callable[[list[Fact]], list[Fact]],
+    ) -> None:
+        """Load all facts for *agent_id*, apply *fn*, save the result atomically.
+
+        The callback *fn* receives the current fact list and must return the
+        updated list.  The entire load→transform→save cycle is protected by an
+        exclusive database-level lock.
         """
         ...
 

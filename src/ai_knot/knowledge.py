@@ -21,7 +21,12 @@ from ai_knot.forgetting import apply_decay
 from ai_knot.providers import LLMProvider, create_provider
 from ai_knot.query_expander import LLMQueryExpander
 from ai_knot.retriever import TFIDFRetriever
-from ai_knot.storage.base import SnapshotCapable, StorageBackend, TemporalStorageCapable
+from ai_knot.storage.base import (
+    AtomicUpdateCapable,
+    SnapshotCapable,
+    StorageBackend,
+    TemporalStorageCapable,
+)
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import (
     ConversationTurn,
@@ -417,7 +422,6 @@ class KnowledgeBase:
                     handled_ids.add(matched_fact.id)
                 if new_fact.op == MemoryOp.DELETE:
                     n_delete += 1
-                    continue  # don't insert the DELETE fact itself
 
             # Phase 3: lexical dedup for remaining unslotted facts.
             remaining_active = [f for f in entity_candidates if f.id not in handled_ids]
@@ -1244,81 +1248,94 @@ class SharedMemoryPool:
     def _publish_locked(self, agent_id: str, to_publish: list[Fact]) -> list[Fact]:
         """Execute publish while holding ``_publish_lock``.  Called only from :meth:`publish`."""
         now = datetime.now(UTC)
-        shared = self._storage.load(_SHARED_NAMESPACE)
-
-        # Index active shared facts by slot_key for O(1) CAS lookup.
-        # Falls back to (entity, attribute) for pre-Phase-3 facts without slot_key.
-        active_by_slot: dict[str, Fact] = {}
-        existing_ids: set[str] = set()
-        for f in shared:
-            existing_ids.add(f.id)
-            if f.is_active(now):
-                if f.slot_key:
-                    active_by_slot[f.slot_key] = f
-                elif f.entity and f.attribute:
-                    # Legacy: synthetic slot key from entity+attribute.
-                    legacy_key = f"{f.entity.lower().strip()}::{f.attribute.lower().strip()}"
-                    active_by_slot.setdefault(legacy_key, f)
-
-        # Global monotonic version counter for the pool.
-        # Each published or superseded fact gets a strictly increasing version
-        # so that load_since_version() and sync_slot_deltas() work correctly
-        # when multiple facts are published in separate batches.
-        next_version = max((f.version for f in shared), default=0) + 1
-
         published: list[Fact] = []
-        for fact in to_publish:
-            new_fact = copy.deepcopy(fact)
-            new_fact.origin_agent_id = agent_id
-            new_fact.visibility = "pool"
-            new_fact.valid_from = now
-            new_fact.valid_until = None
+        quick_inv_updates: dict[str, int] = {}
 
-            # Resolve CAS key: prefer slot_key, fall back to entity+attribute.
-            cas_key = fact.slot_key or (
-                f"{fact.entity.lower().strip()}::{fact.attribute.lower().strip()}"
-                if fact.entity and fact.attribute
-                else ""
-            )
+        def _merge(shared: list[Fact]) -> list[Fact]:
+            # Index active shared facts by slot_key for O(1) CAS lookup.
+            # Falls back to (entity, attribute) for pre-Phase-3 facts without slot_key.
+            active_by_slot: dict[str, Fact] = {}
+            existing_ids: set[str] = set()
+            for f in shared:
+                existing_ids.add(f.id)
+                if f.is_active(now):
+                    if f.slot_key:
+                        active_by_slot[f.slot_key] = f
+                    elif f.entity and f.attribute:
+                        legacy_key = f"{f.entity.lower().strip()}::{f.attribute.lower().strip()}"
+                        active_by_slot.setdefault(legacy_key, f)
 
-            if cas_key and cas_key in active_by_slot:
-                old = active_by_slot[cas_key]
-                if old.id == fact.id:
-                    # Same fact already published as the active version — no-op.
+            # Global monotonic version counter for the pool.
+            # Each published or superseded fact gets a strictly increasing version
+            # so that load_since_version() and sync_slot_deltas() work correctly
+            # when multiple facts are published in separate batches.
+            next_version = max((f.version for f in shared), default=0) + 1
+
+            for fact in to_publish:
+                new_fact = copy.deepcopy(fact)
+                new_fact.origin_agent_id = agent_id
+                new_fact.visibility = "pool"
+                new_fact.valid_from = now
+                new_fact.valid_until = None
+
+                # Resolve CAS key: prefer slot_key, fall back to entity+attribute.
+                cas_key = fact.slot_key or (
+                    f"{fact.entity.lower().strip()}::{fact.attribute.lower().strip()}"
+                    if fact.entity and fact.attribute
+                    else ""
+                )
+
+                if cas_key and cas_key in active_by_slot:
+                    old = active_by_slot[cas_key]
+                    if old.id == fact.id:
+                        # Same fact already published as the active version — no-op.
+                        continue
+                    # Slot-addressed CAS: close old version, insert new.
+                    old.valid_until = now
+                    old.mesi_state = MESIState.INVALID
+                    new_fact.mesi_state = MESIState.MODIFIED
+                    new_fact.version = next_version
+                    next_version += 1
+                    # Quick invalidation: a different agent superseded this slot within the window.
+                    if old.origin_agent_id and old.origin_agent_id != agent_id:
+                        age_s = (now - old.valid_from).total_seconds()
+                        if age_s < _QUICK_INV_WINDOW_S:
+                            quick_inv_updates[old.origin_agent_id] = (
+                                quick_inv_updates.get(old.origin_agent_id, 0) + 1
+                            )
+                elif new_fact.id not in existing_ids:
+                    new_fact.mesi_state = MESIState.SHARED
+                    new_fact.version = next_version
+                    next_version += 1
+                else:
+                    # ID already in pool and no slot key — skip duplicate.
                     continue
-                # Slot-addressed CAS: close old version, insert new.
-                old.valid_until = now
-                old.mesi_state = MESIState.INVALID
-                new_fact.mesi_state = MESIState.MODIFIED
-                new_fact.version = next_version
-                next_version += 1
-                # Quick invalidation: a different agent superseded this slot within the window.
-                if old.origin_agent_id and old.origin_agent_id != agent_id:
-                    age_s = (now - old.valid_from).total_seconds()
-                    if age_s < _QUICK_INV_WINDOW_S:
-                        self._quick_inv_count[old.origin_agent_id] = (
-                            self._quick_inv_count.get(old.origin_agent_id, 0) + 1
-                        )
-            elif new_fact.id not in existing_ids:
-                new_fact.mesi_state = MESIState.SHARED
-                new_fact.version = next_version
-                next_version += 1
-            else:
-                # ID already in pool and no slot key — skip duplicate.
-                continue
 
-            shared.append(new_fact)
-            published.append(new_fact)
+                shared.append(new_fact)
+                published.append(new_fact)
 
-        # Track publish counts for auto-trust.
+            return shared
+
+        # AtomicUpdateCapable backends (SQLite) protect the full load→merge→save
+        # cycle with an EXCLUSIVE transaction, preventing cross-process lost updates.
+        # Other backends fall back to the in-process lock only.
+        if isinstance(self._storage, AtomicUpdateCapable):
+            self._storage.atomic_update(_SHARED_NAMESPACE, _merge)
+        else:
+            current = self._storage.load(_SHARED_NAMESPACE)
+            _merge(current)
+            if published:
+                if isinstance(self._storage, TemporalStorageCapable):
+                    self._storage.save_atomic(_SHARED_NAMESPACE, current)
+                else:
+                    self._storage.save(_SHARED_NAMESPACE, current)
+
+        # Apply trust-tracking side effects outside the storage transaction.
+        for agt, count in quick_inv_updates.items():
+            self._quick_inv_count[agt] = self._quick_inv_count.get(agt, 0) + count
+
         if published:
             self._publish_count[agent_id] = self._publish_count.get(agent_id, 0) + len(published)
-            # Use BEGIN IMMEDIATE on SQLite/Postgres to prevent lost updates from
-            # concurrent processes; fall back to regular save() on YAML.
-            if isinstance(self._storage, TemporalStorageCapable):
-                self._storage.save_atomic(_SHARED_NAMESPACE, shared)
-            else:
-                self._storage.save(_SHARED_NAMESPACE, shared)
             logger.info(
                 "Agent '%s' published %d facts to shared pool",
                 agent_id,
@@ -1381,20 +1398,26 @@ class SharedMemoryPool:
         overfetch_k = min(top_k * _POOL_RECALL_OVERFETCH, len(active))
         pairs = self._retriever.search(query, active, top_k=overfetch_k)
 
-        # Apply per-agent trust discount before final cutoff; track recall hits
-        # for auto-trust computation.
+        # Apply per-agent trust discount before final cutoff.
         discounted: list[tuple[Fact, float]] = []
         for fact, score in pairs:
             if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
                 trust = self.get_trust(fact.origin_agent_id)
                 score *= trust
-                self._used_count[fact.origin_agent_id] = (
-                    self._used_count.get(fact.origin_agent_id, 0) + 1
-                )
             discounted.append((fact, score))
 
         discounted.sort(key=lambda x: x[1], reverse=True)
-        return discounted[:top_k]
+        top_results = discounted[:top_k]
+
+        # Track recall hits only for facts actually returned — not over-fetched
+        # candidates that were discarded after trust discount.
+        for fact, _ in top_results:
+            if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
+                self._used_count[fact.origin_agent_id] = (
+                    self._used_count.get(fact.origin_agent_id, 0) + 1
+                )
+
+        return top_results
 
     def sync_dirty(self, agent_id: str) -> list[Fact]:
         """Pull facts changed by other agents since the last sync (MESI lazy invalidation).

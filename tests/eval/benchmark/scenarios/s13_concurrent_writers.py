@@ -24,6 +24,8 @@ Only runs against MultiAgentMemoryBackend.
 
 from __future__ import annotations
 
+import asyncio
+
 from tests.eval.benchmark.base import MultiAgentMemoryBackend, ScenarioResult
 from tests.eval.benchmark.judge import BaseJudge
 
@@ -84,32 +86,40 @@ async def run(backend: MultiAgentMemoryBackend, judge: BaseJudge) -> ScenarioRes
         for j in range(_NOISE_PER_AGENT):
             await backend.insert_for_agent(agent_id, _NOISE_FACTS[(offset + j) % len(_NOISE_FACTS)])
 
-    # All agents publish in sequence — simulates serialised concurrent intent.
-    for agent_id in agent_ids:
-        await backend.publish_to_pool(agent_id)
+    # All agents publish concurrently — tests real slot-key integrity under parallel writes.
+    await asyncio.gather(*[backend.publish_to_pool(agent_id) for agent_id in agent_ids])
 
     # Measure slot integrity.
     active_count = await backend.pool_count_active_for_entity(_SLOT_ENTITY, _SLOT_ATTRIBUTE)
     total_count = await _count_all_slot_versions(backend, _SLOT_ENTITY, _SLOT_ATTRIBUTE)
 
     no_lost_updates = 1.0 if active_count == 1 else 0.0
-    version_chain_integrity = 1.0 if total_count == _N_AGENTS else 0.0
+    # version_chain_integrity requires access to pool internals; skip for backends
+    # that don't expose _pool (total_count == -1).
+    version_chain_integrity = (
+        1.0 if total_count == _N_AGENTS else 0.0 if total_count != -1 else None
+    )
 
     notes = (
         f"agents={_N_AGENTS}, "
         f"active_slot_count={active_count} (expected=1), "
         f"total_slot_versions={total_count} (expected={_N_AGENTS}), "
-        f"no_lost_updates={no_lost_updates:.0%}, "
-        f"version_chain_integrity={version_chain_integrity:.0%}"
+        f"no_lost_updates={no_lost_updates:.0%}"
+        + (
+            f", version_chain_integrity={version_chain_integrity:.0%}"
+            if version_chain_integrity is not None
+            else ""
+        )
     )
+
+    judge_scores: dict[str, list[float]] = {"no_lost_updates": [no_lost_updates]}
+    if version_chain_integrity is not None:
+        judge_scores["version_chain_integrity"] = [version_chain_integrity]
 
     return ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
-        judge_scores={
-            "no_lost_updates": [no_lost_updates],
-            "version_chain_integrity": [version_chain_integrity],
-        },
+        judge_scores=judge_scores,
         insert_result=None,
         retrieval_result=None,
         notes=notes,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -161,6 +161,35 @@ class SQLiteStorage:
         rows = self._build_rows(agent_id, facts)
         self._execute_save(agent_id, rows)
         logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
+
+    def atomic_update(
+        self,
+        agent_id: str,
+        fn: Callable[[list[Fact]], list[Fact]],
+    ) -> None:
+        """Load, transform, and save facts in a single EXCLUSIVE SQLite transaction.
+
+        Blocks all other writers (including cross-process) for the duration,
+        preventing lost-update races in shared-namespace publish operations.
+        """
+        conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level=None)
+        conn.execute("PRAGMA synchronous=NORMAL")
+        try:
+            conn.execute("BEGIN EXCLUSIVE")
+            rows = conn.execute(
+                f"{self._SELECT_COLS} FROM facts WHERE agent_id = ? ORDER BY created_at",
+                (agent_id,),
+            ).fetchall()
+            current = [self._fact_from_row(row) for row in rows]
+            new_facts = fn(current)
+            conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
+            conn.executemany(_INSERT_FACTS_SQL, self._build_rows(agent_id, new_facts))
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
 
     def save_atomic(self, agent_id: str, facts: list[Fact]) -> None:
         """Atomically replace facts using BEGIN IMMEDIATE to block concurrent writers."""
