@@ -33,6 +33,7 @@ _SA_SCENARIO_IDS = frozenset(
         "s5_decay",
         "s6_load",
         "s7_consolidation",
+        "s16_update_correctness",
     }
 )
 
@@ -126,6 +127,7 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
         ("s13_concurrent_writers", "S13 — Concurrent Writers"),
         ("s14_trust_drift", "S14 — Trust Drift"),
         ("s15_topic_leakage", "S15 — Topic Leakage"),
+        ("s16_update_correctness", "S16 — Update Semantics"),
     ]
     for sid, title in sync_scenarios:
         section = _scenario_section(results, sid, title)
@@ -184,7 +186,8 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
         " | S6 TokComp | S6 Q/Tok"
         " | S7 Grounding | S7 HalluRate"
         " | S8 P95ms | S8 QPS"
-        " | S9 MRR@0 | S9 MRR@1k | S9 Degrad |"
+        " | S9 MRR@0 | S9 MRR@1k | S9 Degrad"
+        " | S16 Del | S16 Noop | S16 Upd |"
     )
     lines.append(
         "|---------|-----"
@@ -197,6 +200,7 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
         "|--------------|-------------"
         "|----------|--------"
         "|----------|-----------|-----------|"
+        "---------|----------|---------|"
     )
 
     for m in results:
@@ -223,7 +227,10 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
             f" | {_cell(m, 's8_throughput', 'throughput')}"
             f" | {_cell(m, 's9_scale', 'mrr_at_0')}"
             f" | {_cell(m, 's9_scale', 'mrr_at_1000')}"
-            f" | {_cell(m, 's9_scale', 'mrr_degradation')} |"
+            f" | {_cell(m, 's9_scale', 'mrr_degradation')}"
+            f" | {_cell(m, 's16_update_correctness', 'delete_correctness', pct=True)}"
+            f" | {_cell(m, 's16_update_correctness', 'noop_correctness', pct=True)}"
+            f" | {_cell(m, 's16_update_correctness', 'update_correctness', pct=True)} |"
         )
         lines.append(row)
 

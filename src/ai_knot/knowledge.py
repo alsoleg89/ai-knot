@@ -23,7 +23,15 @@ from ai_knot.query_expander import LLMQueryExpander
 from ai_knot.retriever import TFIDFRetriever
 from ai_knot.storage.base import SnapshotCapable, StorageBackend, TemporalStorageCapable
 from ai_knot.storage.yaml_storage import YAMLStorage
-from ai_knot.types import ConversationTurn, Fact, MemoryType, MESIState, SlotDelta, SnapshotDiff
+from ai_knot.types import (
+    ConversationTurn,
+    Fact,
+    MemoryOp,
+    MemoryType,
+    MESIState,
+    SlotDelta,
+    SnapshotDiff,
+)
 
 # LLM expansion token weight — higher than PRF (0.5) to reflect
 # the semantic advantage of LLM-based query understanding.
@@ -352,20 +360,38 @@ class KnowledgeBase:
             to_insert: list[Fact] = []
             # IDs of active facts already handled — excluded from later phases.
             handled_ids: set[str] = set()
-            n_reinforce = n_supersede = n_branch = 0
+            n_reinforce = n_supersede = n_branch = n_delete = n_noop = 0
 
             # Phase 1: slot-based resolution (deterministic, exact slot_key match).
             slotted_facts = [f for f in new_facts if f.slot_key]
             for new_fact in slotted_facts:
-                op, matched = resolve_by_slot(new_fact, active_existing)
-                if op == "reinforce":
+                # LLM-signalled NOOP: skip without any mutation.
+                if new_fact.op == MemoryOp.NOOP:
+                    n_noop += 1
+                    continue
+
+                # LLM-signalled DELETE: close matched slot, do not insert replacement.
+                if new_fact.op == MemoryOp.DELETE:
+                    _, matched = resolve_by_slot(new_fact, active_existing)
+                    if matched is not None:
+                        matched.valid_until = now_close
+                        handled_ids.add(matched.id)
+                    n_delete += 1
+                    continue
+
+                slot_op, matched = resolve_by_slot(new_fact, active_existing)
+                # LLM UPDATE overrides structural "reinforce" — treat as supersede.
+                if new_fact.op == MemoryOp.UPDATE and slot_op == "reinforce":
+                    slot_op = "supersede"
+
+                if slot_op == "reinforce":
                     assert matched is not None
                     matched.state_confidence = min(1.0, matched.state_confidence + 0.05)
                     matched.importance = min(1.0, matched.importance + 0.02)
                     matched.last_accessed = now_close
                     handled_ids.add(matched.id)
                     n_reinforce += 1
-                elif op == "supersede":
+                elif slot_op == "supersede":
                     assert matched is not None
                     matched.valid_until = now_close
                     handled_ids.add(matched.id)
@@ -379,7 +405,8 @@ class KnowledgeBase:
 
             # Phase 2: entity-addressed CAS for unslotted facts with entity+attribute.
             # Closes pre-Phase-1 storage facts that carry entity/attribute but no slot_key.
-            unslotted_facts = [f for f in new_facts if not f.slot_key]
+            # NOOP-tagged unslotted facts are excluded entirely.
+            unslotted_facts = [f for f in new_facts if not f.slot_key and f.op != MemoryOp.NOOP]
             unslotted_with_entity = [f for f in unslotted_facts if f.entity and f.attribute]
             entity_candidates = [f for f in active_existing if f.id not in handled_ids]
             for new_fact in unslotted_with_entity:
@@ -400,12 +427,15 @@ class KnowledgeBase:
             self._storage.save(self._agent_id, existing + to_insert)
             logger.info(
                 "Learned %d facts for agent '%s' "
-                "(slot: %d reinforced, %d superseded, %d new; lexical: %d merged)",
+                "(slot: %d reinforced, %d superseded, %d new, %d deleted, %d noop; "
+                "lexical: %d merged)",
                 len(to_insert),
                 self._agent_id,
                 n_reinforce,
                 n_supersede,
                 n_branch,
+                n_delete,
+                n_noop,
                 len(unslotted_facts) - len(unslotted_inserted),
             )
             return to_insert

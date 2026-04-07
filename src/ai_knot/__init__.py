@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
-from ai_knot.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
+from ai_knot.types import ConversationTurn, Fact, MemoryOp, MemoryType, SnapshotDiff
 
 __version__ = "0.9.0"
 
@@ -11,6 +11,7 @@ __all__ = [
     "ConversationTurn",
     "Fact",
     "KnowledgeBase",
+    "MemoryOp",
     "MemoryType",
     "SharedMemoryPool",
     "SnapshotDiff",
