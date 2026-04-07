@@ -343,7 +343,7 @@ def test_mcp_sequential_and_latency(tmp_path: Any) -> None:
         facts = json.loads(session.tool_call("list_facts", {}))
         for fact in facts:
             session.tool_call("forget", {"fact_id": fact["id"]})
-        assert session.tool_call("list_facts", {}) == "No facts stored."
+        assert json.loads(session.tool_call("list_facts", {})) == []
 
         # latency profile: measure P50 and max over 10 iterations
         for i in range(10):

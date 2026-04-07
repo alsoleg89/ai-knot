@@ -112,6 +112,40 @@ def tool_forget(kb: KnowledgeBase, fact_id: str) -> str:
     return f"Fact {fact_id!r} removed."
 
 
+def tool_health() -> str:
+    """Return server health and version.
+
+    Returns:
+        JSON object with ``{"status": "ok", "version": "..."}``
+    """
+    from ai_knot import __version__
+
+    return json.dumps({"status": "ok", "version": __version__})
+
+
+def tool_capabilities() -> str:
+    """Return the list of available tools with short descriptions.
+
+    Returns:
+        JSON array of ``{"name": "...", "description": "..."}`` objects.
+    """
+    tools = [
+        {"name": "add", "description": "Store a single fact"},
+        {"name": "learn", "description": "Extract and store facts from a conversation"},
+        {"name": "recall", "description": "Retrieve relevant facts as text"},
+        {"name": "recall_json", "description": "Retrieve relevant facts as JSON array"},
+        {"name": "forget", "description": "Remove a fact by ID"},
+        {"name": "list_facts", "description": "List all stored facts as JSON array"},
+        {"name": "stats", "description": "Memory statistics"},
+        {"name": "snapshot", "description": "Save current state as a named snapshot"},
+        {"name": "restore", "description": "Restore state from a named snapshot"},
+        {"name": "list_snapshots", "description": "List available snapshots"},
+        {"name": "health", "description": "Server health and version"},
+        {"name": "capabilities", "description": "List available tools"},
+    ]
+    return json.dumps(tools, ensure_ascii=False)
+
+
 def tool_list_facts(kb: KnowledgeBase) -> str:
     """List all stored facts.
 
@@ -119,11 +153,11 @@ def tool_list_facts(kb: KnowledgeBase) -> str:
         kb: The knowledge base instance.
 
     Returns:
-        JSON-formatted list of facts, or a message if empty.
+        JSON array of facts (empty array ``[]`` when nothing is stored).
     """
     facts = kb.list_facts()
     if not facts:
-        return "No facts stored."
+        return "[]"
     data = [
         {
             "id": f.id,
@@ -313,9 +347,10 @@ def _make_server(kb: KnowledgeBase) -> Any:
             "learn: extract and store knowledge from a conversation (preferred). "
             "add: store a single fact directly. recall: retrieve relevant context as text. "
             "recall_json: retrieve relevant context as structured JSON. "
-            "forget: remove a fact by ID. list_facts: view all stored facts. "
+            "forget: remove a fact by ID. list_facts: view all stored facts as JSON. "
             "stats: memory statistics. snapshot/restore: version the memory state. "
-            "list_snapshots: see available snapshots."
+            "list_snapshots: see available snapshots. "
+            "health: check server status. capabilities: list all available tools."
         ),
     )
 
@@ -412,6 +447,16 @@ def _make_server(kb: KnowledgeBase) -> Any:
     def list_snapshots() -> str:
         """List all saved memory snapshots by name."""
         return tool_list_snapshots(kb)
+
+    @app.tool()
+    def health() -> str:
+        """Return server health status and version as JSON."""
+        return tool_health()
+
+    @app.tool()
+    def capabilities() -> str:
+        """Return the list of available tools as a JSON array."""
+        return tool_capabilities()
 
     return app
 
