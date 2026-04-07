@@ -8,7 +8,8 @@ A retrieved text "hits" if ATC token containment >= 0.5 (deterministic, no judge
 When Ollama is available, also computes semantic_mrr via cosine >= 0.65.
 
 Metrics:
-  mrr          — Mean Reciprocal Rank (embed or ATC)
+  lexical_mrr  — MRR using ATC token containment (always available)
+  semantic_mrr — MRR using cosine similarity (Ollama required; falls back to lexical)
   p_at_1       — Precision@1
   p_at_3       — Precision@3
   p_at_5       — Precision@5
@@ -81,21 +82,17 @@ async def run(
         else:
             ranks_semantic.append(rank_lex)
 
-    # Choose best available ranks for primary metrics
-    # Use semantic if it differs from lexical (Ollama was available and helped)
-    has_semantic_improvement = any(
-        rs != rl for rs, rl in zip(ranks_semantic, ranks_lexical, strict=False)
-    )
-    ranks = ranks_semantic if has_semantic_improvement else ranks_lexical
-
-    mrr_score = mrr(ranks)
-    p1 = precision_at_k(ranks, 1)
-    p3 = precision_at_k(ranks, 3)
-    p5 = precision_at_k(ranks, 5)
+    lexical_mrr = mrr(ranks_lexical)
+    semantic_mrr = mrr(ranks_semantic)
+    # Use lexical ranks for P@k (always available, deterministic).
+    p1 = precision_at_k(ranks_lexical, 1)
+    p3 = precision_at_k(ranks_lexical, 3)
+    p5 = precision_at_k(ranks_lexical, 5)
 
     notes = (
         f"n_queries={len(queries)}, "
-        f"mrr={mrr_score:.3f}, p@1={p1:.2f}, p@3={p3:.2f}, p@5={p5:.2f}, "
+        f"lexical_mrr={lexical_mrr:.3f}, semantic_mrr={semantic_mrr:.3f}, "
+        f"p@1={p1:.2f}, p@3={p3:.2f}, p@5={p5:.2f}, "
         f"embed={'yes' if q_embs else 'no (ATC fallback)'}"
     )
 
@@ -103,7 +100,8 @@ async def run(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
-            "mrr": [mrr_score, mrr_score, mrr_score],
+            "lexical_mrr": [lexical_mrr, lexical_mrr, lexical_mrr],
+            "semantic_mrr": [semantic_mrr, semantic_mrr, semantic_mrr],
             "p_at_1": [p1, p1, p1],
             "p_at_3": [p3, p3, p3],
             "p_at_5": [p5, p5, p5],

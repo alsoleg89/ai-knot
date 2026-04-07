@@ -4,12 +4,15 @@ Community metric: LongMemEval temporal faithfulness, MemGPT staleness.
 Pain point (#1): "system returns an outdated fact instead of the current one."
 
 Inserts 5 topics × 5 versions (interleaved, same as S7 old). After inserting all 25,
-queries each topic. Freshness@1 = top-1 is semantically closer to v5 than to v1-v3.
+queries each topic. latest_state_accuracy = top-1 is the latest version.
 
 Metrics (all deterministic, no judge):
-  freshness_at1       — fraction of queries where top-1 is the latest version
-  staleness_rate      — fraction where top-1 is an older version
-  consolidation_ratio — 1 - stored_count / n_inserted (memory compression)
+  latest_state_accuracy — fraction of queries where top-1 is the latest version
+  overconsolidation_rate — compression gained beyond retrieval accuracy:
+                           max(0, consolidation_ratio - latest_state_accuracy);
+                           positive when the system compressed MORE than it
+                           preserved correctly (information loss)
+  consolidation_ratio   — 1 - stored_count / n_inserted (memory compression)
 """
 
 from __future__ import annotations
@@ -103,24 +106,33 @@ async def run(
             staleness_count += 1
 
     n_q = len(fixture.queries)
-    freshness_at1 = freshness_count / max(n_q, 1)
-    staleness_rate = staleness_count / max(n_q, 1)
+    latest_state_accuracy = freshness_count / max(n_q, 1)
+    # overconsolidation: compression exceeds retrieval accuracy → information lost
+    overconsolidation_rate = max(0.0, consolidation_ratio - latest_state_accuracy)
 
     notes = (
         f"lang={bundle.language}, "
         f"facts_inserted={n_inserted}, "
         f"estimated_stored={estimated_stored}, "
         f"consolidation_ratio={consolidation_ratio:.1%}, "
-        f"freshness@1={freshness_at1:.2f}, "
-        f"staleness_rate={staleness_rate:.2f}"
+        f"latest_state_accuracy={latest_state_accuracy:.2f}, "
+        f"overconsolidation_rate={overconsolidation_rate:.2f}"
     )
 
     result_obj = ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
-            "freshness_at1": [freshness_at1, freshness_at1, freshness_at1],
-            "staleness_rate": [staleness_rate, staleness_rate, staleness_rate],
+            "latest_state_accuracy": [
+                latest_state_accuracy,
+                latest_state_accuracy,
+                latest_state_accuracy,
+            ],
+            "overconsolidation_rate": [
+                overconsolidation_rate,
+                overconsolidation_rate,
+                overconsolidation_rate,
+            ],
             "consolidation_ratio": [consolidation_ratio, consolidation_ratio, consolidation_ratio],
         },
         insert_result=last_insert,

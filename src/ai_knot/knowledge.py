@@ -30,6 +30,8 @@ _LLM_EXPANSION_WEIGHT: float = 0.6
 
 _SHARED_NAMESPACE = "__shared__"
 _PROVENANCE_DISCOUNT = 0.8
+# Facts superseded by a different agent within this window count as "quick invalidations".
+_QUICK_INV_WINDOW_S = 3600.0  # 1 hour
 
 logger = logging.getLogger(__name__)
 
@@ -1008,10 +1010,14 @@ class SharedMemoryPool:
     channel with selective read access. Facts from other agents receive a
     provenance discount reflecting per-agent trust (Marsh 1994).
 
-    Trust starts at ``_PROVENANCE_DISCOUNT`` (0.8) for new agents and can
-    be adjusted via :meth:`update_trust` based on feedback quality.
-    Agents that consistently provide relevant facts earn higher trust;
-    unreliable agents can be penalized.
+    Trust is computed automatically from observed behaviour:
+        ``trust = min(1, used / published) × (1 − quick_invalidation_rate)``
+
+    where *published* is the number of facts an agent has contributed,
+    *used* is the total number of recall hits across all queries, and
+    *quick_invalidation_rate* is the fraction of the agent's facts that were
+    superseded by a different agent within ``_QUICK_INV_WINDOW_S`` seconds —
+    a signal that the original data was stale or low-quality.
 
     Usage::
 
@@ -1025,9 +1031,6 @@ class SharedMemoryPool:
         # Coding agent queries the shared pool
         results = pool.recall("what database?", "coding_agent", top_k=5)
 
-        # Boost devops_agent trust after positive feedback
-        pool.update_trust("devops_agent", 0.05)
-
     Args:
         storage: Backend used to persist the shared namespace.
     """
@@ -1036,9 +1039,10 @@ class SharedMemoryPool:
         self._storage: StorageBackend = storage or YAMLStorage()
         self._retriever = TFIDFRetriever()
         self._agents: set[str] = set()
-        self._trust_scores: dict[str, float] = {}
+        self._publish_count: dict[str, int] = {}
+        self._used_count: dict[str, int] = {}
+        self._quick_inv_count: dict[str, int] = {}
         # MESI: per-agent high-water mark of versions pulled from shared pool.
-        # Used by sync_dirty() to avoid re-fetching unchanged facts.
         self._known_version: dict[str, int] = {}
 
     def register(self, agent_id: str) -> None:
@@ -1054,35 +1058,29 @@ class SharedMemoryPool:
         """Return the set of registered agent IDs."""
         return set(self._agents)
 
-    def update_trust(self, agent_id: str, delta: float) -> float:
-        """Adjust trust score for an agent (Marsh 1994 differential trust).
-
-        Trust is clamped to [0.1, 1.0].  Positive ``delta`` rewards agents
-        whose shared facts proved relevant; negative ``delta`` penalizes
-        unreliable sources.
-
-        Args:
-            agent_id: The agent whose trust to adjust.
-            delta: Amount to add (positive = reward, negative = penalize).
-
-        Returns:
-            The updated trust score.
-        """
-        current = self._trust_scores.get(agent_id, _PROVENANCE_DISCOUNT)
-        updated = max(0.1, min(1.0, current + delta))
-        self._trust_scores[agent_id] = updated
-        return updated
-
     def get_trust(self, agent_id: str) -> float:
-        """Return the current trust score for an agent.
+        """Return the current auto-computed trust score for an agent.
+
+        Formula:
+            ``trust = min(1, used / published) × (1 − quick_inv_rate)``
+
+        Falls back to ``_PROVENANCE_DISCOUNT`` when the agent has not yet
+        published any facts (no track record).
 
         Args:
             agent_id: The agent to query.
 
         Returns:
-            Trust score (0.1-1.0), defaulting to ``_PROVENANCE_DISCOUNT``.
+            Trust score in [0.1, 1.0].
         """
-        return self._trust_scores.get(agent_id, _PROVENANCE_DISCOUNT)
+        published = self._publish_count.get(agent_id, 0)
+        if published == 0:
+            return _PROVENANCE_DISCOUNT
+        used = self._used_count.get(agent_id, 0)
+        quick_inv = self._quick_inv_count.get(agent_id, 0)
+        quality = min(1.0, used / published)
+        inv_penalty = quick_inv / published
+        return max(0.1, quality * (1.0 - inv_penalty))
 
     def publish(
         self,
@@ -1181,6 +1179,13 @@ class SharedMemoryPool:
                 new_fact.mesi_state = MESIState.MODIFIED
                 new_fact.version = next_version
                 next_version += 1
+                # Quick invalidation: a different agent superseded this slot within the window.
+                if old.origin_agent_id and old.origin_agent_id != agent_id:
+                    age_s = (now - old.valid_from).total_seconds()
+                    if age_s < _QUICK_INV_WINDOW_S:
+                        self._quick_inv_count[old.origin_agent_id] = (
+                            self._quick_inv_count.get(old.origin_agent_id, 0) + 1
+                        )
             elif new_fact.id not in existing_ids:
                 new_fact.mesi_state = MESIState.SHARED
                 new_fact.version = next_version
@@ -1192,7 +1197,9 @@ class SharedMemoryPool:
             shared.append(new_fact)
             published.append(new_fact)
 
+        # Track publish counts for auto-trust.
         if published:
+            self._publish_count[agent_id] = self._publish_count.get(agent_id, 0) + len(published)
             self._storage.save(_SHARED_NAMESPACE, shared)
             logger.info(
                 "Agent '%s' published %d facts to shared pool",
@@ -1252,12 +1259,15 @@ class SharedMemoryPool:
 
         pairs = self._retriever.search(query, active, top_k=top_k)
 
-        # Apply per-agent trust discount for foreign facts (Marsh 1994).
+        # Apply per-agent trust discount; track recall hits for auto-trust.
         discounted: list[tuple[Fact, float]] = []
         for fact, score in pairs:
             if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
-                trust = self._trust_scores.get(fact.origin_agent_id, _PROVENANCE_DISCOUNT)
+                trust = self.get_trust(fact.origin_agent_id)
                 score *= trust
+                self._used_count[fact.origin_agent_id] = (
+                    self._used_count.get(fact.origin_agent_id, 0) + 1
+                )
             discounted.append((fact, score))
 
         discounted.sort(key=lambda x: x[1], reverse=True)
