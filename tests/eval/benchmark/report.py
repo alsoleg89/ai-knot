@@ -26,18 +26,49 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
     lines.append("\n---\n")
     lines.append("## Per-Scenario Results\n")
 
-    # Professional S1–S8 scenarios
-    pro_scenarios = [
+    # Retrieval Metrics
+    lines.append("### Retrieval Metrics\n")
+    retrieval_scenarios = [
         ("s1_mrr", "S1 — MRR & Precision@k"),
         ("s2_semantic_gap", "S2 — Semantic Gap"),
-        ("s3_staleness", "S3 — Staleness Resistance"),
-        ("s4_compression_f1", "S4 — Memory Compression F1"),
         ("s5_noise", "S5 — Noise Tolerance"),
         ("s6_token_economy", "S6 — Context Economy"),
-        ("s7_grounding", "S7 — Grounding Rate"),
-        ("s8_throughput", "S8 — Latency & Throughput"),
     ]
-    # Legacy S1–S7 scenarios (shown if present)
+    for sid, title in retrieval_scenarios:
+        section = _scenario_section(results, sid, title)
+        if section:
+            lines += section
+            lines.append("")
+
+    # State Metrics
+    lines.append("### State Metrics\n")
+    state_scenarios = [
+        ("s3_staleness", "S3 — Staleness Resistance"),
+        ("s4_compression_f1", "S4 — Memory Compression F1"),
+        ("s7_grounding", "S7 — Grounding Rate"),
+    ]
+    for sid, title in state_scenarios:
+        section = _scenario_section(results, sid, title)
+        if section:
+            lines += section
+            lines.append("")
+
+    # Sync Metrics
+    lines.append("### Sync Metrics\n")
+    sync_scenarios = [
+        ("s8_throughput", "S8 — Latency & Throughput"),
+        ("s8_ma_isolation", "S8-MA — Multi-Agent Isolation"),
+        ("s9_ma_pool_publish", "S9 — Pool Publish"),
+        ("s10_ma_mesi_cas", "S10 — MESI CAS"),
+        ("s11_ma_mesi_sync", "S11 — MESI Sync"),
+    ]
+    for sid, title in sync_scenarios:
+        section = _scenario_section(results, sid, title)
+        if section:
+            lines += section
+            lines.append("")
+
+    # Legacy scenarios (shown if present)
     legacy_scenarios = [
         ("s1_profile_retrieval", "S1-legacy — Profile Retrieval"),
         ("s2_avoid_repeats", "S2-legacy — Avoid Repeats"),
@@ -47,8 +78,10 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
         ("s6_load", "S6-legacy — Load & Reliability"),
         ("s7_consolidation", "S7-legacy — Temporal Consolidation"),
     ]
-
-    for sid, title in pro_scenarios + legacy_scenarios:
+    present_ids = {sr.scenario_id for m in results for sr in m.scenario_results}
+    if present_ids & {sid for sid, _ in legacy_scenarios}:
+        lines.append("### Legacy Scenarios\n")
+    for sid, title in legacy_scenarios:
         section = _scenario_section(results, sid, title)
         if section:
             lines += section
@@ -78,9 +111,9 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
     lines: list[str] = []
     lines.append(
         "| Backend | Lang"
-        " | S1 MRR | S1 P@3"
+        " | S1 LexMRR | S1 SemMRR | S1 P@3"
         " | S2 SemGap"
-        " | S3 Fresh@1 | S3 Stale"
+        " | S3 StateAcc | S3 OverCon"
         " | S4 Dedup% | S4 Retain% | S4 F1"
         " | S5 Signal@3 | S5 SNR"
         " | S6 TokComp | S6 Q/Tok"
@@ -89,9 +122,9 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
     )
     lines.append(
         "|---------|-----"
-        "|--------|-------"
+        "|-----------|-----------|-------"
         "|----------"
-        "|------------|----------"
+        "|-------------|------------"
         "|-----------|------------|-------"
         "|------------|--------"
         "|------------|----------"
@@ -103,11 +136,12 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
         lang = getattr(m, "language", "en")
         row = (
             f"| {m.backend_name} | {lang}"
-            f" | {_cell(m, 's1_mrr', 'mrr')}"
+            f" | {_cell(m, 's1_mrr', 'lexical_mrr')}"
+            f" | {_cell(m, 's1_mrr', 'semantic_mrr')}"
             f" | {_cell(m, 's1_mrr', 'p_at_3')}"
             f" | {_cell(m, 's2_semantic_gap', 'semantic_gap')}"
-            f" | {_cell(m, 's3_staleness', 'freshness_at1')}"
-            f" | {_cell(m, 's3_staleness', 'staleness_rate')}"
+            f" | {_cell(m, 's3_staleness', 'latest_state_accuracy')}"
+            f" | {_cell(m, 's3_staleness', 'overconsolidation_rate')}"
             f" | {_cell(m, 's4_compression_f1', 'dedup_ratio', pct=True)}"
             f" | {_cell(m, 's4_compression_f1', 'retention_ratio', pct=True)}"
             f" | {_cell(m, 's4_compression_f1', 'compression_f1')}"

@@ -454,3 +454,65 @@ class TestTopicChannels:
         loaded = sqlite_db.load("agent_x")
         assert loaded[0].topic_channel == "devops"
         assert loaded[0].visibility_scope == "local"
+
+
+# ---------------------------------------------------------------------------
+# Auto-trust — get_trust() computed from publish/recall behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestAutoTrust:
+    def test_no_track_record_returns_default(self, pool_sqlite: SharedMemoryPool) -> None:
+        """Agent with no published facts gets _PROVENANCE_DISCOUNT trust."""
+        trust = pool_sqlite.get_trust("agent_a")
+        assert trust == pytest.approx(0.8)
+
+    def test_trust_grows_with_recall_hits(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """trust rises after facts from this agent are returned in recall."""
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Python is the best ML language")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+
+        # Trigger recall so agent_a's fact counts as "used".
+        pool_sqlite.recall("Python ML", "agent_b", top_k=5)
+
+        trust = pool_sqlite.get_trust("agent_a")
+        assert trust > 0.1  # non-trivial trust
+
+    def test_unpublished_agent_does_not_accumulate_trust(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """An agent that never publishes stays at default trust regardless of queries."""
+        # Publish from agent_a only.
+        kb_a = _kb("agent_a", sqlite_db)
+        fact = kb_a.add("irrelevant information")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb_a)
+
+        pool_sqlite.recall("Python", "agent_b", top_k=5)
+
+        # agent_b never published — should stay at default.
+        assert pool_sqlite.get_trust("agent_b") == pytest.approx(0.8)
+
+    def test_quick_invalidation_lowers_trust(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Facts superseded quickly by a different agent penalise the originator."""
+        kb_a = _kb("agent_a", sqlite_db)
+        old = kb_a.add("Alex earns 50k")
+        old.slot_key = "Alex::salary"
+        kb_a.replace_facts([old])
+        pool_sqlite.publish("agent_a", [old.id], kb=kb_a)
+
+        # agent_b immediately supersedes agent_a's slot — within the window.
+        kb_b = _kb("agent_b", sqlite_db)
+        new = kb_b.add("Alex earns 95k")
+        new.slot_key = "Alex::salary"
+        kb_b.replace_facts([new])
+        pool_sqlite.publish("agent_b", [new.id], kb=kb_b)
+
+        # agent_a's fact was quickly superseded — its trust should be penalised.
+        trust_a = pool_sqlite.get_trust("agent_a")
+        # Published 1, used 0, quick_inv 1 → trust = 0 * (1-1) = 0, clamped to 0.1
+        assert trust_a == pytest.approx(0.1)
