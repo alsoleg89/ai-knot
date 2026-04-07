@@ -118,8 +118,14 @@ class Fact:
     visibility_scope: str = "global"
 
     def is_active(self, at: datetime | None = None) -> bool:
-        """Return True if this fact is valid at *at* (default: now UTC)."""
+        """Return True if this fact is valid at *at* (default: now UTC).
+
+        A fact is active when ``valid_from <= at < valid_until`` (open upper bound).
+        Future-dated facts (``valid_from > at``) are not yet active.
+        """
         t = at or datetime.now(UTC)
+        if self.valid_from > t:
+            return False
         return self.valid_until is None or self.valid_until > t
 
 

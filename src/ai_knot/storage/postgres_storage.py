@@ -278,12 +278,18 @@ class PostgresStorage:
         )
 
     def load_active(self, agent_id: str) -> list[Fact]:
-        """Load only facts where valid_until IS NULL (index-accelerated)."""
+        """Load only currently-active facts (index-accelerated).
+
+        Excludes future-dated facts (``valid_from > now``).
+        """
+        now = datetime.now(UTC).isoformat()
         with self._get_conn() as conn:
             cur = conn.execute(
                 f'{self._SELECT_COLS} FROM "ai-knot_facts"'
-                " WHERE agent_id = %s AND valid_until IS NULL ORDER BY created_at",
-                (agent_id,),
+                " WHERE agent_id = %s AND valid_until IS NULL"
+                "   AND (valid_from = '' OR valid_from <= %s)"
+                " ORDER BY created_at",
+                (agent_id, now),
             )
             rows = cur.fetchall()
         return [self._fact_from_row(row) for row in rows]
