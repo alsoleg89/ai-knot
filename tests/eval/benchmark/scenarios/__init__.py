@@ -39,6 +39,7 @@ from tests.eval.benchmark.scenarios.s12_topic_gating import run as s12_topic_gat
 from tests.eval.benchmark.scenarios.s13_concurrent_writers import run as s13_concurrent_writers
 from tests.eval.benchmark.scenarios.s14_trust_drift import run as s14_trust_drift
 from tests.eval.benchmark.scenarios.s15_topic_leakage import run as s15_topic_leakage
+from tests.eval.benchmark.scenarios.s16_update_correctness import run as s16_update_correctness
 
 ScenarioFn = Callable[..., Coroutine[Any, Any, Any]]
 
@@ -52,6 +53,7 @@ _ALL: list[tuple[str, ScenarioFn]] = [
     ("s7_grounding", s7_grounding),
     ("s8_throughput", s8_throughput),
     ("s9_scale", s9_scale),
+    ("s16_update_correctness", s16_update_correctness),
 ]
 
 _LEGACY: list[tuple[str, ScenarioFn]] = [

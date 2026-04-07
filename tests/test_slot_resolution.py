@@ -10,7 +10,7 @@ import pytest
 from ai_knot.extractor import resolve_by_slot
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage.yaml_storage import YAMLStorage
-from ai_knot.types import ConversationTurn, Fact, MemoryType
+from ai_knot.types import ConversationTurn, Fact, MemoryOp, MemoryType
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -26,6 +26,7 @@ def _fact(
     state_confidence: float = 1.0,
     entity: str = "",
     attribute: str = "",
+    op: MemoryOp = MemoryOp.ADD,
 ) -> Fact:
     return Fact(
         content=content,
@@ -36,6 +37,7 @@ def _fact(
         state_confidence=state_confidence,
         entity=entity,
         attribute=attribute,
+        op=op,
     )
 
 
@@ -270,3 +272,109 @@ class TestLearnSlotTransitions:
         assert len(active) == 2
         values = {f.value_text for f in active}
         assert values == {"Director", "120000"}
+
+
+# ---------------------------------------------------------------------------
+# MemoryOp: DELETE and NOOP behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryOpDeleteNoop:
+    """learn() must honour DELETE and NOOP op signals from the extractor."""
+
+    def _mock_extract(self, facts: list[Fact]):  # type: ignore[return]
+        return patch("ai_knot.knowledge.Extractor.extract", return_value=facts)
+
+    def test_delete_closes_matched_slot(self, kb: KnowledgeBase) -> None:
+        """op=DELETE on a slotted fact closes the existing slot, inserts nothing."""
+        old = kb.add("Alex works at Acme", importance=0.8)
+        old.slot_key = "Alex::employer"
+        old.value_text = "Acme"
+        kb._storage.save(kb._agent_id, [old])
+
+        delete_fact = _fact(
+            "Alex no longer works at Acme",
+            slot_key="Alex::employer",
+            value_text="Acme",
+            op=MemoryOp.DELETE,
+        )
+        with self._mock_extract([delete_fact]):
+            inserted = kb.learn([ConversationTurn("user", "x")], api_key="fake")
+
+        assert inserted == []
+        all_facts = kb.list_facts()
+        assert len(all_facts) == 1
+        assert all_facts[0].valid_until is not None  # closed
+
+    def test_delete_no_match_is_silent_noop(self, kb: KnowledgeBase) -> None:
+        """op=DELETE with no matching slot neither inserts nor raises."""
+        kb.add("Some unrelated fact")
+
+        delete_fact = _fact(
+            "Alex no longer at FinServe",
+            slot_key="Alex::employer",
+            value_text="FinServe",
+            op=MemoryOp.DELETE,
+        )
+        with self._mock_extract([delete_fact]):
+            inserted = kb.learn([ConversationTurn("user", "x")], api_key="fake")
+
+        assert inserted == []
+        # The pre-existing unrelated fact untouched.
+        active = [f for f in kb.list_facts() if f.is_active()]
+        assert len(active) == 1
+
+    def test_noop_inserts_nothing(self, kb: KnowledgeBase) -> None:
+        """op=NOOP on a slotted fact skips both insert and mutation."""
+        old = kb.add("Alex earns 95k", importance=0.8)
+        old.slot_key = "Alex::salary"
+        old.value_text = "95000"
+        old.state_confidence = 0.9
+        kb._storage.save(kb._agent_id, [old])
+
+        noop_fact = _fact(
+            "Alex's salary is still 95k",
+            slot_key="Alex::salary",
+            value_text="95000",
+            op=MemoryOp.NOOP,
+        )
+        with self._mock_extract([noop_fact]):
+            inserted = kb.learn([ConversationTurn("user", "x")], api_key="fake")
+
+        assert inserted == []
+        all_facts = kb.list_facts()
+        assert len(all_facts) == 1
+        # State unchanged — NOOP must not bump confidence or importance.
+        assert all_facts[0].state_confidence == pytest.approx(0.9)
+        assert all_facts[0].importance == pytest.approx(0.8)
+
+    def test_noop_unslotted_skipped(self, kb: KnowledgeBase) -> None:
+        """Unslotted fact with op=NOOP does not reach phases 2/3."""
+        kb.add("User prefers dark mode")
+
+        noop = _fact("User likes dark mode", op=MemoryOp.NOOP)  # no slot_key
+        with self._mock_extract([noop]):
+            inserted = kb.learn([ConversationTurn("user", "x")], api_key="fake")
+
+        assert inserted == []
+
+    def test_update_overrides_reinforce(self, kb: KnowledgeBase) -> None:
+        """op=UPDATE forces supersede even when structural resolution would reinforce."""
+        old = kb.add("Alex earns 95k")
+        old.slot_key = "Alex::salary"
+        old.value_text = "95000"
+        old.version = 0
+        kb._storage.save(kb._agent_id, [old])
+
+        # Same value_text — structural resolution would reinforce, but UPDATE overrides.
+        update_fact = _fact(
+            "Alex salary confirmed at 95000 with revised grade",
+            slot_key="Alex::salary",
+            value_text="95000",
+            op=MemoryOp.UPDATE,
+        )
+        with self._mock_extract([update_fact]):
+            inserted = kb.learn([ConversationTurn("user", "x")], api_key="fake")
+
+        assert len(inserted) == 1
+        assert inserted[0].version == 1  # versioned replacement, not reinforce

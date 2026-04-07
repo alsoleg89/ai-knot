@@ -36,6 +36,24 @@ class MemoryType(StrEnum):
     EPISODIC = "episodic"
 
 
+class MemoryOp(StrEnum):
+    """LLM-signalled intent for a newly extracted fact (v1.3).
+
+    ADD    — insert as a new fact (default).
+    UPDATE — conversation explicitly corrects an existing value; behaves like a
+             slot supersede even when structural resolution would reinforce.
+    DELETE — conversation explicitly removes knowledge (e.g. "I no longer work
+             at Acme"); close the matched slot without inserting a replacement.
+    NOOP   — conversation merely confirms existing known information; skip
+             entirely (no insert, no mutation).
+    """
+
+    ADD = "add"
+    UPDATE = "update"
+    DELETE = "delete"
+    NOOP = "noop"
+
+
 @dataclass
 class Fact:
     """A single unit of knowledge extracted from or added to an agent's memory.
@@ -116,6 +134,10 @@ class Fact:
     state_confidence: float = 1.0
     topic_channel: str = ""
     visibility_scope: str = "global"
+    # Extraction intent (v1.3): set by Extractor._parse_fact(); never persisted.
+    # ADD = insert (default); UPDATE = force supersede; DELETE = close without insert;
+    # NOOP = skip entirely. Storage backends do not serialize this field.
+    op: MemoryOp = MemoryOp.ADD
 
     def is_active(self, at: datetime | None = None) -> bool:
         """Return True if this fact is valid at *at* (default: now UTC).
