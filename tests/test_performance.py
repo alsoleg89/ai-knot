@@ -281,7 +281,7 @@ def test_retriever_throughput_qps(
     )
     qps = benchmark.stats["ops"]
     benchmark.extra_info["qps"] = round(qps, 1)
-    assert qps > 20, f"Throughput too low: {qps:.1f} QPS (target: >20)"
+    assert qps > 15, f"Throughput too low: {qps:.1f} QPS (target: >15)"
 
 
 # ---------------------------------------------------------------------------

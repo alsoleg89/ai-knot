@@ -97,6 +97,5 @@ def test_repository_text_has_no_blocklisted_legal_terms() -> None:
     assert not violations, (
         "Potentially sensitive legal-compliance terms found in repository text.\n"
         "If a match is deliberate and reviewed, add a precise substring to "
-        "tests/compliance_allowlist.txt.\n\n"
-        + "\n".join(violations)
+        "tests/compliance_allowlist.txt.\n\n" + "\n".join(violations)
     )
