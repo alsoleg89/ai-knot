@@ -66,6 +66,55 @@ class TestFact:
         assert delta < 1.0
 
 
+class TestIsActive:
+    """Fact.is_active() temporal validity checks."""
+
+    def test_active_no_bounds(self) -> None:
+        from datetime import UTC, datetime
+
+        fact = Fact(content="no bounds")
+        assert fact.is_active(datetime.now(UTC)) is True
+
+    def test_active_past_valid_from(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        fact = Fact(content="started in the past")
+        fact.valid_from = datetime.now(UTC) - timedelta(hours=1)
+        assert fact.is_active() is True
+
+    def test_inactive_future_valid_from(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        fact = Fact(content="starts in the future")
+        fact.valid_from = datetime.now(UTC) + timedelta(hours=1)
+        assert fact.is_active() is False
+
+    def test_inactive_past_valid_until(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        fact = Fact(content="already expired")
+        fact.valid_until = datetime.now(UTC) - timedelta(hours=1)
+        assert fact.is_active() is False
+
+    def test_active_within_window(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        fact = Fact(content="within window")
+        fact.valid_from = now - timedelta(hours=2)
+        fact.valid_until = now + timedelta(hours=2)
+        assert fact.is_active(now) is True
+
+    def test_inactive_before_window(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        fact = Fact(content="window starts in the future")
+        fact.valid_from = now + timedelta(hours=1)
+        fact.valid_until = now + timedelta(hours=3)
+        assert fact.is_active(now) is False
+
+
 class TestConversationTurn:
     """ConversationTurn dataclass behavior."""
 

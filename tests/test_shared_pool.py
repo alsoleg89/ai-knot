@@ -461,6 +461,130 @@ class TestTopicChannels:
 # ---------------------------------------------------------------------------
 
 
+class TestTrustOrdering:
+    """Over-fetch ensures high-trust facts beat high-score low-trust facts."""
+
+    def test_overfetch_preserves_high_trust_facts(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """A medium-score high-trust fact must beat a high-score low-trust fact at top_k=1."""
+        # Publish a highly-relevant fact from agent_a (will have raw high score).
+        kb_a = _kb("agent_a", sqlite_db)
+        noisy = kb_a.add("Python machine learning neural network deep learning AI")
+        pool_sqlite.publish("agent_a", [noisy.id], kb=kb_a)
+
+        # Publish a less-keyword-dense but still-relevant fact from agent_b.
+        kb_b = _kb("agent_b", sqlite_db)
+        solid = kb_b.add("Python is used for ML work")
+        pool_sqlite.publish("agent_b", [solid.id], kb=kb_b)
+
+        # Artificially tank agent_a's trust: 1 publish, 0 used, 1 quick invalidation.
+        pool_sqlite._quick_inv_count["agent_a"] = 1
+        assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
+
+        # Give agent_b perfect trust.
+        pool_sqlite._publish_count["agent_b"] = 1
+        pool_sqlite._used_count["agent_b"] = 1
+        assert pool_sqlite.get_trust("agent_b") == pytest.approx(1.0)
+
+        results = pool_sqlite.recall("Python ML", "agent_c", top_k=1)
+        assert len(results) == 1
+        # The returned fact must come from the high-trust agent_b.
+        returned_fact, _ = results[0]
+        assert returned_fact.origin_agent_id == "agent_b"
+
+
+class TestConcurrentPublish:
+    """_publish_lock prevents lost updates under concurrent publish calls."""
+
+    def test_concurrent_publish_different_slots(self, sqlite_db: SQLiteStorage) -> None:
+        """Two threads publishing different slot_keys both land in the pool."""
+        import threading
+
+        pool = SharedMemoryPool(storage=sqlite_db)
+        pool.register("agent_a")
+        pool.register("agent_b")
+
+        kb_a = _kb("agent_a", sqlite_db)
+        kb_b = _kb("agent_b", sqlite_db)
+        fa = kb_a.add("Alex::role = engineer")
+        fa.slot_key = "Alex::role"
+        kb_a.replace_facts([fa])
+        fb = kb_b.add("Bob::role = manager")
+        fb.slot_key = "Bob::role"
+        kb_b.replace_facts([fb])
+
+        errors: list[Exception] = []
+
+        def pub_a() -> None:
+            try:
+                pool.publish("agent_a", [fa.id], kb=kb_a)
+            except Exception as exc:
+                errors.append(exc)
+
+        def pub_b() -> None:
+            try:
+                pool.publish("agent_b", [fb.id], kb=kb_b)
+            except Exception as exc:
+                errors.append(exc)
+
+        t1 = threading.Thread(target=pub_a)
+        t2 = threading.Thread(target=pub_b)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert not errors
+        shared = pool.list_shared_facts()
+        active_slots = {f.slot_key for f in shared if f.is_active() and f.slot_key}
+        assert "Alex::role" in active_slots
+        assert "Bob::role" in active_slots
+
+    def test_concurrent_publish_same_slot(self, sqlite_db: SQLiteStorage) -> None:
+        """Two threads racing to the same slot_key produce exactly one active fact."""
+        import threading
+
+        pool = SharedMemoryPool(storage=sqlite_db)
+        pool.register("agent_a")
+        pool.register("agent_b")
+
+        kb_a = _kb("agent_a", sqlite_db)
+        kb_b = _kb("agent_b", sqlite_db)
+        fa = kb_a.add("Alex earns 80k")
+        fa.slot_key = "Alex::salary"
+        kb_a.replace_facts([fa])
+        fb = kb_b.add("Alex earns 95k")
+        fb.slot_key = "Alex::salary"
+        kb_b.replace_facts([fb])
+
+        errors: list[Exception] = []
+
+        def pub_a() -> None:
+            try:
+                pool.publish("agent_a", [fa.id], kb=kb_a)
+            except Exception as exc:
+                errors.append(exc)
+
+        def pub_b() -> None:
+            try:
+                pool.publish("agent_b", [fb.id], kb=kb_b)
+            except Exception as exc:
+                errors.append(exc)
+
+        t1 = threading.Thread(target=pub_a)
+        t2 = threading.Thread(target=pub_b)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert not errors
+        shared = pool.list_shared_facts()
+        active_salary = [f for f in shared if f.is_active() and f.slot_key == "Alex::salary"]
+        assert len(active_salary) == 1
+
+
 class TestAutoTrust:
     def test_no_track_record_returns_default(self, pool_sqlite: SharedMemoryPool) -> None:
         """Agent with no published facts gets _PROVENANCE_DISCOUNT trust."""
