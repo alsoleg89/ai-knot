@@ -433,8 +433,8 @@ class Extractor:
         if isinstance(raw_qualifiers, dict):
             qualifiers = {str(k): str(v) for k, v in raw_qualifiers.items()}
 
-        entity = str(entry.get("entity", ""))
-        attribute = str(entry.get("attribute", ""))
+        entity = str(entry.get("entity", "")).strip().lower()
+        attribute = str(entry.get("attribute", "")).strip().lower()
         # Derive deterministic slot key when entity+attribute are both present.
         slot_key = f"{entity}::{attribute}" if entity and attribute else ""
 

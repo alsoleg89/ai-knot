@@ -415,11 +415,15 @@ class KnowledgeBase:
                 if matched_fact is not None:
                     matched_fact.valid_until = now_close
                     handled_ids.add(matched_fact.id)
+                if new_fact.op == MemoryOp.DELETE:
+                    n_delete += 1
+                    continue  # don't insert the DELETE fact itself
 
             # Phase 3: lexical dedup for remaining unslotted facts.
             remaining_active = [f for f in entity_candidates if f.id not in handled_ids]
+            unslotted_to_insert = [f for f in unslotted_facts if f.op != MemoryOp.DELETE]
             unslotted_inserted, _ = resolve_against_existing(
-                unslotted_facts, remaining_active, threshold=conflict_threshold
+                unslotted_to_insert, remaining_active, threshold=conflict_threshold
             )
             to_insert.extend(unslotted_inserted)
 
@@ -1213,6 +1217,12 @@ class SharedMemoryPool:
 
         Raises:
             ValueError: If agent_id is not registered.
+
+        Note:
+            Thread-safe within a single process (protected by ``_publish_lock``).
+            Cross-process atomicity is not guaranteed — concurrent writers from
+            separate processes can interleave; use an external advisory lock if
+            cross-process CAS semantics are required.
         """
         if agent_id not in self._agents:
             raise ValueError(f"Agent {agent_id!r} is not registered. Call register() first.")

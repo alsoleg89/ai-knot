@@ -136,7 +136,12 @@ class PostgresStorage:
         logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
 
     def save_atomic(self, agent_id: str, facts: list[Fact]) -> None:
-        """Atomically replace facts. PostgreSQL transactions are always serializable."""
+        """Atomically replace facts within a single PostgreSQL transaction (READ COMMITTED).
+
+        Provides statement-level atomicity for single-process writers. Does not
+        enforce SERIALIZABLE isolation — concurrent cross-process writers may
+        interleave. Use advisory locks externally if cross-process CAS is needed.
+        """
         rows = self._build_rows(facts, agent_id)
         self._execute_save(agent_id, rows)
         logger.debug("Atomically saved %d facts for agent '%s'", len(facts), agent_id)
