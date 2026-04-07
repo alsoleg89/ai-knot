@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS facts (
     attribute   TEXT NOT NULL DEFAULT '',
     version     INTEGER NOT NULL DEFAULT 0,
     mesi_state  TEXT NOT NULL DEFAULT 'E',
+    canonical_surface TEXT NOT NULL DEFAULT '',
+    witness_surface   TEXT NOT NULL DEFAULT '',
+    prompt_surface    TEXT NOT NULL DEFAULT '',
+    slot_key          TEXT NOT NULL DEFAULT '',
+    value_text        TEXT NOT NULL DEFAULT '',
+    qualifiers        TEXT NOT NULL DEFAULT '{}',
+    state_confidence  REAL NOT NULL DEFAULT 1.0,
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -106,6 +113,13 @@ class SQLiteStorage:
             "attribute": "TEXT NOT NULL DEFAULT ''",
             "version": "INTEGER NOT NULL DEFAULT 0",
             "mesi_state": "TEXT NOT NULL DEFAULT 'E'",
+            "canonical_surface": "TEXT NOT NULL DEFAULT ''",
+            "witness_surface": "TEXT NOT NULL DEFAULT ''",
+            "prompt_surface": "TEXT NOT NULL DEFAULT ''",
+            "slot_key": "TEXT NOT NULL DEFAULT ''",
+            "value_text": "TEXT NOT NULL DEFAULT ''",
+            "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
+            "state_confidence": "REAL NOT NULL DEFAULT 1.0",
         }
         with self._get_conn() as conn:
             cur = conn.execute("PRAGMA table_info(facts)")
@@ -143,6 +157,13 @@ class SQLiteStorage:
                 fact.attribute,
                 fact.version,
                 fact.mesi_state,
+                fact.canonical_surface,
+                fact.witness_surface,
+                fact.prompt_surface,
+                fact.slot_key,
+                fact.value_text,
+                json.dumps(fact.qualifiers),
+                fact.state_confidence,
             )
             for fact in facts
         ]
@@ -156,8 +177,10 @@ class SQLiteStorage:
                     support_confidence, verification_source,
                     access_intervals, origin_agent_id, visibility,
                     source_verbatim, valid_from, valid_until,
-                    entity, attribute, version, mesi_state)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    entity, attribute, version, mesi_state,
+                    canonical_surface, witness_surface, prompt_surface,
+                    slot_key, value_text, qualifiers, state_confidence)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 rows,
             )
         logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
@@ -174,7 +197,7 @@ class SQLiteStorage:
 
     @staticmethod
     def _fact_from_row(row: tuple[Any, ...]) -> Fact:
-        """Construct a Fact from a SELECT row (columns 0-23)."""
+        """Construct a Fact from a SELECT row (columns 0-30, matching _SELECT_COLS order)."""
         return Fact(
             id=row[0],
             content=row[1],
@@ -200,6 +223,13 @@ class SQLiteStorage:
             attribute=str(row[21]) if row[21] else "",
             version=int(row[22]) if row[22] is not None else 0,
             mesi_state=MESIState(str(row[23])) if row[23] else MESIState.EXCLUSIVE,
+            canonical_surface=str(row[24]) if row[24] else "",
+            witness_surface=str(row[25]) if row[25] else "",
+            prompt_surface=str(row[26]) if row[26] else "",
+            slot_key=str(row[27]) if row[27] else "",
+            value_text=str(row[28]) if row[28] else "",
+            qualifiers=json.loads(row[29]) if row[29] else {},
+            state_confidence=float(row[30]) if row[30] is not None else 1.0,
         )
 
     def delete(self, agent_id: str, fact_id: str) -> None:
@@ -226,7 +256,9 @@ class SQLiteStorage:
                           support_confidence, verification_source,
                           access_intervals, origin_agent_id, visibility,
                           source_verbatim, valid_from, valid_until,
-                          entity, attribute, version, mesi_state"""
+                          entity, attribute, version, mesi_state,
+                          canonical_surface, witness_surface, prompt_surface,
+                          slot_key, value_text, qualifiers, state_confidence"""
 
     def load_active(self, agent_id: str) -> list[Fact]:
         """Load only facts where valid_until IS NULL (index-accelerated)."""
@@ -281,6 +313,13 @@ class SQLiteStorage:
                 "attribute": f.attribute,
                 "version": f.version,
                 "mesi_state": f.mesi_state,
+                "canonical_surface": f.canonical_surface,
+                "witness_surface": f.witness_surface,
+                "prompt_surface": f.prompt_surface,
+                "slot_key": f.slot_key,
+                "value_text": f.value_text,
+                "qualifiers": f.qualifiers,
+                "state_confidence": f.state_confidence,
             }
             for f in facts
         ]
@@ -338,6 +377,13 @@ class SQLiteStorage:
                 attribute=str(entry.get("attribute", "")),
                 version=int(entry.get("version", 0)),
                 mesi_state=MESIState(str(entry.get("mesi_state", "E"))),
+                canonical_surface=str(entry.get("canonical_surface", "")),
+                witness_surface=str(entry.get("witness_surface", "")),
+                prompt_surface=str(entry.get("prompt_surface", "")),
+                slot_key=str(entry.get("slot_key", "")),
+                value_text=str(entry.get("value_text", "")),
+                qualifiers={str(k): str(v) for k, v in entry.get("qualifiers", {}).items()},
+                state_confidence=float(entry.get("state_confidence", 1.0)),
             )
             for entry in raw
         ]

@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS "ai-knot_facts" (
     attribute          TEXT NOT NULL DEFAULT '',
     version            INTEGER NOT NULL DEFAULT 0,
     mesi_state         TEXT NOT NULL DEFAULT 'E',
+    canonical_surface  TEXT NOT NULL DEFAULT '',
+    witness_surface    TEXT NOT NULL DEFAULT '',
+    prompt_surface     TEXT NOT NULL DEFAULT '',
+    slot_key           TEXT NOT NULL DEFAULT '',
+    value_text         TEXT NOT NULL DEFAULT '',
+    qualifiers         TEXT NOT NULL DEFAULT '{}',
+    state_confidence   DOUBLE PRECISION NOT NULL DEFAULT 1.0,
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -103,6 +110,13 @@ class PostgresStorage:
             "attribute": "TEXT NOT NULL DEFAULT ''",
             "version": "INTEGER NOT NULL DEFAULT 0",
             "mesi_state": "TEXT NOT NULL DEFAULT 'E'",
+            "canonical_surface": "TEXT NOT NULL DEFAULT ''",
+            "witness_surface": "TEXT NOT NULL DEFAULT ''",
+            "prompt_surface": "TEXT NOT NULL DEFAULT ''",
+            "slot_key": "TEXT NOT NULL DEFAULT ''",
+            "value_text": "TEXT NOT NULL DEFAULT ''",
+            "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
+            "state_confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
         }
         with self._get_conn() as conn:
             cur = conn.execute(
@@ -144,6 +158,13 @@ class PostgresStorage:
                 fact.attribute,
                 fact.version,
                 fact.mesi_state,
+                fact.canonical_surface,
+                fact.witness_surface,
+                fact.prompt_surface,
+                fact.slot_key,
+                fact.value_text,
+                json.dumps(fact.qualifiers),
+                fact.state_confidence,
             )
             for fact in facts
         ]
@@ -157,10 +178,12 @@ class PostgresStorage:
                     support_confidence, verification_source,
                     access_intervals, origin_agent_id, visibility,
                     source_verbatim, valid_from, valid_until,
-                    entity, attribute, version, mesi_state)
+                    entity, attribute, version, mesi_state,
+                    canonical_surface, witness_surface, prompt_surface,
+                    slot_key, value_text, qualifiers, state_confidence)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           %s, %s, %s, %s)""",
+                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 rows,
             )
             conn.commit()
@@ -170,48 +193,12 @@ class PostgresStorage:
         """Load all facts for an agent."""
         with self._get_conn() as conn:
             cur = conn.execute(
-                """SELECT id, content, type, importance, retention,
-                          access_count, tags, created_at, last_accessed,
-                          source_snippets, source_spans, supported,
-                          support_confidence, verification_source,
-                          access_intervals, origin_agent_id, visibility,
-                          source_verbatim, valid_from, valid_until,
-                          entity, attribute, version, mesi_state
-                   FROM "ai-knot_facts" WHERE agent_id = %s
-                   ORDER BY created_at""",
+                f'{self._SELECT_COLS} FROM "ai-knot_facts" WHERE agent_id = %s ORDER BY created_at',
                 (agent_id,),
             )
             rows = cur.fetchall()
 
-        return [
-            Fact(
-                id=row[0],
-                content=row[1],
-                type=MemoryType(row[2]),
-                importance=row[3],
-                retention_score=row[4],
-                access_count=row[5],
-                tags=json.loads(row[6]),
-                created_at=_parse_datetime(row[7]),
-                last_accessed=_parse_datetime(row[8]),
-                source_snippets=json.loads(row[9]),
-                source_spans=json.loads(row[10]),
-                supported=bool(row[11]),
-                support_confidence=float(row[12]),
-                verification_source=str(row[13]),
-                access_intervals=json.loads(row[14]),
-                origin_agent_id=str(row[15]),
-                visibility=str(row[16]),
-                source_verbatim=str(row[17]),
-                valid_from=_parse_datetime(row[18]) if row[18] else datetime.now(UTC),
-                valid_until=_parse_datetime(row[19]) if row[19] else None,
-                entity=str(row[20]) if row[20] else "",
-                attribute=str(row[21]) if row[21] else "",
-                version=int(row[22]) if row[22] is not None else 0,
-                mesi_state=MESIState(str(row[23])) if row[23] else MESIState.EXCLUSIVE,
-            )
-            for row in rows
-        ]
+        return [self._fact_from_row(row) for row in rows]
 
     def delete(self, agent_id: str, fact_id: str) -> None:
         """Remove a single fact by id."""
@@ -239,7 +226,9 @@ class PostgresStorage:
                           support_confidence, verification_source,
                           access_intervals, origin_agent_id, visibility,
                           source_verbatim, valid_from, valid_until,
-                          entity, attribute, version, mesi_state"""
+                          entity, attribute, version, mesi_state,
+                          canonical_surface, witness_surface, prompt_surface,
+                          slot_key, value_text, qualifiers, state_confidence"""
 
     def _fact_from_row(self, row: tuple[Any, ...]) -> Fact:
         return Fact(
@@ -267,6 +256,13 @@ class PostgresStorage:
             attribute=str(row[21]) if row[21] else "",
             version=int(row[22]) if row[22] is not None else 0,
             mesi_state=MESIState(str(row[23])) if row[23] else MESIState.EXCLUSIVE,
+            canonical_surface=str(row[24]) if row[24] else "",
+            witness_surface=str(row[25]) if row[25] else "",
+            prompt_surface=str(row[26]) if row[26] else "",
+            slot_key=str(row[27]) if row[27] else "",
+            value_text=str(row[28]) if row[28] else "",
+            qualifiers=json.loads(row[29]) if row[29] else {},
+            state_confidence=float(row[30]) if row[30] is not None else 1.0,
         )
 
     def load_active(self, agent_id: str) -> list[Fact]:

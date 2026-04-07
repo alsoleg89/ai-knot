@@ -55,6 +55,13 @@ class Fact:
         supported: Whether the fact has been verified against sources (v0.5).
         support_confidence: Confidence score for source support (0.0-1.0) (v0.5).
         verification_source: How the fact was verified (v0.5).
+        canonical_surface: Normalised form for BM25 indexing and deduplication (v1.1).
+        witness_surface: Verbatim quote from the source that grounds this fact (v1.1).
+        prompt_surface: Compact form injected into LLM prompts to conserve tokens (v1.1).
+        slot_key: Deterministic slot address ``"{entity}::{attribute}"`` (v1.1).
+        value_text: The extracted value for this slot, e.g. ``"95000"`` (v1.1).
+        qualifiers: Temporal or conditional modifiers, e.g. ``{"since": "2024-01"}`` (v1.1).
+        state_confidence: Confidence that this fact reflects the current state (v1.1).
     """
 
     content: str
@@ -94,6 +101,15 @@ class Fact:
     # mesi_state: E=Exclusive, S=Shared, M=Modified, I=Invalid.
     version: int = 0
     mesi_state: MESIState = MESIState.EXCLUSIVE
+    canonical_surface: str = ""
+    witness_surface: str = ""
+    prompt_surface: str = ""
+    # slot_key: always "{entity}::{attribute}" when both are non-empty, else "".
+    # Stored explicitly so storage queries can filter/group by slot without recomputing.
+    slot_key: str = ""
+    value_text: str = ""
+    qualifiers: dict[str, str] = field(default_factory=dict)
+    state_confidence: float = 1.0
 
     def is_active(self, at: datetime | None = None) -> bool:
         """Return True if this fact is valid at *at* (default: now UTC)."""

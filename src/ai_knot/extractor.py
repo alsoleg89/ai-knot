@@ -29,25 +29,31 @@ Rules:
   episodic (specific events).
 - Rate importance from 0.0 to 1.0.
 - Include 1-3 short domain tags per fact (lowercase, single words).
-- Preserve key phrases and exact wording from the original text where possible.
-  Do not paraphrase or generalize unless necessary for clarity.
-- Add "verbatim": copy the key phrase or rule EXACTLY as it appears in the source
-  text. If the user stated a rule or preference word-for-word, preserve it unchanged.
-  Omit this field only when no distinct quotable phrase exists.
+- Add "canonical": a short, normalised paraphrase for deduplication and search
+  (remove names/pronouns where possible; keep the core proposition).
+- Add "witness": copy the KEY PHRASE or rule EXACTLY as it appears in the source
+  text. This is the verbatim evidence span used for grounding and audit.
+  Omit only when there is no distinct quotable phrase.
 - For facts about a person, organization, or object: add "entity" (the subject,
   e.g. "Alex Chen") and "attribute" (the property, e.g. "salary", "job_title",
-  "employer"). Omit these fields for general statements where entity/attribute
-  don't apply.
+  "employer"), and "value" (the specific value, e.g. "95000").
+  Add "qualifiers" as a JSON object for temporal or conditional context,
+  e.g. {"since": "2024-01", "currency": "USD"}.
+  Omit entity/attribute/value/qualifiers for general statements where they don't apply.
 
 Return a JSON array. Example:
 [
-  {"content": "User works at Sber", "type": "semantic",
-   "importance": 0.9, "tags": ["employer", "company"],
-   "entity": "User", "attribute": "employer"},
+  {"content": "Alex Chen works at FinServe Capital as Senior PM", "type": "semantic",
+   "importance": 0.9, "tags": ["employer", "role"],
+   "canonical": "person works at company as role",
+   "witness": "Alex Chen, Senior Product Manager at FinServe Capital",
+   "entity": "Alex Chen", "attribute": "job_title", "value": "Senior PM",
+   "qualifiers": {}},
   {"content": "User prefers Python over Java",
    "type": "procedural", "importance": 0.85,
    "tags": ["python", "preferences"],
-   "verbatim": "I prefer Python over Java"}
+   "canonical": "prefers Python over Java",
+   "witness": "I prefer Python over Java"}
 ]
 
 If no meaningful facts exist, return an empty array: []
@@ -179,25 +185,29 @@ def resolve_against_existing(
     *,
     threshold: float = _DEDUP_THRESHOLD,
 ) -> tuple[list[Fact], list[Fact]]:
-    """Separate new facts into inserts and updates relative to existing facts.
+    """Separate new facts into inserts and temporal closes relative to existing facts.
 
-    For each new fact, if a similar existing fact is found
-    (combined similarity >= threshold), the existing fact is updated in-place:
-    importance is bumped by 0.05 (capped at 1.0) and ``last_accessed`` is set
-    to UTC now. Otherwise the new fact is collected for insertion.
+    For each new fact, if a sufficiently similar existing fact is found
+    (combined similarity >= threshold), the old fact is **temporally closed**
+    (``valid_until`` set to now) and the new fact is queued for insertion with
+    bumped importance. This preserves the full fact history instead of mutating
+    it in place.
+
+    If no match is found, the new fact is inserted unchanged.
 
     Args:
         new_facts: Facts extracted from the latest conversation.
-        existing: Facts already stored for this agent.
+        existing: Active facts already stored for this agent.
         threshold: Combined similarity threshold to consider two facts duplicates.
 
     Returns:
-        A 2-tuple ``(to_insert, updated_existing)`` where:
-        - ``to_insert``: new facts with no match in existing.
-        - ``updated_existing``: existing facts that were updated in place.
+        A 2-tuple ``(to_insert, closed_existing)`` where:
+        - ``to_insert``: facts to insert (both genuinely new and new-version replacements).
+        - ``closed_existing``: old facts that were temporally closed (``valid_until`` set).
     """
     to_insert: list[Fact] = []
-    updated: list[Fact] = []
+    closed: list[Fact] = []
+    now = datetime.now(UTC)
 
     for new in new_facts:
         matched: Fact | None = None
@@ -208,16 +218,17 @@ def resolve_against_existing(
                 best_sim = sim
                 matched = old
         if matched is not None:
-            # Temporal update: replace stored content with the newer version.
-            matched.content = new.content
-            matched.source_verbatim = new.source_verbatim
-            matched.importance = min(1.0, matched.importance + 0.05)
-            matched.last_accessed = datetime.now(UTC)
-            updated.append(matched)
+            # Temporal close: seal the old version without mutating its content.
+            matched.valid_until = now
+            closed.append(matched)
+            # Carry forward importance and version from the old fact.
+            new.importance = min(1.0, matched.importance + 0.05)
+            new.version = matched.version + 1
+            to_insert.append(new)
         else:
             to_insert.append(new)
 
-    return to_insert, updated
+    return to_insert, closed
 
 
 _PRONOUNS = frozenset({"he", "she", "it", "they", "i", "we", "you", "him", "her", "them"})
@@ -372,12 +383,31 @@ class Extractor:
         if isinstance(raw_tags, list):
             tags = [str(t).lower().strip() for t in raw_tags if isinstance(t, str)][:5]
 
+        # Parse qualifiers dict (graceful degradation if malformed).
+        raw_qualifiers = entry.get("qualifiers", {})
+        qualifiers: dict[str, str] = {}
+        if isinstance(raw_qualifiers, dict):
+            qualifiers = {str(k): str(v) for k, v in raw_qualifiers.items()}
+
+        entity = str(entry.get("entity", ""))
+        attribute = str(entry.get("attribute", ""))
+        # Derive deterministic slot key when entity+attribute are both present.
+        slot_key = f"{entity}::{attribute}" if entity and attribute else ""
+
+        witness = str(entry.get("witness", "") or entry.get("verbatim", ""))
+        canonical = str(entry.get("canonical", ""))
+
         return Fact(
             content=str(entry.get("content", "")),
             type=memory_type,
             importance=importance,
             tags=tags,
-            source_verbatim=str(entry.get("verbatim", "")),
-            entity=str(entry.get("entity", "")),
-            attribute=str(entry.get("attribute", "")),
+            source_verbatim=witness,
+            entity=entity,
+            attribute=attribute,
+            canonical_surface=canonical,
+            witness_surface=witness,
+            value_text=str(entry.get("value", "")),
+            qualifiers=qualifiers,
+            slot_key=slot_key,
         )
