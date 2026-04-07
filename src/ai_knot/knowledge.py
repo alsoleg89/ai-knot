@@ -365,14 +365,14 @@ class KnowledgeBase:
             # Phase 1: slot-based resolution (deterministic, exact slot_key match).
             slotted_facts = [f for f in new_facts if f.slot_key]
             for new_fact in slotted_facts:
-                # LLM-signalled NOOP: skip without any mutation.
                 if new_fact.op == MemoryOp.NOOP:
                     n_noop += 1
                     continue
 
-                # LLM-signalled DELETE: close matched slot, do not insert replacement.
                 if new_fact.op == MemoryOp.DELETE:
-                    _, matched = resolve_by_slot(new_fact, active_existing)
+                    # Exclude already-handled IDs so a second DELETE can't double-close.
+                    unhandled = [f for f in active_existing if f.id not in handled_ids]
+                    _, matched = resolve_by_slot(new_fact, unhandled)
                     if matched is not None:
                         matched.valid_until = now_close
                         handled_ids.add(matched.id)
@@ -380,7 +380,7 @@ class KnowledgeBase:
                     continue
 
                 slot_op, matched = resolve_by_slot(new_fact, active_existing)
-                # LLM UPDATE overrides structural "reinforce" — treat as supersede.
+                # UPDATE overrides structural "reinforce" when value unchanged but context differs.
                 if new_fact.op == MemoryOp.UPDATE and slot_op == "reinforce":
                     slot_op = "supersede"
 
@@ -405,7 +405,6 @@ class KnowledgeBase:
 
             # Phase 2: entity-addressed CAS for unslotted facts with entity+attribute.
             # Closes pre-Phase-1 storage facts that carry entity/attribute but no slot_key.
-            # NOOP-tagged unslotted facts are excluded entirely.
             unslotted_facts = [f for f in new_facts if not f.slot_key and f.op != MemoryOp.NOOP]
             unslotted_with_entity = [f for f in unslotted_facts if f.entity and f.attribute]
             entity_candidates = [f for f in active_existing if f.id not in handled_ids]

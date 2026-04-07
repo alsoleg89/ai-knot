@@ -85,29 +85,32 @@ def _iter_turns(conv: dict) -> list[str]:
     return turns
 
 
-def _token_f1(prediction: str, gold: str) -> float:
-    """Best-effort token F1 between two strings (lowercased, whitespace-split)."""
-    pred_tokens = prediction.lower().split()
-    gold_tokens = gold.lower().split()
-    if not gold_tokens:
-        return 1.0 if not pred_tokens else 0.0
-    if not pred_tokens:
-        return 0.0
-    pred_set = set(pred_tokens)
-    gold_set = set(gold_tokens)
-    common = pred_set & gold_set
-    if not common:
-        return 0.0
-    precision = len(common) / len(pred_set)
-    recall = len(common) / len(gold_set)
-    return 2.0 * precision * recall / (precision + recall)
-
-
 def _best_f1_against(retrieved_texts: list[str], gold: str) -> float:
-    """Max token F1 between any retrieved text and the gold answer."""
+    """Max token F1 between any retrieved text and the gold answer.
+
+    Gold tokens are computed once and reused across all retrieved texts.
+    """
     if not retrieved_texts:
         return 0.0
-    return max(_token_f1(text, gold) for text in retrieved_texts)
+    gold_tokens = gold.lower().split()
+    if not gold_tokens:
+        return 0.0
+    gold_set = set(gold_tokens)
+    best = 0.0
+    for text in retrieved_texts:
+        pred_tokens = text.lower().split()
+        if not pred_tokens:
+            continue
+        pred_set = set(pred_tokens)
+        common = pred_set & gold_set
+        if not common:
+            continue
+        precision = len(common) / len(pred_set)
+        recall = len(common) / len(gold_set)
+        f1 = 2.0 * precision * recall / (precision + recall)
+        if f1 > best:
+            best = f1
+    return best
 
 
 async def run(
