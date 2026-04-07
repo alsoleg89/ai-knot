@@ -220,3 +220,43 @@ def import_cmd(ctx: click.Context, agent_id: str, input_file: str) -> None:
     kb = _make_kb(ctx, agent_id)
     kb.replace_facts(facts)
     click.echo(f"Imported {len(facts)} facts for agent '{agent_id}'.")
+
+
+@main.group()
+def setup() -> None:
+    """Set up ai-knot integrations."""
+
+
+@setup.command("claude")
+@click.option("--agent-id", default="default", show_default=True, help="Agent namespace.")
+@click.option(
+    "--data-dir",
+    default=".ai_knot",
+    show_default=True,
+    help="Data directory (resolved to absolute path).",
+)
+@click.option(
+    "--storage",
+    default="sqlite",
+    show_default=True,
+    type=click.Choice(["sqlite", "yaml"]),
+    help="Storage backend.",
+)
+def setup_claude(agent_id: str, data_dir: str, storage: str) -> None:
+    """Output a paste-ready MCP config for Claude Desktop / Claude Code.
+
+    Copy the printed JSON into:
+    \b
+      macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json
+      Windows: %APPDATA%\\Claude\\claude_desktop_config.json
+
+    Under the "mcpServers" key.
+    """
+    import json
+    from typing import Literal
+
+    from ai_knot.integrations.openclaw import generate_mcp_config
+
+    storage_typed: Literal["sqlite", "yaml"] = "sqlite" if storage == "sqlite" else "yaml"
+    config = generate_mcp_config(agent_id=agent_id, data_dir=data_dir, storage=storage_typed)
+    click.echo(json.dumps(config, indent=2))
