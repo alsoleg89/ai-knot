@@ -22,7 +22,7 @@ from ai_knot.query_expander import LLMQueryExpander
 from ai_knot.retriever import TFIDFRetriever
 from ai_knot.storage.base import SnapshotCapable, StorageBackend, TemporalStorageCapable
 from ai_knot.storage.yaml_storage import YAMLStorage
-from ai_knot.types import ConversationTurn, Fact, MemoryType, MESIState, SnapshotDiff
+from ai_knot.types import ConversationTurn, Fact, MemoryType, MESIState, SlotDelta, SnapshotDiff
 
 # LLM expansion token weight — higher than PRF (0.5) to reflect
 # the semantic advantage of LLM-based query understanding.
@@ -1122,13 +1122,25 @@ class SharedMemoryPool:
         now = datetime.now(UTC)
         shared = self._storage.load(_SHARED_NAMESPACE)
 
-        # Index active shared facts by (entity, attribute) for O(1) lookup.
-        active_by_entity: dict[tuple[str, str], Fact] = {}
+        # Index active shared facts by slot_key for O(1) CAS lookup.
+        # Falls back to (entity, attribute) for pre-Phase-3 facts without slot_key.
+        active_by_slot: dict[str, Fact] = {}
         existing_ids: set[str] = set()
         for f in shared:
             existing_ids.add(f.id)
-            if f.entity and f.attribute and f.is_active(now):
-                active_by_entity[(f.entity.lower().strip(), f.attribute.lower().strip())] = f
+            if f.is_active(now):
+                if f.slot_key:
+                    active_by_slot[f.slot_key] = f
+                elif f.entity and f.attribute:
+                    # Legacy: synthetic slot key from entity+attribute.
+                    legacy_key = f"{f.entity.lower().strip()}::{f.attribute.lower().strip()}"
+                    active_by_slot.setdefault(legacy_key, f)
+
+        # Global monotonic version counter for the pool.
+        # Each published or superseded fact gets a strictly increasing version
+        # so that load_since_version() and sync_slot_deltas() work correctly
+        # when multiple facts are published in separate batches.
+        next_version = max((f.version for f in shared), default=0) + 1
 
         published: list[Fact] = []
         for fact in to_publish:
@@ -1138,23 +1150,30 @@ class SharedMemoryPool:
             new_fact.valid_from = now
             new_fact.valid_until = None
 
-            key = (fact.entity.lower().strip(), fact.attribute.lower().strip())
-            if fact.entity and fact.attribute and key in active_by_entity:
-                old = active_by_entity[key]
+            # Resolve CAS key: prefer slot_key, fall back to entity+attribute.
+            cas_key = fact.slot_key or (
+                f"{fact.entity.lower().strip()}::{fact.attribute.lower().strip()}"
+                if fact.entity and fact.attribute
+                else ""
+            )
+
+            if cas_key and cas_key in active_by_slot:
+                old = active_by_slot[cas_key]
                 if old.id == fact.id:
                     # Same fact already published as the active version — no-op.
                     continue
-                # Entity-addressed CAS: close old version, insert new.
+                # Slot-addressed CAS: close old version, insert new.
                 old.valid_until = now
                 old.mesi_state = MESIState.INVALID
-                old.version += 1
                 new_fact.mesi_state = MESIState.MODIFIED
-                new_fact.version = old.version
+                new_fact.version = next_version
+                next_version += 1
             elif new_fact.id not in existing_ids:
                 new_fact.mesi_state = MESIState.SHARED
-                new_fact.version = 1
+                new_fact.version = next_version
+                next_version += 1
             else:
-                # ID already in pool and no entity key — skip duplicate.
+                # ID already in pool and no slot key — skip duplicate.
                 continue
 
             shared.append(new_fact)
@@ -1249,6 +1268,58 @@ class SharedMemoryPool:
         if dirty:
             self._known_version[agent_id] = max(f.version for f in dirty)
         return dirty
+
+    def sync_slot_deltas(self, agent_id: str) -> list[SlotDelta]:
+        """Pull slot-level changes since the last sync as lightweight ``SlotDelta`` records.
+
+        Semantically equivalent to :meth:`sync_dirty` but returns compact
+        ``SlotDelta`` objects instead of full ``Fact`` copies.  Each delta
+        carries only ``slot_key``, ``version``, ``op``, ``fact_id``,
+        ``content``, and ``prompt_surface`` — roughly 10–30× less data than
+        a full ``Fact`` for a typical memory entry.
+
+        On SQLite/Postgres backends the query is index-accelerated; on YAML
+        backends it falls back to Python-level filtering.
+
+        Args:
+            agent_id: The agent requesting delta records.
+
+        Returns:
+            ``SlotDelta`` records for slot changes by other agents since the
+            last call for this agent.  The per-agent high-water mark is
+            updated on each call.
+        """
+        since = self._known_version.get(agent_id, 0)
+
+        if isinstance(self._storage, TemporalStorageCapable):
+            deltas = self._storage.load_slot_deltas_since(_SHARED_NAMESPACE, since, agent_id)
+        else:
+            # Python-level fallback for YAML backends.
+            all_shared = self._storage.load(_SHARED_NAMESPACE)
+            deltas = []
+            for f in all_shared:
+                if f.version <= since or f.origin_agent_id == agent_id:
+                    continue
+                if f.valid_until is not None:
+                    op = "invalidate"
+                elif f.version == 1:
+                    op = "new"
+                else:
+                    op = "supersede"
+                deltas.append(
+                    SlotDelta(
+                        slot_key=f.slot_key,
+                        version=f.version,
+                        op=op,
+                        fact_id=f.id,
+                        content=f.content,
+                        prompt_surface=f.prompt_surface,
+                    )
+                )
+
+        if deltas:
+            self._known_version[agent_id] = max(d.version for d in deltas)
+        return deltas
 
     def list_shared_facts(self) -> list[Fact]:
         """Return all facts in the shared pool.

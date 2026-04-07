@@ -89,8 +89,8 @@ class YAMLStorage:
             d["attribute"] = fact.attribute
         if fact.version:
             d["version"] = fact.version
-        if fact.mesi_state != "E":
-            d["mesi_state"] = fact.mesi_state
+        if fact.mesi_state != MESIState.EXCLUSIVE:
+            d["mesi_state"] = fact.mesi_state.value  # Emit plain string for SafeLoader compat.
         if fact.canonical_surface:
             d["canonical_surface"] = fact.canonical_surface
         if fact.witness_surface:

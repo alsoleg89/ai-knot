@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ai_knot.storage.base import parse_datetime as _parse_datetime
-from ai_knot.types import Fact, MemoryType, MESIState
+from ai_knot.types import Fact, MemoryType, MESIState, SlotDelta
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +280,70 @@ class SQLiteStorage:
                 (agent_id, since, exclude_agent),
             ).fetchall()
         return [self._fact_from_row(row) for row in rows]
+
+    def load_active_frontier(self, agent_id: str) -> list[Fact]:
+        """Return the latest active fact per slot_key (active frontier).
+
+        For slotted facts, returns the highest-version active fact per slot.
+        For unslotted facts, returns all active facts (no slot to collapse).
+        """
+        with self._get_conn() as conn:
+            # Latest active version per slot (for slotted facts).
+            slotted = conn.execute(
+                f"{self._SELECT_COLS} FROM facts f"
+                " INNER JOIN ("
+                "   SELECT slot_key AS sk, MAX(version) AS max_v"
+                "   FROM facts"
+                "   WHERE agent_id = ? AND valid_until IS NULL AND slot_key != ''"
+                "   GROUP BY sk"
+                " ) m ON f.slot_key = m.sk AND f.version = m.max_v"
+                " AND f.agent_id = ? AND f.valid_until IS NULL",
+                (agent_id, agent_id),
+            ).fetchall()
+            # All active unslotted facts.
+            unslotted = conn.execute(
+                f"{self._SELECT_COLS} FROM facts"
+                " WHERE agent_id = ? AND valid_until IS NULL AND slot_key = ''",
+                (agent_id,),
+            ).fetchall()
+        return [self._fact_from_row(r) for r in slotted + unslotted]
+
+    def load_slot_deltas_since(
+        self, agent_id: str, since_version: int, exclude_agent: str
+    ) -> list[SlotDelta]:
+        """Lightweight delta pull: slot changes since *since_version*, excluding *exclude_agent*.
+
+        Returns ``SlotDelta`` objects instead of full ``Fact`` objects for
+        bandwidth-efficient cross-agent synchronisation.
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT slot_key, version, id, prompt_surface, content, valid_until"
+                " FROM facts"
+                " WHERE agent_id = ? AND version > ? AND origin_agent_id != ?"
+                " ORDER BY version",
+                (agent_id, since_version, exclude_agent),
+            ).fetchall()
+
+        deltas: list[SlotDelta] = []
+        for slot_key, version, fact_id, prompt_surface, content, valid_until in rows:
+            if valid_until is not None:
+                op = "invalidate"
+            elif version == 1:
+                op = "new"
+            else:
+                op = "supersede"
+            deltas.append(
+                SlotDelta(
+                    slot_key=str(slot_key) if slot_key else "",
+                    version=int(version),
+                    op=op,
+                    fact_id=str(fact_id),
+                    content=str(content),
+                    prompt_surface=str(prompt_surface) if prompt_surface else "",
+                )
+            )
+        return deltas
 
     # ------------------------------------------------------------------
     # SnapshotCapable implementation

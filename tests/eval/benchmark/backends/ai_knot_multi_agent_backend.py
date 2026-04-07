@@ -12,7 +12,7 @@ import time
 
 from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
 from ai_knot.storage.sqlite_storage import SQLiteStorage
-from ai_knot.types import Fact
+from ai_knot.types import SlotDelta
 from tests.eval.benchmark.base import InsertResult, MultiAgentMemoryBackend, RetrievalResult
 
 _POOL_AGENT_IDS = ("agent_a", "agent_b", "agent_c")
@@ -128,8 +128,8 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
 
     async def sync_dirty(self, agent_id: str) -> list[str]:
         assert self._pool is not None, "call reset() first"
-        dirty: list[Fact] = self._pool.sync_dirty(agent_id)
-        return [f.source_verbatim or f.content for f in dirty]
+        deltas: list[SlotDelta] = self._pool.sync_slot_deltas(agent_id)
+        return [d.prompt_surface or d.content for d in deltas]
 
     def __del__(self) -> None:
         if self._tmp_dir:

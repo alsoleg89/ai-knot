@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
-from ai_knot.types import Fact
+from ai_knot.types import Fact, SlotDelta
 
 
 def parse_datetime(value: str) -> datetime:
@@ -55,6 +55,25 @@ class TemporalStorageCapable(Protocol):
 
     def load_since_version(self, agent_id: str, since: int, exclude_agent: str) -> list[Fact]:
         """MESI dirty pull: facts with version > since, from agents other than exclude_agent."""
+        ...
+
+    def load_active_frontier(self, agent_id: str) -> list[Fact]:
+        """Return the latest active fact per slot_key (active frontier).
+
+        For slotted facts (``slot_key != ""``), returns the highest-version
+        active fact per slot.  For unslotted facts, returns all active facts
+        (each unslotted fact has a unique identity with no slot to collapse).
+        """
+        ...
+
+    def load_slot_deltas_since(
+        self, agent_id: str, since_version: int, exclude_agent: str
+    ) -> list[SlotDelta]:
+        """Lightweight delta pull: slot changes since *since_version*, excluding *exclude_agent*.
+
+        Returns ``SlotDelta`` records instead of full ``Fact`` objects, making
+        cross-agent sync roughly one order of magnitude cheaper in token cost.
+        """
         ...
 
 

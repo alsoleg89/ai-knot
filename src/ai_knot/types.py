@@ -135,6 +135,33 @@ class SnapshotDiff:
 
 
 @dataclass
+class SlotDelta:
+    """Lightweight record of a slot state change in the shared pool (v1.1).
+
+    Used by ``SharedMemoryPool.sync_slot_deltas()`` to transmit only the
+    minimal information needed for a receiving agent to update its view —
+    far cheaper than copying full ``Fact`` objects across agents.
+
+    Attributes:
+        slot_key: Deterministic slot address ``"{entity}::{attribute}"``,
+            or ``""`` for unslotted facts.
+        version: Monotonic version counter at the time of the change.
+        op: Type of change — ``"new"`` (first publish), ``"supersede"``
+            (replaces a prior value), or ``"invalidate"`` (fact closed).
+        fact_id: ID of the new active fact (or the closed fact for "invalidate").
+        content: Full fact content — used when the receiver needs the text.
+        prompt_surface: Compact surface for prompt injection; may be empty.
+    """
+
+    slot_key: str
+    version: int
+    op: str  # "new" | "supersede" | "invalidate"
+    fact_id: str
+    content: str
+    prompt_surface: str = ""
+
+
+@dataclass
 class ConversationTurn:
     """A single message in a conversation.
 
