@@ -52,6 +52,9 @@ class InvertedIndex:
         self._content_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
         self._tags_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
         self._canonical_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
+        self._content_trigrams: dict[str, frozenset[str]] = {}  # id -> trigrams
+        self._canonical_trigrams: dict[str, frozenset[str]] = {}  # id -> trigrams
+        self._slot_tokens: dict[str, frozenset[str]] = {}  # id -> tokenised slot_key
         self._doc_count: int = 0
         self._avg_content_dl: float = 0.0
         self._avg_tags_dl: float = 0.0
@@ -105,6 +108,18 @@ class InvertedIndex:
                 if term not in self._canonical_postings:
                     self._canonical_postings[term] = {}
                 self._canonical_postings[term][fact.id] = tf
+
+            # Precompute trigrams and slot tokens once at index-build time so
+            # search() does not recompute them for every query.
+            self._content_trigrams[fact.id] = _char_trigrams(fact.content)
+            self._canonical_trigrams[fact.id] = (
+                _char_trigrams(fact.canonical_surface) if fact.canonical_surface else frozenset()
+            )
+            if fact.slot_key:
+                slot_text = fact.slot_key.replace("::", " ")
+                self._slot_tokens[fact.id] = frozenset(_tokenize(slot_text))
+            else:
+                self._slot_tokens[fact.id] = frozenset()
 
         self._doc_count = len(facts)
         self._avg_content_dl = total_content_len / self._doc_count if self._doc_count else 1.0
@@ -204,6 +219,21 @@ class InvertedIndex:
     def content_lengths(self) -> dict[str, int]:
         """Return document content lengths for PRF."""
         return self._content_lengths
+
+    @property
+    def content_trigrams(self) -> dict[str, frozenset[str]]:
+        """Precomputed char-trigrams for fact content (id → trigrams)."""
+        return self._content_trigrams
+
+    @property
+    def canonical_trigrams(self) -> dict[str, frozenset[str]]:
+        """Precomputed char-trigrams for canonical_surface (id → trigrams)."""
+        return self._canonical_trigrams
+
+    @property
+    def slot_tokens(self) -> dict[str, frozenset[str]]:
+        """Precomputed tokenised slot_key (id → token set)."""
+        return self._slot_tokens
 
 
 def _prf_expand(
@@ -397,13 +427,31 @@ class BM25Retriever:
             reverse=True,
         )
 
-        # Precompute per-fact slot and trigram scores to avoid redundant computation
-        # inside sorting lambdas (each sort calls the key function N log N times).
+        # Precompute per-fact slot and trigram scores using index caches — avoids
+        # recomputing _char_trigrams / slot tokenisation on every search call.
         query_trigrams = _char_trigrams(query)
-        slot_scores: dict[str, float] = {f.id: _slot_exact_score(query_tokens, f) for f in facts}
+
+        def _cached_slot_score(fid: str) -> float:
+            slot_toks = index.slot_tokens[fid]
+            if not slot_toks:
+                return 0.0
+            return len(query_tokens & slot_toks) / len(slot_toks)
+
+        slot_scores: dict[str, float] = {fid: _cached_slot_score(fid) for fid in all_ids}
+
+        def _cached_trigram_score(fid: str) -> float:
+            ct = index.content_trigrams[fid]
+            kt = index.canonical_trigrams[fid]
+            qt = query_trigrams
+            if not qt:
+                return 0.0
+            s_content = len(qt & ct) / len(qt | ct) if ct else 0.0
+            s_canon = len(qt & kt) / len(qt | kt) if kt else 0.0
+            return max(s_content, s_canon)
+
+        trigram_scores: dict[str, float] = {fid: _cached_trigram_score(fid) for fid in all_ids}
 
         # Ranker 2: slot-exact — fraction of slot address tokens covered by the query.
-        # Deterministically surfaces entity+attribute facts when the query names the entity.
         slot_ranked = sorted(
             all_ids,
             key=lambda i: (slot_scores[i], raw_scores.get(i, 0.0)),
@@ -411,14 +459,10 @@ class BM25Retriever:
         )
 
         # Ranker 3: char-trigram Jaccard — surface-level similarity between query
-        # and fact content/canonical_surface.  Bridges morphological variants not
-        # caught by the stemming tokenizer.
+        # and fact content/canonical_surface.
         trigram_ranked = sorted(
             all_ids,
-            key=lambda i: max(
-                _trigram_jaccard_against(query_trigrams, index.facts[i].content),
-                _trigram_jaccard_against(query_trigrams, index.facts[i].canonical_surface),
-            ),
+            key=lambda i: (trigram_scores[i], raw_scores.get(i, 0.0)),
             reverse=True,
         )
 
