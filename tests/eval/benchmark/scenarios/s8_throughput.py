@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import time
 
+from tests.eval.benchmark._eval_utils import percentile as _percentile
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, ScenarioResult
 from tests.eval.benchmark.fixtures import LOAD_FACTS, LOAD_QUERIES
 from tests.eval.benchmark.judge import BaseJudge
@@ -66,18 +67,9 @@ async def run(
     wall_time = time.perf_counter() - t_start
     throughput = len(latencies_ms) / max(wall_time, 0.001)
 
-    sorted_lat = sorted(latencies_ms)
-    n = len(sorted_lat)
-
-    def _percentile(p: float) -> float:
-        if not sorted_lat:
-            return 0.0
-        idx = min(int(p / 100 * n), n - 1)
-        return sorted_lat[idx]
-
-    p50 = _percentile(50)
-    p95 = _percentile(95)
-    p99 = _percentile(99)
+    p50 = _percentile(latencies_ms, 50)
+    p95 = _percentile(latencies_ms, 95)
+    p99 = _percentile(latencies_ms, 99)
 
     notes = (
         f"facts={len(LOAD_FACTS)}, "

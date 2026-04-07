@@ -82,3 +82,13 @@ def precision_at_k(ranks: list[int | None], k: int) -> float:
     if not ranks:
         return 0.0
     return sum(1 for r in ranks if r is not None and r <= k) / len(ranks)
+
+
+def percentile(data: list[float], p: float) -> float:
+    """p-th percentile of data using linear interpolation."""
+    if not data:
+        return 0.0
+    s = sorted(data)
+    idx = (p / 100.0) * (len(s) - 1)
+    lo, hi = int(idx), min(int(idx) + 1, len(s) - 1)
+    return s[lo] + (idx - lo) * (s[hi] - s[lo])

@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import time
 
+from tests.eval.benchmark._eval_utils import percentile as _percentile
 from tests.eval.benchmark.base import MemoryBackend, ScenarioResult
 from tests.eval.benchmark.fixtures import LOAD_FACTS, LOAD_QUERIES, PROFILE
 from tests.eval.benchmark.judge import BaseJudge
@@ -32,15 +33,6 @@ SCENARIO_ID = "s6_load"
 TOP_K = 5
 CONCURRENT_TASKS_DEFAULT = 50  # M5 Pro: 14 perf cores + Metal
 CONCURRENT_TASKS_QUICK = 20  # CI / low-resource environments
-
-
-def _percentile(data: list[float], p: float) -> float:
-    if not data:
-        return 0.0
-    s = sorted(data)
-    idx = (p / 100.0) * (len(s) - 1)
-    lo, hi = int(idx), min(int(idx) + 1, len(s) - 1)
-    return s[lo] + (idx - lo) * (s[hi] - s[lo])
 
 
 async def run(
