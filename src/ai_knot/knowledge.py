@@ -80,7 +80,7 @@ class KnowledgeBase:
         self._agent_id = agent_id
         self._storage: StorageBackend = storage or YAMLStorage()
         self._retriever = TFIDFRetriever(
-            rrf_weights=rrf_weights or (5.0, 2.0, 2.0, 1.0),
+            rrf_weights=rrf_weights or (5.0, 3.0, 2.0, 1.5, 1.5, 1.0),
         )
         self._default_provider = provider
         self._default_api_key = api_key
@@ -773,7 +773,10 @@ class KnowledgeBase:
         pairs = self._execute_recall(query, top_k=top_k, now=now)
         if not pairs:
             return ""
-        lines = [f"[{f.type.value}] {f.source_verbatim or f.content}" for f, _ in pairs]
+        lines = [
+            f"[{f.type.value}] {f.prompt_surface or f.source_verbatim or f.content}"
+            for f, _ in pairs
+        ]
         return "\n".join(lines)
 
     def list_facts(self) -> list[Fact]:
