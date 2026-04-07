@@ -6,32 +6,17 @@ Fallback: ATC token containment when Ollama is unavailable.
 
 from __future__ import annotations
 
-import httpx
-
 from ai_knot.embedder import cosine as _cosine
+from ai_knot.embedder import embed_texts as _embed_texts
 from ai_knot.tokenizer import tokenize
 
-_EMBED_URL = "http://localhost:11434/v1/embeddings"
 _EMBED_MODEL = "qwen2.5:7b"
-_HTTP = httpx.AsyncClient(timeout=60.0)
 
 
 async def maybe_embed_batch(texts: list[str]) -> list[list[float]] | None:
     """Batch-embed via Ollama; return None if Ollama is unreachable."""
-    if not texts:
-        return []
-    try:
-        resp = await _HTTP.post(
-            _EMBED_URL,
-            headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"},
-            json={"model": _EMBED_MODEL, "input": texts},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        items = sorted(data["data"], key=lambda x: x["index"])
-        return [list(it["embedding"]) for it in items]
-    except Exception:
-        return None
+    result = await _embed_texts(texts, model=_EMBED_MODEL, timeout=60.0)
+    return result if result else None
 
 
 def atc_score(snippet: str, source: str) -> float:

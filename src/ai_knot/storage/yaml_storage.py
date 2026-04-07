@@ -105,6 +105,10 @@ class YAMLStorage:
             d["qualifiers"] = fact.qualifiers
         if fact.state_confidence != 1.0:
             d["state_confidence"] = fact.state_confidence
+        if fact.topic_channel:
+            d["topic_channel"] = fact.topic_channel
+        if fact.visibility_scope != "global":
+            d["visibility_scope"] = fact.visibility_scope
         return d
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
@@ -185,6 +189,8 @@ class YAMLStorage:
                     value_text=str(entry.get("value_text", "")),
                     qualifiers={str(k): str(v) for k, v in entry.get("qualifiers", {}).items()},
                     state_confidence=float(entry.get("state_confidence", 1.0)),
+                    topic_channel=str(entry.get("topic_channel", "")),
+                    visibility_scope=str(entry.get("visibility_scope", "global")),
                 )
             )
         return facts
@@ -293,6 +299,8 @@ class YAMLStorage:
                     value_text=str(entry.get("value_text", "")),
                     qualifiers={str(k): str(v) for k, v in entry.get("qualifiers", {}).items()},
                     state_confidence=float(entry.get("state_confidence", 1.0)),
+                    topic_channel=str(entry.get("topic_channel", "")),
+                    visibility_scope=str(entry.get("visibility_scope", "global")),
                 )
             )
         return facts

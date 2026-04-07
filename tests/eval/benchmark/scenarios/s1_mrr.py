@@ -60,7 +60,7 @@ async def run(
     ranks_lexical: list[int | None] = []
     ranks_semantic: list[int | None] = []
 
-    for i, (query, rel_text) in enumerate(zip(queries, relevant_texts)):
+    for i, (query, rel_text) in enumerate(zip(queries, relevant_texts, strict=False)):
         # Reset session novelty state so each query evaluates independently.
         # MRR measures per-query retrieval quality, not cross-query novelty.
         await backend.reset_session()
@@ -83,7 +83,9 @@ async def run(
 
     # Choose best available ranks for primary metrics
     # Use semantic if it differs from lexical (Ollama was available and helped)
-    has_semantic_improvement = any(rs != rl for rs, rl in zip(ranks_semantic, ranks_lexical))
+    has_semantic_improvement = any(
+        rs != rl for rs, rl in zip(ranks_semantic, ranks_lexical, strict=False)
+    )
     ranks = ranks_semantic if has_semantic_improvement else ranks_lexical
 
     mrr_score = mrr(ranks)

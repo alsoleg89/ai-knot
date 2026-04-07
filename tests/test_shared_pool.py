@@ -341,3 +341,116 @@ class TestLoadActiveFrontier:
 
         frontier = sqlite_db.load_active_frontier("test_agent")
         assert len(frontier) == 2
+
+
+# ---------------------------------------------------------------------------
+# Publish gating — utility_threshold
+# ---------------------------------------------------------------------------
+
+
+class TestPublishGating:
+    def test_low_utility_fact_not_published(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Facts below utility_threshold are silently skipped."""
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("low-importance noise")
+        fact.importance = 0.1
+        fact.state_confidence = 0.1
+        kb.replace_facts([fact])  # Persist mutated values to storage.
+
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, utility_threshold=0.5)
+        assert published == []
+        assert pool_sqlite.list_shared_facts() == []
+
+    def test_high_utility_fact_published(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Facts at or above utility_threshold are published normally."""
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("high-importance finding")
+        fact.importance = 0.9
+        fact.state_confidence = 0.9
+        kb.replace_facts([fact])  # Persist mutated values to storage.
+
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, utility_threshold=0.5)
+        assert len(published) == 1
+
+    def test_default_threshold_allows_all(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Default threshold (0.0) lets every fact through."""
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("any fact")
+        fact.importance = 0.01
+        fact.state_confidence = 0.0
+        kb.replace_facts([fact])  # Persist mutated values to storage.
+
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        assert len(published) == 1
+
+
+# ---------------------------------------------------------------------------
+# Topic channels + visibility_scope
+# ---------------------------------------------------------------------------
+
+
+class TestTopicChannels:
+    def test_channel_filter_isolates_results(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """recall() with topic_channel only returns facts from that channel."""
+        kb = _kb("agent_a", sqlite_db)
+        f_devops = kb.add("deploy pipeline uses Kubernetes")
+        f_devops.topic_channel = "devops"
+        f_finance = kb.add("Q1 revenue is 5M")
+        f_finance.topic_channel = "finance"
+        kb.replace_facts([f_devops, f_finance])  # Persist channel tags.
+
+        pool_sqlite.publish("agent_a", [f_devops.id, f_finance.id], kb=kb)
+
+        results = pool_sqlite.recall("deploy pipeline", "agent_b", top_k=5, topic_channel="devops")
+        channels = {f.topic_channel for f, _ in results}
+        assert "finance" not in channels
+
+    def test_no_channel_filter_returns_all(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """recall() without topic_channel returns facts from all channels."""
+        kb = _kb("agent_a", sqlite_db)
+        f1 = kb.add("Python is great for ML")
+        f1.topic_channel = "ml"
+        f2 = kb.add("Python is great for scripting")
+        f2.topic_channel = "scripting"
+        kb.replace_facts([f1, f2])  # Persist channel tags.
+
+        pool_sqlite.publish("agent_a", [f1.id, f2.id], kb=kb)
+
+        results = pool_sqlite.recall("Python", "agent_b", top_k=5)
+        channels = {f.topic_channel for f, _ in results}
+        assert "ml" in channels or "scripting" in channels
+
+    def test_local_visibility_excluded_from_recall(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Facts with visibility_scope='local' are not returned to other agents."""
+        kb = _kb("agent_a", sqlite_db)
+        f_local = kb.add("agent A private data")
+        f_local.visibility_scope = "local"
+        f_global = kb.add("agent A shared fact")
+        f_global.visibility_scope = "global"
+        kb.replace_facts([f_local, f_global])  # Persist visibility scopes.
+
+        pool_sqlite.publish("agent_a", [f_local.id, f_global.id], kb=kb)
+
+        results = pool_sqlite.recall("agent A", "agent_b", top_k=10)
+        contents = [f.content for f, _ in results]
+        assert "agent A private data" not in contents
+
+    def test_topic_channel_persisted_in_sqlite(self, sqlite_db: SQLiteStorage) -> None:
+        """topic_channel and visibility_scope survive a SQLite round-trip."""
+        f = Fact(content="test", topic_channel="devops", visibility_scope="local")
+        sqlite_db.save("agent_x", [f])
+        loaded = sqlite_db.load("agent_x")
+        assert loaded[0].topic_channel == "devops"
+        assert loaded[0].visibility_scope == "local"

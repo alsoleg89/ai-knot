@@ -47,7 +47,7 @@ async def run(
     n = len(fixture.paraphrase_queries)
 
     for i, (paraphrase, verbatim) in enumerate(
-        zip(fixture.paraphrase_queries, fixture.verbatim_facts)
+        zip(fixture.paraphrase_queries, fixture.verbatim_facts, strict=False)
     ):
         await backend.reset_session()
         result = await backend.retrieve(paraphrase, top_k=TOP_K)

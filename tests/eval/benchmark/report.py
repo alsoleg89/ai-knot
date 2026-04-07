@@ -126,38 +126,37 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
 
 
 def _scenario_section(results: list[BenchmarkMetrics], sid: str, title: str) -> list[str] | None:
-    # Only render if at least one backend has results for this scenario
-    has_data = any(any(sr.scenario_id == sid for sr in m.scenario_results) for m in results)
-    if not has_data:
-        return None
+    # Single pass: collect matching results and their metrics
+    from tests.eval.benchmark.base import ScenarioResult
 
-    lines: list[str] = [f"### {title}\n"]
-
-    # Collect all metrics for this scenario
+    matching: list[tuple[BenchmarkMetrics, ScenarioResult]] = []
     all_metrics: set[str] = set()
     for m in results:
         for sr in m.scenario_results:
             if sr.scenario_id == sid:
+                matching.append((m, sr))
                 all_metrics.update(sr.judge_scores.keys())
 
+    if not matching:
+        return None
+
+    lines: list[str] = [f"### {title}\n"]
     metric_list = sorted(all_metrics)
     header = "| Backend | " + " | ".join(metric_list) + " | Notes |"
     sep = "|---------|" + "|".join("-" * (len(k) + 2) for k in metric_list) + "|-------|"
     lines.append(header)
     lines.append(sep)
 
-    for m in results:
-        for sr in m.scenario_results:
-            if sr.scenario_id == sid:
-                cells = []
-                for metric in metric_list:
-                    vals = sr.judge_scores.get(metric, [])
-                    if vals:
-                        med = statistics.median(vals)
-                        cells.append(_fmt(med))
-                    else:
-                        cells.append("—")
-                notes_short = sr.notes[:80] + "…" if len(sr.notes) > 80 else sr.notes
-                lines.append(f"| {m.backend_name} | " + " | ".join(cells) + f" | {notes_short} |")
+    for m, sr in matching:
+        cells = []
+        for metric in metric_list:
+            vals = sr.judge_scores.get(metric, [])
+            if vals:
+                med = statistics.median(vals)
+                cells.append(_fmt(med))
+            else:
+                cells.append("—")
+        notes_short = sr.notes[:80] + "…" if len(sr.notes) > 80 else sr.notes
+        lines.append(f"| {m.backend_name} | " + " | ".join(cells) + f" | {notes_short} |")
 
     return lines

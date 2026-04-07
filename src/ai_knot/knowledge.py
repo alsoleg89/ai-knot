@@ -1090,18 +1090,27 @@ class SharedMemoryPool:
         fact_ids: list[str],
         *,
         kb: KnowledgeBase,
+        utility_threshold: float = 0.0,
     ) -> list[Fact]:
         """Copy facts from an agent's private KB into the shared pool.
 
-        Uses entity-addressed CAS: for each fact with entity+attribute, the
-        existing active fact for that entity+attribute is closed (valid_until=now,
-        mesi_state='I') and the new fact is inserted (mesi_state='M' if replacing,
-        'S' if new). Generic facts (no entity) fall back to ID-based dedup.
+        Uses slot-addressed CAS: for each fact with a ``slot_key``, the
+        existing active fact for that slot is closed (valid_until=now,
+        mesi_state='I') and the new fact is inserted (mesi_state='M' if
+        replacing, 'S' if new). Facts with no slot fall back to ID-based dedup.
+
+        An optional publish gate filters facts by utility score before
+        inserting:
+            ``utility = state_confidence × importance``
+        Only facts with ``utility >= utility_threshold`` are published.
+        Threshold 0.0 (default) = no gating.
 
         Args:
             agent_id: The agent publishing the facts.
             fact_ids: IDs of facts to publish from the agent's KB.
             kb: The agent's KnowledgeBase instance.
+            utility_threshold: Minimum utility score (0.0–1.0) to publish.
+                Facts below the threshold are silently skipped.
 
         Returns:
             List of facts that were published (copies, not mutations of private KB).
@@ -1114,7 +1123,11 @@ class SharedMemoryPool:
 
         private_facts = kb.list_facts()
         id_set = set(fact_ids)
-        to_publish = [f for f in private_facts if f.id in id_set]
+        to_publish = [
+            f
+            for f in private_facts
+            if f.id in id_set and f.state_confidence * f.importance >= utility_threshold
+        ]
 
         if not to_publish:
             return []
@@ -1196,6 +1209,7 @@ class SharedMemoryPool:
         *,
         top_k: int = 5,
         now: datetime | None = None,
+        topic_channel: str = "",
     ) -> list[tuple[Fact, float]]:
         """Search the shared pool with provenance discount.
 
@@ -1208,6 +1222,8 @@ class SharedMemoryPool:
             requesting_agent_id: Agent performing the query.
             top_k: Maximum results to return.
             now: Point-in-time for temporal filter (default: UTC now).
+            topic_channel: If non-empty, only return facts with a matching
+                ``topic_channel`` or no channel (empty = visible in all channels).
 
         Returns:
             List of (Fact, score) pairs sorted by relevance.
@@ -1219,6 +1235,17 @@ class SharedMemoryPool:
             now_dt = now or datetime.now(UTC)
             all_shared = self._storage.load(_SHARED_NAMESPACE)
             active = [f for f in all_shared if f.is_active(now_dt)]
+
+        # Topic channel filter: include global facts (no channel) + matching channel.
+        if topic_channel:
+            active = [f for f in active if not f.topic_channel or f.topic_channel == topic_channel]
+
+        # visibility_scope filter: hide local-only facts from foreign agents.
+        active = [
+            f
+            for f in active
+            if f.visibility_scope != "local" or f.origin_agent_id == requesting_agent_id
+        ]
 
         if not active:
             return []
@@ -1302,10 +1329,10 @@ class SharedMemoryPool:
                     continue
                 if f.valid_until is not None:
                     op = "invalidate"
-                elif f.version == 1:
-                    op = "new"
-                else:
+                elif f.mesi_state == MESIState.MODIFIED:
                     op = "supersede"
+                else:
+                    op = "new"
                 deltas.append(
                     SlotDelta(
                         slot_key=f.slot_key,

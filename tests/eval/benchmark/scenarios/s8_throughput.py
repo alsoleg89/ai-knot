@@ -53,14 +53,13 @@ async def run(
     latencies_ms: list[float] = []
     t_start = time.perf_counter()
 
+    async def _timed_retrieve(q: str) -> float:
+        t0 = time.perf_counter()
+        await backend.retrieve(q, top_k=5)
+        return (time.perf_counter() - t0) * 1000
+
     for batch_start in range(0, len(measure_queries), CONCURRENCY):
         batch = measure_queries[batch_start : batch_start + CONCURRENCY]
-
-        async def _timed_retrieve(q: str) -> float:
-            t0 = time.perf_counter()
-            await backend.retrieve(q, top_k=5)
-            return (time.perf_counter() - t0) * 1000
-
         batch_times = await asyncio.gather(*[_timed_retrieve(q) for q in batch])
         latencies_ms.extend(batch_times)
 

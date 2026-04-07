@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS facts (
     value_text        TEXT NOT NULL DEFAULT '',
     qualifiers        TEXT NOT NULL DEFAULT '{}',
     state_confidence  REAL NOT NULL DEFAULT 1.0,
+    topic_channel     TEXT NOT NULL DEFAULT '',
+    visibility_scope  TEXT NOT NULL DEFAULT 'global',
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -120,6 +122,8 @@ class SQLiteStorage:
             "value_text": "TEXT NOT NULL DEFAULT ''",
             "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
             "state_confidence": "REAL NOT NULL DEFAULT 1.0",
+            "topic_channel": "TEXT NOT NULL DEFAULT ''",
+            "visibility_scope": "TEXT NOT NULL DEFAULT 'global'",
         }
         with self._get_conn() as conn:
             cur = conn.execute("PRAGMA table_info(facts)")
@@ -164,6 +168,8 @@ class SQLiteStorage:
                 fact.value_text,
                 json.dumps(fact.qualifiers),
                 fact.state_confidence,
+                fact.topic_channel,
+                fact.visibility_scope,
             )
             for fact in facts
         ]
@@ -179,8 +185,9 @@ class SQLiteStorage:
                     source_verbatim, valid_from, valid_until,
                     entity, attribute, version, mesi_state,
                     canonical_surface, witness_surface, prompt_surface,
-                    slot_key, value_text, qualifiers, state_confidence)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    slot_key, value_text, qualifiers, state_confidence,
+                    topic_channel, visibility_scope)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 rows,
             )
         logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
@@ -197,7 +204,7 @@ class SQLiteStorage:
 
     @staticmethod
     def _fact_from_row(row: tuple[Any, ...]) -> Fact:
-        """Construct a Fact from a SELECT row (columns 0-30, matching _SELECT_COLS order)."""
+        """Construct a Fact from a SELECT row (columns 0-32, matching _SELECT_COLS order)."""
         return Fact(
             id=row[0],
             content=row[1],
@@ -230,6 +237,8 @@ class SQLiteStorage:
             value_text=str(row[28]) if row[28] else "",
             qualifiers=json.loads(row[29]) if row[29] else {},
             state_confidence=float(row[30]) if row[30] is not None else 1.0,
+            topic_channel=str(row[31]) if row[31] else "",
+            visibility_scope=str(row[32]) if row[32] else "global",
         )
 
     def delete(self, agent_id: str, fact_id: str) -> None:
@@ -258,7 +267,8 @@ class SQLiteStorage:
                           source_verbatim, valid_from, valid_until,
                           entity, attribute, version, mesi_state,
                           canonical_surface, witness_surface, prompt_surface,
-                          slot_key, value_text, qualifiers, state_confidence"""
+                          slot_key, value_text, qualifiers, state_confidence,
+                          topic_channel, visibility_scope"""
 
     def load_active(self, agent_id: str) -> list[Fact]:
         """Load only facts where valid_until IS NULL (index-accelerated)."""
@@ -318,7 +328,7 @@ class SQLiteStorage:
         """
         with self._get_conn() as conn:
             rows = conn.execute(
-                "SELECT slot_key, version, id, prompt_surface, content, valid_until"
+                "SELECT slot_key, version, id, prompt_surface, content, valid_until, mesi_state"
                 " FROM facts"
                 " WHERE agent_id = ? AND version > ? AND origin_agent_id != ?"
                 " ORDER BY version",
@@ -326,13 +336,13 @@ class SQLiteStorage:
             ).fetchall()
 
         deltas: list[SlotDelta] = []
-        for slot_key, version, fact_id, prompt_surface, content, valid_until in rows:
+        for slot_key, version, fact_id, prompt_surface, content, valid_until, mesi_state in rows:
             if valid_until is not None:
                 op = "invalidate"
-            elif version == 1:
-                op = "new"
-            else:
+            elif str(mesi_state) == MESIState.MODIFIED:
                 op = "supersede"
+            else:
+                op = "new"
             deltas.append(
                 SlotDelta(
                     slot_key=str(slot_key) if slot_key else "",
@@ -384,6 +394,8 @@ class SQLiteStorage:
                 "value_text": f.value_text,
                 "qualifiers": f.qualifiers,
                 "state_confidence": f.state_confidence,
+                "topic_channel": f.topic_channel,
+                "visibility_scope": f.visibility_scope,
             }
             for f in facts
         ]
@@ -448,6 +460,8 @@ class SQLiteStorage:
                 value_text=str(entry.get("value_text", "")),
                 qualifiers={str(k): str(v) for k, v in entry.get("qualifiers", {}).items()},
                 state_confidence=float(entry.get("state_confidence", 1.0)),
+                topic_channel=str(entry.get("topic_channel", "")),
+                visibility_scope=str(entry.get("visibility_scope", "global")),
             )
             for entry in raw
         ]

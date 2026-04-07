@@ -62,6 +62,10 @@ class Fact:
         value_text: The extracted value for this slot, e.g. ``"95000"`` (v1.1).
         qualifiers: Temporal or conditional modifiers, e.g. ``{"since": "2024-01"}`` (v1.1).
         state_confidence: Confidence that this fact reflects the current state (v1.1).
+        topic_channel: Domain label for shared pool routing, e.g. ``"devops"`` (v1.2).
+            Empty string = no topic filter (visible in all channels).
+        visibility_scope: How widely the fact propagates — ``"global"`` (all agents)
+            or ``"local"`` (only the owning agent, v1.2).
     """
 
     content: str
@@ -110,6 +114,8 @@ class Fact:
     value_text: str = ""
     qualifiers: dict[str, str] = field(default_factory=dict)
     state_confidence: float = 1.0
+    topic_channel: str = ""
+    visibility_scope: str = "global"
 
     def is_active(self, at: datetime | None = None) -> bool:
         """Return True if this fact is valid at *at* (default: now UTC)."""

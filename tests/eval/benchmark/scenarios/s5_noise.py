@@ -44,28 +44,24 @@ async def run(
     total_retrieved = 0
     noise_retrieved = 0
 
-    for signal_text, query in zip(fixture.signal_facts, fixture.signal_queries):
+    for i, (_, query) in enumerate(zip(fixture.signal_facts, fixture.signal_queries, strict=False)):
         await backend.reset_session()
         result = await backend.retrieve(query, top_k=TOP_K)
         texts = result.texts[:TOP_K]
         total_retrieved += len(texts)
 
-        # Check if signal fact appears in results
-        hit = any(
-            max(atc_score(signal_text, r), atc_score(r, signal_text)) >= _SIGNAL_ATC_THRESHOLD
-            for r in texts
-        )
-        if hit:
-            signal_hits += 1
-
-        # Count noise items (not matching any signal fact)
+        # For each retrieved text compute ATC once against all signal facts to
+        # distinguish signal hits (current query's fact) from noise (no match).
+        hit = False
         for r in texts:
-            is_signal = any(
-                max(atc_score(sf, r), atc_score(r, sf)) >= _SIGNAL_ATC_THRESHOLD
-                for sf in fixture.signal_facts
-            )
+            scores = [max(atc_score(sf, r), atc_score(r, sf)) for sf in fixture.signal_facts]
+            is_signal = max(scores, default=0.0) >= _SIGNAL_ATC_THRESHOLD
             if not is_signal:
                 noise_retrieved += 1
+            elif scores[i] >= _SIGNAL_ATC_THRESHOLD:
+                hit = True
+        if hit:
+            signal_hits += 1
 
     n = len(fixture.signal_queries)
     signal_recall = signal_hits / max(n, 1)

@@ -66,7 +66,9 @@ async def run(
     freshness_count = 0
     staleness_count = 0
 
-    for i, (query, latest_text) in enumerate(zip(fixture.queries, fixture.latest_facts)):
+    for i, (query, latest_text) in enumerate(
+        zip(fixture.queries, fixture.latest_facts, strict=False)
+    ):
         await backend.reset_session()
         result = await backend.retrieve(query, top_k=TOP_K)
         if not result.texts:

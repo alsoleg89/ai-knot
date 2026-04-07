@@ -110,7 +110,7 @@ class TestResolveAgainstExisting:
         new = [_fact("User works at Sber as a Director")]
         to_insert, closed = resolve_against_existing(new, [old], threshold=0.3)
         assert len(to_insert) == 1  # new version inserted
-        assert len(closed) == 1    # old version closed
+        assert len(closed) == 1  # old version closed
         assert old.valid_until is not None
 
     def test_empty_existing_all_inserted(self) -> None:

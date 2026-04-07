@@ -204,9 +204,8 @@ async def _run(
             output = "benchmark_fast.md"
         if raw_output == "benchmark_raw.json":
             raw_output = "benchmark_fast_raw.json"
-        _fast_bundle = None  # professional scenarios use standalone fixtures, not LanguageBundle
-    else:
-        _fast_bundle = None
+
+    _fast_bundle = None  # professional scenarios use standalone fixtures, not LanguageBundle
 
     if not mock_judge and not check_ollama_available():
         click.echo(
