@@ -37,7 +37,7 @@ from datetime import UTC, datetime
 import click
 
 from tests.eval.benchmark._check_ollama import check_ollama_available
-from tests.eval.benchmark.base import BenchmarkMetrics, MemoryBackend
+from tests.eval.benchmark.base import BenchmarkMetrics, MemoryBackend, MultiAgentMemoryBackend
 from tests.eval.benchmark.report import render_markdown
 
 _BACKEND_CHOICES = (
@@ -61,6 +61,7 @@ _SCENARIO_CHOICES = (
     "s6",
     "s7",
     "s8",
+    "s9",
     # legacy (prefix-selectable)
     "s1_profile_retrieval",
     "s2_avoid_repeats",
@@ -70,7 +71,7 @@ _SCENARIO_CHOICES = (
     "s6_load",
     "s7_consolidation",
 )
-_MA_SCENARIO_CHOICES = ("s8_ma", "s9", "s10", "s11")
+_MA_SCENARIO_CHOICES = ("s8_ma", "s9", "s10", "s11", "s12", "s13", "s14", "s15")
 _MODE_CHOICES = ("basic", "extended", "auto")
 _LANGUAGE_CHOICES = ("en", "ru", "both")
 
@@ -95,7 +96,7 @@ _LANGUAGE_CHOICES = ("en", "ru", "both")
     "--scenarios",
     default="all",
     help=(
-        f"Comma-separated scenario prefixes. Options: {', '.join(_SCENARIO_CHOICES[:8])}, all. "
+        f"Comma-separated scenario prefixes. Options: {', '.join(_SCENARIO_CHOICES[:9])}, all. "
         "Use '--scenarios legacy' to run the original S1–S7 scenarios."
     ),
 )
@@ -147,9 +148,16 @@ _LANGUAGE_CHOICES = ("en", "ru", "both")
     "multi_agent",
     is_flag=True,
     default=False,
+    help=("Run ONLY multi-agent scenarios (S8–S11). Uses AiKnotMultiAgentBackend only."),
+)
+@click.option(
+    "--skip-multi-agent",
+    "skip_multi_agent",
+    is_flag=True,
+    default=False,
     help=(
-        "Run multi-agent scenarios (S8–S11) instead of standard scenarios. "
-        "Uses AiKnotMultiAgentBackend only."
+        "Skip multi-agent scenarios (S8-MA, S9, S10, S11) that are "
+        "normally appended to a standard run."
     ),
 )
 def main(
@@ -163,6 +171,7 @@ def main(
     language: str,
     fast: bool,
     multi_agent: bool,
+    skip_multi_agent: bool,
 ) -> None:
     """Run the ai-knot benchmark suite."""
     asyncio.run(
@@ -177,6 +186,7 @@ def main(
             language,
             fast,
             multi_agent=multi_agent,
+            skip_multi_agent=skip_multi_agent,
         )
     )
 
@@ -192,6 +202,7 @@ async def _run(
     language: str = "en",
     fast: bool = False,
     multi_agent: bool = False,
+    skip_multi_agent: bool = False,
 ) -> None:
     # --fast: mini fixtures + 2 backends. Real LLM still used (tests actual system).
     # Add --mock-judge explicitly if you need an offline/instant run (~20s, no LLM).
@@ -239,6 +250,7 @@ async def _run(
         return
 
     # Resolve effective mode when backends are not explicitly overridden
+    effective_mode = "basic"
     if backends_override is None:
         effective_mode = _resolve_mode(mode)
         selected_backends = _build_backends_for_mode(
@@ -276,6 +288,18 @@ async def _run(
         )
         all_metrics.extend(lang_metrics)
 
+    # Also run multi-agent scenarios unless skipped.
+    # mem0_multi_agent is only added when Ollama is confirmed available
+    # (effective_mode=="extended" or explicit override containing real backends).
+    if not skip_multi_agent:
+        extra_ma: list[MultiAgentMemoryBackend] = []
+        if effective_mode == "extended" or (backends_override is not None and not mock_judge):
+            from tests.eval.benchmark.backends.mem0_ma_backend import Mem0MultiAgentBackend
+
+            extra_ma = [Mem0MultiAgentBackend()]
+        ma_metrics_list = await _run_multi_agent_inline(judge=judge, extra_ma_backends=extra_ma)
+        all_metrics.extend(ma_metrics_list)
+
     _write_reports(all_metrics, output, raw_output)
 
 
@@ -301,21 +325,22 @@ async def _run_backend(
     return metrics
 
 
-async def _run_multi_agent(
+async def _run_multi_agent_inline(
     *,
-    scenarios_arg: str,
-    output: str,
-    raw_output: str,
     judge: object,
-) -> None:
-    """Run multi-agent scenarios (S8–S11) against AiKnotMultiAgentBackend."""
+    scenarios_arg: str = "all",
+    extra_ma_backends: list[MultiAgentMemoryBackend] | None = None,
+) -> list[BenchmarkMetrics]:
+    """Run multi-agent scenarios (S8-MA through S12) and return metrics per backend.
+
+    Used both by the inline path (appended to standard runs) and by
+    ``_run_multi_agent()`` (standalone ``--multi-agent`` mode).
+    Returns empty list when no runners match.
+    """
     from tests.eval.benchmark.backends.ai_knot_multi_agent_backend import (
         AiKnotMultiAgentBackend,
     )
-    from tests.eval.benchmark.base import BenchmarkMetrics
     from tests.eval.benchmark.scenarios import get_ma_scenario_runners
-
-    backend = AiKnotMultiAgentBackend()
 
     if scenarios_arg in ("all", "ma"):
         runners = get_ma_scenario_runners()
@@ -323,28 +348,52 @@ async def _run_multi_agent(
         names = [s.strip() for s in scenarios_arg.split(",")]
         runners = get_ma_scenario_runners(names=names)
         if not runners:
-            click.echo(
-                f"No multi-agent scenarios matched {names!r}. Valid prefixes: s8, s9, s10, s11.",
-                err=True,
-            )
-            sys.exit(1)
+            return []
+
+    backends: list[MultiAgentMemoryBackend] = [
+        AiKnotMultiAgentBackend(),
+        *(extra_ma_backends or []),
+    ]
 
     click.echo(
-        f"Running {len(runners)} multi-agent scenario(s) [{', '.join(sid for sid, _ in runners)}]"
+        f"\nRunning {len(runners)} multi-agent scenario(s) [{', '.join(sid for sid, _ in runners)}]"
     )
-    click.echo(f"\n>>> Backend: {backend.name}")
 
-    metrics = BenchmarkMetrics(backend_name=backend.name, language="en")
-    for sid, scenario_fn in runners:
-        click.echo(f"    {sid} ...", nl=False)
-        try:
-            result = await scenario_fn(backend, judge)
-            metrics.scenario_results.append(result)
-            click.echo(f" done  ({result.notes[:80]})" if result.notes else " done")
-        except Exception as exc:
-            click.echo(f" ERROR: {exc}")
+    all_ma_metrics: list[BenchmarkMetrics] = []
+    for backend in backends:
+        click.echo(f"\n>>> Backend: {backend.name}")
+        metrics = BenchmarkMetrics(backend_name=backend.name, language="en")
+        for sid, scenario_fn in runners:
+            click.echo(f"    {sid} ...", nl=False)
+            try:
+                result = await scenario_fn(backend, judge)
+                metrics.scenario_results.append(result)
+                click.echo(f" done  ({result.notes[:80]})" if result.notes else " done")
+            except Exception as exc:
+                click.echo(f" ERROR: {exc}")
+        all_ma_metrics.append(metrics)
 
-    _write_reports([metrics], output, raw_output)
+    return all_ma_metrics
+
+
+async def _run_multi_agent(
+    *,
+    scenarios_arg: str,
+    output: str,
+    raw_output: str,
+    judge: object,
+) -> None:
+    """Run multi-agent scenarios (S8-MA through S12) standalone (``--multi-agent`` flag)."""
+    metrics_list = await _run_multi_agent_inline(judge=judge, scenarios_arg=scenarios_arg)
+    if not metrics_list:
+        click.echo(
+            f"No multi-agent scenarios matched {scenarios_arg!r}. "
+            "Valid prefixes: s8, s9, s10, s11, s12.",
+            err=True,
+        )
+        sys.exit(1)
+
+    _write_reports(metrics_list, output, raw_output)
 
 
 def _write_reports(metrics: list[BenchmarkMetrics], output: str, raw_output: str) -> None:
@@ -384,8 +433,9 @@ def _build_backends_for_mode(
     base: list[MemoryBackend] = [
         BaselineBackend(),
         AiKnotNoLlmBackend(),
-        AiKnotBackend(provider, use_add=mock_judge),  # type: ignore[arg-type]
     ]
+    if not mock_judge:
+        base.append(AiKnotBackend(provider, use_add=False))  # type: ignore[arg-type]
 
     if mode == "extended":
         from tests.eval.benchmark.backends.mem0_real import Mem0RealBackend
@@ -428,6 +478,12 @@ def _build_backends_from_names(
     result: list[MemoryBackend] = []
     for name in backends_arg.split(","):
         name = name.strip()
+        if name == "ai_knot" and mock_judge:
+            click.echo(
+                "WARNING: ai_knot with --mock-judge uses kb.add() (identical to ai_knot_no_llm). "
+                "Including it anyway since explicitly requested.",
+                err=True,
+            )
         if name in all_map:
             result.append(all_map[name])
         elif name == "qdrant_real":

@@ -19,6 +19,7 @@ Only runs against MultiAgentMemoryBackend (skipped for single-agent backends).
 
 from __future__ import annotations
 
+from tests.eval.benchmark._eval_utils import has_domain_hit as _has_domain_hit
 from tests.eval.benchmark.base import MultiAgentMemoryBackend, ScenarioResult
 from tests.eval.benchmark.fixtures import MULTI_AGENT_FIXTURE, MultiAgentFixture
 from tests.eval.benchmark.judge import BaseJudge
@@ -29,11 +30,6 @@ SCENARIO_ID = "s8_ma_isolation"
 def _keyword_set(facts: list[str]) -> set[str]:
     """Build a set of significant keywords (length > 4) from a list of fact strings."""
     return {w.lower() for fact in facts for w in fact.split() if len(w) > 4}
-
-
-def _has_domain_hit(texts: list[str], domain_keywords: set[str]) -> bool:
-    """Return True if any retrieved text shares a keyword with the precomputed set."""
-    return any({w.lower().strip(".,;:") for w in text.split()} & domain_keywords for text in texts)
 
 
 async def run(

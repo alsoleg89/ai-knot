@@ -92,3 +92,21 @@ def percentile(data: list[float], p: float) -> float:
     idx = (p / 100.0) * (len(s) - 1)
     lo, hi = int(idx), min(int(idx) + 1, len(s) - 1)
     return s[lo] + (idx - lo) * (s[hi] - s[lo])
+
+
+def estimate_extraction_tokens(text: str) -> int:
+    """Approximate input tokens consumed by LLM extraction.
+
+    Uses word count × 2 to account for system prompt overhead.
+    This is a heuristic — actual token counts depend on the model and tokenizer.
+    """
+    return len(text.split()) * 2
+
+
+def has_domain_hit(texts: list[str], keywords: set[str]) -> bool:
+    """Return True if any text in *texts* contains at least one keyword from *keywords*.
+
+    Strips common punctuation before matching so "kubernetes," matches "kubernetes".
+    Used by MA isolation/leakage scenarios to detect domain overlap.
+    """
+    return any({w.lower().strip(".,;:()") for w in text.split()} & keywords for text in texts)
