@@ -55,18 +55,26 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
-      - name: Commit version bump
+      - name: Commit version bump (skip if already at target version)
         run: |
           git config user.name "alsoleg89"
           git config user.email "155813332+alsoleg89@users.noreply.github.com"
           git add pyproject.toml src/ai_knot/__init__.py npm/package.json
-          git commit -m "chore: bump version to ${{ inputs.version }}"
-          git push origin HEAD
+          if git diff --cached --quiet; then
+            echo "Version already at ${{ inputs.version }} — nothing to commit"
+          else
+            git commit -m "chore: bump version to ${{ inputs.version }}"
+            git push origin HEAD
+          fi
 
-      - name: Create and push tag
+      - name: Create and push tag (skip if already exists)
         run: |
-          git tag "v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ inputs.version }} already exists — skipping"
+          else
+            git tag "v${{ inputs.version }}"
+            git push origin "v${{ inputs.version }}"
+          fi
 
       - name: Create GitHub Release
         env:
