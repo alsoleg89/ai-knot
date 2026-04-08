@@ -109,6 +109,10 @@ class YAMLStorage:
             d["topic_channel"] = fact.topic_channel
         if fact.visibility_scope != "global":
             d["visibility_scope"] = fact.visibility_scope
+        if fact.claim_key:
+            d["claim_key"] = fact.claim_key
+        if fact.memory_tier != "private":
+            d["memory_tier"] = fact.memory_tier
         return d
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
@@ -191,6 +195,8 @@ class YAMLStorage:
                     state_confidence=float(entry.get("state_confidence", 1.0)),
                     topic_channel=str(entry.get("topic_channel", "")),
                     visibility_scope=str(entry.get("visibility_scope", "global")),
+                    claim_key=str(entry.get("claim_key", "")),
+                    memory_tier=str(entry.get("memory_tier", "private")),
                 )
             )
         return facts
@@ -301,6 +307,8 @@ class YAMLStorage:
                     state_confidence=float(entry.get("state_confidence", 1.0)),
                     topic_channel=str(entry.get("topic_channel", "")),
                     visibility_scope=str(entry.get("visibility_scope", "global")),
+                    claim_key=str(entry.get("claim_key", "")),
+                    memory_tier=str(entry.get("memory_tier", "private")),
                 )
             )
         return facts

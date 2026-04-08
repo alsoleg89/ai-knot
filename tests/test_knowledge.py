@@ -784,3 +784,39 @@ class TestLLMVsBaseDifferences:
         assert full_rank == 0, (
             f"Full LLM pipeline should promote PostgreSQL to #1 (got rank {full_rank})"
         )
+
+
+class TestRecallVerificationGate:
+    """supported=False facts must be excluded from all recall paths by default."""
+
+    def test_recall_excludes_unsupported(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("Alex works at Acme")
+        fact.supported = False
+        kb.replace_facts([fact])
+
+        result = kb.recall("Alex employer")
+        assert "Acme" not in result
+
+    def test_recall_includes_unsupported_when_flag_set(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("Alex works at Acme")
+        fact.supported = False
+        kb.replace_facts([fact])
+
+        result = kb.recall("Alex employer", include_unsupported=True)
+        assert "Acme" in result
+
+    def test_recall_facts_excludes_unsupported(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("Alex works at Acme")
+        fact.supported = False
+        kb.replace_facts([fact])
+
+        results = kb.recall_facts("Alex employer")
+        assert all(f.supported is not False for f in results)
+
+    def test_recall_by_tag_excludes_unsupported(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("Alex works at Acme", tags=["employer"])
+        fact.supported = False
+        kb.replace_facts([fact])
+
+        results = kb.recall_by_tag("employer")
+        assert results == []

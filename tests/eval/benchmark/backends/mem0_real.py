@@ -16,27 +16,21 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import functools
-import tempfile
 import time
-from pathlib import Path
 
+from tests.eval.benchmark.backends._mem0_utils import (
+    MEM0_SEM as _SEM,
+)
+from tests.eval.benchmark.backends._mem0_utils import (
+    build_ollama_mem0_config,
+    mem0_chroma_path,
+)
+from tests.eval.benchmark.backends._mem0_utils import (
+    normalize_mem0_results as _normalize_mem0_results,
+)
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
-
-def _normalize_mem0_results(response: object) -> list[dict[str, object]]:
-    """Normalize mem0 API response across versions.
-
-    ≤0.1.x returns {"results": [...]}, ≥0.1.y returns [...] directly.
-    """
-    if isinstance(response, list):
-        return response  # type: ignore[return-value]
-    if isinstance(response, dict):
-        return response.get("results", [])  # type: ignore[return-value]
-    return []
-
-
-_DEFAULT_CHROMA_PATH = str(Path(tempfile.gettempdir()) / "mem0_bench_chroma")
-_SEM = asyncio.Semaphore(1)  # Chroma/SQLite not safe for concurrent writes
+_DEFAULT_CHROMA_PATH = mem0_chroma_path("bench")
 
 
 class Mem0RealBackend(MemoryBackend):
@@ -53,31 +47,7 @@ class Mem0RealBackend(MemoryBackend):
         return "mem0_real"
 
     def _build_config(self) -> dict[str, object]:
-        return {
-            "llm": {
-                "provider": "ollama",
-                "config": {
-                    "model": "qwen2.5:7b",
-                    "ollama_base_url": "http://localhost:11434",
-                    "temperature": 0.1,
-                    "max_tokens": 2000,
-                },
-            },
-            "embedder": {
-                "provider": "ollama",
-                "config": {
-                    "model": "qwen2.5:7b",
-                    "ollama_base_url": "http://localhost:11434",
-                },
-            },
-            "vector_store": {
-                "provider": "chroma",
-                "config": {
-                    "collection_name": "mem0_bench",
-                    "path": self._chroma_path,
-                },
-            },
-        }
+        return build_ollama_mem0_config(collection_name="mem0_bench", chroma_path=self._chroma_path)
 
     async def _get_memory(self) -> object:
         if self._memory is None:

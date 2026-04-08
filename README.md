@@ -333,6 +333,10 @@ kb = KnowledgeBase(agent_id="bot",
 
 Same API. Same code. Different storage.
 
+> **Cross-process safety (SQLite):** `SQLiteStorage` implements `AtomicUpdateCapable` —
+> `SharedMemoryPool.publish()` wraps the entire load→merge→save cycle in a `BEGIN EXCLUSIVE`
+> SQLite transaction, preventing lost updates when multiple processes share the same `.db` file.
+
 ---
 
 ## Initialization — storage + LLM provider together
@@ -750,15 +754,17 @@ kb.publish(pool, utility_threshold=0.3)
 
 ## Auto-trust (multi-agent)
 
-Trust is computed automatically from observed behaviour — no manual calibration:
+Trust is computed automatically from observed behaviour — no manual configuration:
 
 ```python
-pool.recall("query")        # increments _used_count for source agents
-kb.get_trust("agent_b")     # min(1, used/published) × (1 - quick_invalidation_rate)
+results = pool.recall("query", "agent_b", top_k=3)
+# only the 3 returned facts affect _used_count — not the wider overfetch window
+
+trust = pool.get_trust("agent_a")   # min(1, used/published) × (1 - quick_inv_rate)
 ```
 
-An agent whose facts are recalled often and rarely superseded quickly earns trust ≈ 1.0.
-An agent that publishes stale or conflicting facts sees its trust decay automatically.
+An agent whose facts appear in recalled results often and are rarely superseded quickly
+earns trust ≈ 1.0. An agent that publishes stale or conflicting facts sees trust decay automatically.
 
 ---
 
@@ -767,9 +773,9 @@ An agent that publishes stale or conflicting facts sees its trust decay automati
 `sync_slot_deltas()` exchanges only *changed slots* between agents instead of full fact sets:
 
 ```python
-# Agent A has new/updated slots since version 5
-deltas = pool.load_slot_deltas_since(agent_id="agent_a", since_version=5, exclude_agent="agent_b")
-agent_b_kb.apply_slot_deltas(deltas)
+# Pull lightweight delta records since last sync
+deltas = pool.sync_slot_deltas("agent_b")
+# Each SlotDelta carries: slot_key, op, version, content, prompt_surface
 ```
 
 Delta token transfer is typically < 15% of full-sync volume.
@@ -891,19 +897,35 @@ kb.add("All endpoints require JWT auth",        importance=0.95)
 # Commit .ai_knot/ to Git — new team members clone the context
 ```
 
-### 7. Shared knowledge across multiple agents
+### 7. Shared knowledge across multiple agents (SharedMemoryPool)
 
 ```python
-from ai_knot import KnowledgeBase
+from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
 from ai_knot.storage import SQLiteStorage
+from ai_knot.types import Fact
 
 storage = SQLiteStorage(db_path="./team.db")
-researcher = KnowledgeBase(agent_id="team_alpha", storage=storage)
-writer     = KnowledgeBase(agent_id="team_alpha", storage=storage)
+pool = SharedMemoryPool(storage=storage)
+pool.register("researcher")
+pool.register("writer")
 
-researcher.add("API rate limit is 100 req/s")
-context = writer.recall("rate limits")  # sees researcher's facts instantly
+researcher = KnowledgeBase(agent_id="researcher", storage=storage)
+writer     = KnowledgeBase(agent_id="writer",     storage=storage)
+
+# Researcher learns a fact and publishes it to the shared pool
+fact = researcher.add("API rate limit is 100 req/s", importance=0.9)
+pool.publish("researcher", [fact.id], kb=researcher)
+
+# Writer queries the pool — sees researcher's fact, tagged with trust score
+results = pool.recall("rate limits", "writer", top_k=3)
+for fact, score in results:
+    print(f"[{score:.2f}] (trust={pool.get_trust(fact.origin_agent_id):.2f}) {fact.content}")
+
+# Delta sync: pull only changed slots since last check
+deltas = pool.sync_slot_deltas("writer")
 ```
+
+> See `examples/shared_pool.py` for a complete walkthrough with slot supersession and trust evolution.
 
 ### 8. Stats and forgetting curve
 

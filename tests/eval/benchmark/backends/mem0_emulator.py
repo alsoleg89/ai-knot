@@ -23,6 +23,7 @@ import httpx
 from ai_knot.extractor import Extractor
 from ai_knot.providers.base import LLMProvider
 from ai_knot.types import ConversationTurn
+from tests.eval.benchmark._eval_utils import estimate_extraction_tokens
 from tests.eval.benchmark.backends.qdrant_emulator import (
     QdrantEmulator,
     embed_batch,
@@ -72,4 +73,5 @@ class Mem0Emulator(QdrantEmulator):
             facts_stored=len(self._store),
             facts_extracted=len(facts),
             insert_ms=(time.perf_counter() - t0) * 1000,
+            extraction_tokens=estimate_extraction_tokens(text),
         )

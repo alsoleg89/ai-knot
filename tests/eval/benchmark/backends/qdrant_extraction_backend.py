@@ -17,6 +17,7 @@ import time
 
 from ai_knot.extractor import Extractor
 from ai_knot.types import ConversationTurn
+from tests.eval.benchmark._eval_utils import estimate_extraction_tokens
 from tests.eval.benchmark.backends.qdrant_emulator import QdrantEmulator
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
@@ -61,6 +62,7 @@ class QdrantWithExtractionBackend(MemoryBackend):
             facts_stored=self._total_stored,
             facts_extracted=facts_extracted,
             insert_ms=(time.perf_counter() - t0) * 1000,
+            extraction_tokens=estimate_extraction_tokens(text),
         )
 
     async def retrieve(self, query: str, *, top_k: int = 5) -> RetrievalResult:

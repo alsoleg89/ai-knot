@@ -1,18 +1,22 @@
 """S10 — MESI Entity-Addressed CAS (Conflict Resolution).
 
-Verifies that when two agents publish facts about the same entity+attribute,
-the shared pool retains exactly ONE active version — the latest one.
+Verifies that when four agents publish facts about the same entity+attribute
+sequentially, the shared pool retains exactly ONE active version — the last one.
 
 This tests the entity-addressed Compare-And-Swap (CAS) in SharedMemoryPool:
-  - Agent A publishes salary v1 ($95k) for Jordan Lee.
-  - Agent B publishes salary v2 ($140k) for the same person.
-  - Expected: pool has exactly 1 active fact for (Jordan Lee, annual_salary).
-  - Expected: that fact contains the v2 value ($140k).
-  - Old fact: valid_until is set (MESI state = INVALID).
+  - Agent A publishes salary v1 ($95k).
+  - Agent B publishes salary v2 ($110k) — supersedes v1.
+  - Agent C publishes salary v3 ($125k) — supersedes v2.
+  - Agent D publishes salary v4 ($140k, promotion to Staff) — supersedes v3.
+
+Expected after all 4 publishes:
+  - Exactly 1 active fact for (Jordan Lee, annual_salary).
+  - That fact contains the v4 keyword ("Staff").
+  - All previous versions have valid_until set (MESI state = INVALID).
 
 Metrics (deterministic):
-  cas_correctness    — 1.0 if exactly 1 active fact for the entity+attribute, else 0.0
-  latest_surfaced    — 1.0 if the retrieved fact contains the v2 keyword, else 0.0
+  cas_correctness  — 1.0 if exactly 1 active fact after all 4 publishes
+  latest_surfaced  — 1.0 if the retrieved fact contains the v4 keyword
 
 Only runs against MultiAgentMemoryBackend.
 """
@@ -35,39 +39,40 @@ async def run(
 ) -> ScenarioResult:
     await backend.reset()
 
-    await backend.add_structured(
-        "agent_a",
-        fixture.cas_fact_v1,
-        entity=fixture.cas_entity,
-        attribute=fixture.cas_attribute,
-    )
-    await backend.publish_to_pool("agent_a")
+    # Publish 4 versions sequentially — each supersedes the previous.
+    versions = [
+        ("agent_a", fixture.cas_fact_v1),
+        ("agent_b", fixture.cas_fact_v2),
+        ("agent_c", fixture.cas_fact_v3),
+        ("agent_d", fixture.cas_fact_v4),
+    ]
 
-    count_after_v1 = await backend.pool_count_active_for_entity(
+    for agent_id, fact in versions:
+        await backend.add_structured(
+            agent_id,
+            fact,
+            entity=fixture.cas_entity,
+            attribute=fixture.cas_attribute,
+        )
+        await backend.publish_to_pool(agent_id)
+
+    # After all 4 publishes: exactly 1 active fact, containing v4 keyword.
+    active_count = await backend.pool_count_active_for_entity(
         fixture.cas_entity, fixture.cas_attribute
     )
+    cas_correctness = 1.0 if active_count == 1 else 0.0
 
-    await backend.add_structured(
-        "agent_b",
-        fixture.cas_fact_v2,
-        entity=fixture.cas_entity,
-        attribute=fixture.cas_attribute,
+    # Verify v4 is the active version.
+    r = await backend.pool_retrieve("agent_a", fixture.cas_query, top_k=top_k)
+    latest_surfaced = (
+        1.0 if any(fixture.cas_v4_keyword.lower() in t.lower() for t in r.texts) else 0.0
     )
-    await backend.publish_to_pool("agent_b")
-
-    count_after_v2 = await backend.pool_count_active_for_entity(
-        fixture.cas_entity, fixture.cas_attribute
-    )
-    cas_correctness = 1.0 if count_after_v2 == 1 else 0.0
-
-    r = await backend.pool_retrieve("agent_c", fixture.cas_query, top_k=top_k)
-    latest_surfaced = 1.0 if any(fixture.cas_v2_keyword in t for t in r.texts) else 0.0
 
     notes = (
-        f"active_after_v1={count_after_v1}, "
-        f"active_after_v2={count_after_v2} (expected=1), "
+        f"versions=4, "
+        f"active_count={active_count} (expected=1), "
         f"cas_correctness={cas_correctness:.0%}, "
-        f"latest_surfaced={latest_surfaced:.0%} (keyword={fixture.cas_v2_keyword!r})"
+        f"latest_surfaced={latest_surfaced:.0%} (v4_keyword={fixture.cas_v4_keyword!r})"
     )
 
     return ScenarioResult(

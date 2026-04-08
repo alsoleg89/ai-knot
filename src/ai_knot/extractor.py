@@ -15,7 +15,7 @@ from typing import Any
 
 from ai_knot.providers import LLMProvider, call_with_retry, create_provider
 from ai_knot.tokenizer import tokenize
-from ai_knot.types import ConversationTurn, Fact, MemoryType
+from ai_knot.types import ConversationTurn, Fact, MemoryOp, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,13 @@ Rules:
   Add "qualifiers" as a JSON object for temporal or conditional context,
   e.g. {"since": "2024-01", "currency": "USD"}.
   Omit entity/attribute/value/qualifiers for general statements where they don't apply.
+- Add "op" to signal extraction intent (string, one of: "add", "update", "delete", "noop"):
+  "add"    — new fact not previously known (default when omitted).
+  "update" — conversation explicitly corrects an existing value
+             (e.g. "actually my salary is now $120k", "I switched to TypeScript").
+  "delete" — conversation explicitly removes knowledge
+             (e.g. "forget that I work at Acme", "I no longer use Redis").
+  "noop"   — conversation merely confirms already-known information; nothing new.
 
 Return a JSON array. Example:
 [
@@ -48,12 +55,12 @@ Return a JSON array. Example:
    "canonical": "person works at company as role",
    "witness": "Alex Chen, Senior Product Manager at FinServe Capital",
    "entity": "Alex Chen", "attribute": "job_title", "value": "Senior PM",
-   "qualifiers": {}},
+   "qualifiers": {}, "op": "add"},
   {"content": "User prefers Python over Java",
    "type": "procedural", "importance": 0.85,
    "tags": ["python", "preferences"],
    "canonical": "prefers Python over Java",
-   "witness": "I prefer Python over Java"}
+   "witness": "I prefer Python over Java", "op": "add"}
 ]
 
 If no meaningful facts exist, return an empty array: []
@@ -426,13 +433,19 @@ class Extractor:
         if isinstance(raw_qualifiers, dict):
             qualifiers = {str(k): str(v) for k, v in raw_qualifiers.items()}
 
-        entity = str(entry.get("entity", ""))
-        attribute = str(entry.get("attribute", ""))
+        entity = str(entry.get("entity", "")).strip().lower()
+        attribute = str(entry.get("attribute", "")).strip().lower()
         # Derive deterministic slot key when entity+attribute are both present.
         slot_key = f"{entity}::{attribute}" if entity and attribute else ""
 
         witness = str(entry.get("witness", "") or entry.get("verbatim", ""))
         canonical = str(entry.get("canonical", ""))
+
+        # Parse LLM-signalled extraction intent (defaults to ADD when absent/invalid).
+        op = MemoryOp.ADD
+        raw_op = entry.get("op", "add")
+        with contextlib.suppress(ValueError):
+            op = MemoryOp(str(raw_op).lower())
 
         return Fact(
             content=str(entry.get("content", "")),
@@ -447,4 +460,5 @@ class Extractor:
             value_text=str(entry.get("value", "")),
             qualifiers=qualifiers,
             slot_key=slot_key,
+            op=op,
         )

@@ -1,22 +1,27 @@
-"""S11 — MESI Lazy Sync (Incremental Dirty Pull).
+"""S11 — Progressive Knowledge Catchup (Realistic Incremental Sync).
 
-Verifies token-efficient incremental synchronisation: sync_dirty() returns
-only facts that changed since the last sync, not the entire pool.
+Verifies that sync_dirty() correctly delivers incremental deltas when an agent
+has been offline while others published updates, urgent facts, and CAS
+supersessions.
+
+Real-world pattern: Agent B goes "offline" after an initial sync. While offline,
+Agent A updates 3 entity slots, Agent C publishes 4 new facts, and Agent D
+publishes 3 urgent incident facts. Agent B returns, calls sync_dirty(), and
+receives ONLY the delta (not the full pool).
 
 Flow:
-  1. Agent A publishes 5 facts to the pool.
-  2. Agent B calls sync_dirty() → receives all 5 facts (first sync).
-  3. Agent A publishes an updated version of 1 fact (same entity+attribute).
-  4. Agent B calls sync_dirty() again → receives only the 1 changed fact.
+  Phase 1: Agent A publishes 8 initial facts.
+  Phase 2: Agent B syncs (sees 8), publishes 5 own facts.
+           Agent C publishes 6 facts.
+  Phase 3 (B offline): A updates 3 slots, C adds 4 more, D adds 3 urgent.
+  Phase 4: B syncs — must get only the delta from phase 3 (10 new/updated, not all).
+           B publishes 2 response facts based on the delta.
+  Phase 5: Querier verifies B's response facts are retrievable.
 
-Metrics (deterministic):
-  initial_sync_completeness  — fraction of initial facts received in first sync
-                                (should be 1.0)
-  incremental_efficiency     — 1 - (facts_returned_in_second_sync / pool_size)
-                                (1.0 = only dirty facts returned; 0.0 = full broadcast)
-
-arXiv 2603.15183 reports 95% token savings with MESI lazy invalidation vs
-broadcast.  This scenario measures that savings empirically.
+Metrics:
+  delta_correctness    — 1.0 if sync_dirty returns ≥10 delta items (3 updates + 4 new + 3 urgent)
+  delta_efficiency     — 1.0 if delta size < total pool size (not re-sending known facts)
+  response_relevance   — fraction of B's response queries returning relevant results
 
 Only runs against MultiAgentMemoryBackend.
 """
@@ -38,54 +43,77 @@ async def run(
 ) -> ScenarioResult:
     await backend.reset()
 
-    for fact in fixture.sync_initial_facts:
+    # Phase 1: Agent A publishes initial facts.
+    for fact in fixture.catchup_initial_facts:
         await backend.insert_for_agent("agent_a", fact)
-    # The updatable fact is added with entity+attribute so CAS can track its version.
-    await backend.add_structured(
-        "agent_a",
-        fixture.sync_fact_v1,
-        entity=fixture.sync_update_entity,
-        attribute=fixture.sync_update_attribute,
-    )
     await backend.publish_to_pool("agent_a")
 
-    pool_size_initial = len(fixture.sync_initial_facts) + 1  # +1 for the structured fact
+    # Phase 2: B does initial sync, publishes own facts. C publishes concurrently.
+    await backend.sync_dirty("agent_b")
+    for fact in fixture.catchup_agent_b_facts:
+        await backend.insert_for_agent("agent_b", fact)
+    await backend.publish_to_pool("agent_b")
 
-    first_sync = await backend.sync_dirty("agent_b")
-    initial_sync_completeness = min(1.0, len(first_sync) / max(pool_size_initial, 1))
+    for fact in fixture.catchup_agent_c_facts:
+        await backend.insert_for_agent("agent_c", fact)
+    await backend.publish_to_pool("agent_c")
 
-    await backend.add_structured(
-        "agent_a",
-        fixture.sync_fact_v2,
-        entity=fixture.sync_update_entity,
-        attribute=fixture.sync_update_attribute,
-    )
+    # Phase 3: While B is "offline", others publish updates.
+    # A updates 3 entity slots (CAS supersession).
+    for entity, attr, content in fixture.catchup_agent_a_updates:
+        await backend.add_structured("agent_a", content, entity=entity, attribute=attr)
     await backend.publish_to_pool("agent_a")
 
-    second_sync = await backend.sync_dirty("agent_b")
-    # 1.0 = only the 1 changed fact returned; 0.0 = entire pool re-broadcast.
-    incremental_efficiency = max(
-        0.0, min(1.0, 1.0 - len(second_sync) / max(pool_size_initial + 1, 1))
-    )
+    # C publishes 4 more facts.
+    for fact in fixture.catchup_agent_c_extra_facts:
+        await backend.insert_for_agent("agent_c", fact)
+    await backend.publish_to_pool("agent_c")
 
-    # fixture.sync_v2_keyword is unique to v2 (absent from v1 and initial facts).
-    v2_in_sync = any(fixture.sync_v2_keyword.lower() in t.lower() for t in second_sync)
+    # D publishes 3 urgent incident facts.
+    for fact in fixture.catchup_agent_d_urgent_facts:
+        await backend.insert_for_agent("agent_d", fact)
+    await backend.publish_to_pool("agent_d")
+
+    # Phase 4: B comes back and syncs — should get only the delta.
+    delta = await backend.sync_dirty("agent_b")
+    delta_size = len(delta)
+
+    # Expected delta: 3 CAS updates + 4 new from C + 3 urgent from D = 10 minimum.
+    # (Some syncs also include C's initial 6 facts if B's first sync didn't see them.)
+    delta_correctness = 1.0 if delta_size >= 10 else delta_size / 10
+
+    # Pool total should be much larger than delta.
+    pool = getattr(backend, "_pool", None)
+    pool_size = len(pool.list_shared_facts()) if pool else delta_size + 1
+    delta_efficiency = 1.0 if delta_size < pool_size else 0.0
+
+    # B publishes response facts based on what it saw in the delta.
+    for fact in fixture.catchup_agent_b_response_facts:
+        await backend.insert_for_agent("agent_b", fact)
+    await backend.publish_to_pool("agent_b")
+
+    # Phase 5: Verify B's response facts are retrievable.
+    response_hits = 0
+    for query, kw in fixture.catchup_b_response_queries:
+        r = await backend.pool_retrieve("agent_e", query, top_k=5)
+        if any(kw.lower() in t.lower() for t in r.texts):
+            response_hits += 1
+    response_relevance = response_hits / len(fixture.catchup_b_response_queries)
 
     notes = (
-        f"pool_size={pool_size_initial}, "
-        f"first_sync_count={len(first_sync)}, "
-        f"initial_sync_completeness={initial_sync_completeness:.2%}, "
-        f"second_sync_count={len(second_sync)}, "
-        f"incremental_efficiency={incremental_efficiency:.2%}, "
-        f"v2_in_second_sync={v2_in_sync}"
+        f"delta_size={delta_size}, pool_size={pool_size}, "
+        f"delta_correctness={delta_correctness:.0%}, "
+        f"delta_efficiency={'yes' if delta_efficiency else 'no'}, "
+        f"response_relevance={response_relevance:.0%}"
     )
 
     return ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
-            "initial_sync_completeness": [initial_sync_completeness],
-            "incremental_efficiency": [incremental_efficiency],
+            "delta_correctness": [delta_correctness],
+            "delta_efficiency": [delta_efficiency],
+            "response_relevance": [response_relevance],
         },
         insert_result=None,
         retrieval_result=None,

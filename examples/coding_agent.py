@@ -2,8 +2,9 @@
 
 Demonstrates the full ai-knot feature set for a coding-assistant scenario:
   - Two agents (architect + developer) with private knowledge bases
-  - Slot-addressed facts (entity::attribute) for structured state
+  - Slot-addressed facts (entity::attribute) for deterministic dedup
   - Shared pool with topic channels and publish gating
+  - Slot supersession (developer overrides architect's DB decision)
   - Auto-trust based on observed recall quality
   - Slot delta sync for efficient cross-agent updates
 
@@ -19,7 +20,37 @@ from pathlib import Path
 
 from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
 from ai_knot.storage.sqlite_storage import SQLiteStorage
-from ai_knot.types import MemoryType
+from ai_knot.types import Fact, MemoryType
+
+# ---------------------------------------------------------------------------
+# Helper — build a slot-addressed Fact without mutating after add()
+# ---------------------------------------------------------------------------
+
+
+def slotted(
+    content: str,
+    *,
+    entity: str,
+    attribute: str,
+    value_text: str,
+    channel: str = "",
+    importance: float = 0.9,
+    type: MemoryType = MemoryType.SEMANTIC,
+) -> Fact:
+    """Return a Fact with normalised slot_key = '{entity}::{attribute}'."""
+    ent = entity.lower()
+    att = attribute.lower()
+    return Fact(
+        content=content,
+        type=type,
+        importance=importance,
+        entity=ent,
+        attribute=att,
+        slot_key=f"{ent}::{att}",
+        value_text=value_text,
+        topic_channel=channel,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Setup: two agents sharing a SQLite-backed pool
@@ -40,42 +71,42 @@ print("=" * 60)
 print("  ai-knot coding-agent demo")
 print("=" * 60)
 
+
 # ---------------------------------------------------------------------------
 # Architect records architectural decisions with slot addressing
 # ---------------------------------------------------------------------------
 
 print("\n[architect] Recording design decisions...")
 
-db_fact = arch_kb.add(
-    "Team uses PostgreSQL 16 as the primary database",
-    importance=0.9,
-)
-db_fact.entity = "stack"
-db_fact.attribute = "database"
-db_fact.slot_key = "stack::database"
-db_fact.value_text = "PostgreSQL 16"
-db_fact.topic_channel = "architecture"
+arch_facts = [
+    slotted(
+        "Team uses PostgreSQL 16 as the primary database",
+        entity="stack",
+        attribute="database",
+        value_text="PostgreSQL 16",
+        channel="architecture",
+    ),
+    slotted(
+        "Primary language is Python 3.12 with strict mypy",
+        entity="stack",
+        attribute="language",
+        value_text="Python 3.12",
+        channel="architecture",
+        importance=0.85,
+        type=MemoryType.PROCEDURAL,
+    ),
+]
+arch_kb.replace_facts(arch_facts)
 
-lang_fact = arch_kb.add(
-    "Primary language is Python 3.12 with strict mypy",
-    importance=0.85,
-    type=MemoryType.PROCEDURAL,
-)
-lang_fact.entity = "stack"
-lang_fact.attribute = "language"
-lang_fact.slot_key = "stack::language"
-lang_fact.value_text = "Python 3.12"
-lang_fact.topic_channel = "architecture"
-arch_kb.replace_facts([db_fact, lang_fact])
-
-# Publish to shared pool with topic channel (gated by utility)
+# Publish to shared pool — utility gate filters out low-confidence facts.
 published = pool.publish(
     "architect",
-    [db_fact.id, lang_fact.id],
+    [f.id for f in arch_facts],
     kb=arch_kb,
     utility_threshold=0.5,
 )
-print(f"  Published {len(published)} architecture facts to shared pool")
+print(f"  Published {len(published)} architecture fact(s) to shared pool")
+
 
 # ---------------------------------------------------------------------------
 # Developer queries the shared pool
@@ -88,45 +119,49 @@ for fact, score in results:
     trust = pool.get_trust(fact.origin_agent_id)
     print(f"  [{score:.2f}] (trust={trust:.2f}) {fact.content}")
 
+
 # ---------------------------------------------------------------------------
-# Developer learns new info, publishes an update
+# Developer publishes an update — supersedes architect's DB fact
 # ---------------------------------------------------------------------------
 
 print("\n[developer] Updating database decision (migration to CockroachDB)...")
 
-new_db = dev_kb.add(
+new_db = slotted(
     "Team migrated to CockroachDB for horizontal scaling",
+    entity="stack",
+    attribute="database",  # same slot_key — triggers supersession
+    value_text="CockroachDB",
+    channel="architecture",
     importance=0.92,
 )
-new_db.entity = "stack"
-new_db.attribute = "database"
-new_db.slot_key = "stack::database"
-new_db.value_text = "CockroachDB"
-new_db.topic_channel = "architecture"
 dev_kb.replace_facts([new_db])
 
 published2 = pool.publish("developer", [new_db.id], kb=dev_kb, utility_threshold=0.5)
-mesi = published2[0].mesi_state.value if published2 else "none"
-print(f"  Published {len(published2)} update (MESI state: {mesi})")
+if published2:
+    mesi = published2[0].mesi_state.value
+    print(f"  Published {len(published2)} update(s) (MESI state: {mesi})")
+
 
 # ---------------------------------------------------------------------------
-# Architect syncs via slot deltas (lightweight)
+# Architect syncs via slot deltas (lightweight — only changed slots)
 # ---------------------------------------------------------------------------
 
 print("\n[architect] Syncing changes via slot deltas...")
 
 deltas = pool.sync_slot_deltas("architect")
 for delta in deltas:
-    print(f"  delta op={delta.op!r} slot={delta.slot_key!r}: {delta.content[:60]}")
+    print(f"  op={delta.op!r}  slot={delta.slot_key!r}: {delta.content[:60]}")
+
 
 # ---------------------------------------------------------------------------
-# Final recall — shows updated state
+# Final recall — confirms only one active fact per slot remains
 # ---------------------------------------------------------------------------
 
-print("\n[architect] Latest context after sync:")
+print("\n[architect] Latest architecture context after sync:")
 final = pool.recall("database technology", "architect", top_k=3, topic_channel="architecture")
 for fact, score in final:
-    print(f"  [{score:.2f}] {fact.content} (v{fact.version})")
+    print(f"  [{score:.2f}] v{fact.version}  {fact.content}")
+
 
 # ---------------------------------------------------------------------------
 # Trust scores — auto-computed from publish + recall activity
@@ -136,4 +171,4 @@ print("\n[trust scores]")
 for agent in ["architect", "developer"]:
     print(f"  {agent}: {pool.get_trust(agent):.3f}")
 
-print("\nDone. Temp files at:", tmp_dir)
+print(f"\nDone. Temp files at: {tmp_dir}")

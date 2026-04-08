@@ -21,6 +21,7 @@ from ai_knot.knowledge import KnowledgeBase
 from ai_knot.providers.base import LLMProvider
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 from ai_knot.types import ConversationTurn
+from tests.eval.benchmark._eval_utils import estimate_extraction_tokens
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
 
@@ -73,6 +74,7 @@ class AiKnotBackend(MemoryBackend):
                 facts_stored=stored,
                 facts_extracted=1,
                 insert_ms=(time.perf_counter() - t0) * 1000,
+                extraction_tokens=0,
             )
 
         turns = [ConversationTurn(role="user", content=text)]
@@ -82,6 +84,7 @@ class AiKnotBackend(MemoryBackend):
             facts_stored=stored,
             facts_extracted=len(new_facts),
             insert_ms=(time.perf_counter() - t0) * 1000,
+            extraction_tokens=estimate_extraction_tokens(text),
         )
 
     async def retrieve(self, query: str, *, top_k: int = 5) -> RetrievalResult:

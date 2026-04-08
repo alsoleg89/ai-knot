@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS "ai-knot_facts" (
     value_text         TEXT NOT NULL DEFAULT '',
     qualifiers         TEXT NOT NULL DEFAULT '{}',
     state_confidence   DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    claim_key          TEXT NOT NULL DEFAULT '',
+    memory_tier        TEXT NOT NULL DEFAULT 'private',
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -117,6 +119,8 @@ class PostgresStorage:
             "value_text": "TEXT NOT NULL DEFAULT ''",
             "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
             "state_confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
+            "claim_key": "TEXT NOT NULL DEFAULT ''",
+            "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
         }
         with self._get_conn() as conn:
             cur = conn.execute(
@@ -131,7 +135,23 @@ class PostgresStorage:
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
         """Replace all facts for an agent."""
-        rows = [
+        rows = self._build_rows(facts, agent_id)
+        self._execute_save(agent_id, rows)
+        logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
+
+    def save_atomic(self, agent_id: str, facts: list[Fact]) -> None:
+        """Atomically replace facts within a single PostgreSQL transaction (READ COMMITTED).
+
+        Provides statement-level atomicity for single-process writers. Does not
+        enforce SERIALIZABLE isolation — concurrent cross-process writers may
+        interleave. Use advisory locks externally if cross-process CAS is needed.
+        """
+        rows = self._build_rows(facts, agent_id)
+        self._execute_save(agent_id, rows)
+        logger.debug("Atomically saved %d facts for agent '%s'", len(facts), agent_id)
+
+    def _build_rows(self, facts: list[Fact], agent_id: str) -> list[tuple]:  # type: ignore[type-arg]
+        return [
             (
                 fact.id,
                 agent_id,
@@ -165,9 +185,13 @@ class PostgresStorage:
                 fact.value_text,
                 json.dumps(fact.qualifiers),
                 fact.state_confidence,
+                fact.claim_key,
+                fact.memory_tier,
             )
             for fact in facts
         ]
+
+    def _execute_save(self, agent_id: str, rows: list[tuple]) -> None:  # type: ignore[type-arg]
         with self._get_conn() as conn:
             conn.execute('DELETE FROM "ai-knot_facts" WHERE agent_id = %s', (agent_id,))
             conn.executemany(
@@ -180,14 +204,14 @@ class PostgresStorage:
                     source_verbatim, valid_from, valid_until,
                     entity, attribute, version, mesi_state,
                     canonical_surface, witness_surface, prompt_surface,
-                    slot_key, value_text, qualifiers, state_confidence)
+                    slot_key, value_text, qualifiers, state_confidence,
+                    claim_key, memory_tier)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 rows,
             )
             conn.commit()
-        logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
 
     def load(self, agent_id: str) -> list[Fact]:
         """Load all facts for an agent."""
@@ -228,7 +252,8 @@ class PostgresStorage:
                           source_verbatim, valid_from, valid_until,
                           entity, attribute, version, mesi_state,
                           canonical_surface, witness_surface, prompt_surface,
-                          slot_key, value_text, qualifiers, state_confidence"""
+                          slot_key, value_text, qualifiers, state_confidence,
+                          claim_key, memory_tier"""
 
     def _fact_from_row(self, row: tuple[Any, ...]) -> Fact:
         return Fact(
@@ -263,15 +288,23 @@ class PostgresStorage:
             value_text=str(row[28]) if row[28] else "",
             qualifiers=json.loads(row[29]) if row[29] else {},
             state_confidence=float(row[30]) if row[30] is not None else 1.0,
+            claim_key=str(row[31]) if len(row) > 31 and row[31] else "",
+            memory_tier=str(row[32]) if len(row) > 32 and row[32] else "private",
         )
 
     def load_active(self, agent_id: str) -> list[Fact]:
-        """Load only facts where valid_until IS NULL (index-accelerated)."""
+        """Load only currently-active facts (index-accelerated).
+
+        Excludes future-dated facts (``valid_from > now``).
+        """
+        now = datetime.now(UTC).isoformat()
         with self._get_conn() as conn:
             cur = conn.execute(
                 f'{self._SELECT_COLS} FROM "ai-knot_facts"'
-                " WHERE agent_id = %s AND valid_until IS NULL ORDER BY created_at",
-                (agent_id,),
+                " WHERE agent_id = %s AND valid_until IS NULL"
+                "   AND (valid_from = '' OR valid_from <= %s)"
+                " ORDER BY created_at",
+                (agent_id, now),
             )
             rows = cur.fetchall()
         return [self._fact_from_row(row) for row in rows]

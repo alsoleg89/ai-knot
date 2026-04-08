@@ -148,3 +148,51 @@ class TestDeduplication:
     def test_single_fact(self) -> None:
         facts = [Fact(content="only one")]
         assert len(deduplicate_facts(facts)) == 1
+
+
+class TestMemoryOpParsing:
+    """_parse_fact() correctly parses the 'op' field from LLM output."""
+
+    def _parse(self, entry: dict) -> Fact:  # type: ignore[type-arg]
+        from ai_knot.extractor import Extractor
+
+        return Extractor._parse_fact(entry)
+
+    def _base_entry(self) -> dict:  # type: ignore[type-arg]
+        return {"content": "test fact", "type": "semantic", "importance": "0.8"}
+
+    def test_op_add(self) -> None:
+        from ai_knot.types import MemoryOp
+
+        fact = self._parse({**self._base_entry(), "op": "add"})
+        assert fact.op == MemoryOp.ADD
+
+    def test_op_delete(self) -> None:
+        from ai_knot.types import MemoryOp
+
+        fact = self._parse({**self._base_entry(), "op": "delete"})
+        assert fact.op == MemoryOp.DELETE
+
+    def test_op_noop(self) -> None:
+        from ai_knot.types import MemoryOp
+
+        fact = self._parse({**self._base_entry(), "op": "noop"})
+        assert fact.op == MemoryOp.NOOP
+
+    def test_op_update(self) -> None:
+        from ai_knot.types import MemoryOp
+
+        fact = self._parse({**self._base_entry(), "op": "update"})
+        assert fact.op == MemoryOp.UPDATE
+
+    def test_op_invalid_defaults_to_add(self) -> None:
+        from ai_knot.types import MemoryOp
+
+        fact = self._parse({**self._base_entry(), "op": "garbage_value"})
+        assert fact.op == MemoryOp.ADD
+
+    def test_op_missing_defaults_to_add(self) -> None:
+        from ai_knot.types import MemoryOp
+
+        fact = self._parse(self._base_entry())  # no "op" key
+        assert fact.op == MemoryOp.ADD

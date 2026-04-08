@@ -46,6 +46,7 @@ async def run(
     stored = await backend.count_stored()
     estimated_stored = stored if stored is not None else n_inserted
     consolidation_ratio = max(0.0, 1.0 - estimated_stored / max(n_inserted, 1))
+    slot_dedup_ratio = consolidation_ratio  # alias: how much slot-supersede compressed storage
 
     # Embed latest facts for semantic freshness check
     latest_embs = await maybe_embed_batch(fixture.latest_facts)
@@ -115,6 +116,7 @@ async def run(
         f"facts_inserted={n_inserted}, "
         f"estimated_stored={estimated_stored}, "
         f"consolidation_ratio={consolidation_ratio:.1%}, "
+        f"slot_dedup_ratio={slot_dedup_ratio:.1%}, "
         f"latest_state_accuracy={latest_state_accuracy:.2f}, "
         f"overconsolidation_rate={overconsolidation_rate:.2f}"
     )
@@ -134,6 +136,7 @@ async def run(
                 overconsolidation_rate,
             ],
             "consolidation_ratio": [consolidation_ratio, consolidation_ratio, consolidation_ratio],
+            "slot_dedup_ratio": [slot_dedup_ratio, slot_dedup_ratio, slot_dedup_ratio],
         },
         insert_result=last_insert,
         retrieval_result=None,

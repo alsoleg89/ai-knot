@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -50,6 +52,8 @@ CREATE TABLE IF NOT EXISTS facts (
     state_confidence  REAL NOT NULL DEFAULT 1.0,
     topic_channel     TEXT NOT NULL DEFAULT '',
     visibility_scope  TEXT NOT NULL DEFAULT 'global',
+    claim_key         TEXT NOT NULL DEFAULT '',
+    memory_tier       TEXT NOT NULL DEFAULT 'private',
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -70,6 +74,19 @@ CREATE TABLE IF NOT EXISTS snapshots (
 )
 """
 
+_INSERT_FACTS_SQL = """INSERT INTO facts
+   (id, agent_id, content, type, importance, retention,
+    access_count, tags, created_at, last_accessed,
+    source_snippets, source_spans, supported,
+    support_confidence, verification_source,
+    access_intervals, origin_agent_id, visibility,
+    source_verbatim, valid_from, valid_until,
+    entity, attribute, version, mesi_state,
+    canonical_surface, witness_surface, prompt_surface,
+    slot_key, value_text, qualifiers, state_confidence,
+    topic_channel, visibility_scope, claim_key, memory_tier)
+   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+
 
 class SQLiteStorage:
     """Stores facts in a local SQLite database.
@@ -83,13 +100,22 @@ class SQLiteStorage:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
-    def _get_conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conn(self) -> Iterator[sqlite3.Connection]:
+        """Context manager that opens, yields, and always closes a SQLite connection."""
         conn = sqlite3.connect(self._db_path, timeout=30.0)
         conn.execute("PRAGMA synchronous=NORMAL")
-        return conn
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def _init_db(self) -> None:
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_SNAPSHOTS_TABLE)
@@ -124,8 +150,10 @@ class SQLiteStorage:
             "state_confidence": "REAL NOT NULL DEFAULT 1.0",
             "topic_channel": "TEXT NOT NULL DEFAULT ''",
             "visibility_scope": "TEXT NOT NULL DEFAULT 'global'",
+            "claim_key": "TEXT NOT NULL DEFAULT ''",
+            "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
         }
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             cur = conn.execute("PRAGMA table_info(facts)")
             existing_cols = {row[1] for row in cur.fetchall()}
             for col, definition in new_columns.items():
@@ -134,7 +162,58 @@ class SQLiteStorage:
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
         """Replace all facts for an agent."""
-        rows = [
+        rows = self._build_rows(agent_id, facts)
+        self._execute_save(agent_id, rows)
+        logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
+
+    def atomic_update(
+        self,
+        agent_id: str,
+        fn: Callable[[list[Fact]], list[Fact]],
+    ) -> None:
+        """Load, transform, and save facts in a single EXCLUSIVE SQLite transaction.
+
+        Blocks all other writers (including cross-process) for the duration,
+        preventing lost-update races in shared-namespace publish operations.
+        """
+        conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level=None)
+        conn.execute("PRAGMA synchronous=NORMAL")
+        try:
+            conn.execute("BEGIN EXCLUSIVE")
+            rows = conn.execute(
+                f"{self._SELECT_COLS} FROM facts WHERE agent_id = ? ORDER BY created_at",
+                (agent_id,),
+            ).fetchall()
+            current = [self._fact_from_row(row) for row in rows]
+            new_facts = fn(current)
+            conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
+            conn.executemany(_INSERT_FACTS_SQL, self._build_rows(agent_id, new_facts))
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+
+    def save_atomic(self, agent_id: str, facts: list[Fact]) -> None:
+        """Atomically replace facts using BEGIN IMMEDIATE to block concurrent writers."""
+        rows = self._build_rows(agent_id, facts)
+        conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level=None)
+        conn.execute("PRAGMA synchronous=NORMAL")
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
+            conn.executemany(_INSERT_FACTS_SQL, rows)
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+        logger.debug("Atomically saved %d facts for agent '%s'", len(facts), agent_id)
+
+    def _build_rows(self, agent_id: str, facts: list[Fact]) -> list[tuple]:  # type: ignore[type-arg]
+        return [
             (
                 fact.id,
                 agent_id,
@@ -170,31 +249,20 @@ class SQLiteStorage:
                 fact.state_confidence,
                 fact.topic_channel,
                 fact.visibility_scope,
+                fact.claim_key,
+                fact.memory_tier,
             )
             for fact in facts
         ]
-        with self._get_conn() as conn:
+
+    def _execute_save(self, agent_id: str, rows: list[tuple]) -> None:  # type: ignore[type-arg]
+        with self._conn() as conn:
             conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
-            conn.executemany(
-                """INSERT INTO facts
-                   (id, agent_id, content, type, importance, retention,
-                    access_count, tags, created_at, last_accessed,
-                    source_snippets, source_spans, supported,
-                    support_confidence, verification_source,
-                    access_intervals, origin_agent_id, visibility,
-                    source_verbatim, valid_from, valid_until,
-                    entity, attribute, version, mesi_state,
-                    canonical_surface, witness_surface, prompt_surface,
-                    slot_key, value_text, qualifiers, state_confidence,
-                    topic_channel, visibility_scope)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                rows,
-            )
-        logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
+            conn.executemany(_INSERT_FACTS_SQL, rows)
 
     def load(self, agent_id: str) -> list[Fact]:
         """Load all facts for an agent."""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             rows = conn.execute(
                 f"{self._SELECT_COLS} FROM facts WHERE agent_id = ? ORDER BY created_at",
                 (agent_id,),
@@ -239,11 +307,13 @@ class SQLiteStorage:
             state_confidence=float(row[30]) if row[30] is not None else 1.0,
             topic_channel=str(row[31]) if row[31] else "",
             visibility_scope=str(row[32]) if row[32] else "global",
+            claim_key=str(row[33]) if len(row) > 33 and row[33] else "",
+            memory_tier=str(row[34]) if len(row) > 34 and row[34] else "private",
         )
 
     def delete(self, agent_id: str, fact_id: str) -> None:
         """Remove a single fact by id."""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute(
                 "DELETE FROM facts WHERE agent_id = ? AND id = ?",
                 (agent_id, fact_id),
@@ -251,7 +321,7 @@ class SQLiteStorage:
 
     def list_agents(self) -> list[str]:
         """Return all agent_ids that have stored facts."""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             rows = conn.execute("SELECT DISTINCT agent_id FROM facts").fetchall()
         return [row[0] for row in rows]
 
@@ -268,21 +338,29 @@ class SQLiteStorage:
                           entity, attribute, version, mesi_state,
                           canonical_surface, witness_surface, prompt_surface,
                           slot_key, value_text, qualifiers, state_confidence,
-                          topic_channel, visibility_scope"""
+                          topic_channel, visibility_scope, claim_key,
+                          memory_tier"""
 
     def load_active(self, agent_id: str) -> list[Fact]:
-        """Load only facts where valid_until IS NULL (index-accelerated)."""
-        with self._get_conn() as conn:
+        """Load only currently-active facts (index-accelerated).
+
+        A fact is active when ``valid_until IS NULL`` (no expiry) and
+        ``valid_from <= now`` (not yet future-dated).
+        """
+        now = datetime.now(UTC).isoformat()
+        with self._conn() as conn:
             rows = conn.execute(
                 f"{self._SELECT_COLS} FROM facts"
-                " WHERE agent_id = ? AND valid_until IS NULL ORDER BY created_at",
-                (agent_id,),
+                " WHERE agent_id = ? AND valid_until IS NULL"
+                "   AND (valid_from = '' OR valid_from <= ?)"
+                " ORDER BY created_at",
+                (agent_id, now),
             ).fetchall()
         return [self._fact_from_row(row) for row in rows]
 
     def load_since_version(self, agent_id: str, since: int, exclude_agent: str) -> list[Fact]:
         """MESI dirty pull: facts with version > since from agents other than exclude_agent."""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             rows = conn.execute(
                 f"{self._SELECT_COLS} FROM facts"
                 " WHERE agent_id = ? AND version > ? AND origin_agent_id != ?"
@@ -296,8 +374,10 @@ class SQLiteStorage:
 
         For slotted facts, returns the highest-version active fact per slot.
         For unslotted facts, returns all active facts (no slot to collapse).
+        Only returns facts where ``valid_from <= now`` (not future-dated).
         """
-        with self._get_conn() as conn:
+        now = datetime.now(UTC).isoformat()
+        with self._conn() as conn:
             # Latest active version per slot (for slotted facts).
             slotted = conn.execute(
                 f"{self._SELECT_COLS} FROM facts f"
@@ -305,16 +385,18 @@ class SQLiteStorage:
                 "   SELECT slot_key AS sk, MAX(version) AS max_v"
                 "   FROM facts"
                 "   WHERE agent_id = ? AND valid_until IS NULL AND slot_key != ''"
+                "     AND (valid_from = '' OR valid_from <= ?)"
                 "   GROUP BY sk"
                 " ) m ON f.slot_key = m.sk AND f.version = m.max_v"
                 " AND f.agent_id = ? AND f.valid_until IS NULL",
-                (agent_id, agent_id),
+                (agent_id, now, agent_id),
             ).fetchall()
             # All active unslotted facts.
             unslotted = conn.execute(
                 f"{self._SELECT_COLS} FROM facts"
-                " WHERE agent_id = ? AND valid_until IS NULL AND slot_key = ''",
-                (agent_id,),
+                " WHERE agent_id = ? AND valid_until IS NULL AND slot_key = ''"
+                "   AND (valid_from = '' OR valid_from <= ?)",
+                (agent_id, now),
             ).fetchall()
         return [self._fact_from_row(r) for r in slotted + unslotted]
 
@@ -326,7 +408,7 @@ class SQLiteStorage:
         Returns ``SlotDelta`` objects instead of full ``Fact`` objects for
         bandwidth-efficient cross-agent synchronisation.
         """
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             rows = conn.execute(
                 "SELECT slot_key, version, id, prompt_surface, content, valid_until, mesi_state"
                 " FROM facts"
@@ -399,7 +481,7 @@ class SQLiteStorage:
             }
             for f in facts
         ]
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO snapshots (agent_id, name, created_at, facts_json)
                    VALUES (?, ?, ?, ?)""",
@@ -413,7 +495,7 @@ class SQLiteStorage:
         Raises:
             KeyError: If no snapshot with the given name exists.
         """
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             row = conn.execute(
                 "SELECT facts_json FROM snapshots WHERE agent_id = ? AND name = ?",
                 (agent_id, name),
@@ -468,7 +550,7 @@ class SQLiteStorage:
 
     def list_snapshots(self, agent_id: str) -> list[str]:
         """Return snapshot names sorted by creation time (oldest first)."""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             rows = conn.execute(
                 "SELECT name FROM snapshots WHERE agent_id = ? ORDER BY created_at",
                 (agent_id,),
@@ -477,7 +559,7 @@ class SQLiteStorage:
 
     def delete_snapshot(self, agent_id: str, name: str) -> None:
         """Delete a named snapshot. No-op if it does not exist."""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute(
                 "DELETE FROM snapshots WHERE agent_id = ? AND name = ?",
                 (agent_id, name),
