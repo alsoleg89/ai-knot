@@ -191,20 +191,20 @@ def generate_mcp_config(
     data_dir: str = ".ai_knot",
     storage: Literal["sqlite", "yaml"] = "sqlite",
 ) -> dict[str, Any]:
-    """Return the OpenClaw mcpServers config snippet for ai-knot-mcp.
+    """Return the MCP server config snippet for ai-knot-mcp.
 
-    Paste the returned dict into your OpenClaw config file:
+    Paste the returned dict into your MCP client config file:
 
-    - macOS / Linux: ``~/.openclaw/openclaw.json``
-    - Windows:       ``%APPDATA%\\OpenClaw\\openclaw.json``
+    - Claude Desktop: ``~/Library/Application Support/Claude/claude_desktop_config.json``
+    - OpenClaw: ``~/.openclaw/openclaw.json``
 
     SQLite is the default backend because WAL mode (already enabled)
     handles concurrent agent reads without write locks.
 
     Args:
         agent_id: Agent namespace passed to ai-knot-mcp.
-        data_dir: Directory where ai-knot stores its data.
-            The SQLite file will be at ``{data_dir}/ai_knot.db``.
+        data_dir: Directory where ai-knot stores its data (resolved to an
+            absolute path so the config works from any working directory).
         storage: Backend type — ``"sqlite"`` (recommended) or ``"yaml"``.
 
     Returns:
@@ -219,23 +219,21 @@ def generate_mcp_config(
         from ai_knot.integrations.openclaw import generate_mcp_config
 
         print(json.dumps(generate_mcp_config("my_agent"), indent=2))
-        # Paste into ~/.openclaw/openclaw.json under "mcpServers"
+        # Paste into your MCP client config under "mcpServers"
     """
-    import sys
+    from pathlib import Path
 
     if storage not in ("sqlite", "yaml"):
         raise ValueError(f"storage must be 'sqlite' or 'yaml', got {storage!r}")
-    if "mcp" in sys.modules and sys.modules["mcp"] is None:
-        raise ImportError(
-            "mcp package is required to use ai-knot-mcp. Install with: pip install 'ai-knot[mcp]'"
-        )
+
+    abs_data_dir = str(Path(data_dir).resolve())
     return {
         "mcpServers": {
             "ai-knot": {
                 "command": "ai-knot-mcp",
                 "env": {
                     "AI_KNOT_AGENT_ID": agent_id,
-                    "AI_KNOT_DATA_DIR": data_dir,
+                    "AI_KNOT_DATA_DIR": abs_data_dir,
                     "AI_KNOT_STORAGE": storage,
                 },
             }

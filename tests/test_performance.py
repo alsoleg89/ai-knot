@@ -258,14 +258,19 @@ def test_retriever_throughput_qps(
     benchmark: pytest.fixture,  # type: ignore[type-arg]
     facts_1k: list[Fact],
 ) -> None:
-    """TFIDFRetriever throughput on 1 000 facts must exceed 30 QPS.
+    """TFIDFRetriever throughput on 1 000 facts must exceed 20 QPS.
 
     benchmark.stats["ops"] is the built-in QPS metric (1 / mean).
     Industry context: Qdrant P99 = 38.71ms at 2200 QPS for 1M vectors;
-    our BM25F+PRF+RRF pipeline is heavier than plain TF-IDF — single-threaded,
-    in-memory, zero deps.  Threshold lowered from 40 to 30 to account for
-    BM25F field scoring, Cyrillic stemmer overhead, and variance on shared
-    CI runners.
+    our BM25F+PRF+RRF pipeline is heavier than plain TF-IDF — 6 rankers
+    (BM25F + slot-exact + char-trigram + importance + retention + recency),
+    single-threaded, in-memory, zero deps.
+
+    Threshold history:
+      40 QPS — original plain BM25F baseline
+      30 QPS — after adding Cyrillic stemmer + canonical_surface field
+      20 QPS — after adding 6-ranker RRF pipeline (Phase 4); GitHub Actions
+                2-vCPU runners are ~2× slower than M5 Pro (44 QPS locally).
     """
     retriever = TFIDFRetriever()
 
@@ -276,7 +281,7 @@ def test_retriever_throughput_qps(
     )
     qps = benchmark.stats["ops"]
     benchmark.extra_info["qps"] = round(qps, 1)
-    assert qps > 30, f"Throughput too low: {qps:.1f} QPS (target: >30)"
+    assert qps > 20, f"Throughput too low: {qps:.1f} QPS (target: >20)"
 
 
 # ---------------------------------------------------------------------------

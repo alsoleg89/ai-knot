@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
-from ai_knot.types import Fact
+from ai_knot.types import Fact, SlotDelta
+
+
+def parse_datetime(value: str) -> datetime:
+    """Parse an ISO-format datetime string, ensuring UTC timezone."""
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt
 
 
 class StorageBackend(Protocol):
@@ -28,6 +37,43 @@ class StorageBackend(Protocol):
 
     def list_agents(self) -> list[str]:
         """Return all agent_ids that have stored facts."""
+        ...
+
+
+@runtime_checkable
+class TemporalStorageCapable(Protocol):
+    """Optional extension for backends with index-accelerated temporal queries.
+
+    Not required by ``StorageBackend``.  ``SharedMemoryPool`` checks
+    ``isinstance(storage, TemporalStorageCapable)`` at runtime and falls back
+    to Python-level filtering on YAML backends.
+    """
+
+    def load_active(self, agent_id: str) -> list[Fact]:
+        """Load only facts where ``valid_until IS NULL`` (index-accelerated)."""
+        ...
+
+    def load_since_version(self, agent_id: str, since: int, exclude_agent: str) -> list[Fact]:
+        """MESI dirty pull: facts with version > since, from agents other than exclude_agent."""
+        ...
+
+    def load_active_frontier(self, agent_id: str) -> list[Fact]:
+        """Return the latest active fact per slot_key (active frontier).
+
+        For slotted facts (``slot_key != ""``), returns the highest-version
+        active fact per slot.  For unslotted facts, returns all active facts
+        (each unslotted fact has a unique identity with no slot to collapse).
+        """
+        ...
+
+    def load_slot_deltas_since(
+        self, agent_id: str, since_version: int, exclude_agent: str
+    ) -> list[SlotDelta]:
+        """Lightweight delta pull: slot changes since *since_version*, excluding *exclude_agent*.
+
+        Returns ``SlotDelta`` records instead of full ``Fact`` objects, making
+        cross-agent sync roughly one order of magnitude cheaper in token cost.
+        """
         ...
 
 

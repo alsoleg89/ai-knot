@@ -1,10 +1,10 @@
 """Hybrid retriever: BM25F + PRF + RRF (zero deps).
 
 The retriever uses a pure-Python BM25F (Robertson et al., 2004) implementation
-with structured field weighting (content + tags). Pseudo-relevance feedback
-(Rocchio 1971 / RM3) expands queries via top-k feedback documents. Final ranking
-uses Reciprocal Rank Fusion (Cormack et al., 2009) over four signals: BM25F,
-importance, retention, and recency.
+with structured field weighting (content + canonical_surface + tags).
+Pseudo-relevance feedback (Rocchio 1971 / RM3) expands queries via top-k feedback
+documents. Final ranking uses Reciprocal Rank Fusion (Cormack et al., 2009) over
+six signals: BM25F, slot-exact, char-trigram, importance, retention, and recency.
 """
 
 from __future__ import annotations
@@ -18,8 +18,10 @@ from ai_knot.types import Fact
 _BM25_K1: float = 1.5  # Term saturation parameter.
 _BM25_B_CONTENT: float = 0.75  # Length normalization for content field.
 _BM25_B_TAGS: float = 0.3  # Length normalization for tags field.
+_BM25_B_CANONICAL: float = 0.5  # Length normalization for canonical_surface field.
 _W_CONTENT: float = 1.0  # Content field weight.
 _W_TAGS: float = 2.0  # Tags field weight (more specific, higher boost).
+_W_CANONICAL: float = 1.5  # canonical_surface field weight (normalized paraphrase).
 
 # IDF high-DF threshold: terms in >70% of docs get zero IDF weight.
 _IDF_HIGH_DF_RATIO: float = 0.7
@@ -46,16 +48,23 @@ class InvertedIndex:
         self._facts: dict[str, Fact] = {}  # id -> Fact
         self._content_lengths: dict[str, int] = {}  # id -> content token count
         self._tags_lengths: dict[str, int] = {}  # id -> tags token count
+        self._canonical_lengths: dict[str, int] = {}  # id -> canonical_surface token count
         self._content_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
         self._tags_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
+        self._canonical_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
+        self._content_trigrams: dict[str, frozenset[str]] = {}  # id -> trigrams
+        self._canonical_trigrams: dict[str, frozenset[str]] = {}  # id -> trigrams
+        self._slot_tokens: dict[str, frozenset[str]] = {}  # id -> tokenised slot_key
         self._doc_count: int = 0
         self._avg_content_dl: float = 0.0
         self._avg_tags_dl: float = 0.0
+        self._avg_canonical_dl: float = 0.0
         self._build(facts)
 
     def _build(self, facts: list[Fact]) -> None:
         total_content_len = 0
         total_tags_len = 0
+        total_canonical_len = 0
 
         for fact in facts:
             self._facts[fact.id] = fact
@@ -87,15 +96,42 @@ class InvertedIndex:
                     self._tags_postings[term] = {}
                 self._tags_postings[term][fact.id] = tf
 
+            # Canonical surface field (LLM-normalised paraphrase, e.g. "person earns salary").
+            canonical_tokens = _tokenize(fact.canonical_surface) if fact.canonical_surface else []
+            self._canonical_lengths[fact.id] = len(canonical_tokens)
+            total_canonical_len += len(canonical_tokens)
+
+            canonical_tf: dict[str, int] = {}
+            for token in canonical_tokens:
+                canonical_tf[token] = canonical_tf.get(token, 0) + 1
+            for term, tf in canonical_tf.items():
+                if term not in self._canonical_postings:
+                    self._canonical_postings[term] = {}
+                self._canonical_postings[term][fact.id] = tf
+
+            # Precompute trigrams and slot tokens once at index-build time so
+            # search() does not recompute them for every query.
+            self._content_trigrams[fact.id] = _char_trigrams(fact.content)
+            self._canonical_trigrams[fact.id] = (
+                _char_trigrams(fact.canonical_surface) if fact.canonical_surface else frozenset()
+            )
+            if fact.slot_key:
+                slot_text = fact.slot_key.replace("::", " ")
+                self._slot_tokens[fact.id] = frozenset(_tokenize(slot_text))
+            else:
+                self._slot_tokens[fact.id] = frozenset()
+
         self._doc_count = len(facts)
         self._avg_content_dl = total_content_len / self._doc_count if self._doc_count else 1.0
         self._avg_tags_dl = total_tags_len / self._doc_count if self._doc_count else 1.0
+        self._avg_canonical_dl = total_canonical_len / self._doc_count if self._doc_count else 1.0
 
     def _combined_df(self, term: str) -> int:
         """Number of documents containing *term* in any field."""
         content_docs = set(self._content_postings.get(term, {}).keys())
         tags_docs = set(self._tags_postings.get(term, {}).keys())
-        return len(content_docs | tags_docs)
+        canonical_docs = set(self._canonical_postings.get(term, {}).keys())
+        return len(content_docs | tags_docs | canonical_docs)
 
     def score(
         self,
@@ -143,13 +179,17 @@ class InvertedIndex:
                 continue
             idf = math.log((n - df + 0.5) / (df + 0.5) + 1.0)
 
-            # Collect all doc_ids that have this term in either field.
             content_posting = self._content_postings.get(term, {})
             tags_posting = self._tags_postings.get(term, {})
-            doc_ids = set(content_posting.keys()) | set(tags_posting.keys())
+            canonical_posting = self._canonical_postings.get(term, {})
+            doc_ids = (
+                set(content_posting.keys())
+                | set(tags_posting.keys())
+                | set(canonical_posting.keys())
+            )
 
             for doc_id in doc_ids:
-                # BM25F: weighted sum of normalized tf across fields.
+                # BM25F: weighted sum of normalized tf across all three fields.
                 tf_content = content_posting.get(doc_id, 0)
                 dl_c = self._content_lengths[doc_id]
                 norm_tf_c = tf_content / (1.0 + b * (dl_c / self._avg_content_dl - 1.0))
@@ -159,7 +199,12 @@ class InvertedIndex:
                 avg_t = self._avg_tags_dl if self._avg_tags_dl > 0 else 1.0
                 norm_tf_t = tf_tags / (1.0 + _BM25_B_TAGS * (dl_t / avg_t - 1.0))
 
-                tf_bm25f = _W_CONTENT * norm_tf_c + _W_TAGS * norm_tf_t
+                tf_canonical = canonical_posting.get(doc_id, 0)
+                dl_can = self._canonical_lengths[doc_id]
+                avg_can = self._avg_canonical_dl if self._avg_canonical_dl > 0 else 1.0
+                norm_tf_can = tf_canonical / (1.0 + _BM25_B_CANONICAL * (dl_can / avg_can - 1.0))
+
+                tf_bm25f = _W_CONTENT * norm_tf_c + _W_TAGS * norm_tf_t + _W_CANONICAL * norm_tf_can
                 tf_score = (k1 + 1.0) * tf_bm25f / (k1 + tf_bm25f)
                 scores[doc_id] = scores.get(doc_id, 0.0) + idf * tf_score * q_weight
 
@@ -174,6 +219,21 @@ class InvertedIndex:
     def content_lengths(self) -> dict[str, int]:
         """Return document content lengths for PRF."""
         return self._content_lengths
+
+    @property
+    def content_trigrams(self) -> dict[str, frozenset[str]]:
+        """Precomputed char-trigrams for fact content (id → trigrams)."""
+        return self._content_trigrams
+
+    @property
+    def canonical_trigrams(self) -> dict[str, frozenset[str]]:
+        """Precomputed char-trigrams for canonical_surface (id → trigrams)."""
+        return self._canonical_trigrams
+
+    @property
+    def slot_tokens(self) -> dict[str, frozenset[str]]:
+        """Precomputed tokenised slot_key (id → token set)."""
+        return self._slot_tokens
 
 
 def _prf_expand(
@@ -249,20 +309,64 @@ def _rrf_fuse(
     return fused
 
 
+def _char_trigrams(text: str) -> frozenset[str]:
+    """Extract character-level trigrams from *text* (lowercased).
+
+    Character trigrams bridge morphological variants not caught by stemming
+    (e.g. "employer" / "employed" share "empl", "mpl", etc.).
+    """
+    t = text.lower()
+    return frozenset(t[i : i + 3] for i in range(len(t) - 2)) if len(t) >= 3 else frozenset()
+
+
+def _trigram_jaccard_against(qt: frozenset[str], text: str) -> float:
+    """Jaccard similarity between precomputed query trigrams and *text* (0.0–1.0).
+
+    Use this in hot paths where the query trigrams are already computed.
+    """
+    tt = _char_trigrams(text)
+    if not qt or not tt:
+        return 0.0
+    return len(qt & tt) / len(qt | tt)
+
+
+def _char_trigram_jaccard(query: str, text: str) -> float:
+    """Char-trigram Jaccard similarity between *query* and *text* (0.0–1.0)."""
+    return _trigram_jaccard_against(_char_trigrams(query), text)
+
+
+def _slot_exact_score(query_tokens: frozenset[str], fact: Fact) -> float:
+    """Fraction of slot address tokens covered by the query.
+
+    ``slot_key`` is ``"{entity}::{attribute}"``; both parts are tokenized and
+    matched against query tokens.  Returns 0.0 for facts with no slot.
+
+    Example: query "Alex salary" with slot_key "Alex Chen::salary" →
+    tokens {"alex", "chen", "salari"} → query coverage = 2/3 ≈ 0.67.
+    """
+    if not fact.slot_key:
+        return 0.0
+    slot_text = fact.slot_key.replace("::", " ")
+    slot_tokens = frozenset(_tokenize(slot_text))
+    if not slot_tokens:
+        return 0.0
+    return len(query_tokens & slot_tokens) / len(slot_tokens)
+
+
 class BM25Retriever:
     """Zero-dependency BM25F retriever with PRF and RRF.
 
     Scoring pipeline:
-      1. BM25F (content + tags fields) with IDF high-DF filtering.
+      1. BM25F (content + canonical_surface + tags fields) with IDF high-DF filtering.
       2. Pseudo-relevance feedback expands query with top-doc terms.
-      3. Reciprocal Rank Fusion combines BM25F, importance, retention,
-         and recency into a single ranking.
+      3. Reciprocal Rank Fusion combines six signals: BM25F, slot-exact,
+         char-trigram, importance, retention, and recency.
     """
 
     def __init__(
         self,
         *,
-        rrf_weights: tuple[float, ...] = (5.0, 2.0, 2.0, 1.0),
+        rrf_weights: tuple[float, ...] = (5.0, 3.0, 2.0, 1.5, 1.5, 1.0),
     ) -> None:
         self._rrf_weights = rrf_weights
 
@@ -303,9 +407,10 @@ class BM25Retriever:
             if prf:
                 raw_scores = index.score(query, expansion_weights=prf)
 
-        # 3. Build four ranked lists for RRF.
+        # 3. Build six ranked lists for RRF.
         # Use BM25 score as secondary sort key to break ties deterministically.
         all_ids = [f.id for f in facts]
+        query_tokens = frozenset(_tokenize(query))
 
         # Boost BM25 scores by importance so that equally relevant facts
         # are differentiated by their importance.  This ensures the dominant
@@ -322,44 +427,96 @@ class BM25Retriever:
             reverse=True,
         )
 
-        # Ranker 2: importance (descending), BM25 tie-break.
+        # Precompute per-fact slot and trigram scores using index caches — avoids
+        # recomputing _char_trigrams / slot tokenisation on every search call.
+        query_trigrams = _char_trigrams(query)
+
+        def _cached_slot_score(fid: str) -> float:
+            slot_toks = index.slot_tokens[fid]
+            if not slot_toks:
+                return 0.0
+            return len(query_tokens & slot_toks) / len(slot_toks)
+
+        slot_scores: dict[str, float] = {fid: _cached_slot_score(fid) for fid in all_ids}
+
+        def _cached_trigram_score(fid: str) -> float:
+            ct = index.content_trigrams[fid]
+            kt = index.canonical_trigrams[fid]
+            qt = query_trigrams
+            if not qt:
+                return 0.0
+            s_content = len(qt & ct) / len(qt | ct) if ct else 0.0
+            s_canon = len(qt & kt) / len(qt | kt) if kt else 0.0
+            return max(s_content, s_canon)
+
+        trigram_scores: dict[str, float] = {fid: _cached_trigram_score(fid) for fid in all_ids}
+
+        # Ranker 2: slot-exact — fraction of slot address tokens covered by the query.
+        slot_ranked = sorted(
+            all_ids,
+            key=lambda i: (slot_scores[i], raw_scores.get(i, 0.0)),
+            reverse=True,
+        )
+
+        # Ranker 3: char-trigram Jaccard — surface-level similarity between query
+        # and fact content/canonical_surface.
+        trigram_ranked = sorted(
+            all_ids,
+            key=lambda i: (trigram_scores[i], raw_scores.get(i, 0.0)),
+            reverse=True,
+        )
+
+        # Ranker 4: importance (descending), BM25 tie-break.
         importance_ranked = sorted(
             all_ids,
             key=lambda i: (index.facts[i].importance, raw_scores.get(i, 0.0)),
             reverse=True,
         )
 
-        # Ranker 3: retention (descending), BM25 tie-break.
+        # Ranker 5: retention (descending), BM25 tie-break.
         retention_ranked = sorted(
             all_ids,
             key=lambda i: (index.facts[i].retention_score, raw_scores.get(i, 0.0)),
             reverse=True,
         )
 
-        # Ranker 4: recency — last_accessed (newest first), BM25 tie-break.
+        # Ranker 6: recency — created_at (newest first), BM25 tie-break.
+        # Use created_at, not last_accessed: last_accessed reflects when a fact was
+        # *read*, which is identical for all facts inserted in a batch (S7 scenario).
+        # created_at is immutable and correctly orders v1 → v5 temporal versions.
         recency_ranked = sorted(
             all_ids,
-            key=lambda i: (index.facts[i].last_accessed, raw_scores.get(i, 0.0)),
+            key=lambda i: (index.facts[i].created_at, raw_scores.get(i, 0.0)),
             reverse=True,
         )
 
-        # 4. RRF fusion — default weights (5,2,2,1) give BM25 50% influence,
-        #    importance+retention 40%, recency 10%.
+        # 4. RRF fusion — default weights (5,3,2,1.5,1.5,1) give BM25 ~37% influence,
+        #    slot-exact ~22%, trigram ~15%, importance+retention ~22%, recency ~7%.
         fused = _rrf_fuse(
-            [bm25_ranked, importance_ranked, retention_ranked, recency_ranked],
+            [
+                bm25_ranked,
+                slot_ranked,
+                trigram_ranked,
+                importance_ranked,
+                retention_ranked,
+                recency_ranked,
+            ],
             weights=list(self._rrf_weights),
         )
 
         # 5. Faithfulness floor: when there are enough BM25 matches to fill
         # top_k, only return facts that have lexical relevance.  This prevents
         # importance/recency from pushing unrelated facts into results (S1/S3).
+        # Slot-matched facts bypass this floor — they are deterministically relevant.
         # When there aren't enough matches, fall back to full RRF ranking.
         scored_ids = set(raw_scores.keys())
+        slot_matched_ids = {fid for fid, s in slot_scores.items() if s > 0}
 
         results: list[tuple[Fact, float]] = []
-        if len(scored_ids) >= top_k:
+        eligible_ids = scored_ids | slot_matched_ids
+        if len(eligible_ids) >= top_k:
             for fact in facts:
-                if fact.id in scored_ids:
+                if fact.id in eligible_ids:
                     results.append((fact, fused.get(fact.id, 0.0)))
         else:
             for fact in facts:

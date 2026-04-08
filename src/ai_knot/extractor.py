@@ -29,14 +29,31 @@ Rules:
   episodic (specific events).
 - Rate importance from 0.0 to 1.0.
 - Include 1-3 short domain tags per fact (lowercase, single words).
+- Add "canonical": a short, normalised paraphrase for deduplication and search
+  (remove names/pronouns where possible; keep the core proposition).
+- Add "witness": copy the KEY PHRASE or rule EXACTLY as it appears in the source
+  text. This is the verbatim evidence span used for grounding and audit.
+  Omit only when there is no distinct quotable phrase.
+- For facts about a person, organization, or object: add "entity" (the subject,
+  e.g. "Alex Chen") and "attribute" (the property, e.g. "salary", "job_title",
+  "employer"), and "value" (the specific value, e.g. "95000").
+  Add "qualifiers" as a JSON object for temporal or conditional context,
+  e.g. {"since": "2024-01", "currency": "USD"}.
+  Omit entity/attribute/value/qualifiers for general statements where they don't apply.
 
 Return a JSON array. Example:
 [
-  {"content": "User works at Sber", "type": "semantic",
-   "importance": 0.9, "tags": ["employer", "company"]},
+  {"content": "Alex Chen works at FinServe Capital as Senior PM", "type": "semantic",
+   "importance": 0.9, "tags": ["employer", "role"],
+   "canonical": "person works at company as role",
+   "witness": "Alex Chen, Senior Product Manager at FinServe Capital",
+   "entity": "Alex Chen", "attribute": "job_title", "value": "Senior PM",
+   "qualifiers": {}},
   {"content": "User prefers Python over Java",
    "type": "procedural", "importance": 0.85,
-   "tags": ["python", "preferences"]}
+   "tags": ["python", "preferences"],
+   "canonical": "prefers Python over Java",
+   "witness": "I prefer Python over Java"}
 ]
 
 If no meaningful facts exist, return an empty array: []
@@ -130,7 +147,14 @@ def _dedup_similarity(a: str, b: str) -> float:
     return max(_jaccard_similarity(a, b), _containment_similarity(a, b))
 
 
-def deduplicate_facts(facts: list[Fact], *, threshold: float = 0.7) -> list[Fact]:
+# Unified dedup threshold for both within-batch and cross-store deduplication.
+# 0.85 avoids false-positive merges of short but semantically distinct rules
+# (e.g. "keep posts under 300 words" vs "use fenced code blocks"), which occur
+# at the original 0.7 threshold when containment similarity exceeds min-token ratio.
+_DEDUP_THRESHOLD: float = 0.85
+
+
+def deduplicate_facts(facts: list[Fact], *, threshold: float = _DEDUP_THRESHOLD) -> list[Fact]:
     """Remove near-duplicate facts by combined similarity (Jaccard + containment).
 
     Args:
@@ -159,27 +183,31 @@ def resolve_against_existing(
     new_facts: list[Fact],
     existing: list[Fact],
     *,
-    threshold: float = 0.6,
+    threshold: float = _DEDUP_THRESHOLD,
 ) -> tuple[list[Fact], list[Fact]]:
-    """Separate new facts into inserts and updates relative to existing facts.
+    """Separate new facts into inserts and temporal closes relative to existing facts.
 
-    For each new fact, if a similar existing fact is found
-    (combined similarity >= threshold), the existing fact is updated in-place:
-    importance is bumped by 0.05 (capped at 1.0) and ``last_accessed`` is set
-    to UTC now. Otherwise the new fact is collected for insertion.
+    For each new fact, if a sufficiently similar existing fact is found
+    (combined similarity >= threshold), the old fact is **temporally closed**
+    (``valid_until`` set to now) and the new fact is queued for insertion with
+    bumped importance. This preserves the full fact history instead of mutating
+    it in place.
+
+    If no match is found, the new fact is inserted unchanged.
 
     Args:
         new_facts: Facts extracted from the latest conversation.
-        existing: Facts already stored for this agent.
+        existing: Active facts already stored for this agent.
         threshold: Combined similarity threshold to consider two facts duplicates.
 
     Returns:
-        A 2-tuple ``(to_insert, updated_existing)`` where:
-        - ``to_insert``: new facts with no match in existing.
-        - ``updated_existing``: existing facts that were updated in place.
+        A 2-tuple ``(to_insert, closed_existing)`` where:
+        - ``to_insert``: facts to insert (both genuinely new and new-version replacements).
+        - ``closed_existing``: old facts that were temporally closed (``valid_until`` set).
     """
     to_insert: list[Fact] = []
-    updated: list[Fact] = []
+    closed: list[Fact] = []
+    now = datetime.now(UTC)
 
     for new in new_facts:
         matched: Fact | None = None
@@ -190,13 +218,99 @@ def resolve_against_existing(
                 best_sim = sim
                 matched = old
         if matched is not None:
-            matched.importance = min(1.0, matched.importance + 0.05)
-            matched.last_accessed = datetime.now(UTC)
-            updated.append(matched)
+            # Temporal close: seal the old version without mutating its content.
+            matched.valid_until = now
+            closed.append(matched)
+            # Carry forward importance and version from the old fact.
+            new.importance = min(1.0, matched.importance + 0.05)
+            new.version = matched.version + 1
+            to_insert.append(new)
         else:
             to_insert.append(new)
 
-    return to_insert, updated
+    return to_insert, closed
+
+
+_PRONOUNS = frozenset({"he", "she", "it", "they", "i", "we", "you", "him", "her", "them"})
+
+
+def entity_match(a: str, b: str) -> bool:
+    """Return True if two entity strings refer to the same real-world entity.
+
+    Uses containment (substring in both directions) and Jaccard similarity.
+    Guards against pronoun-based false matches (e.g. "he" != "Alex Chen").
+    """
+    a, b = a.lower().strip(), b.lower().strip()
+    if not a or not b:
+        return False
+    if a in _PRONOUNS or b in _PRONOUNS:
+        return False
+    if a in b or b in a:
+        return True
+    return _jaccard_similarity(a, b) > 0.5
+
+
+def resolve_structured(
+    new_fact: Fact,
+    existing: list[Fact],
+) -> Fact | None:
+    """Entity-addressed dedup: find existing fact with same entity+attribute.
+
+    Returns the existing Fact if a match is found, or None if no match
+    (meaning this fact should be treated as a new insert).
+
+    Only fires when both new_fact.entity and new_fact.attribute are non-empty.
+    Falls back to cosine-based dedup otherwise.
+    """
+    if not new_fact.entity or not new_fact.attribute:
+        return None
+    for existing_fact in existing:
+        if not existing_fact.entity or not existing_fact.attribute:
+            continue
+        if (
+            entity_match(new_fact.entity, existing_fact.entity)
+            and new_fact.attribute.lower().strip() == existing_fact.attribute.lower().strip()
+            and existing_fact.is_active()
+        ):
+            return existing_fact
+    return None
+
+
+def resolve_by_slot(
+    new_fact: Fact,
+    existing: list[Fact],
+) -> tuple[str, Fact | None]:
+    """Exact-match slot resolution against existing active facts.
+
+    Returns ``(op, matched)`` where *op* is one of:
+
+    - ``'branch'``: ``new_fact`` has no ``slot_key``, or no existing fact shares it → insert as new.
+    - ``'reinforce'``: same slot, same ``value_text`` → bump confidence on existing, skip insert.
+    - ``'supersede'``: same slot, different (or missing) ``value_text`` → close old, insert new.
+
+    This is faster and more reliable than Jaccard-based ``resolve_structured`` because
+    ``slot_key`` is a deterministic ``"{entity}::{attribute}"`` address — no fuzzy matching needed.
+
+    Args:
+        new_fact: Newly extracted fact to resolve.
+        existing: Active facts to search. Caller is responsible for passing only active facts.
+    """
+    if not new_fact.slot_key:
+        return "branch", None
+
+    for old in existing:
+        if old.slot_key != new_fact.slot_key:
+            continue
+        # Same slot — compare values to decide reinforce vs supersede.
+        if (
+            new_fact.value_text
+            and old.value_text
+            and new_fact.value_text.strip().lower() == old.value_text.strip().lower()
+        ):
+            return "reinforce", old
+        return "supersede", old
+
+    return "branch", None
 
 
 class Extractor:
@@ -306,9 +420,31 @@ class Extractor:
         if isinstance(raw_tags, list):
             tags = [str(t).lower().strip() for t in raw_tags if isinstance(t, str)][:5]
 
+        # Parse qualifiers dict (graceful degradation if malformed).
+        raw_qualifiers = entry.get("qualifiers", {})
+        qualifiers: dict[str, str] = {}
+        if isinstance(raw_qualifiers, dict):
+            qualifiers = {str(k): str(v) for k, v in raw_qualifiers.items()}
+
+        entity = str(entry.get("entity", ""))
+        attribute = str(entry.get("attribute", ""))
+        # Derive deterministic slot key when entity+attribute are both present.
+        slot_key = f"{entity}::{attribute}" if entity and attribute else ""
+
+        witness = str(entry.get("witness", "") or entry.get("verbatim", ""))
+        canonical = str(entry.get("canonical", ""))
+
         return Fact(
             content=str(entry.get("content", "")),
             type=memory_type,
             importance=importance,
             tags=tags,
+            source_verbatim=witness,
+            entity=entity,
+            attribute=attribute,
+            canonical_surface=canonical,
+            witness_surface=witness,
+            value_text=str(entry.get("value", "")),
+            qualifiers=qualifiers,
+            slot_key=slot_key,
         )

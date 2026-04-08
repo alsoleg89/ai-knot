@@ -29,3 +29,9 @@ Thumbs.db
 *~
 .ai_knot/
 .claude/
+
+# Claude Code local settings
+.claude/settings.local.json
+# Benchmark output files (all variants)
+benchmark_*.json
+benchmark_*.md

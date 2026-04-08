@@ -16,7 +16,10 @@ from ai_knot.knowledge import KnowledgeBase
 from ai_knot.mcp_server import (
     _build_kb,
     tool_add,
+    tool_capabilities,
     tool_forget,
+    tool_health,
+    tool_learn,
     tool_list_facts,
     tool_list_snapshots,
     tool_recall,
@@ -168,9 +171,9 @@ class TestToolForget:
 class TestToolListFacts:
     """Tests for tool_list_facts()."""
 
-    def test_empty_kb(self, kb: KnowledgeBase) -> None:
+    def test_empty_kb_returns_json_array(self, kb: KnowledgeBase) -> None:
         result = tool_list_facts(kb)
-        assert "No facts" in result
+        assert json.loads(result) == []
 
     def test_returns_json(self, kb: KnowledgeBase) -> None:
         kb.add("User works at Sber")
@@ -378,3 +381,117 @@ class TestMakeServer:
         call_args = mock_fastmcp_cls.call_args
         assert call_args[0][0] == "ai-knot"
         assert "instructions" in call_args[1]
+
+
+# ---------------------------------------------------------------------------
+# tool_learn — multi-turn ingestion with degraded-mode fallback
+# ---------------------------------------------------------------------------
+
+
+class TestToolLearn:
+    def test_learn_degraded_stores_last_user_message(self, kb: KnowledgeBase) -> None:
+        """Without LLM credentials, stores the last user message verbatim."""
+        messages = [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Hello! How can I help?"},
+            {"role": "user", "content": "I use PostgreSQL 16 as my main database."},
+        ]
+        result = tool_learn(kb, messages)
+        data = json.loads(result)
+        assert data["stored"] == 1
+        assert len(data["ids"]) == 1
+        facts = kb.list_facts()
+        assert any("PostgreSQL" in f.content for f in facts)
+
+    def test_learn_degraded_returns_json(self, kb: KnowledgeBase) -> None:
+        """tool_learn always returns valid JSON."""
+        result = tool_learn(kb, [{"role": "user", "content": "test fact"}])
+        data = json.loads(result)
+        assert "stored" in data
+        assert "ids" in data
+
+    def test_learn_degraded_no_user_message(self, kb: KnowledgeBase) -> None:
+        """Returns zero stored when there is no user message in conversation."""
+        result = tool_learn(kb, [{"role": "assistant", "content": "Hello"}])
+        data = json.loads(result)
+        assert data["stored"] == 0
+        assert data["ids"] == []
+
+    def test_learn_degraded_empty_messages(self, kb: KnowledgeBase) -> None:
+        """Returns zero stored for empty conversation."""
+        result = tool_learn(kb, [])
+        data = json.loads(result)
+        assert data["stored"] == 0
+
+    def test_learn_provider_env_vars(
+        self, kb: KnowledgeBase, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """tool_learn reads provider credentials from environment variables."""
+        monkeypatch.setenv("AI_KNOT_PROVIDER", "anthropic")
+        monkeypatch.setenv("AI_KNOT_API_KEY", "test-key")
+
+        # With a bad API key the LLM call will fail; we expect an error JSON,
+        # not an exception propagating out of tool_learn.
+        result = tool_learn(kb, [{"role": "user", "content": "test"}])
+        data = json.loads(result)
+        # Either stored successfully (unlikely with fake key) or got an error field.
+        assert "stored" in data or "error" in data
+
+
+# ---------------------------------------------------------------------------
+# tool_health + tool_capabilities
+# ---------------------------------------------------------------------------
+
+
+class TestToolHealthCapabilities:
+    def test_health_returns_ok(self) -> None:
+        result = tool_health()
+        data = json.loads(result)
+        assert data["status"] == "ok"
+        assert "version" in data
+        assert isinstance(data["version"], str)
+
+    def test_capabilities_returns_list(self) -> None:
+        result = tool_capabilities()
+        tools = json.loads(result)
+        assert isinstance(tools, list)
+        assert len(tools) > 0
+        names = {t["name"] for t in tools}
+        assert "add" in names
+        assert "recall" in names
+        assert "learn" in names
+        assert "health" in names
+
+    def test_capabilities_have_descriptions(self) -> None:
+        tools = json.loads(tool_capabilities())
+        assert all("name" in t and "description" in t for t in tools)
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw generate_mcp_config — absolute path contract
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateMcpConfig:
+    def test_data_dir_is_absolute(self) -> None:
+        from ai_knot.integrations.openclaw import generate_mcp_config
+
+        config = generate_mcp_config(agent_id="test", data_dir=".ai_knot")
+        env = config["mcpServers"]["ai-knot"]["env"]
+        assert env["AI_KNOT_DATA_DIR"].startswith("/")
+
+    def test_relative_path_resolved(self) -> None:
+        from pathlib import Path
+
+        from ai_knot.integrations.openclaw import generate_mcp_config
+
+        config = generate_mcp_config(agent_id="test", data_dir="relative/path")
+        env = config["mcpServers"]["ai-knot"]["env"]
+        expected = str(Path("relative/path").resolve())
+        assert env["AI_KNOT_DATA_DIR"] == expected
+
+    def test_invalid_storage_raises(self) -> None:
+        from ai_knot.integrations.openclaw import generate_mcp_config
+
+        with pytest.raises(ValueError, match="storage must be"):
+            generate_mcp_config(storage="invalid")  # type: ignore[arg-type]

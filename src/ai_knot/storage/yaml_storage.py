@@ -13,7 +13,8 @@ from typing import Any
 
 import yaml
 
-from ai_knot.types import Fact, MemoryType
+from ai_knot.storage.base import parse_datetime as _parse_datetime
+from ai_knot.types import Fact, MemoryType, MESIState
 
 # Use C extension loader when available (10-20x faster than pure Python).
 _YamlLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
@@ -47,37 +48,75 @@ class YAMLStorage:
     def __init__(self, base_dir: str = ".ai_knot") -> None:
         self._base_dir = Path(base_dir)
 
+    @staticmethod
+    def _fact_to_dict(fact: Fact) -> dict[str, Any]:
+        """Serialize a Fact to a YAML-friendly dict, omitting default values."""
+        d: dict[str, Any] = {
+            "content": fact.content,
+            "type": fact.type.value,
+            "importance": fact.importance,
+            "retention_score": fact.retention_score,
+            "access_count": fact.access_count,
+            "tags": fact.tags,
+            "created_at": fact.created_at.isoformat(),
+            "last_accessed": fact.last_accessed.isoformat(),
+        }
+        # Only write non-default optional fields to keep YAML compact.
+        if fact.source_snippets:
+            d["source_snippets"] = fact.source_snippets
+        if fact.source_spans:
+            d["source_spans"] = fact.source_spans
+        if not fact.supported:
+            d["supported"] = fact.supported
+        if fact.support_confidence != 1.0:
+            d["support_confidence"] = fact.support_confidence
+        if fact.verification_source != "manual":
+            d["verification_source"] = fact.verification_source
+        if fact.access_intervals:
+            d["access_intervals"] = fact.access_intervals
+        if fact.origin_agent_id:
+            d["origin_agent_id"] = fact.origin_agent_id
+        if fact.visibility != "private":
+            d["visibility"] = fact.visibility
+        if fact.source_verbatim:
+            d["source_verbatim"] = fact.source_verbatim
+        d["valid_from"] = fact.valid_from.isoformat()
+        if fact.valid_until is not None:
+            d["valid_until"] = fact.valid_until.isoformat()
+        if fact.entity:
+            d["entity"] = fact.entity
+        if fact.attribute:
+            d["attribute"] = fact.attribute
+        if fact.version:
+            d["version"] = fact.version
+        if fact.mesi_state != MESIState.EXCLUSIVE:
+            d["mesi_state"] = fact.mesi_state.value  # Emit plain string for SafeLoader compat.
+        if fact.canonical_surface:
+            d["canonical_surface"] = fact.canonical_surface
+        if fact.witness_surface:
+            d["witness_surface"] = fact.witness_surface
+        if fact.prompt_surface:
+            d["prompt_surface"] = fact.prompt_surface
+        if fact.slot_key:
+            d["slot_key"] = fact.slot_key
+        if fact.value_text:
+            d["value_text"] = fact.value_text
+        if fact.qualifiers:
+            d["qualifiers"] = fact.qualifiers
+        if fact.state_confidence != 1.0:
+            d["state_confidence"] = fact.state_confidence
+        if fact.topic_channel:
+            d["topic_channel"] = fact.topic_channel
+        if fact.visibility_scope != "global":
+            d["visibility_scope"] = fact.visibility_scope
+        return d
+
     def save(self, agent_id: str, facts: list[Fact]) -> None:
         """Write all facts for an agent to a YAML file (atomic)."""
         agent_dir = self._base_dir / agent_id
         agent_dir.mkdir(parents=True, exist_ok=True)
 
-        data: dict[str, dict[str, Any]] = {}
-        for fact in facts:
-            data[fact.id] = {
-                "content": fact.content,
-                "type": fact.type.value,
-                "importance": fact.importance,
-                "retention_score": fact.retention_score,
-                "access_count": fact.access_count,
-                "tags": fact.tags,
-                "created_at": fact.created_at.isoformat(),
-                "last_accessed": fact.last_accessed.isoformat(),
-            }
-            # Only write evidence fields when non-default to keep YAML compact.
-            if fact.source_snippets:
-                data[fact.id]["source_snippets"] = fact.source_snippets
-            if fact.source_spans:
-                data[fact.id]["source_spans"] = fact.source_spans
-            if not fact.supported:
-                data[fact.id]["supported"] = fact.supported
-            if fact.support_confidence != 1.0:
-                data[fact.id]["support_confidence"] = fact.support_confidence
-            if fact.verification_source != "manual":
-                data[fact.id]["verification_source"] = fact.verification_source
-            if fact.access_intervals:
-                data[fact.id]["access_intervals"] = fact.access_intervals
-
+        data = {fact.id: self._fact_to_dict(fact) for fact in facts}
         yaml_path = agent_dir / "knowledge.yaml"
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -130,6 +169,28 @@ class YAMLStorage:
                     support_confidence=float(entry.get("support_confidence", 1.0)),
                     verification_source=str(entry.get("verification_source", "legacy")),
                     access_intervals=[float(x) for x in entry.get("access_intervals", [])],
+                    origin_agent_id=str(entry.get("origin_agent_id", "")),
+                    visibility=str(entry.get("visibility", "private")),
+                    source_verbatim=str(entry.get("source_verbatim", "")),
+                    valid_from=_parse_datetime(entry["valid_from"])
+                    if "valid_from" in entry
+                    else datetime.now(UTC),
+                    valid_until=_parse_datetime(entry["valid_until"])
+                    if "valid_until" in entry
+                    else None,
+                    entity=str(entry.get("entity", "")),
+                    attribute=str(entry.get("attribute", "")),
+                    version=int(entry.get("version", 0)),
+                    mesi_state=MESIState(str(entry.get("mesi_state", "E"))),
+                    canonical_surface=str(entry.get("canonical_surface", "")),
+                    witness_surface=str(entry.get("witness_surface", "")),
+                    prompt_surface=str(entry.get("prompt_surface", "")),
+                    slot_key=str(entry.get("slot_key", "")),
+                    value_text=str(entry.get("value_text", "")),
+                    qualifiers={str(k): str(v) for k, v in entry.get("qualifiers", {}).items()},
+                    state_confidence=float(entry.get("state_confidence", 1.0)),
+                    topic_channel=str(entry.get("topic_channel", "")),
+                    visibility_scope=str(entry.get("visibility_scope", "global")),
                 )
             )
         return facts
@@ -164,31 +225,7 @@ class YAMLStorage:
         snap_dir.mkdir(parents=True, exist_ok=True)
         snap_path = snap_dir / f"{name}.yaml"
 
-        data: dict[str, Any] = {}
-        for fact in facts:
-            data[fact.id] = {
-                "content": fact.content,
-                "type": fact.type.value,
-                "importance": fact.importance,
-                "retention_score": fact.retention_score,
-                "access_count": fact.access_count,
-                "tags": fact.tags,
-                "created_at": fact.created_at.isoformat(),
-                "last_accessed": fact.last_accessed.isoformat(),
-            }
-            if fact.source_snippets:
-                data[fact.id]["source_snippets"] = fact.source_snippets
-            if fact.source_spans:
-                data[fact.id]["source_spans"] = fact.source_spans
-            if not fact.supported:
-                data[fact.id]["supported"] = fact.supported
-            if fact.support_confidence != 1.0:
-                data[fact.id]["support_confidence"] = fact.support_confidence
-            if fact.verification_source != "manual":
-                data[fact.id]["verification_source"] = fact.verification_source
-            if fact.access_intervals:
-                data[fact.id]["access_intervals"] = fact.access_intervals
-
+        data = {fact.id: self._fact_to_dict(fact) for fact in facts}
         yaml_text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
         lock = _get_lock(snap_path)
         with lock:
@@ -242,6 +279,28 @@ class YAMLStorage:
                     support_confidence=float(entry.get("support_confidence", 1.0)),
                     verification_source=str(entry.get("verification_source", "legacy")),
                     access_intervals=[float(x) for x in entry.get("access_intervals", [])],
+                    origin_agent_id=str(entry.get("origin_agent_id", "")),
+                    visibility=str(entry.get("visibility", "private")),
+                    source_verbatim=str(entry.get("source_verbatim", "")),
+                    valid_from=_parse_datetime(entry["valid_from"])
+                    if "valid_from" in entry
+                    else datetime.now(UTC),
+                    valid_until=_parse_datetime(entry["valid_until"])
+                    if "valid_until" in entry
+                    else None,
+                    entity=str(entry.get("entity", "")),
+                    attribute=str(entry.get("attribute", "")),
+                    version=int(entry.get("version", 0)),
+                    mesi_state=MESIState(str(entry.get("mesi_state", "E"))),
+                    canonical_surface=str(entry.get("canonical_surface", "")),
+                    witness_surface=str(entry.get("witness_surface", "")),
+                    prompt_surface=str(entry.get("prompt_surface", "")),
+                    slot_key=str(entry.get("slot_key", "")),
+                    value_text=str(entry.get("value_text", "")),
+                    qualifiers={str(k): str(v) for k, v in entry.get("qualifiers", {}).items()},
+                    state_confidence=float(entry.get("state_confidence", 1.0)),
+                    topic_channel=str(entry.get("topic_channel", "")),
+                    visibility_scope=str(entry.get("visibility_scope", "global")),
                 )
             )
         return facts
@@ -259,11 +318,3 @@ class YAMLStorage:
         snap_path = self._snapshot_dir(agent_id) / f"{name}.yaml"
         with contextlib.suppress(FileNotFoundError):
             snap_path.unlink()
-
-
-def _parse_datetime(value: str) -> datetime:
-    """Parse an ISO-format datetime string, ensuring UTC timezone."""
-    dt = datetime.fromisoformat(value)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt

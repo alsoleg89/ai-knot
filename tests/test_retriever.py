@@ -6,7 +6,15 @@ import math
 
 import pytest
 
-from ai_knot.retriever import BM25Retriever, InvertedIndex, TFIDFRetriever
+from ai_knot.retriever import (
+    BM25Retriever,
+    InvertedIndex,
+    TFIDFRetriever,
+    _char_trigram_jaccard,
+    _char_trigrams,
+    _slot_exact_score,
+    _trigram_jaccard_against,
+)
 from ai_knot.tokenizer import tokenize as _tokenize
 from ai_knot.types import Fact
 
@@ -254,3 +262,112 @@ class TestInvertedIndex:
         for fact in facts:
             assert fact.id in index.facts
             assert index.facts[fact.id] is fact
+
+
+class TestCharTrigrams:
+    """Tests for character-trigram helpers."""
+
+    def test_trigrams_empty(self) -> None:
+        assert _char_trigrams("") == frozenset()
+        assert _char_trigrams("ab") == frozenset()  # < 3 chars
+
+    def test_trigrams_exact(self) -> None:
+        assert _char_trigrams("abc") == frozenset({"abc"})
+
+    def test_trigrams_lowercases(self) -> None:
+        assert _char_trigrams("ABC") == frozenset({"abc"})
+
+    def test_trigrams_hello(self) -> None:
+        result = _char_trigrams("hello")
+        assert result == frozenset({"hel", "ell", "llo"})
+
+    def test_char_trigram_jaccard_identical(self) -> None:
+        assert _char_trigram_jaccard("hello", "hello") == pytest.approx(1.0)
+
+    def test_char_trigram_jaccard_no_overlap(self) -> None:
+        score = _char_trigram_jaccard("abc", "xyz")
+        assert score == pytest.approx(0.0)
+
+    def test_char_trigram_jaccard_partial(self) -> None:
+        score = _char_trigram_jaccard("employer", "employed")
+        # Both share "empl", "mpl", "plo" → non-zero overlap
+        assert score > 0.0
+        assert score < 1.0
+
+    def test_trigram_jaccard_against_uses_precomputed(self) -> None:
+        qt = _char_trigrams("hello")
+        assert _trigram_jaccard_against(qt, "hello") == pytest.approx(1.0)
+        assert _trigram_jaccard_against(qt, "xyz") == pytest.approx(0.0)
+
+    def test_trigram_jaccard_against_empty_query(self) -> None:
+        assert _trigram_jaccard_against(frozenset(), "hello") == pytest.approx(0.0)
+
+
+class TestSlotExactScore:
+    """Tests for _slot_exact_score()."""
+
+    def test_no_slot_key_returns_zero(self) -> None:
+        fact = Fact(content="User earns 95k")
+        score = _slot_exact_score(frozenset({"alex", "salari"}), fact)
+        assert score == pytest.approx(0.0)
+
+    def test_full_match(self) -> None:
+        fact = Fact(content="...", slot_key="Alex::salary")
+        # slot tokens: {"alex", "salari"} (stemmed)
+        from ai_knot.tokenizer import tokenize
+
+        slot_tokens = frozenset(tokenize("Alex salary"))
+        score = _slot_exact_score(slot_tokens, fact)
+        assert score == pytest.approx(1.0)
+
+    def test_partial_match(self) -> None:
+        fact = Fact(content="...", slot_key="Alex Chen::salary")
+        # slot_key tokens: {"alex", "chen", "salari"}
+        from ai_knot.tokenizer import tokenize
+
+        query_tokens = frozenset(tokenize("Alex"))
+        score = _slot_exact_score(query_tokens, fact)
+        assert 0.0 < score < 1.0
+
+    def test_no_match(self) -> None:
+        fact = Fact(content="...", slot_key="Alex::salary")
+        score = _slot_exact_score(frozenset({"python", "test"}), fact)
+        assert score == pytest.approx(0.0)
+
+
+class TestSlotExactRanker:
+    """Integration tests: slot-exact ranker surfaces entity facts."""
+
+    def test_slot_fact_ranked_above_lexical_match(self) -> None:
+        """Fact with slot_key matching query tokens should rank at top."""
+        retriever = BM25Retriever()
+        slot_fact = Fact(
+            content="Alex Chen earns 95000 USD per year",
+            slot_key="Alex Chen::salary",
+            value_text="95000",
+            importance=0.8,
+        )
+        unrelated = Fact(
+            content="The salary cap in the league is high",
+            importance=0.9,  # higher importance, no slot
+        )
+        facts = [unrelated, slot_fact]
+        results = retriever.search("Alex salary", facts, top_k=2)
+        assert len(results) >= 1
+        # Slot fact should win: query covers its slot_key tokens
+        assert results[0][0] is slot_fact
+
+    def test_canonical_surface_indexed_in_bm25(self) -> None:
+        """Facts with canonical_surface should be findable via canonical terms."""
+        retriever = BM25Retriever()
+        fact_with_canonical = Fact(
+            content="Alex Chen earns 95000",
+            canonical_surface="person earns salary",
+            importance=0.8,
+        )
+        fact_without = Fact(content="User deploys Docker containers", importance=0.8)
+        facts = [fact_without, fact_with_canonical]
+        results = retriever.search("person salary", facts, top_k=2)
+        # fact_with_canonical should match via canonical_surface terms
+        assert len(results) >= 1
+        assert results[0][0] is fact_with_canonical

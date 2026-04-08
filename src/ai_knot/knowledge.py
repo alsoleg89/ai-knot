@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 from collections import Counter
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from ai_knot.extractor import Extractor, resolve_against_existing
+from ai_knot.extractor import (
+    Extractor,
+    resolve_against_existing,
+    resolve_by_slot,
+    resolve_structured,
+)
 from ai_knot.forgetting import apply_decay
 from ai_knot.providers import LLMProvider, create_provider
 from ai_knot.query_expander import LLMQueryExpander
 from ai_knot.retriever import TFIDFRetriever
-from ai_knot.storage.base import SnapshotCapable, StorageBackend
+from ai_knot.storage.base import SnapshotCapable, StorageBackend, TemporalStorageCapable
 from ai_knot.storage.yaml_storage import YAMLStorage
-from ai_knot.types import ConversationTurn, Fact, MemoryType, SnapshotDiff
+from ai_knot.types import ConversationTurn, Fact, MemoryType, MESIState, SlotDelta, SnapshotDiff
 
 # LLM expansion token weight — higher than PRF (0.5) to reflect
 # the semantic advantage of LLM-based query understanding.
@@ -24,6 +30,8 @@ _LLM_EXPANSION_WEIGHT: float = 0.6
 
 _SHARED_NAMESPACE = "__shared__"
 _PROVENANCE_DISCOUNT = 0.8
+# Facts superseded by a different agent within this window count as "quick invalidations".
+_QUICK_INV_WINDOW_S = 3600.0  # 1 hour
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +76,13 @@ class KnowledgeBase:
         llm_recall: bool = False,
         rrf_weights: tuple[float, ...] | None = None,
         expansion_weight: float | None = None,
+        episodic_ttl_hours: float = 72.0,
         **provider_kwargs: str,
     ) -> None:
         self._agent_id = agent_id
         self._storage: StorageBackend = storage or YAMLStorage()
         self._retriever = TFIDFRetriever(
-            rrf_weights=rrf_weights or (5.0, 2.0, 2.0, 1.0),
+            rrf_weights=rrf_weights or (5.0, 3.0, 2.0, 1.5, 1.5, 1.0),
         )
         self._default_provider = provider
         self._default_api_key = api_key
@@ -83,6 +92,7 @@ class KnowledgeBase:
         self._expansion_weight = expansion_weight
         self._query_expander: LLMQueryExpander | None = None
         self._default_provider_kwargs: dict[str, str] = dict(provider_kwargs)
+        self._episodic_ttl_hours = episodic_ttl_hours
 
     def add(
         self,
@@ -187,6 +197,46 @@ class KnowledgeBase:
         logger.info("Added %d facts to agent '%s'", len(new_facts), self._agent_id)
         return new_facts
 
+    def add_episodic(
+        self,
+        content: str,
+        *,
+        importance: float = 0.3,
+        tags: list[str] | tuple[str, ...] = (),
+        ttl_hours: float | None = None,
+    ) -> Fact:
+        """Add a short-lived episodic fact (L1 hippocampus-like buffer).
+
+        Episodic facts have a time-to-live: they expire after ``ttl_hours``
+        (defaults to ``episodic_ttl_hours`` set at init, typically 72h).
+        They are excluded from default recall() and recall_facts() results
+        (which only return active semantic/procedural facts), but are visible
+        to consolidate_episodic() for promotion to semantic memory.
+
+        Use for: raw conversation snippets, session context, unverified claims
+        that need consolidation before becoming durable knowledge.
+        """
+        if not content.strip():
+            raise ValueError("content must not be empty")
+        if not 0.0 <= importance <= 1.0:
+            raise ValueError(f"importance must be between 0.0 and 1.0, got {importance}")
+
+        ttl = ttl_hours if ttl_hours is not None else self._episodic_ttl_hours
+        now = datetime.now(UTC)
+        fact = Fact(
+            content=content,
+            type=MemoryType.EPISODIC,
+            importance=importance,
+            tags=list(tags),
+            valid_from=now,
+            valid_until=now + timedelta(hours=ttl),
+        )
+        facts = self._storage.load(self._agent_id)
+        facts.append(fact)
+        self._storage.save(self._agent_id, facts)
+        logger.info("Added episodic fact (TTL=%.0fh) to agent '%s'", ttl, self._agent_id)
+        return fact
+
     def learn(
         self,
         turns: list[ConversationTurn],
@@ -201,9 +251,20 @@ class KnowledgeBase:
     ) -> list[Fact]:
         """Extract and store facts from a conversation using an LLM.
 
-        Existing facts that are similar to newly extracted ones (Jaccard >=
-        ``conflict_threshold``) are updated in place (importance bumped, access
-        time refreshed) instead of being duplicated.
+        Resolution uses a three-phase pipeline:
+
+        1. **Slot-based** (deterministic): facts with ``slot_key`` are matched
+           against existing active facts by exact ``slot_key`` equality.
+           Same slot + same value → *reinforce* (bump confidence, no insert).
+           Same slot + new value → *supersede* (temporal close + versioned insert).
+           No slot match → *branch* (insert as new).
+
+        2. **Entity-addressed CAS** (fuzzy, backward compat): unslotted facts
+           with ``entity`` + ``attribute`` are matched via ``resolve_structured``
+           (Jaccard entity matching) to close superseded pre-Phase-1 facts.
+
+        3. **Lexical dedup**: remaining unslotted facts are checked against active
+           facts with ``resolve_against_existing`` (combined Jaccard + containment).
 
         Provider credentials default to those passed at :meth:`__init__` when
         not specified per-call.
@@ -218,8 +279,8 @@ class KnowledgeBase:
                 openai-compat.
             model: Override the default model for this provider. Falls back to
                 the value set at init.
-            conflict_threshold: Jaccard similarity threshold above which a new
-                fact is treated as a duplicate of an existing one (0.0–1.0).
+            conflict_threshold: Jaccard similarity threshold for the lexical
+                dedup pass (phase 3). Does not affect slot-based resolution.
             timeout: Per-request timeout in seconds for LLM calls. ``None``
                 uses the provider's built-in default (30 s).
             batch_size: Maximum conversation turns sent per LLM call. Longer
@@ -230,7 +291,8 @@ class KnowledgeBase:
                 precedence.
 
         Returns:
-            List of genuinely new Facts that were inserted (excludes updates).
+            List of inserted Facts (new inserts + versioned replacements).
+            Reinforced facts (same value) are excluded from the return value.
         """
         if not turns:
             return []
@@ -280,15 +342,67 @@ class KnowledgeBase:
 
         if new_facts:
             existing = self._storage.load(self._agent_id)
-            to_insert, _ = resolve_against_existing(
-                new_facts, existing, threshold=conflict_threshold
+            now_close = datetime.now(UTC)
+            active_existing = [f for f in existing if f.is_active(now_close)]
+
+            to_insert: list[Fact] = []
+            # IDs of active facts already handled — excluded from later phases.
+            handled_ids: set[str] = set()
+            n_reinforce = n_supersede = n_branch = 0
+
+            # Phase 1: slot-based resolution (deterministic, exact slot_key match).
+            slotted_facts = [f for f in new_facts if f.slot_key]
+            for new_fact in slotted_facts:
+                op, matched = resolve_by_slot(new_fact, active_existing)
+                if op == "reinforce":
+                    assert matched is not None
+                    matched.state_confidence = min(1.0, matched.state_confidence + 0.05)
+                    matched.importance = min(1.0, matched.importance + 0.02)
+                    matched.last_accessed = now_close
+                    handled_ids.add(matched.id)
+                    n_reinforce += 1
+                elif op == "supersede":
+                    assert matched is not None
+                    matched.valid_until = now_close
+                    handled_ids.add(matched.id)
+                    new_fact.importance = min(1.0, matched.importance + 0.05)
+                    new_fact.version = matched.version + 1
+                    to_insert.append(new_fact)
+                    n_supersede += 1
+                else:  # branch — new slot, insert as-is
+                    to_insert.append(new_fact)
+                    n_branch += 1
+
+            # Phase 2: entity-addressed CAS for unslotted facts with entity+attribute.
+            # Closes pre-Phase-1 storage facts that carry entity/attribute but no slot_key.
+            unslotted_facts = [f for f in new_facts if not f.slot_key]
+            unslotted_with_entity = [f for f in unslotted_facts if f.entity and f.attribute]
+            entity_candidates = [f for f in active_existing if f.id not in handled_ids]
+            for new_fact in unslotted_with_entity:
+                # Re-filter candidates each iteration so each existing fact is matched at most once.
+                available = [f for f in entity_candidates if f.id not in handled_ids]
+                matched_fact = resolve_structured(new_fact, available)
+                if matched_fact is not None:
+                    matched_fact.valid_until = now_close
+                    handled_ids.add(matched_fact.id)
+
+            # Phase 3: lexical dedup for remaining unslotted facts.
+            remaining_active = [f for f in entity_candidates if f.id not in handled_ids]
+            unslotted_inserted, _ = resolve_against_existing(
+                unslotted_facts, remaining_active, threshold=conflict_threshold
             )
+            to_insert.extend(unslotted_inserted)
+
             self._storage.save(self._agent_id, existing + to_insert)
             logger.info(
-                "Learned %d new facts (%d merged) for agent '%s'",
+                "Learned %d facts for agent '%s' "
+                "(slot: %d reinforced, %d superseded, %d new; lexical: %d merged)",
                 len(to_insert),
-                len(new_facts) - len(to_insert),
                 self._agent_id,
+                n_reinforce,
+                n_supersede,
+                n_branch,
+                len(unslotted_facts) - len(unslotted_inserted),
             )
             return to_insert
         return []
@@ -336,6 +450,197 @@ class KnowledgeBase:
                 **provider_kwargs,
             ),
         )
+
+    async def learn_async(
+        self,
+        turns: list[ConversationTurn],
+        *,
+        api_key: str | None = None,
+        provider: str | LLMProvider | None = None,
+        model: str | None = None,
+        conflict_threshold: float = 0.7,
+        timeout: float | None = None,
+        batch_size: int = 20,
+        embed_url: str = "http://localhost:11434",
+        embed_model: str = "nomic-embed-text",
+        semantic_threshold: float = 0.80,
+        **provider_kwargs: str,
+    ) -> list[Fact]:
+        """Like :meth:`alearn` but adds a semantic deduplication pass after extraction.
+
+        After the standard LLM extraction + lexical dedup (``resolve_against_existing``),
+        a second pass embeds remaining new facts alongside existing facts and merges
+        any pair with cosine similarity ≥ ``semantic_threshold``.  This detects
+        topic-evolution updates (e.g. "I use Airflow" followed by "I switched to
+        Prefect") that share almost no tokens but are semantically near-duplicate.
+
+        On merge the *newer* fact's content replaces the existing one (temporal
+        consolidation).  Importance is bumped by ``+0.05`` (clamped to 1.0).
+
+        Graceful degradation: if the Ollama embedding endpoint is unreachable the
+        semantic pass is silently skipped and behaviour is identical to
+        :meth:`alearn`.
+
+        Args:
+            turns: Conversation messages to extract knowledge from.
+            embed_url: Base URL of the Ollama server for embeddings.
+            embed_model: Embedding model name (must support /v1/embeddings).
+            semantic_threshold: Cosine similarity above which two facts are
+                considered the same topic (0.0–1.0, default 0.82).
+            All other args: same as :meth:`learn`.
+        """
+        from ai_knot.embedder import cosine, embed_texts
+
+        loop = asyncio.get_running_loop()
+        new_facts: list[Fact] = await loop.run_in_executor(
+            None,
+            lambda: self.learn(
+                turns,
+                api_key=api_key,
+                provider=provider,
+                model=model,
+                conflict_threshold=conflict_threshold,
+                timeout=timeout,
+                batch_size=batch_size,
+                **provider_kwargs,
+            ),
+        )
+
+        if not new_facts:
+            return new_facts
+
+        existing = await loop.run_in_executor(None, lambda: self._storage.load(self._agent_id))
+        if not existing:
+            return new_facts
+
+        # Build a set of already-inserted new fact IDs to avoid comparing against
+        # themselves (learn() already saved them to storage).
+        new_ids = {f.id for f in new_facts}
+        prior_facts = [f for f in existing if f.id not in new_ids]
+        if not prior_facts:
+            return new_facts
+
+        new_texts = [f.content for f in new_facts]
+        all_embeddings = await embed_texts(
+            new_texts + [f.content for f in prior_facts], base_url=embed_url, model=embed_model
+        )
+
+        if not all_embeddings:
+            # Ollama unavailable — graceful degradation.
+            return new_facts
+
+        new_embs = all_embeddings[: len(new_facts)]
+        prior_embs = all_embeddings[len(new_facts) :]
+
+        # For each new fact find its nearest prior fact.  If above threshold,
+        # close the old fact (set valid_until = now) and keep the new fact as
+        # the current version — proper temporal versioning instead of mutation.
+        closed_ids: set[str] = set()
+        updated_prior: list[Fact] = []
+        for _new_fact, new_emb in zip(new_facts, new_embs, strict=True):
+            updated_prior_ids = {p.id for p in updated_prior}
+            best_score = 0.0
+            best_prior: Fact | None = None
+            for prior_fact, prior_emb in zip(prior_facts, prior_embs, strict=True):
+                if prior_fact.id in updated_prior_ids:
+                    continue  # already merged into this slot — don't double-merge
+                score = cosine(new_emb, prior_emb)
+                if score > best_score:
+                    best_score = score
+                    best_prior = prior_fact
+
+            if best_prior is not None and best_score >= semantic_threshold:
+                # Temporal close: mark prior fact as superseded instead of mutating content.
+                best_prior.valid_until = datetime.now(UTC)
+                best_prior.importance = min(1.0, best_prior.importance + 0.05)
+                updated_prior.append(best_prior)
+                closed_ids.add(best_prior.id)
+
+        if closed_ids:
+            await loop.run_in_executor(None, lambda: self._storage.save(self._agent_id, existing))
+            logger.info(
+                "Temporal consolidation closed %d prior fact(s) for agent '%s'",
+                len(closed_ids),
+                self._agent_id,
+            )
+
+        return new_facts
+
+    async def consolidate_episodic(
+        self,
+        *,
+        older_than_hours: float = 24.0,
+        embed_url: str = "http://localhost:11434",
+        embed_model: str = "nomic-embed-text",
+        semantic_threshold: float = 0.80,
+    ) -> int:
+        """Promote episodic facts to semantic memory (async "sleep consolidation").
+
+        Finds episodic facts older than ``older_than_hours``, runs LLM extraction
+        to produce structured semantic facts, deduplicates against existing
+        semantic memory, and marks episodic facts as consolidated (valid_until=now).
+
+        Inspired by CLS theory (McClelland et al. 1995): hippocampal → neocortical
+        transfer happens offline (during "sleep"), not during encoding.
+
+        Args:
+            older_than_hours: Only consolidate episodic facts created more than
+                this many hours ago (avoids consolidating too-recent episodes).
+            embed_url: Ollama base URL for semantic dedup embeddings.
+            embed_model: Embedding model for dedup pass.
+            semantic_threshold: Cosine threshold for semantic dedup.
+
+        Returns:
+            Number of new semantic facts created from consolidation.
+        """
+        if not self._default_provider:
+            logger.warning(
+                "consolidate_episodic() requires a provider; "
+                "configure KnowledgeBase with provider= to enable this."
+            )
+            return 0
+
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(hours=older_than_hours)
+
+        all_facts = self._storage.load(self._agent_id)
+        to_consolidate = [
+            f
+            for f in all_facts
+            if f.type == MemoryType.EPISODIC and f.is_active(now) and f.created_at <= cutoff
+        ]
+
+        if not to_consolidate:
+            return 0
+
+        # Run LLM extraction on the episodic batch (treat as conversation turns)
+        turns = [
+            ConversationTurn(role="user", content=f.source_verbatim or f.content)
+            for f in to_consolidate
+        ]
+        new_semantic = await self.learn_async(
+            turns,
+            embed_url=embed_url,
+            embed_model=embed_model,
+            semantic_threshold=semantic_threshold,
+        )
+
+        # Reload after learn_async() (which internally saved new semantic facts)
+        # to avoid overwriting them with the stale snapshot.
+        all_facts = self._storage.load(self._agent_id)
+        consolidated_ids = {f.id for f in to_consolidate}
+        for fact in all_facts:
+            if fact.id in consolidated_ids:
+                fact.valid_until = now
+
+        self._storage.save(self._agent_id, all_facts)
+        logger.info(
+            "Consolidated %d episodic facts → %d new semantic facts for agent '%s'",
+            len(to_consolidate),
+            len(new_semantic),
+            self._agent_id,
+        )
+        return len(new_semantic)
 
     async def arecall(self, query: str, *, top_k: int = 5, now: datetime | None = None) -> str:
         """Async variant of :meth:`recall` — non-blocking for asyncio applications.
@@ -403,120 +708,43 @@ class KnowledgeBase:
                 expansion[token] = self._expansion_weight or _LLM_EXPANSION_WEIGHT
         return query, expansion if expansion else None
 
-    def recall(self, query: str, *, top_k: int = 5, now: datetime | None = None) -> str:
-        """Retrieve relevant facts as a formatted string for prompt injection.
-
-        Args:
-            query: What the agent needs to know right now.
-            top_k: Maximum number of facts to return.
-            now: Point-in-time for decay calculation (default: current UTC).
-
-        Returns:
-            Formatted multi-line string, or "" if no facts found.
-        """
-        facts = self._storage.load(self._agent_id)
-        if not facts:
-            return ""
-
-        # Apply decay before searching.
-        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
-
-        query, expansion = self._expand_query(query)
-        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
-        if not pairs:
-            return ""
-
-        results = [f for f, _ in pairs]
-
-        # Increment access_count on returned facts and persist.
-        returned_ids = {r.id for r in results}
-        access_time = datetime.now(UTC)
-        for fact in facts:
-            if fact.id in returned_ids:
-                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
-                fact.access_intervals.append(interval)
-                if len(fact.access_intervals) > 20:
-                    fact.access_intervals = fact.access_intervals[-20:]
-                fact.access_count += 1
-                fact.last_accessed = access_time
-        self._storage.save(self._agent_id, facts)
-
-        # Format for prompt injection.
-        lines = [f"[{r.type.value}] {r.content}" for r in results]
-        return "\n".join(lines)
-
-    def list_facts(self) -> list[Fact]:
-        """Return all stored facts for this agent.
-
-        Returns:
-            List of all Facts, in storage order.
-        """
-        return self._storage.load(self._agent_id)
-
-    def recall_facts(
-        self, query: str, *, top_k: int = 5, now: datetime | None = None
-    ) -> list[Fact]:
-        """Structured alternative to recall() — returns Fact objects.
-
-        Use when you need IDs, types, importance scores, or other metadata.
-        Use recall() when you only need a formatted string for prompt injection.
-
-        Args:
-            query: What the agent needs to know right now.
-            top_k: Maximum number of facts to return.
-            now: Point-in-time for decay calculation (default: current UTC).
-
-        Returns:
-            List of relevant Facts (may be empty), sorted by relevance.
-        """
-        facts = self._storage.load(self._agent_id)
-        if not facts:
-            return []
-
-        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
-        query, expansion = self._expand_query(query)
-        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
-        if not pairs:
-            return []
-
-        results = [f for f, _ in pairs]
-        returned_ids = {r.id for r in results}
-        access_time = datetime.now(UTC)
-        for fact in facts:
-            if fact.id in returned_ids:
-                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
-                fact.access_intervals.append(interval)
-                if len(fact.access_intervals) > 20:
-                    fact.access_intervals = fact.access_intervals[-20:]
-                fact.access_count += 1
-                fact.last_accessed = access_time
-        self._storage.save(self._agent_id, facts)
-        return results
-
-    def recall_facts_with_scores(
-        self, query: str, *, top_k: int = 5, now: datetime | None = None
+    def _execute_recall(
+        self,
+        query: str,
+        *,
+        top_k: int,
+        now: datetime | None,
+        excluded_ids: set[str] | None = None,
     ) -> list[tuple[Fact, float]]:
-        """Like recall_facts() but also returns the relevance score for each fact.
+        """Core recall logic shared by recall(), recall_facts(), recall_facts_with_scores().
 
-        The score is a hybrid value (TF-IDF + retention + importance). Use it
-        to rank or filter results in integration adapters.
+        Loads facts, applies decay, runs retrieval, updates access metadata, and
+        persists.  Returns (Fact, score) pairs in relevance order.
 
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
             now: Point-in-time for decay calculation (default: current UTC).
-
-        Returns:
-            List of (Fact, score) pairs sorted by relevance (most relevant first).
-            Empty list if no facts stored or none match.
+            excluded_ids: Fact IDs to exclude from results (e.g. already-seen facts
+                in a novelty-aware retrieval loop).  ``None`` means no exclusion.
         """
         facts = self._storage.load(self._agent_id)
         if not facts:
             return []
 
-        facts = apply_decay(facts, type_exponents=self._decay_config, now=now)
-        query, expansion = self._expand_query(query)
-        pairs = self._retriever.search(query, facts, top_k=top_k, expansion_weights=expansion)
+        now_dt = now or datetime.now(UTC)
+        # Temporal filter + exclude episodic (raw buffer) in one pass.
+        facts = [f for f in facts if f.is_active(now_dt) and f.type != MemoryType.EPISODIC]
+        if not facts:
+            return []
+
+        facts = apply_decay(facts, type_exponents=self._decay_config, now=now_dt)
+        expanded_query, expansion = self._expand_query(query)
+
+        candidate_facts = [f for f in facts if f.id not in excluded_ids] if excluded_ids else facts
+        pairs = self._retriever.search(
+            expanded_query, candidate_facts, top_k=top_k, expansion_weights=expansion
+        )
         if not pairs:
             return []
 
@@ -532,6 +760,86 @@ class KnowledgeBase:
                 fact.last_accessed = access_time
         self._storage.save(self._agent_id, facts)
         return pairs
+
+    def recall(self, query: str, *, top_k: int = 5, now: datetime | None = None) -> str:
+        """Retrieve relevant facts as a formatted string for prompt injection.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
+
+        Returns:
+            Formatted multi-line string, or "" if no facts found.
+        """
+        pairs = self._execute_recall(query, top_k=top_k, now=now)
+        if not pairs:
+            return ""
+        lines = [
+            f"[{f.type.value}] {f.prompt_surface or f.source_verbatim or f.content}"
+            for f, _ in pairs
+        ]
+        return "\n".join(lines)
+
+    def list_facts(self) -> list[Fact]:
+        """Return all stored facts for this agent.
+
+        Returns:
+            List of all Facts, in storage order.
+        """
+        return self._storage.load(self._agent_id)
+
+    def recall_facts(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        excluded_ids: set[str] | None = None,
+    ) -> list[Fact]:
+        """Structured alternative to recall() — returns Fact objects.
+
+        Use when you need IDs, types, importance scores, or other metadata.
+        Use recall() when you only need a formatted string for prompt injection.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
+            excluded_ids: Fact IDs to omit from results (novelty-aware retrieval).
+
+        Returns:
+            List of relevant Facts (may be empty), sorted by relevance.
+        """
+        return [
+            f
+            for f, _ in self._execute_recall(query, top_k=top_k, now=now, excluded_ids=excluded_ids)
+        ]
+
+    def recall_facts_with_scores(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        excluded_ids: set[str] | None = None,
+    ) -> list[tuple[Fact, float]]:
+        """Like recall_facts() but also returns the relevance score for each fact.
+
+        The score is a hybrid value (TF-IDF + retention + importance). Use it
+        to rank or filter results in integration adapters.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+            now: Point-in-time for decay calculation (default: current UTC).
+            excluded_ids: Fact IDs to omit from results (novelty-aware retrieval).
+
+        Returns:
+            List of (Fact, score) pairs sorted by relevance (most relevant first).
+            Empty list if no facts stored or none match.
+        """
+        return self._execute_recall(query, top_k=top_k, now=now, excluded_ids=excluded_ids)
 
     def recall_by_tag(self, tag: str) -> list[Fact]:
         """Return all facts that carry the given tag.
@@ -666,25 +974,28 @@ class KnowledgeBase:
         Returns:
             Dict with total_facts, by_type counts, avg_importance, avg_retention.
         """
+        _zero: dict[str, Any] = {
+            "total_facts": 0,
+            "by_type": {"semantic": 0, "procedural": 0, "episodic": 0},
+            "avg_importance": 0.0,
+            "avg_retention": 0.0,
+        }
         facts = self._storage.load(self._agent_id)
-        if not facts:
-            return {
-                "total_facts": 0,
-                "by_type": {"semantic": 0, "procedural": 0, "episodic": 0},
-                "avg_importance": 0.0,
-                "avg_retention": 0.0,
-            }
+        now_dt = datetime.now(UTC)
+        active_facts = [f for f in facts if f.is_active(now_dt)]
+        if not active_facts:
+            return _zero
 
-        type_counts = Counter(f.type.value for f in facts)
+        type_counts = Counter(f.type.value for f in active_facts)
         return {
-            "total_facts": len(facts),
+            "total_facts": len(active_facts),
             "by_type": {
                 "semantic": type_counts.get("semantic", 0),
                 "procedural": type_counts.get("procedural", 0),
                 "episodic": type_counts.get("episodic", 0),
             },
-            "avg_importance": sum(f.importance for f in facts) / len(facts),
-            "avg_retention": sum(f.retention_score for f in facts) / len(facts),
+            "avg_importance": sum(f.importance for f in active_facts) / len(active_facts),
+            "avg_retention": sum(f.retention_score for f in active_facts) / len(active_facts),
         }
 
 
@@ -699,10 +1010,14 @@ class SharedMemoryPool:
     channel with selective read access. Facts from other agents receive a
     provenance discount reflecting per-agent trust (Marsh 1994).
 
-    Trust starts at ``_PROVENANCE_DISCOUNT`` (0.8) for new agents and can
-    be adjusted via :meth:`update_trust` based on feedback quality.
-    Agents that consistently provide relevant facts earn higher trust;
-    unreliable agents can be penalized.
+    Trust is computed automatically from observed behaviour:
+        ``trust = min(1, used / published) × (1 − quick_invalidation_rate)``
+
+    where *published* is the number of facts an agent has contributed,
+    *used* is the total number of recall hits across all queries, and
+    *quick_invalidation_rate* is the fraction of the agent's facts that were
+    superseded by a different agent within ``_QUICK_INV_WINDOW_S`` seconds —
+    a signal that the original data was stale or low-quality.
 
     Usage::
 
@@ -716,9 +1031,6 @@ class SharedMemoryPool:
         # Coding agent queries the shared pool
         results = pool.recall("what database?", "coding_agent", top_k=5)
 
-        # Boost devops_agent trust after positive feedback
-        pool.update_trust("devops_agent", 0.05)
-
     Args:
         storage: Backend used to persist the shared namespace.
     """
@@ -727,7 +1039,11 @@ class SharedMemoryPool:
         self._storage: StorageBackend = storage or YAMLStorage()
         self._retriever = TFIDFRetriever()
         self._agents: set[str] = set()
-        self._trust_scores: dict[str, float] = {}
+        self._publish_count: dict[str, int] = {}
+        self._used_count: dict[str, int] = {}
+        self._quick_inv_count: dict[str, int] = {}
+        # MESI: per-agent high-water mark of versions pulled from shared pool.
+        self._known_version: dict[str, int] = {}
 
     def register(self, agent_id: str) -> None:
         """Register an agent to participate in the shared pool.
@@ -742,35 +1058,29 @@ class SharedMemoryPool:
         """Return the set of registered agent IDs."""
         return set(self._agents)
 
-    def update_trust(self, agent_id: str, delta: float) -> float:
-        """Adjust trust score for an agent (Marsh 1994 differential trust).
-
-        Trust is clamped to [0.1, 1.0].  Positive ``delta`` rewards agents
-        whose shared facts proved relevant; negative ``delta`` penalizes
-        unreliable sources.
-
-        Args:
-            agent_id: The agent whose trust to adjust.
-            delta: Amount to add (positive = reward, negative = penalize).
-
-        Returns:
-            The updated trust score.
-        """
-        current = self._trust_scores.get(agent_id, _PROVENANCE_DISCOUNT)
-        updated = max(0.1, min(1.0, current + delta))
-        self._trust_scores[agent_id] = updated
-        return updated
-
     def get_trust(self, agent_id: str) -> float:
-        """Return the current trust score for an agent.
+        """Return the current auto-computed trust score for an agent.
+
+        Formula:
+            ``trust = min(1, used / published) × (1 − quick_inv_rate)``
+
+        Falls back to ``_PROVENANCE_DISCOUNT`` when the agent has not yet
+        published any facts (no track record).
 
         Args:
             agent_id: The agent to query.
 
         Returns:
-            Trust score (0.1-1.0), defaulting to ``_PROVENANCE_DISCOUNT``.
+            Trust score in [0.1, 1.0].
         """
-        return self._trust_scores.get(agent_id, _PROVENANCE_DISCOUNT)
+        published = self._publish_count.get(agent_id, 0)
+        if published == 0:
+            return _PROVENANCE_DISCOUNT
+        used = self._used_count.get(agent_id, 0)
+        quick_inv = self._quick_inv_count.get(agent_id, 0)
+        quality = min(1.0, used / published)
+        inv_penalty = quick_inv / published
+        return max(0.1, quality * (1.0 - inv_penalty))
 
     def publish(
         self,
@@ -778,19 +1088,30 @@ class SharedMemoryPool:
         fact_ids: list[str],
         *,
         kb: KnowledgeBase,
+        utility_threshold: float = 0.0,
     ) -> list[Fact]:
         """Copy facts from an agent's private KB into the shared pool.
 
-        Each published fact gets ``visibility="pool"`` and
-        ``origin_agent_id`` set to the publishing agent.
+        Uses slot-addressed CAS: for each fact with a ``slot_key``, the
+        existing active fact for that slot is closed (valid_until=now,
+        mesi_state='I') and the new fact is inserted (mesi_state='M' if
+        replacing, 'S' if new). Facts with no slot fall back to ID-based dedup.
+
+        An optional publish gate filters facts by utility score before
+        inserting:
+            ``utility = state_confidence × importance``
+        Only facts with ``utility >= utility_threshold`` are published.
+        Threshold 0.0 (default) = no gating.
 
         Args:
             agent_id: The agent publishing the facts.
             fact_ids: IDs of facts to publish from the agent's KB.
             kb: The agent's KnowledgeBase instance.
+            utility_threshold: Minimum utility score (0.0–1.0) to publish.
+                Facts below the threshold are silently skipped.
 
         Returns:
-            List of facts that were published.
+            List of facts that were published (copies, not mutations of private KB).
 
         Raises:
             ValueError: If agent_id is not registered.
@@ -800,27 +1121,93 @@ class SharedMemoryPool:
 
         private_facts = kb.list_facts()
         id_set = set(fact_ids)
-        to_publish: list[Fact] = []
+        to_publish = [
+            f
+            for f in private_facts
+            if f.id in id_set and f.state_confidence * f.importance >= utility_threshold
+        ]
 
-        for fact in private_facts:
-            if fact.id in id_set:
-                fact.origin_agent_id = agent_id
-                fact.visibility = "pool"
-                to_publish.append(fact)
+        if not to_publish:
+            return []
 
-        if to_publish:
-            shared = self._storage.load(_SHARED_NAMESPACE)
-            existing_ids = {f.id for f in shared}
-            new_facts = [f for f in to_publish if f.id not in existing_ids]
-            shared.extend(new_facts)
+        now = datetime.now(UTC)
+        shared = self._storage.load(_SHARED_NAMESPACE)
+
+        # Index active shared facts by slot_key for O(1) CAS lookup.
+        # Falls back to (entity, attribute) for pre-Phase-3 facts without slot_key.
+        active_by_slot: dict[str, Fact] = {}
+        existing_ids: set[str] = set()
+        for f in shared:
+            existing_ids.add(f.id)
+            if f.is_active(now):
+                if f.slot_key:
+                    active_by_slot[f.slot_key] = f
+                elif f.entity and f.attribute:
+                    # Legacy: synthetic slot key from entity+attribute.
+                    legacy_key = f"{f.entity.lower().strip()}::{f.attribute.lower().strip()}"
+                    active_by_slot.setdefault(legacy_key, f)
+
+        # Global monotonic version counter for the pool.
+        # Each published or superseded fact gets a strictly increasing version
+        # so that load_since_version() and sync_slot_deltas() work correctly
+        # when multiple facts are published in separate batches.
+        next_version = max((f.version for f in shared), default=0) + 1
+
+        published: list[Fact] = []
+        for fact in to_publish:
+            new_fact = copy.deepcopy(fact)
+            new_fact.origin_agent_id = agent_id
+            new_fact.visibility = "pool"
+            new_fact.valid_from = now
+            new_fact.valid_until = None
+
+            # Resolve CAS key: prefer slot_key, fall back to entity+attribute.
+            cas_key = fact.slot_key or (
+                f"{fact.entity.lower().strip()}::{fact.attribute.lower().strip()}"
+                if fact.entity and fact.attribute
+                else ""
+            )
+
+            if cas_key and cas_key in active_by_slot:
+                old = active_by_slot[cas_key]
+                if old.id == fact.id:
+                    # Same fact already published as the active version — no-op.
+                    continue
+                # Slot-addressed CAS: close old version, insert new.
+                old.valid_until = now
+                old.mesi_state = MESIState.INVALID
+                new_fact.mesi_state = MESIState.MODIFIED
+                new_fact.version = next_version
+                next_version += 1
+                # Quick invalidation: a different agent superseded this slot within the window.
+                if old.origin_agent_id and old.origin_agent_id != agent_id:
+                    age_s = (now - old.valid_from).total_seconds()
+                    if age_s < _QUICK_INV_WINDOW_S:
+                        self._quick_inv_count[old.origin_agent_id] = (
+                            self._quick_inv_count.get(old.origin_agent_id, 0) + 1
+                        )
+            elif new_fact.id not in existing_ids:
+                new_fact.mesi_state = MESIState.SHARED
+                new_fact.version = next_version
+                next_version += 1
+            else:
+                # ID already in pool and no slot key — skip duplicate.
+                continue
+
+            shared.append(new_fact)
+            published.append(new_fact)
+
+        # Track publish counts for auto-trust.
+        if published:
+            self._publish_count[agent_id] = self._publish_count.get(agent_id, 0) + len(published)
             self._storage.save(_SHARED_NAMESPACE, shared)
             logger.info(
                 "Agent '%s' published %d facts to shared pool",
                 agent_id,
-                len(new_facts),
+                len(published),
             )
 
-        return to_publish
+        return published
 
     def recall(
         self,
@@ -828,42 +1215,153 @@ class SharedMemoryPool:
         requesting_agent_id: str,
         *,
         top_k: int = 5,
+        now: datetime | None = None,
+        topic_channel: str = "",
     ) -> list[tuple[Fact, float]]:
         """Search the shared pool with provenance discount.
 
+        Applies temporal filter (only active facts) before retrieval.
         Facts originating from the requesting agent receive full score;
-        facts from other agents are discounted by ``_PROVENANCE_DISCOUNT``
-        (0.8×) to reflect lower trust in external knowledge.
+        facts from other agents are discounted by per-agent trust (Marsh 1994).
 
         Args:
             query: The search query.
             requesting_agent_id: Agent performing the query.
             top_k: Maximum results to return.
+            now: Point-in-time for temporal filter (default: UTC now).
+            topic_channel: If non-empty, only return facts with a matching
+                ``topic_channel`` or no channel (empty = visible in all channels).
 
         Returns:
             List of (Fact, score) pairs sorted by relevance.
         """
-        shared = self._storage.load(_SHARED_NAMESPACE)
-        if not shared:
+        # Use index-accelerated fast path if available (SQLite/Postgres).
+        if isinstance(self._storage, TemporalStorageCapable):
+            active = self._storage.load_active(_SHARED_NAMESPACE)
+        else:
+            now_dt = now or datetime.now(UTC)
+            all_shared = self._storage.load(_SHARED_NAMESPACE)
+            active = [f for f in all_shared if f.is_active(now_dt)]
+
+        # Topic channel filter: include global facts (no channel) + matching channel.
+        if topic_channel:
+            active = [f for f in active if not f.topic_channel or f.topic_channel == topic_channel]
+
+        # visibility_scope filter: hide local-only facts from foreign agents.
+        active = [
+            f
+            for f in active
+            if f.visibility_scope != "local" or f.origin_agent_id == requesting_agent_id
+        ]
+
+        if not active:
             return []
 
-        pairs = self._retriever.search(query, shared, top_k=top_k)
+        pairs = self._retriever.search(query, active, top_k=top_k)
 
-        # Apply per-agent trust discount for foreign facts (Marsh 1994).
+        # Apply per-agent trust discount; track recall hits for auto-trust.
         discounted: list[tuple[Fact, float]] = []
         for fact, score in pairs:
             if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
-                trust = self._trust_scores.get(fact.origin_agent_id, _PROVENANCE_DISCOUNT)
+                trust = self.get_trust(fact.origin_agent_id)
                 score *= trust
+                self._used_count[fact.origin_agent_id] = (
+                    self._used_count.get(fact.origin_agent_id, 0) + 1
+                )
             discounted.append((fact, score))
 
         discounted.sort(key=lambda x: x[1], reverse=True)
         return discounted[:top_k]
 
+    def sync_dirty(self, agent_id: str) -> list[Fact]:
+        """Pull facts changed by other agents since the last sync (MESI lazy invalidation).
+
+        Implements the Modified/Invalid state pull from MESI protocol.
+        Token savings: ~95% vs broadcast when only a small subset of facts
+        changes between syncs (arXiv 2603.15183).
+
+        Uses ``TemporalStorageCapable.load_since_version()`` for index-accelerated
+        queries on SQLite/Postgres; falls back to Python filtering on YAML.
+
+        Args:
+            agent_id: The agent requesting dirty facts.
+
+        Returns:
+            Facts changed by other agents since the last sync call for this agent.
+        """
+        since = self._known_version.get(agent_id, 0)
+
+        if isinstance(self._storage, TemporalStorageCapable):
+            dirty = self._storage.load_since_version(_SHARED_NAMESPACE, since, agent_id)
+        else:
+            now_dt = datetime.now(UTC)
+            all_shared = self._storage.load(_SHARED_NAMESPACE)
+            dirty = [
+                f
+                for f in all_shared
+                if f.version > since and f.origin_agent_id != agent_id and f.is_active(now_dt)
+            ]
+
+        if dirty:
+            self._known_version[agent_id] = max(f.version for f in dirty)
+        return dirty
+
+    def sync_slot_deltas(self, agent_id: str) -> list[SlotDelta]:
+        """Pull slot-level changes since the last sync as lightweight ``SlotDelta`` records.
+
+        Semantically equivalent to :meth:`sync_dirty` but returns compact
+        ``SlotDelta`` objects instead of full ``Fact`` copies.  Each delta
+        carries only ``slot_key``, ``version``, ``op``, ``fact_id``,
+        ``content``, and ``prompt_surface`` — roughly 10–30× less data than
+        a full ``Fact`` for a typical memory entry.
+
+        On SQLite/Postgres backends the query is index-accelerated; on YAML
+        backends it falls back to Python-level filtering.
+
+        Args:
+            agent_id: The agent requesting delta records.
+
+        Returns:
+            ``SlotDelta`` records for slot changes by other agents since the
+            last call for this agent.  The per-agent high-water mark is
+            updated on each call.
+        """
+        since = self._known_version.get(agent_id, 0)
+
+        if isinstance(self._storage, TemporalStorageCapable):
+            deltas = self._storage.load_slot_deltas_since(_SHARED_NAMESPACE, since, agent_id)
+        else:
+            # Python-level fallback for YAML backends.
+            all_shared = self._storage.load(_SHARED_NAMESPACE)
+            deltas = []
+            for f in all_shared:
+                if f.version <= since or f.origin_agent_id == agent_id:
+                    continue
+                if f.valid_until is not None:
+                    op = "invalidate"
+                elif f.mesi_state == MESIState.MODIFIED:
+                    op = "supersede"
+                else:
+                    op = "new"
+                deltas.append(
+                    SlotDelta(
+                        slot_key=f.slot_key,
+                        version=f.version,
+                        op=op,
+                        fact_id=f.id,
+                        content=f.content,
+                        prompt_surface=f.prompt_surface,
+                    )
+                )
+
+        if deltas:
+            self._known_version[agent_id] = max(d.version for d in deltas)
+        return deltas
+
     def list_shared_facts(self) -> list[Fact]:
         """Return all facts in the shared pool.
 
         Returns:
-            List of all shared Facts.
+            List of all shared Facts (including closed/invalidated).
         """
         return self._storage.load(_SHARED_NAMESPACE)

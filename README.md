@@ -230,10 +230,16 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-**Available tools:** `add`, `recall`, `recall_json`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`, `list_snapshots`.
+**Available tools:** `add`, `recall`, `recall_json`, `learn`, `forget`, `list_facts`, `stats`, `snapshot`, `restore`, `list_snapshots`, `health`, `capabilities`.
 
-> **TypeScript agents:** always use `recall_json` — it returns a stable JSON array (`[]` when empty).
-> `recall` returns a plain string and `"No relevant facts found."` on empty — harder to parse reliably.
+> **TypeScript agents:** always use `recall_json` — it returns a stable JSON array (`[]` when empty, never a human string).
+
+> **`learn`** accepts `messages` (same format as OpenAI chat) and extracts relevant facts using the
+> configured LLM. Without `AI_KNOT_PROVIDER` / `AI_KNOT_API_KEY` it falls back to storing the last
+> user message directly.
+
+> **`health`** returns `{"status":"ok","version":"..."}`. **`capabilities`** returns the full tool list
+> as JSON — useful for introspection without a full `tools/list` round-trip.
 
 **Environment variables:**
 
@@ -531,6 +537,13 @@ ai-knot export my_agent out.yaml   # backup to file
 ai-knot import my_agent in.yaml    # restore from backup
 ```
 
+**MCP setup shortcut** — prints a paste-ready config block for Claude Desktop or Claude Code:
+
+```bash
+ai-knot setup claude                            # defaults: sqlite, agent_id=default
+ai-knot setup claude --agent-id bot --storage yaml --data-dir /data/mem
+```
+
 ---
 
 ## How knowledge looks on disk (YAML backend)
@@ -547,6 +560,8 @@ a1b2c3:
   created_at: '2026-03-01T10:00:00+00:00'
   last_accessed: '2026-03-27T09:00:00+00:00'
   tags: [user_profile, work]
+  slot_key: "user::role"              # slot-addressed (set automatically)
+  canonical_surface: "senior backend developer at Acme Corp"
 
 d4e5f6:
   content: "User prefers Python, dislikes async patterns"
@@ -554,6 +569,8 @@ d4e5f6:
   importance: 0.85
   retention_score: 0.88
   access_count: 34
+  topic_channel: devops               # optional — route to a named channel
+  visibility_scope: local             # local = private to this agent (default: global)
 ```
 
 Edit it by hand. Commit it to Git. Roll back when needed.
@@ -681,30 +698,111 @@ response = openai_client.chat.completions.create(
 
 ---
 
+## Slot-addressed deduplication
+
+ai-knot identifies *what a fact is about* using a `slot_key` in the form `entity::attribute`
+(e.g. `user::preferred_language`, `project::database`). When `learn()` extracts a new fact whose
+slot matches an existing one, it **supersedes** the old fact instead of creating a duplicate:
+
+```python
+kb.learn([{"role":"user","content":"I use Python"}], provider="openai")
+kb.learn([{"role":"user","content":"I switched to Go"}], provider="openai")
+
+facts = kb.list_facts()
+# 1 fact: "I switched to Go"  (Python fact was closed, not duplicated)
+```
+
+Without an LLM, `add()` still does lexical deduplication on exact-match text.
+
+---
+
+## Topic channels and visibility
+
+Facts can carry a `topic_channel` (domain routing) and `visibility_scope`
+(`"global"` = shared across all agents in the pool, `"local"` = private):
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.types import Fact, MemoryType
+
+kb = KnowledgeBase(agent_id="devbot", storage=storage)
+kb.add("Deploy uses Helm 3", topic_channel="devops", importance=0.9)
+
+# recall with channel filter — only "devops" facts surface
+context = kb.recall("deployment tools", topic_channel="devops")
+```
+
+In multi-agent scenarios pass `topic_channel` to `SharedMemoryPool.recall()` for domain-isolated retrieval.
+
+---
+
+## Publish gating (multi-agent)
+
+`publish()` pushes private facts into the shared pool. Set `utility_threshold` to gate out low-signal facts:
+
+```python
+pool = SharedMemoryPool(storage=storage)
+# utility = state_confidence × importance — only facts above threshold are shared
+kb.publish(pool, utility_threshold=0.3)
+```
+
+---
+
+## Auto-trust (multi-agent)
+
+Trust is computed automatically from observed behaviour — no manual calibration:
+
+```python
+pool.recall("query")        # increments _used_count for source agents
+kb.get_trust("agent_b")     # min(1, used/published) × (1 - quick_invalidation_rate)
+```
+
+An agent whose facts are recalled often and rarely superseded quickly earns trust ≈ 1.0.
+An agent that publishes stale or conflicting facts sees its trust decay automatically.
+
+---
+
+## Delta sync (multi-agent)
+
+`sync_slot_deltas()` exchanges only *changed slots* between agents instead of full fact sets:
+
+```python
+# Agent A has new/updated slots since version 5
+deltas = pool.load_slot_deltas_since(agent_id="agent_a", since_version=5, exclude_agent="agent_b")
+agent_b_kb.apply_slot_deltas(deltas)
+```
+
+Delta token transfer is typically < 15% of full-sync volume.
+
+---
+
 ## Architecture
 
 ```
 Conversation Turns
        |
-[ Extractor ]         LLM-based distillation -> structured facts
-       |                 + ATC verification (Broder, 1997)
-[ KnowledgeBase ]     importance scoring + deduplication + power-law decay
+[ Extractor ]         LLM distillation → tri-surface facts (canonical/witness/prompt)
+       |                 + slot_key induction + ATC verification (Broder, 1997)
+[ KnowledgeBase ]     slot-based dedup + importance scoring + power-law decay
+       |                 + topic channels + publish gating + auto-trust
+[ Storage Adapter ]   YAML / SQLite / PostgreSQL
        |
-[ Storage Adapter ]   YAML / SQLite / PostgreSQL (Mongo, Qdrant planned)
-       |
-[ BM25 Retriever ]    Okapi BM25 (zero deps) + Embeddings (planned)
+[ Retriever ]         BM25 + slot-exact + char-trigram (Jaccard) + retention fusion
        |
 Context String        injected into agent system prompt
 ```
 
-**Why BM25 instead of embeddings?** Embeddings need either an API call or a 500 MB local model just
-to recall which language the user prefers. For knowledge bases up to ~10k facts, BM25 with hybrid
-scoring (term relevance + retention + importance) is fast, deterministic, and requires zero extra setup.
-BM25 (Robertson & Zaragoza, 2009) handles term saturation and document length normalization better
-than raw TF-IDF. Semantic embeddings are on the roadmap for larger knowledge bases where keyword
-overlap isn't reliable.
+**Why BM25 + slot-exact instead of embeddings?** For knowledge bases up to ~10k facts, BM25 with
+hybrid scoring (term relevance + retention + importance) is fast and deterministic. The char-trigram
+ranker closes the semantic gap for paraphrases; slot-exact matching ensures the most recent value for
+a given attribute always surfaces first. Semantic embeddings remain on the roadmap for large corpora.
 
-**ATC verification:** Every LLM-extracted fact is verified against the source text using Asymmetric
+**Tri-surface retrieval:** each fact carries three surfaces — `canonical_surface` (normalised form
+for indexing), `witness_surface` (verbatim evidence supporting the fact), and `prompt_surface`
+(polished recall text injected into the system prompt). Retrieval indexes the canonical surface;
+output uses the prompt surface.
+
+**ATC verification:** every LLM-extracted fact is verified against the source text using Asymmetric
 Token Containment (ATC). Facts where fewer than 60% of tokens appear in the source are flagged as
 `supported=False`, preventing hallucinated facts from polluting the knowledge base.
 
@@ -850,8 +948,17 @@ kb.decay()  # apply power-law forgetting curve — stale facts lose retention sc
 - [x] LLM auto-tagging during extraction (base + enhanced pattern)
 - [x] Configurable decay exponents via `decay_config`
 - [x] Opt-in LLM query expansion at recall time
+- [x] Tri-surface facts (canonical / witness / prompt surfaces)
+- [x] Slot-addressed deduplication (`slot_key` — supersede instead of duplicate)
+- [x] Char-trigram + slot-exact rankers (closes semantic gap without embeddings)
+- [x] Slot-delta sync for multi-agent (< 15% token volume vs full sync)
+- [x] Topic channels + visibility scope (`topic_channel`, `visibility_scope`)
+- [x] Publish gating (`utility_threshold` — filter low-signal facts from shared pool)
+- [x] Auto-trust from observed behaviour (replaces manual `update_trust()`)
+- [x] MCP `learn`, `health`, `capabilities` tools
+- [x] `ai-knot setup claude` CLI — paste-ready MCP config with absolute paths
 - [ ] MongoDB backend
-- [ ] Qdrant + Weaviate backends
+- [ ] Qdrant + Weaviate backends (benchmark backend exists; production driver planned)
 - [ ] Semantic embeddings (sentence-transformers / OpenAI)
 - [ ] LangChain / CrewAI integrations
 - [ ] Web UI knowledge inspector
@@ -870,7 +977,9 @@ kb.decay()  # apply power-law forgetting curve — stale facts lose retention sc
 | Setup time | 30 sec | 10 min | 30 min | 5 min |
 | Framework-agnostic | Yes | Partial | Partial | LangGraph only |
 | Forgetting curve (type-aware power-law) | Yes | No | No | No |
-| Multi-agent trust matrix | Yes | No | No | No |
+| Slot-addressed dedup (no LLM needed) | Yes | No | No | No |
+| Multi-agent auto-trust | Yes | No | No | No |
+| Topic channels + publish gating | Yes | No | No | No |
 | Fact verification (ATC) | Yes | No | No | No |
 | Offline eval framework | Yes | No | No | No |
 | Snapshots + diff | Yes | No | No | No |

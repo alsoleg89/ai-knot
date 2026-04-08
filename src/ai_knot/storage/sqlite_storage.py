@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ai_knot.types import Fact, MemoryType
+from ai_knot.storage.base import parse_datetime as _parse_datetime
+from ai_knot.types import Fact, MemoryType, MESIState, SlotDelta
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +32,33 @@ CREATE TABLE IF NOT EXISTS facts (
     support_confidence REAL NOT NULL DEFAULT 1.0,
     verification_source TEXT NOT NULL DEFAULT 'manual',
     access_intervals TEXT NOT NULL DEFAULT '[]',
+    origin_agent_id TEXT NOT NULL DEFAULT '',
+    visibility      TEXT NOT NULL DEFAULT 'private',
+    source_verbatim TEXT NOT NULL DEFAULT '',
+    valid_from  TEXT NOT NULL DEFAULT '',
+    valid_until TEXT,
+    entity      TEXT NOT NULL DEFAULT '',
+    attribute   TEXT NOT NULL DEFAULT '',
+    version     INTEGER NOT NULL DEFAULT 0,
+    mesi_state  TEXT NOT NULL DEFAULT 'E',
+    canonical_surface TEXT NOT NULL DEFAULT '',
+    witness_surface   TEXT NOT NULL DEFAULT '',
+    prompt_surface    TEXT NOT NULL DEFAULT '',
+    slot_key          TEXT NOT NULL DEFAULT '',
+    value_text        TEXT NOT NULL DEFAULT '',
+    qualifiers        TEXT NOT NULL DEFAULT '{}',
+    state_confidence  REAL NOT NULL DEFAULT 1.0,
+    topic_channel     TEXT NOT NULL DEFAULT '',
+    visibility_scope  TEXT NOT NULL DEFAULT 'global',
     PRIMARY KEY (agent_id, id)
 )
 """
+
+_CREATE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_facts_valid ON facts(agent_id, valid_until)",
+    "CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(agent_id, entity, attribute)",
+    "CREATE INDEX IF NOT EXISTS idx_facts_version ON facts(agent_id, version)",
+]
 
 _CREATE_SNAPSHOTS_TABLE = """
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -68,6 +93,8 @@ class SQLiteStorage:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_SNAPSHOTS_TABLE)
+            for stmt in _CREATE_INDEXES:
+                conn.execute(stmt)
         self._migrate_db()
 
     def _migrate_db(self) -> None:
@@ -79,6 +106,24 @@ class SQLiteStorage:
             "support_confidence": "REAL NOT NULL DEFAULT 1.0",
             "verification_source": "TEXT NOT NULL DEFAULT 'manual'",
             "access_intervals": "TEXT NOT NULL DEFAULT '[]'",
+            "origin_agent_id": "TEXT NOT NULL DEFAULT ''",
+            "visibility": "TEXT NOT NULL DEFAULT 'private'",
+            "source_verbatim": "TEXT NOT NULL DEFAULT ''",
+            "valid_from": "TEXT NOT NULL DEFAULT ''",
+            "valid_until": "TEXT",
+            "entity": "TEXT NOT NULL DEFAULT ''",
+            "attribute": "TEXT NOT NULL DEFAULT ''",
+            "version": "INTEGER NOT NULL DEFAULT 0",
+            "mesi_state": "TEXT NOT NULL DEFAULT 'E'",
+            "canonical_surface": "TEXT NOT NULL DEFAULT ''",
+            "witness_surface": "TEXT NOT NULL DEFAULT ''",
+            "prompt_surface": "TEXT NOT NULL DEFAULT ''",
+            "slot_key": "TEXT NOT NULL DEFAULT ''",
+            "value_text": "TEXT NOT NULL DEFAULT ''",
+            "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
+            "state_confidence": "REAL NOT NULL DEFAULT 1.0",
+            "topic_channel": "TEXT NOT NULL DEFAULT ''",
+            "visibility_scope": "TEXT NOT NULL DEFAULT 'global'",
         }
         with self._get_conn() as conn:
             cur = conn.execute("PRAGMA table_info(facts)")
@@ -89,72 +134,112 @@ class SQLiteStorage:
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
         """Replace all facts for an agent."""
+        rows = [
+            (
+                fact.id,
+                agent_id,
+                fact.content,
+                fact.type.value,
+                fact.importance,
+                fact.retention_score,
+                fact.access_count,
+                json.dumps(fact.tags),
+                fact.created_at.isoformat(),
+                fact.last_accessed.isoformat(),
+                json.dumps(fact.source_snippets),
+                json.dumps(fact.source_spans),
+                1 if fact.supported else 0,
+                fact.support_confidence,
+                fact.verification_source,
+                json.dumps(fact.access_intervals),
+                fact.origin_agent_id,
+                fact.visibility,
+                fact.source_verbatim,
+                fact.valid_from.isoformat(),
+                fact.valid_until.isoformat() if fact.valid_until is not None else None,
+                fact.entity,
+                fact.attribute,
+                fact.version,
+                fact.mesi_state,
+                fact.canonical_surface,
+                fact.witness_surface,
+                fact.prompt_surface,
+                fact.slot_key,
+                fact.value_text,
+                json.dumps(fact.qualifiers),
+                fact.state_confidence,
+                fact.topic_channel,
+                fact.visibility_scope,
+            )
+            for fact in facts
+        ]
         with self._get_conn() as conn:
             conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
-            for fact in facts:
-                conn.execute(
-                    """INSERT INTO facts
-                       (id, agent_id, content, type, importance, retention,
-                        access_count, tags, created_at, last_accessed,
-                        source_snippets, source_spans, supported,
-                        support_confidence, verification_source,
-                        access_intervals)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        fact.id,
-                        agent_id,
-                        fact.content,
-                        fact.type.value,
-                        fact.importance,
-                        fact.retention_score,
-                        fact.access_count,
-                        json.dumps(fact.tags),
-                        fact.created_at.isoformat(),
-                        fact.last_accessed.isoformat(),
-                        json.dumps(fact.source_snippets),
-                        json.dumps(fact.source_spans),
-                        1 if fact.supported else 0,
-                        fact.support_confidence,
-                        fact.verification_source,
-                        json.dumps(fact.access_intervals),
-                    ),
-                )
+            conn.executemany(
+                """INSERT INTO facts
+                   (id, agent_id, content, type, importance, retention,
+                    access_count, tags, created_at, last_accessed,
+                    source_snippets, source_spans, supported,
+                    support_confidence, verification_source,
+                    access_intervals, origin_agent_id, visibility,
+                    source_verbatim, valid_from, valid_until,
+                    entity, attribute, version, mesi_state,
+                    canonical_surface, witness_surface, prompt_surface,
+                    slot_key, value_text, qualifiers, state_confidence,
+                    topic_channel, visibility_scope)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                rows,
+            )
         logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
 
     def load(self, agent_id: str) -> list[Fact]:
         """Load all facts for an agent."""
         with self._get_conn() as conn:
             rows = conn.execute(
-                """SELECT id, content, type, importance, retention,
-                          access_count, tags, created_at, last_accessed,
-                          source_snippets, source_spans, supported,
-                          support_confidence, verification_source,
-                          access_intervals
-                   FROM facts WHERE agent_id = ?
-                   ORDER BY created_at""",
+                f"{self._SELECT_COLS} FROM facts WHERE agent_id = ? ORDER BY created_at",
                 (agent_id,),
             ).fetchall()
 
-        return [
-            Fact(
-                id=row[0],
-                content=row[1],
-                type=MemoryType(row[2]),
-                importance=row[3],
-                retention_score=row[4],
-                access_count=row[5],
-                tags=json.loads(row[6]),
-                created_at=_parse_datetime(row[7]),
-                last_accessed=_parse_datetime(row[8]),
-                source_snippets=json.loads(row[9]),
-                source_spans=json.loads(row[10]),
-                supported=bool(row[11]),
-                support_confidence=float(row[12]),
-                verification_source=str(row[13]),
-                access_intervals=json.loads(row[14]),
-            )
-            for row in rows
-        ]
+        return [self._fact_from_row(row) for row in rows]
+
+    @staticmethod
+    def _fact_from_row(row: tuple[Any, ...]) -> Fact:
+        """Construct a Fact from a SELECT row (columns 0-32, matching _SELECT_COLS order)."""
+        return Fact(
+            id=row[0],
+            content=row[1],
+            type=MemoryType(row[2]),
+            importance=row[3],
+            retention_score=row[4],
+            access_count=row[5],
+            tags=json.loads(row[6]),
+            created_at=_parse_datetime(row[7]),
+            last_accessed=_parse_datetime(row[8]),
+            source_snippets=json.loads(row[9]),
+            source_spans=json.loads(row[10]),
+            supported=bool(row[11]),
+            support_confidence=float(row[12]),
+            verification_source=str(row[13]),
+            access_intervals=json.loads(row[14]),
+            origin_agent_id=str(row[15]),
+            visibility=str(row[16]),
+            source_verbatim=str(row[17]),
+            valid_from=_parse_datetime(row[18]) if row[18] else datetime.now(UTC),
+            valid_until=_parse_datetime(row[19]) if row[19] else None,
+            entity=str(row[20]) if row[20] else "",
+            attribute=str(row[21]) if row[21] else "",
+            version=int(row[22]) if row[22] is not None else 0,
+            mesi_state=MESIState(str(row[23])) if row[23] else MESIState.EXCLUSIVE,
+            canonical_surface=str(row[24]) if row[24] else "",
+            witness_surface=str(row[25]) if row[25] else "",
+            prompt_surface=str(row[26]) if row[26] else "",
+            slot_key=str(row[27]) if row[27] else "",
+            value_text=str(row[28]) if row[28] else "",
+            qualifiers=json.loads(row[29]) if row[29] else {},
+            state_confidence=float(row[30]) if row[30] is not None else 1.0,
+            topic_channel=str(row[31]) if row[31] else "",
+            visibility_scope=str(row[32]) if row[32] else "global",
+        )
 
     def delete(self, agent_id: str, fact_id: str) -> None:
         """Remove a single fact by id."""
@@ -169,6 +254,106 @@ class SQLiteStorage:
         with self._get_conn() as conn:
             rows = conn.execute("SELECT DISTINCT agent_id FROM facts").fetchall()
         return [row[0] for row in rows]
+
+    # ------------------------------------------------------------------
+    # TemporalStorageCapable implementation (index-accelerated queries)
+    # ------------------------------------------------------------------
+
+    _SELECT_COLS = """SELECT id, content, type, importance, retention,
+                          access_count, tags, created_at, last_accessed,
+                          source_snippets, source_spans, supported,
+                          support_confidence, verification_source,
+                          access_intervals, origin_agent_id, visibility,
+                          source_verbatim, valid_from, valid_until,
+                          entity, attribute, version, mesi_state,
+                          canonical_surface, witness_surface, prompt_surface,
+                          slot_key, value_text, qualifiers, state_confidence,
+                          topic_channel, visibility_scope"""
+
+    def load_active(self, agent_id: str) -> list[Fact]:
+        """Load only facts where valid_until IS NULL (index-accelerated)."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                f"{self._SELECT_COLS} FROM facts"
+                " WHERE agent_id = ? AND valid_until IS NULL ORDER BY created_at",
+                (agent_id,),
+            ).fetchall()
+        return [self._fact_from_row(row) for row in rows]
+
+    def load_since_version(self, agent_id: str, since: int, exclude_agent: str) -> list[Fact]:
+        """MESI dirty pull: facts with version > since from agents other than exclude_agent."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                f"{self._SELECT_COLS} FROM facts"
+                " WHERE agent_id = ? AND version > ? AND origin_agent_id != ?"
+                " ORDER BY version",
+                (agent_id, since, exclude_agent),
+            ).fetchall()
+        return [self._fact_from_row(row) for row in rows]
+
+    def load_active_frontier(self, agent_id: str) -> list[Fact]:
+        """Return the latest active fact per slot_key (active frontier).
+
+        For slotted facts, returns the highest-version active fact per slot.
+        For unslotted facts, returns all active facts (no slot to collapse).
+        """
+        with self._get_conn() as conn:
+            # Latest active version per slot (for slotted facts).
+            slotted = conn.execute(
+                f"{self._SELECT_COLS} FROM facts f"
+                " INNER JOIN ("
+                "   SELECT slot_key AS sk, MAX(version) AS max_v"
+                "   FROM facts"
+                "   WHERE agent_id = ? AND valid_until IS NULL AND slot_key != ''"
+                "   GROUP BY sk"
+                " ) m ON f.slot_key = m.sk AND f.version = m.max_v"
+                " AND f.agent_id = ? AND f.valid_until IS NULL",
+                (agent_id, agent_id),
+            ).fetchall()
+            # All active unslotted facts.
+            unslotted = conn.execute(
+                f"{self._SELECT_COLS} FROM facts"
+                " WHERE agent_id = ? AND valid_until IS NULL AND slot_key = ''",
+                (agent_id,),
+            ).fetchall()
+        return [self._fact_from_row(r) for r in slotted + unslotted]
+
+    def load_slot_deltas_since(
+        self, agent_id: str, since_version: int, exclude_agent: str
+    ) -> list[SlotDelta]:
+        """Lightweight delta pull: slot changes since *since_version*, excluding *exclude_agent*.
+
+        Returns ``SlotDelta`` objects instead of full ``Fact`` objects for
+        bandwidth-efficient cross-agent synchronisation.
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT slot_key, version, id, prompt_surface, content, valid_until, mesi_state"
+                " FROM facts"
+                " WHERE agent_id = ? AND version > ? AND origin_agent_id != ?"
+                " ORDER BY version",
+                (agent_id, since_version, exclude_agent),
+            ).fetchall()
+
+        deltas: list[SlotDelta] = []
+        for slot_key, version, fact_id, prompt_surface, content, valid_until, mesi_state in rows:
+            if valid_until is not None:
+                op = "invalidate"
+            elif str(mesi_state) == MESIState.MODIFIED:
+                op = "supersede"
+            else:
+                op = "new"
+            deltas.append(
+                SlotDelta(
+                    slot_key=str(slot_key) if slot_key else "",
+                    version=int(version),
+                    op=op,
+                    fact_id=str(fact_id),
+                    content=str(content),
+                    prompt_surface=str(prompt_surface) if prompt_surface else "",
+                )
+            )
+        return deltas
 
     # ------------------------------------------------------------------
     # SnapshotCapable implementation
@@ -193,6 +378,24 @@ class SQLiteStorage:
                 "support_confidence": f.support_confidence,
                 "verification_source": f.verification_source,
                 "access_intervals": f.access_intervals,
+                "origin_agent_id": f.origin_agent_id,
+                "visibility": f.visibility,
+                "source_verbatim": f.source_verbatim,
+                "valid_from": f.valid_from.isoformat(),
+                "valid_until": f.valid_until.isoformat() if f.valid_until is not None else None,
+                "entity": f.entity,
+                "attribute": f.attribute,
+                "version": f.version,
+                "mesi_state": f.mesi_state,
+                "canonical_surface": f.canonical_surface,
+                "witness_surface": f.witness_surface,
+                "prompt_surface": f.prompt_surface,
+                "slot_key": f.slot_key,
+                "value_text": f.value_text,
+                "qualifiers": f.qualifiers,
+                "state_confidence": f.state_confidence,
+                "topic_channel": f.topic_channel,
+                "visibility_scope": f.visibility_scope,
             }
             for f in facts
         ]
@@ -237,6 +440,28 @@ class SQLiteStorage:
                 support_confidence=float(entry.get("support_confidence", 1.0)),
                 verification_source=str(entry.get("verification_source", "legacy")),
                 access_intervals=[float(x) for x in entry.get("access_intervals", [])],
+                origin_agent_id=str(entry.get("origin_agent_id", "")),
+                visibility=str(entry.get("visibility", "private")),
+                source_verbatim=str(entry.get("source_verbatim", "")),
+                valid_from=_parse_datetime(str(entry["valid_from"]))
+                if entry.get("valid_from")
+                else datetime.now(UTC),
+                valid_until=_parse_datetime(str(entry["valid_until"]))
+                if entry.get("valid_until")
+                else None,
+                entity=str(entry.get("entity", "")),
+                attribute=str(entry.get("attribute", "")),
+                version=int(entry.get("version", 0)),
+                mesi_state=MESIState(str(entry.get("mesi_state", "E"))),
+                canonical_surface=str(entry.get("canonical_surface", "")),
+                witness_surface=str(entry.get("witness_surface", "")),
+                prompt_surface=str(entry.get("prompt_surface", "")),
+                slot_key=str(entry.get("slot_key", "")),
+                value_text=str(entry.get("value_text", "")),
+                qualifiers={str(k): str(v) for k, v in entry.get("qualifiers", {}).items()},
+                state_confidence=float(entry.get("state_confidence", 1.0)),
+                topic_channel=str(entry.get("topic_channel", "")),
+                visibility_scope=str(entry.get("visibility_scope", "global")),
             )
             for entry in raw
         ]
@@ -257,11 +482,3 @@ class SQLiteStorage:
                 "DELETE FROM snapshots WHERE agent_id = ? AND name = ?",
                 (agent_id, name),
             )
-
-
-def _parse_datetime(value: str) -> datetime:
-    """Parse an ISO-format datetime string, ensuring UTC timezone."""
-    dt = datetime.fromisoformat(value)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt

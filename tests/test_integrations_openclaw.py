@@ -165,7 +165,9 @@ class TestGenerateMcpConfig:
         assert cfg["mcpServers"]["ai-knot"]["command"] == "ai-knot-mcp"
         env = cfg["mcpServers"]["ai-knot"]["env"]
         assert env["AI_KNOT_AGENT_ID"] == "default"
-        assert env["AI_KNOT_DATA_DIR"] == ".ai_knot"
+        # data_dir is resolved to an absolute path.
+        assert env["AI_KNOT_DATA_DIR"].endswith(".ai_knot")
+        assert env["AI_KNOT_DATA_DIR"].startswith("/")
         assert env["AI_KNOT_STORAGE"] == "sqlite"
 
     def test_custom_params(self) -> None:
@@ -187,12 +189,3 @@ class TestGenerateMcpConfig:
     def test_invalid_storage_raises(self) -> None:
         with pytest.raises(ValueError, match="sqlite.*yaml"):
             generate_mcp_config(storage="postgres")  # type: ignore[arg-type]
-
-    def test_raises_without_mcp_package(self) -> None:
-        from unittest.mock import patch
-
-        with (
-            patch.dict("sys.modules", {"mcp": None}),
-            pytest.raises(ImportError, match="ai-knot\\[mcp\\]"),
-        ):
-            generate_mcp_config()
