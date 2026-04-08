@@ -246,6 +246,26 @@ def _stamp_path(path: str, stamp: str) -> str:
         "'retrieval' (ranking, trust, assembly), or 'all'."
     ),
 )
+@click.option(
+    "--locomo-file",
+    "locomo_file",
+    default=None,
+    help="Path to a local locomo10.json file (overrides download/cache).",
+)
+@click.option(
+    "--locomo-max-conversations",
+    "locomo_max_conversations",
+    default=None,
+    type=int,
+    help="Limit LoCoMo conversations (for fast CI runs).",
+)
+@click.option(
+    "--locomo-max-qa-per-conv",
+    "locomo_max_qa_per_conv",
+    default=None,
+    type=int,
+    help="Limit QA pairs per LoCoMo conversation (for fast CI runs).",
+)
 def main(
     mode: str,
     backends: str | None,
@@ -264,6 +284,9 @@ def main(
     ma_postgres_dsn: str,
     jsonl_output: str,
     ma_category: str,
+    locomo_file: str | None,
+    locomo_max_conversations: int | None,
+    locomo_max_qa_per_conv: int | None,
 ) -> None:
     """Run the ai-knot benchmark suite."""
     asyncio.run(
@@ -285,6 +308,9 @@ def main(
             ma_postgres_dsn=ma_postgres_dsn,
             jsonl_output=jsonl_output,
             ma_category=ma_category,
+            locomo_file=locomo_file,
+            locomo_max_conversations=locomo_max_conversations,
+            locomo_max_qa_per_conv=locomo_max_qa_per_conv,
         )
     )
 
@@ -307,6 +333,9 @@ async def _run(
     ma_postgres_dsn: str = "",
     jsonl_output: str = "benchmark_live.jsonl",
     ma_category: str = "all",
+    locomo_file: str | None = None,
+    locomo_max_conversations: int | None = None,
+    locomo_max_qa_per_conv: int | None = None,
 ) -> None:
     # Stamp default filenames with current datetime so runs don't overwrite each other.
     stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
@@ -387,6 +416,21 @@ async def _run(
         )
 
     base_scenarios = _build_scenarios(scenarios_arg, quick=quick)
+
+    # Bind LoCoMo CLI parameters to s_locomo scenario if present.
+    if locomo_file or locomo_max_conversations is not None or locomo_max_qa_per_conv is not None:
+        locomo_kwargs: dict[str, object] = {}
+        if locomo_file:
+            locomo_kwargs["locomo_file"] = locomo_file
+        if locomo_max_conversations is not None:
+            locomo_kwargs["max_conversations"] = locomo_max_conversations
+        if locomo_max_qa_per_conv is not None:
+            locomo_kwargs["max_qa_per_conv"] = locomo_max_qa_per_conv
+        base_scenarios = [
+            (sid, functools.partial(fn, **locomo_kwargs)) if sid == "s_locomo" else (sid, fn)
+            for sid, fn in base_scenarios  # type: ignore[misc]
+        ]
+
     bundles = [_fast_bundle] if _fast_bundle is not None else _build_bundles(language)
 
     if not selected_backends:
