@@ -5,13 +5,14 @@ Evaluates memory recall quality against the LoCoMo10 dataset
 
 Protocol:
   1. For each conversation, insert every session turn via ``backend.insert()``.
-  2. For each QA pair, retrieve top-5 facts via ``backend.retrieve()``.
+  2. Reset per-session state, then for each QA pair retrieve top-5 facts.
   3. Compute best-doc token F1: max over retrieved texts of F1(text, gold_answer).
   4. Aggregate by question category:
        1 → single_hop_f1
        2 → multi_hop_f1
        3 → temporal_f1
-       4 → adversarial_f1   (if present in dataset)
+       4 → open_ended_f1
+       5 → adversarial_f1
      overall_f1 = mean over all pairs.
 
 Dataset is downloaded on first run and cached in the system temp directory.
@@ -22,17 +23,20 @@ Metrics:
   single_hop_f1     — category 1 questions
   multi_hop_f1      — category 2 questions
   temporal_f1       — category 3 questions
-  adversarial_f1    — category 4 questions (if present; else omitted)
+  open_ended_f1     — category 4 questions
+  adversarial_f1    — category 5 questions (uses adversarial_answer as gold)
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from tests.eval.benchmark.base import MemoryBackend, ScenarioResult
 from tests.eval.benchmark.judge import BaseJudge
@@ -47,38 +51,61 @@ _CAT_NAME: dict[int, str] = {
     1: "single_hop_f1",
     2: "multi_hop_f1",
     3: "temporal_f1",
-    4: "adversarial_f1",
+    4: "open_ended_f1",
+    5: "adversarial_f1",
 }
 
+_SESSION_KEY_RE = re.compile(r"^session_(\d+)$")
 
-def _load_locomo(local_path: str | None = None) -> list[dict]:
+
+def _load_locomo(local_path: str | None = None) -> list[dict[str, Any]]:
     """Load LoCoMo10 JSON, downloading and caching if needed."""
     if local_path:
         with open(local_path, encoding="utf-8") as fh:
-            return json.load(fh)
+            result: list[dict[str, Any]] = json.load(fh)
+            return result
 
     env_path = os.environ.get("LOCOMO_FILE")
     if env_path and Path(env_path).is_file():
         with open(env_path, encoding="utf-8") as fh:
-            return json.load(fh)
+            result = json.load(fh)
+            return result
 
     if _CACHE_PATH.is_file():
         with open(_CACHE_PATH, encoding="utf-8") as fh:
-            return json.load(fh)
+            result = json.load(fh)
+            return result
 
     # Download to cache.
     urllib.request.urlretrieve(_LOCOMO_URL, _CACHE_PATH)  # noqa: S310
     with open(_CACHE_PATH, encoding="utf-8") as fh:
-        return json.load(fh)
+        result = json.load(fh)
+        return result
 
 
-def _iter_turns(conv: dict) -> list[str]:
-    """Flatten all sessions in a conversation into a list of speaker: text strings."""
+def _iter_turns(sample: dict[str, Any]) -> list[str]:
+    """Flatten all sessions in a LoCoMo sample into a list of ``speaker: text`` strings.
+
+    The real LoCoMo schema stores sessions inside ``sample["conversation"]``
+    as ``session_1``, ``session_2``, …  alongside ``session_N_date_time`` keys
+    and ``speaker_a`` / ``speaker_b``.  We extract only ``session_N`` lists,
+    sort them by *N*, and yield each turn.
+    """
+    conversation = sample.get("conversation", sample)
+    # Collect (session_number, key) pairs and sort by number.
+    numbered: list[tuple[int, str]] = []
+    for key in conversation:
+        m = _SESSION_KEY_RE.match(key)
+        if m:
+            numbered.append((int(m.group(1)), key))
+    numbered.sort()
+
     turns: list[str] = []
-    for key, val in conv.items():
-        if not key.startswith("session_") or "_date" in key or not isinstance(val, list):
+    for _n, key in numbered:
+        session = conversation[key]
+        if not isinstance(session, list):
             continue
-        for turn in val:
+        for turn in session:
             if isinstance(turn, dict) and "text" in turn:
                 speaker = turn.get("speaker", "speaker")
                 turns.append(f"{speaker}: {turn['text']}")
@@ -149,31 +176,49 @@ async def run(
     # f1_by_cat[category] → list of per-pair F1 scores
     f1_by_cat: dict[int, list[float]] = defaultdict(list)
     all_f1: list[float] = []
+    total_turns_ingested = 0
+    total_qa = 0
+    total_qa_scored = 0
+    total_empty_retrievals = 0
 
     for conv in dataset:
         await backend.reset()
 
         # Phase 1: ingest all turns.
-        for turn_text in _iter_turns(conv):
+        turn_texts = _iter_turns(conv)
+        for turn_text in turn_texts:
             await backend.insert(turn_text)
+        total_turns_ingested += len(turn_texts)
 
         # Phase 2: answer QA pairs.
-        qa_pairs: list[dict] = conv.get("qa", [])
+        qa_pairs: list[dict[str, Any]] = conv.get("qa", [])
         if max_qa_per_conv is not None:
             qa_pairs = qa_pairs[:max_qa_per_conv]
+        total_qa += len(qa_pairs)
 
         for qa in qa_pairs:
             question = str(qa.get("question", ""))
-            gold = str(qa.get("answer", ""))
             category = int(qa.get("category", 0))
+
+            # Category 5 (adversarial): gold is adversarial_answer.
+            if category == 5:
+                gold = str(qa.get("adversarial_answer", qa.get("answer", "")))
+            else:
+                gold = str(qa.get("answer", ""))
 
             if not question or not gold:
                 continue
 
+            await backend.reset_session()
             result = await backend.retrieve(question, top_k=5)
+
+            if not result.texts:
+                total_empty_retrievals += 1
+
             f1 = _best_f1_against(result.texts, gold)
 
             all_f1.append(f1)
+            total_qa_scored += 1
             if category in _CAT_NAME:
                 f1_by_cat[category].append(f1)
 
@@ -195,8 +240,11 @@ async def run(
             scores[name] = [sum(cat_scores) / len(cat_scores)]
 
     n_convs = len(dataset)
-    n_qa = len(all_f1)
-    notes = f"conversations={n_convs}, qa_pairs={n_qa}, overall_f1={overall:.3f}"
+    notes = (
+        f"conversations={n_convs}, turns_ingested={total_turns_ingested}, "
+        f"qa_total={total_qa}, qa_scored={total_qa_scored}, "
+        f"empty_retrievals={total_empty_retrievals}, overall_f1={overall:.3f}"
+    )
 
     return ScenarioResult(
         scenario_id=SCENARIO_ID,
