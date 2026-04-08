@@ -23,6 +23,7 @@ class RetrievalResult:
     texts: list[str]  # retrieved fact texts in ranked order
     scores: list[float]  # backend-native scores (BM25, cosine, etc.)
     retrieve_ms: float
+    evidence_texts: list[str] = field(default_factory=list)  # enriched with source_snippets
 
 
 @dataclass

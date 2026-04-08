@@ -22,6 +22,8 @@ _BM25_B_CANONICAL: float = 0.5  # Length normalization for canonical_surface fie
 _W_CONTENT: float = 1.0  # Content field weight.
 _W_TAGS: float = 2.0  # Tags field weight (more specific, higher boost).
 _W_CANONICAL: float = 1.5  # canonical_surface field weight (normalized paraphrase).
+_BM25_B_EVIDENCE: float = 0.75  # Length normalization for evidence (source_snippets) field.
+_W_EVIDENCE: float = 0.8  # Evidence field weight (lower than content to avoid over-boosting).
 
 # IDF high-DF threshold: terms in >70% of docs get zero IDF weight.
 _IDF_HIGH_DF_RATIO: float = 0.7
@@ -54,17 +56,22 @@ class InvertedIndex:
         self._canonical_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
         self._content_trigrams: dict[str, frozenset[str]] = {}  # id -> trigrams
         self._canonical_trigrams: dict[str, frozenset[str]] = {}  # id -> trigrams
+        self._evidence_lengths: dict[str, int] = {}  # id -> evidence token count
+        self._evidence_postings: dict[str, dict[str, int]] = {}  # term -> {id: tf}
+        self._evidence_trigrams: dict[str, frozenset[str]] = {}  # id -> trigrams
         self._slot_tokens: dict[str, frozenset[str]] = {}  # id -> tokenised slot_key
         self._doc_count: int = 0
         self._avg_content_dl: float = 0.0
         self._avg_tags_dl: float = 0.0
         self._avg_canonical_dl: float = 0.0
+        self._avg_evidence_dl: float = 0.0
         self._build(facts)
 
     def _build(self, facts: list[Fact]) -> None:
         total_content_len = 0
         total_tags_len = 0
         total_canonical_len = 0
+        total_evidence_len = 0
 
         for fact in facts:
             self._facts[fact.id] = fact
@@ -109,11 +116,28 @@ class InvertedIndex:
                     self._canonical_postings[term] = {}
                 self._canonical_postings[term][fact.id] = tf
 
+            # Evidence field (joined source_snippets — original conversation turns).
+            evidence_text = " ".join(fact.source_snippets) if fact.source_snippets else ""
+            evidence_tokens = _tokenize(evidence_text) if evidence_text else []
+            self._evidence_lengths[fact.id] = len(evidence_tokens)
+            total_evidence_len += len(evidence_tokens)
+
+            evidence_tf: dict[str, int] = {}
+            for token in evidence_tokens:
+                evidence_tf[token] = evidence_tf.get(token, 0) + 1
+            for term, tf in evidence_tf.items():
+                if term not in self._evidence_postings:
+                    self._evidence_postings[term] = {}
+                self._evidence_postings[term][fact.id] = tf
+
             # Precompute trigrams and slot tokens once at index-build time so
             # search() does not recompute them for every query.
             self._content_trigrams[fact.id] = _char_trigrams(fact.content)
             self._canonical_trigrams[fact.id] = (
                 _char_trigrams(fact.canonical_surface) if fact.canonical_surface else frozenset()
+            )
+            self._evidence_trigrams[fact.id] = (
+                _char_trigrams(evidence_text) if evidence_text else frozenset()
             )
             if fact.slot_key:
                 slot_text = fact.slot_key.replace("::", " ")
@@ -125,13 +149,15 @@ class InvertedIndex:
         self._avg_content_dl = total_content_len / self._doc_count if self._doc_count else 1.0
         self._avg_tags_dl = total_tags_len / self._doc_count if self._doc_count else 1.0
         self._avg_canonical_dl = total_canonical_len / self._doc_count if self._doc_count else 1.0
+        self._avg_evidence_dl = total_evidence_len / self._doc_count if self._doc_count else 1.0
 
     def _combined_df(self, term: str) -> int:
         """Number of documents containing *term* in any field."""
         content_docs = set(self._content_postings.get(term, {}).keys())
         tags_docs = set(self._tags_postings.get(term, {}).keys())
         canonical_docs = set(self._canonical_postings.get(term, {}).keys())
-        return len(content_docs | tags_docs | canonical_docs)
+        evidence_docs = set(self._evidence_postings.get(term, {}).keys())
+        return len(content_docs | tags_docs | canonical_docs | evidence_docs)
 
     def score(
         self,
@@ -182,14 +208,16 @@ class InvertedIndex:
             content_posting = self._content_postings.get(term, {})
             tags_posting = self._tags_postings.get(term, {})
             canonical_posting = self._canonical_postings.get(term, {})
+            evidence_posting = self._evidence_postings.get(term, {})
             doc_ids = (
                 set(content_posting.keys())
                 | set(tags_posting.keys())
                 | set(canonical_posting.keys())
+                | set(evidence_posting.keys())
             )
 
             for doc_id in doc_ids:
-                # BM25F: weighted sum of normalized tf across all three fields.
+                # BM25F: weighted sum of normalized tf across all four fields.
                 tf_content = content_posting.get(doc_id, 0)
                 dl_c = self._content_lengths[doc_id]
                 norm_tf_c = tf_content / (1.0 + b * (dl_c / self._avg_content_dl - 1.0))
@@ -204,7 +232,17 @@ class InvertedIndex:
                 avg_can = self._avg_canonical_dl if self._avg_canonical_dl > 0 else 1.0
                 norm_tf_can = tf_canonical / (1.0 + _BM25_B_CANONICAL * (dl_can / avg_can - 1.0))
 
-                tf_bm25f = _W_CONTENT * norm_tf_c + _W_TAGS * norm_tf_t + _W_CANONICAL * norm_tf_can
+                tf_evidence = evidence_posting.get(doc_id, 0)
+                dl_ev = self._evidence_lengths[doc_id]
+                avg_ev = self._avg_evidence_dl if self._avg_evidence_dl > 0 else 1.0
+                norm_tf_ev = tf_evidence / (1.0 + _BM25_B_EVIDENCE * (dl_ev / avg_ev - 1.0))
+
+                tf_bm25f = (
+                    _W_CONTENT * norm_tf_c
+                    + _W_TAGS * norm_tf_t
+                    + _W_CANONICAL * norm_tf_can
+                    + _W_EVIDENCE * norm_tf_ev
+                )
                 tf_score = (k1 + 1.0) * tf_bm25f / (k1 + tf_bm25f)
                 scores[doc_id] = scores.get(doc_id, 0.0) + idf * tf_score * q_weight
 
@@ -229,6 +267,11 @@ class InvertedIndex:
     def canonical_trigrams(self) -> dict[str, frozenset[str]]:
         """Precomputed char-trigrams for canonical_surface (id → trigrams)."""
         return self._canonical_trigrams
+
+    @property
+    def evidence_trigrams(self) -> dict[str, frozenset[str]]:
+        """Precomputed char-trigrams for evidence/source_snippets (id → trigrams)."""
+        return self._evidence_trigrams
 
     @property
     def slot_tokens(self) -> dict[str, frozenset[str]]:
@@ -445,12 +488,14 @@ class BM25Retriever:
         def _cached_trigram_score(fid: str) -> float:
             ct = index.content_trigrams[fid]
             kt = index.canonical_trigrams[fid]
+            et = index.evidence_trigrams[fid]
             qt = query_trigrams
             if not qt:
                 return 0.0
             s_content = len(qt & ct) / len(qt | ct) if ct else 0.0
             s_canon = len(qt & kt) / len(qt | kt) if kt else 0.0
-            return max(s_content, s_canon)
+            s_evidence = len(qt & et) / len(qt | et) if et else 0.0
+            return max(s_content, s_canon, s_evidence)
 
         trigram_scores: dict[str, float] = {fid: _cached_trigram_score(fid) for fid in all_ids}
 

@@ -112,6 +112,32 @@ def _verify_facts_atc(
     return facts
 
 
+def _populate_source_snippets(
+    facts: list[Fact],
+    turn_texts: list[str],
+    *,
+    max_snippets: int = 3,
+    min_atc: float = 0.4,
+) -> None:
+    """Populate fact.source_snippets from original conversation turns.
+
+    For each fact, scores every turn by ATC(fact.content, turn) and by
+    ATC(fact.witness_surface, turn) (if non-empty), then stores the top
+    ``max_snippets`` turns with score >= ``min_atc``.  Modifies in place.
+    """
+    for fact in facts:
+        scored: dict[str, float] = {}
+        for turn in turn_texts:
+            score = _atc_score(fact.content, turn)
+            if fact.witness_surface:
+                score = max(score, _atc_score(fact.witness_surface, turn))
+            if score >= min_atc and turn not in scored:
+                scored[turn] = score
+        fact.source_snippets = [
+            t for t, _ in sorted(scored.items(), key=lambda x: x[1], reverse=True)
+        ][:max_snippets]
+
+
 def _jaccard_similarity(a: str, b: str) -> float:
     """Compute Jaccard similarity between two strings using stemmed tokens.
 
@@ -231,6 +257,11 @@ def resolve_against_existing(
             # Carry forward importance and version from the old fact.
             new.importance = min(1.0, matched.importance + 0.05)
             new.version = matched.version + 1
+            # Carry over evidence trail from the old fact.
+            if matched.source_snippets:
+                existing_snips = set(new.source_snippets)
+                carried = [s for s in matched.source_snippets if s not in existing_snips]
+                new.source_snippets = (new.source_snippets + carried)[:5]
             to_insert.append(new)
         else:
             to_insert.append(new)
@@ -378,6 +409,8 @@ class Extractor:
         facts = [self._parse_fact(entry) for entry in all_raw if isinstance(entry, dict)]
         facts = deduplicate_facts(facts)
         _verify_facts_atc(facts, source_text)
+        turn_texts = [f"{t.role}: {t.content}" for t in turns]
+        _populate_source_snippets(facts, turn_texts)
         return facts
 
     def _call_llm(self, turns: list[ConversationTurn]) -> list[dict[str, Any]]:

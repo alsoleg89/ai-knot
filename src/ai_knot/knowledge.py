@@ -562,6 +562,14 @@ class KnowledgeBase:
                 matched.state_confidence = min(1.0, matched.state_confidence + 0.05)
                 matched.importance = min(1.0, matched.importance + 0.02)
                 matched.last_accessed = now_close
+                # Accumulate evidence snippets from the new observation.
+                if new_fact.source_snippets:
+                    existing_snips = set(matched.source_snippets)
+                    for s in new_fact.source_snippets:
+                        if s not in existing_snips:
+                            matched.source_snippets.append(s)
+                            existing_snips.add(s)
+                    matched.source_snippets = matched.source_snippets[:5]
                 handled_ids.add(matched.id)
                 n_reinforce += 1
             elif slot_op == "supersede":
@@ -570,6 +578,11 @@ class KnowledgeBase:
                 handled_ids.add(matched.id)
                 new_fact.importance = min(1.0, matched.importance + 0.05)
                 new_fact.version = matched.version + 1
+                # Carry over evidence trail from the old fact.
+                if matched.source_snippets:
+                    existing_snips = set(new_fact.source_snippets)
+                    carried = [s for s in matched.source_snippets if s not in existing_snips]
+                    new_fact.source_snippets = (new_fact.source_snippets + carried)[:5]
                 to_insert.append(new_fact)
                 n_supersede += 1
             else:  # branch — new slot, insert as-is
@@ -586,6 +599,11 @@ class KnowledgeBase:
             if matched_fact is not None:
                 matched_fact.valid_until = now_close
                 handled_ids.add(matched_fact.id)
+                # Carry over evidence trail from the old entity fact.
+                if matched_fact.source_snippets and new_fact.op != MemoryOp.DELETE:
+                    existing_snips = set(new_fact.source_snippets)
+                    carried = [s for s in matched_fact.source_snippets if s not in existing_snips]
+                    new_fact.source_snippets = (new_fact.source_snippets + carried)[:5]
             if new_fact.op == MemoryOp.DELETE:
                 n_delete += 1
 

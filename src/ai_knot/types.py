@@ -149,6 +149,19 @@ class Fact:
     # NOOP = skip entirely. Storage backends do not serialize this field.
     op: MemoryOp = MemoryOp.ADD
 
+    @property
+    def answer_surface(self) -> str:
+        """Compact text for LLM prompts and F1 scoring."""
+        return self.prompt_surface or self.source_verbatim or self.content
+
+    @property
+    def evidence_surface(self) -> str:
+        """Text enriched with source evidence for grounding evaluation."""
+        base = self.source_verbatim or self.content
+        if self.source_snippets:
+            return base + " " + " ".join(self.source_snippets)
+        return base
+
     def is_active(self, at: datetime | None = None) -> bool:
         """Return True if this fact is valid at *at* (default: now UTC).
 

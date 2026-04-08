@@ -261,10 +261,11 @@ async def run(
             if category in _CAT_NAME:
                 f1_by_cat[category].append(f1)
 
-            # Evidence-based retrieval recall.
+            # Evidence-based retrieval recall (use enriched texts when available).
             evidence_ids: list[str] = qa.get("evidence", [])
             if evidence_ids and dia_map:
-                ev_recall = _evidence_recall_at_k(result.texts, evidence_ids, dia_map)
+                ev_texts = result.evidence_texts or result.texts
+                ev_recall = _evidence_recall_at_k(ev_texts, evidence_ids, dia_map)
                 all_evidence_recall.append(ev_recall)
 
     if not all_f1:

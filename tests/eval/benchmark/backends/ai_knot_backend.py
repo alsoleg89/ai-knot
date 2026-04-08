@@ -95,9 +95,10 @@ class AiKnotBackend(MemoryBackend):
         )
         self._session_seen.update(f.id for f, _ in pairs)
         return RetrievalResult(
-            texts=[f.source_verbatim or f.content for f, _ in pairs],
+            texts=[f.answer_surface for f, _ in pairs],
             scores=[s for _, s in pairs],
             retrieve_ms=(time.perf_counter() - t0) * 1000,
+            evidence_texts=[f.evidence_surface for f, _ in pairs],
         )
 
     async def count_stored(self) -> int | None:
