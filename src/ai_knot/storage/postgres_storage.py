@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS "ai-knot_facts" (
     value_text         TEXT NOT NULL DEFAULT '',
     qualifiers         TEXT NOT NULL DEFAULT '{}',
     state_confidence   DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    claim_key          TEXT NOT NULL DEFAULT '',
+    memory_tier        TEXT NOT NULL DEFAULT 'private',
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -117,6 +119,8 @@ class PostgresStorage:
             "value_text": "TEXT NOT NULL DEFAULT ''",
             "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
             "state_confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
+            "claim_key": "TEXT NOT NULL DEFAULT ''",
+            "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
         }
         with self._get_conn() as conn:
             cur = conn.execute(
@@ -181,6 +185,8 @@ class PostgresStorage:
                 fact.value_text,
                 json.dumps(fact.qualifiers),
                 fact.state_confidence,
+                fact.claim_key,
+                fact.memory_tier,
             )
             for fact in facts
         ]
@@ -198,10 +204,11 @@ class PostgresStorage:
                     source_verbatim, valid_from, valid_until,
                     entity, attribute, version, mesi_state,
                     canonical_surface, witness_surface, prompt_surface,
-                    slot_key, value_text, qualifiers, state_confidence)
+                    slot_key, value_text, qualifiers, state_confidence,
+                    claim_key, memory_tier)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 rows,
             )
             conn.commit()
@@ -245,7 +252,8 @@ class PostgresStorage:
                           source_verbatim, valid_from, valid_until,
                           entity, attribute, version, mesi_state,
                           canonical_surface, witness_surface, prompt_surface,
-                          slot_key, value_text, qualifiers, state_confidence"""
+                          slot_key, value_text, qualifiers, state_confidence,
+                          claim_key, memory_tier"""
 
     def _fact_from_row(self, row: tuple[Any, ...]) -> Fact:
         return Fact(
@@ -280,6 +288,8 @@ class PostgresStorage:
             value_text=str(row[28]) if row[28] else "",
             qualifiers=json.loads(row[29]) if row[29] else {},
             state_confidence=float(row[30]) if row[30] is not None else 1.0,
+            claim_key=str(row[31]) if len(row) > 31 and row[31] else "",
+            memory_tier=str(row[32]) if len(row) > 32 and row[32] else "private",
         )
 
     def load_active(self, agent_id: str) -> list[Fact]:

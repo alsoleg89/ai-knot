@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import dataclasses
 import logging
+import math
+import os
+import re
 import threading
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any
 
 from ai_knot.extractor import (
@@ -28,7 +33,9 @@ from ai_knot.storage.base import (
     TemporalStorageCapable,
 )
 from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.tokenizer import tokenize as _tokenize
 from ai_knot.types import (
+    CONFLICT_POLICIES,
     ConversationTurn,
     Fact,
     MemoryOp,
@@ -49,8 +56,87 @@ _QUICK_INV_WINDOW_S = 3600.0  # 1 hour
 # Over-fetch multiplier for shared-pool recall: fetch N×top_k before trust discount so that
 # high-scoring low-trust facts don't crowd out lower-scoring high-trust ones before discounting.
 _POOL_RECALL_OVERFETCH = 3
+_POOL_DEBUG = bool(os.environ.get("AI_KNOT_POOL_DEBUG", ""))
+_LEARN_DEBUG = bool(os.environ.get("AI_KNOT_LEARN_DEBUG", ""))
 
 logger = logging.getLogger(__name__)
+
+# Minimum score threshold: results below this are considered non-relevant filler.
+# Computed empirically — a BM25 match on a single common term scores ~0.02.
+_COVERAGE_SCORE_FLOOR: float = 0.01
+
+# ---------------------------------------------------------------------------
+# Pool query intent classification (rule-based, no LLM calls)
+# ---------------------------------------------------------------------------
+
+_TIME_PATTERN = re.compile(r"\d{1,2}:\d{2}")
+_INCIDENT_KEYWORDS = frozenset(
+    {
+        "error",
+        "outage",
+        "incident",
+        "alert",
+        "failure",
+        "500",
+        "503",
+        "timeout",
+        "deploy",
+        "rollout",
+    }
+)
+_CROSS_DOMAIN_KEYWORDS = frozenset({"include", "pricing", "sla", "tier", "regions", "integrate"})
+
+
+class _PoolQueryIntent(StrEnum):
+    """Inferred intent of a shared-pool query."""
+
+    ENTITY_LOOKUP = "entity_lookup"
+    INCIDENT = "incident"
+    CROSS_DOMAIN = "cross_domain"
+    GENERAL = "general"
+
+
+def _classify_pool_query(query: str, active_facts: list[Fact]) -> _PoolQueryIntent:
+    """Classify a pool query by intent using lexical heuristics.
+
+    Rules (evaluated in priority order):
+    1. INCIDENT — time patterns or error/outage keywords.
+    2. ENTITY_LOOKUP — query mentions a known entity from the pool.
+    3. CROSS_DOMAIN — aggregation signals (conjunctions in long queries,
+       pricing/sla/tier keywords).
+    4. GENERAL — fallback.
+    """
+    q_lower = query.lower()
+    tokens = set(q_lower.split())
+
+    if _TIME_PATTERN.search(q_lower) or tokens & _INCIDENT_KEYWORDS:
+        return _PoolQueryIntent.INCIDENT
+
+    entity_names = {f.entity.lower() for f in active_facts if f.entity}
+    for ent in entity_names:
+        if ent in q_lower:
+            return _PoolQueryIntent.ENTITY_LOOKUP
+
+    if tokens & _CROSS_DOMAIN_KEYWORDS or ("and" in tokens and len(query.split()) > 6):
+        return _PoolQueryIntent.CROSS_DOMAIN
+
+    return _PoolQueryIntent.GENERAL
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _RecallMeta:
+    """Internal metadata from the last pool recall (not part of public API).
+
+    Exposes coverage and intent classification for downstream logic
+    (e.g. coverage-aware abstention) without changing the public ``recall()``
+    return type.
+    """
+
+    intent: _PoolQueryIntent
+    total_active: int
+    returned: int
+    coverage: float  # fraction of returned results above _COVERAGE_SCORE_FLOOR
+    low_coverage: bool  # True when coverage < 0.5
 
 
 class KnowledgeBase:
@@ -314,6 +400,46 @@ class KnowledgeBase:
         if not turns:
             return []
 
+        # Stage 1: extract raw candidate facts from LLM.
+        candidates = self._extract_phase(
+            turns,
+            provider=provider,
+            api_key=api_key,
+            model=model,
+            timeout=timeout,
+            batch_size=batch_size,
+            **provider_kwargs,
+        )
+        if not candidates:
+            return []
+
+        # Stage 2: candidate verification (dedup, future ATC checks).
+        verified = self._candidate_phase(candidates)
+
+        # Stage 3: resolve against existing knowledge.
+        existing = self._storage.load(self._agent_id)
+        to_insert = self._resolve_phase(verified, existing, conflict_threshold)
+
+        # Stage 4: commit to storage.
+        self._commit_phase(existing, to_insert)
+        return to_insert
+
+    # ------------------------------------------------------------------
+    # learn() pipeline stages
+    # ------------------------------------------------------------------
+
+    def _extract_phase(
+        self,
+        turns: list[ConversationTurn],
+        *,
+        provider: str | LLMProvider | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        timeout: float | None = None,
+        batch_size: int = 20,
+        **provider_kwargs: str,
+    ) -> list[Fact]:
+        """Stage 1: extract raw candidate facts from an LLM."""
         resolved_provider = provider or self._default_provider or "openai"
         resolved_api_key = api_key or self._default_api_key
         resolved_model = model or self._default_model
@@ -355,98 +481,154 @@ class KnowledgeBase:
                 batch_size=batch_size,
             )
 
-        new_facts = extractor.extract(turns)
+        facts = extractor.extract(turns)
+        if _LEARN_DEBUG:
+            logger.debug(
+                "learn/_extract_phase: %d candidates from %d turns",
+                len(facts),
+                len(turns),
+            )
+        return facts
 
-        if new_facts:
-            existing = self._storage.load(self._agent_id)
-            now_close = datetime.now(UTC)
-            active_existing = [f for f in existing if f.is_active(now_close)]
+    def _candidate_phase(self, candidates: list[Fact]) -> list[Fact]:
+        """Stage 2: verify and deduplicate candidate facts.
 
-            to_insert: list[Fact] = []
-            # IDs of active facts already handled — excluded from later phases.
-            handled_ids: set[str] = set()
-            n_reinforce = n_supersede = n_branch = n_delete = n_noop = 0
+        Currently a pass-through. Future: ATC (Assertion-Truth-Checking),
+        source grounding, confidence calibration.
+        """
+        if _LEARN_DEBUG:
+            logger.debug("learn/_candidate_phase: %d candidates (pass-through)", len(candidates))
+        return candidates
 
-            # Phase 1: slot-based resolution (deterministic, exact slot_key match).
-            slotted_facts = [f for f in new_facts if f.slot_key]
-            for new_fact in slotted_facts:
-                if new_fact.op == MemoryOp.NOOP:
-                    n_noop += 1
-                    continue
+    def _resolve_phase(
+        self,
+        verified: list[Fact],
+        existing: list[Fact],
+        conflict_threshold: float,
+    ) -> list[Fact]:
+        """Stage 3: resolve new facts against existing knowledge.
 
-                if new_fact.op == MemoryOp.DELETE:
-                    # Exclude already-handled IDs so a second DELETE can't double-close.
-                    unhandled = [f for f in active_existing if f.id not in handled_ids]
-                    _, matched = resolve_by_slot(new_fact, unhandled)
-                    if matched is not None:
-                        matched.valid_until = now_close
-                        handled_ids.add(matched.id)
-                    n_delete += 1
-                    continue
+        Three-phase resolution:
+        1. Slot-based CAS (deterministic, exact slot_key match).
+        2. Entity-addressed CAS (fuzzy, for pre-Phase-1 facts).
+        3. Lexical dedup (Jaccard + containment).
 
-                slot_op, matched = resolve_by_slot(new_fact, active_existing)
-                # UPDATE overrides structural "reinforce" when value unchanged but context differs.
-                if new_fact.op == MemoryOp.UPDATE and slot_op == "reinforce":
-                    slot_op = "supersede"
+        Returns:
+            Facts to insert (new + versioned replacements).
+            Mutates ``existing`` in place (closing superseded facts).
+        """
+        now_close = datetime.now(UTC)
+        active_existing = [f for f in existing if f.is_active(now_close)]
 
-                if slot_op == "reinforce":
-                    assert matched is not None
-                    matched.state_confidence = min(1.0, matched.state_confidence + 0.05)
-                    matched.importance = min(1.0, matched.importance + 0.02)
-                    matched.last_accessed = now_close
-                    handled_ids.add(matched.id)
-                    n_reinforce += 1
-                elif slot_op == "supersede":
-                    assert matched is not None
+        to_insert: list[Fact] = []
+        handled_ids: set[str] = set()
+        n_reinforce = n_supersede = n_branch = n_delete = n_noop = 0
+
+        # Phase 1: slot-based resolution (deterministic, exact slot_key match).
+        # Consults the per-type ConflictPolicy to decide supersession behaviour.
+        slotted_facts = [f for f in verified if f.slot_key]
+        for new_fact in slotted_facts:
+            if new_fact.op == MemoryOp.NOOP:
+                n_noop += 1
+                continue
+
+            policy = CONFLICT_POLICIES.get(new_fact.type, CONFLICT_POLICIES[MemoryType.SEMANTIC])
+
+            if new_fact.op == MemoryOp.DELETE:
+                unhandled = [f for f in active_existing if f.id not in handled_ids]
+                _, matched = resolve_by_slot(new_fact, unhandled)
+                if matched is not None:
                     matched.valid_until = now_close
                     handled_ids.add(matched.id)
-                    new_fact.importance = min(1.0, matched.importance + 0.05)
-                    new_fact.version = matched.version + 1
-                    to_insert.append(new_fact)
-                    n_supersede += 1
-                else:  # branch — new slot, insert as-is
-                    to_insert.append(new_fact)
-                    n_branch += 1
+                n_delete += 1
+                continue
 
-            # Phase 2: entity-addressed CAS for unslotted facts with entity+attribute.
-            # Closes pre-Phase-1 storage facts that carry entity/attribute but no slot_key.
-            unslotted_facts = [f for f in new_facts if not f.slot_key and f.op != MemoryOp.NOOP]
-            unslotted_with_entity = [f for f in unslotted_facts if f.entity and f.attribute]
-            entity_candidates = [f for f in active_existing if f.id not in handled_ids]
-            for new_fact in unslotted_with_entity:
-                # Re-filter candidates each iteration so each existing fact is matched at most once.
-                available = [f for f in entity_candidates if f.id not in handled_ids]
-                matched_fact = resolve_structured(new_fact, available)
-                if matched_fact is not None:
-                    matched_fact.valid_until = now_close
-                    handled_ids.add(matched_fact.id)
-                if new_fact.op == MemoryOp.DELETE:
-                    n_delete += 1
+            slot_op, matched = resolve_by_slot(new_fact, active_existing)
+            if new_fact.op == MemoryOp.UPDATE and slot_op == "reinforce":
+                slot_op = "supersede"
 
-            # Phase 3: lexical dedup for remaining unslotted facts.
-            remaining_active = [f for f in entity_candidates if f.id not in handled_ids]
-            unslotted_to_insert = [f for f in unslotted_facts if f.op != MemoryOp.DELETE]
-            unslotted_inserted, _ = resolve_against_existing(
-                unslotted_to_insert, remaining_active, threshold=conflict_threshold
-            )
-            to_insert.extend(unslotted_inserted)
+            # Policy override: if the policy says don't supersede, branch instead.
+            # Explicit UPDATE ops bypass the policy (user intent is authoritative).
+            if (
+                slot_op == "supersede"
+                and matched is not None
+                and new_fact.op != MemoryOp.UPDATE
+                and not policy.should_supersede(new_fact, matched)
+            ):
+                slot_op = "branch"
 
-            self._storage.save(self._agent_id, existing + to_insert)
-            logger.info(
-                "Learned %d facts for agent '%s' "
-                "(slot: %d reinforced, %d superseded, %d new, %d deleted, %d noop; "
-                "lexical: %d merged)",
-                len(to_insert),
-                self._agent_id,
+            if slot_op == "reinforce":
+                assert matched is not None
+                matched.state_confidence = min(1.0, matched.state_confidence + 0.05)
+                matched.importance = min(1.0, matched.importance + 0.02)
+                matched.last_accessed = now_close
+                handled_ids.add(matched.id)
+                n_reinforce += 1
+            elif slot_op == "supersede":
+                assert matched is not None
+                matched.valid_until = now_close
+                handled_ids.add(matched.id)
+                new_fact.importance = min(1.0, matched.importance + 0.05)
+                new_fact.version = matched.version + 1
+                to_insert.append(new_fact)
+                n_supersede += 1
+            else:  # branch — new slot, insert as-is
+                to_insert.append(new_fact)
+                n_branch += 1
+
+        # Phase 2: entity-addressed CAS for unslotted facts with entity+attribute.
+        unslotted_facts = [f for f in verified if not f.slot_key and f.op != MemoryOp.NOOP]
+        unslotted_with_entity = [f for f in unslotted_facts if f.entity and f.attribute]
+        entity_candidates = [f for f in active_existing if f.id not in handled_ids]
+        for new_fact in unslotted_with_entity:
+            available = [f for f in entity_candidates if f.id not in handled_ids]
+            matched_fact = resolve_structured(new_fact, available)
+            if matched_fact is not None:
+                matched_fact.valid_until = now_close
+                handled_ids.add(matched_fact.id)
+            if new_fact.op == MemoryOp.DELETE:
+                n_delete += 1
+
+        # Phase 3: lexical dedup for remaining unslotted facts.
+        remaining_active = [f for f in entity_candidates if f.id not in handled_ids]
+        unslotted_to_insert = [f for f in unslotted_facts if f.op != MemoryOp.DELETE]
+        unslotted_inserted, _ = resolve_against_existing(
+            unslotted_to_insert, remaining_active, threshold=conflict_threshold
+        )
+        to_insert.extend(unslotted_inserted)
+
+        if _LEARN_DEBUG:
+            logger.debug(
+                "learn/_resolve_phase: slot=%d(r=%d s=%d b=%d d=%d n=%d) "
+                "entity=%d lexical=%d→%d insert=%d",
+                len(slotted_facts),
                 n_reinforce,
                 n_supersede,
                 n_branch,
                 n_delete,
                 n_noop,
-                len(unslotted_facts) - len(unslotted_inserted),
+                len(unslotted_with_entity),
+                len(unslotted_to_insert),
+                len(unslotted_inserted),
+                len(to_insert),
             )
-            return to_insert
-        return []
+        return to_insert
+
+    def _commit_phase(self, existing: list[Fact], to_insert: list[Fact]) -> None:
+        """Stage 4: persist resolved facts to storage."""
+        self._storage.save(self._agent_id, existing + to_insert)
+        if _LEARN_DEBUG:
+            logger.debug(
+                "learn/_commit_phase: saved %d total facts (%d new) for '%s'",
+                len(existing) + len(to_insert),
+                len(to_insert),
+                self._agent_id,
+            )
+        logger.info(
+            "Learned %d facts for agent '%s'",
+            len(to_insert),
+            self._agent_id,
+        )
 
     async def alearn(
         self,
@@ -814,9 +996,21 @@ class KnowledgeBase:
         facts = apply_decay(facts, type_exponents=self._decay_config, now=now_dt)
         expanded_query, expansion = self._expand_query(query)
 
+        # Intent-aware RRF weights for private KB (same classifier as pool).
+        intent = _classify_pool_query(query, facts)
+        kb_rrf: dict[_PoolQueryIntent, tuple[float, ...]] = {
+            _PoolQueryIntent.ENTITY_LOOKUP: (5.0, 8.0, 2.0, 1.5, 1.5, 1.0),
+            _PoolQueryIntent.INCIDENT: (5.0, 3.0, 2.0, 1.5, 1.5, 3.0),
+        }
+        rrf_override = kb_rrf.get(intent)
+
         candidate_facts = [f for f in facts if f.id not in excluded_ids] if excluded_ids else facts
         pairs = self._retriever.search(
-            expanded_query, candidate_facts, top_k=top_k, expansion_weights=expansion
+            expanded_query,
+            candidate_facts,
+            top_k=top_k,
+            expansion_weights=expansion,
+            rrf_weights=rrf_override,
         )
         if not pairs:
             return []
@@ -1103,6 +1297,158 @@ class KnowledgeBase:
         }
 
 
+# ---------------------------------------------------------------------------
+# Claim normalization for unslotted facts in the shared pool
+# ---------------------------------------------------------------------------
+
+_CLAIM_ATTR_STEMS = frozenset(
+    {
+        "sla",
+        "price",
+        "cost",
+        "limit",
+        "rate",
+        "version",
+        "api",
+        "timeout",
+        "region",
+        "uptim",
+        "user",
+        "tier",
+        "window",
+        "hour",
+        "minut",
+        "coverag",
+        "rotat",
+        "schedul",
+        "migrat",
+        "deploy",
+        "review",
+        "scan",
+        "endpoint",
+        "authen",
+        "support",
+        "call",
+        "deprec",
+    }
+)
+
+
+def _extract_claim_key(content: str) -> str:
+    """Extract a lightweight claim fingerprint from free-text content.
+
+    Tokenises the content and collects up to 2 entity-like tokens (those
+    appearing before the first attribute keyword) plus the first attribute
+    keyword.  Returns ``"{entity_tok}_{entity_tok}::{attr_stem}"`` or
+    ``""`` if no clear claim structure is detected.
+    """
+    tokens = _tokenize(content)
+    if len(tokens) < 3:
+        return ""
+
+    entity_tokens: list[str] = []
+    attr_token = ""
+    for t in tokens:
+        if t in _CLAIM_ATTR_STEMS:
+            attr_token = t
+            break
+        if len(entity_tokens) < 2:
+            entity_tokens.append(t)
+
+    if not entity_tokens or not attr_token:
+        return ""
+    return f"{'_'.join(entity_tokens)}::{attr_token}"
+
+
+# ---------------------------------------------------------------------------
+# Pool reranking
+# ---------------------------------------------------------------------------
+
+
+def _pool_rerank(
+    pairs: list[tuple[Fact, float]],
+    *,
+    recency_weight: float = 0.05,
+    freshness_weight: float = 0.03,
+) -> list[tuple[Fact, float]]:
+    """Rerank pool retrieval results with recency and freshness boosts.
+
+    Signals applied multiplicatively to the incoming score:
+    1. Recency: newer facts (by ``created_at``) receive up to
+       ``+recency_weight`` boost (linear rank-normalised).
+    2. Freshness: facts in MODIFIED or SHARED MESI state receive
+       ``+freshness_weight`` boost (active CAS winners).
+    """
+    if len(pairs) <= 1:
+        return pairs
+
+    sorted_by_time = sorted(pairs, key=lambda p: p[0].created_at)
+    n = len(sorted_by_time) - 1
+    recency_rank: dict[str, float] = {f.id: i / n for i, (f, _) in enumerate(sorted_by_time)}
+
+    reranked: list[tuple[Fact, float]] = []
+    for fact, score in pairs:
+        boost = 1.0
+        boost += recency_weight * recency_rank.get(fact.id, 0.0)
+        if fact.mesi_state in (MESIState.MODIFIED, MESIState.SHARED):
+            boost += freshness_weight
+        reranked.append((fact, score * boost))
+    return reranked
+
+
+# ---------------------------------------------------------------------------
+# Claim conflict resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_claim_conflicts(
+    pairs: list[tuple[Fact, float]],
+    get_trust: Callable[[str], float],
+) -> list[tuple[Fact, float]]:
+    """Among facts sharing a ``claim_key``, keep only the canonical winner.
+
+    Winner selection (priority order):
+    1. If any member has a ``slot_key``, it wins (CAS is authoritative).
+    2. Otherwise: highest ``trust(origin_agent) × created_at`` wins.
+    3. Tie-breaker: latest ``created_at``.
+
+    Facts with an empty ``claim_key`` pass through unchanged.
+    """
+    if not pairs:
+        return pairs
+
+    clusters: dict[str, list[tuple[Fact, float]]] = {}
+    unclustered: list[tuple[Fact, float]] = []
+
+    for fact, score in pairs:
+        if fact.claim_key:
+            clusters.setdefault(fact.claim_key, []).append((fact, score))
+        else:
+            unclustered.append((fact, score))
+
+    resolved = list(unclustered)
+    for members in clusters.values():
+        if len(members) == 1:
+            resolved.append(members[0])
+            continue
+
+        # Prefer slotted facts (CAS is authoritative).
+        slotted = [(f, s) for f, s in members if f.slot_key]
+        if slotted:
+            resolved.append(max(slotted, key=lambda x: x[1]))
+            continue
+
+        # Pick the winner by trust × recency.
+        def _conflict_score(pair: tuple[Fact, float]) -> float:
+            f = pair[0]
+            trust = get_trust(f.origin_agent_id) if f.origin_agent_id else 1.0
+            return trust * f.created_at.timestamp()
+
+        resolved.append(max(members, key=_conflict_score))
+
+    return resolved
+
+
 class SharedMemoryPool:
     """Shared memory pool for multi-agent knowledge exchange.
 
@@ -1139,9 +1485,16 @@ class SharedMemoryPool:
         storage: Backend used to persist the shared namespace.
     """
 
+    # Auto-promotion: promote facts used by >= N distinct agents to "org" tier.
+    _AUTO_PROMOTE_THRESHOLD: int = 3
+    # Pool TTL: expire pool facts unused for this many seconds (30 days).
+    _POOL_TTL_SECONDS: float = 30 * 24 * 3600.0
+    # Tier score boost: multiplicative bonus for higher-tier facts in recall.
+    _TIER_BOOST: dict[str, float] = {"private": 1.0, "pool": 1.0, "org": 1.05}
+
     def __init__(self, storage: StorageBackend | None = None) -> None:
         self._storage: StorageBackend = storage or YAMLStorage()
-        self._retriever = TFIDFRetriever()
+        self._retriever = TFIDFRetriever(skip_prf=True)
         self._agents: set[str] = set()
         self._publish_count: dict[str, int] = {}
         self._used_count: dict[str, int] = {}
@@ -1150,6 +1503,10 @@ class SharedMemoryPool:
         self._known_version: dict[str, int] = {}
         # Serialise concurrent publish() calls on the same pool instance.
         self._publish_lock = threading.Lock()
+        # Internal recall metadata (not part of public API).
+        self._last_recall_meta: _RecallMeta | None = None
+        # Per-fact usage tracking: fact_id -> set of agent_ids that recalled it.
+        self._fact_consumers: dict[str, set[str]] = {}
 
     def register(self, agent_id: str) -> None:
         """Register an agent to participate in the shared pool.
@@ -1184,7 +1541,14 @@ class SharedMemoryPool:
             return _PROVENANCE_DISCOUNT
         used = self._used_count.get(agent_id, 0)
         quick_inv = self._quick_inv_count.get(agent_id, 0)
-        quality = min(1.0, used / published)
+        # Use Bayesian prior: start at _PROVENANCE_DISCOUNT and adjust toward
+        # observed quality as evidence accumulates.  Without this, agents with
+        # published facts but no retrievals yet get trust=0.1 (the floor),
+        # which is far below the old flat 0.8 default and distorts ranking.
+        _PRIOR_WEIGHT = 3  # pseudocount — ~3 observations before prior fades
+        quality = min(
+            1.0, (used + _PRIOR_WEIGHT * _PROVENANCE_DISCOUNT) / (published + _PRIOR_WEIGHT)
+        )
         inv_penalty = quick_inv / published
         return max(0.1, quality * (1.0 - inv_penalty))
 
@@ -1275,8 +1639,13 @@ class SharedMemoryPool:
                 new_fact = copy.deepcopy(fact)
                 new_fact.origin_agent_id = agent_id
                 new_fact.visibility = "pool"
+                new_fact.memory_tier = "pool"
                 new_fact.valid_from = now
                 new_fact.valid_until = None
+
+                # For unslotted facts, extract a claim fingerprint for conflict detection.
+                if not new_fact.slot_key and not new_fact.claim_key:
+                    new_fact.claim_key = _extract_claim_key(new_fact.content)
 
                 # Resolve CAS key: prefer slot_key, fall back to entity+attribute.
                 cas_key = fact.slot_key or (
@@ -1394,34 +1763,211 @@ class SharedMemoryPool:
         ]
 
         if not active:
+            self._last_recall_meta = _RecallMeta(
+                intent=_PoolQueryIntent.GENERAL,
+                total_active=0,
+                returned=0,
+                coverage=0.0,
+                low_coverage=True,
+            )
             return []
+
+        # Classify query intent for downstream strategy selection.
+        intent = _classify_pool_query(query, active)
+
+        # Intent-aware RRF weights (BM25, slot-exact, trigram, importance,
+        # retention, recency).  Default: (5.0, 3.0, 2.0, 1.5, 1.5, 1.0).
+        intent_rrf: dict[_PoolQueryIntent, tuple[float, ...]] = {
+            # Boost slot-exact to 8.0 for entity lookups — deterministic
+            # slot match is more reliable than BM25 for known entities.
+            _PoolQueryIntent.ENTITY_LOOKUP: (5.0, 8.0, 2.0, 1.5, 1.5, 1.0),
+            # Boost recency ranker for incidents — recent facts more relevant.
+            _PoolQueryIntent.INCIDENT: (5.0, 3.0, 2.0, 1.5, 1.5, 3.0),
+        }
+        rrf_override = intent_rrf.get(intent)
+
+        # Intent-aware rerank weights.
+        intent_rerank: dict[_PoolQueryIntent, tuple[float, float]] = {
+            # Incident queries: stronger recency signal.
+            _PoolQueryIntent.INCIDENT: (0.12, 0.05),
+        }
 
         # Over-fetch so trust discount is applied before the top-k cutoff.
         # Without this, low-trust facts can displace better candidates by scoring
         # high in retrieval and then being down-ranked after the cut.
         overfetch_k = min(top_k * _POOL_RECALL_OVERFETCH, len(active))
-        pairs = self._retriever.search(query, active, top_k=overfetch_k)
+        pairs = self._retriever.search(
+            query,
+            active,
+            top_k=overfetch_k,
+            rrf_weights=rrf_override,
+        )
 
-        # Apply per-agent trust discount before final cutoff.
+        if _POOL_DEBUG:
+            logger.debug(
+                "pool_recall query=%r intent=%s active=%d overfetch=%d raw_top5=%s",
+                query,
+                intent.value,
+                len(active),
+                overfetch_k,
+                [(f.id[:8], f.origin_agent_id, round(s, 4)) for f, s in pairs[:5]],
+            )
+
+        # Apply per-agent trust discount + tier boost before final cutoff.
         discounted: list[tuple[Fact, float]] = []
         for fact, score in pairs:
             if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
                 trust = self.get_trust(fact.origin_agent_id)
                 score *= trust
+            # Tier-aware scoring: org-tier facts get a small boost.
+            score *= self._TIER_BOOST.get(fact.memory_tier, 1.0)
             discounted.append((fact, score))
+
+        # Pool-specific reranking: recency + freshness boosts.
+        rerank_params = intent_rerank.get(intent, (0.05, 0.03))
+        discounted = _pool_rerank(
+            discounted,
+            recency_weight=rerank_params[0],
+            freshness_weight=rerank_params[1],
+        )
+
+        # Resolve claim conflicts: among facts with same claim_key, keep winner.
+        discounted = _resolve_claim_conflicts(discounted, self.get_trust)
+
+        if _POOL_DEBUG:
+            logger.debug(
+                "pool_recall trust_discounted_top5=%s",
+                [
+                    (f.id[:8], f.origin_agent_id, round(s, 4))
+                    for f, s in sorted(discounted, key=lambda x: x[1], reverse=True)[:5]
+                ],
+            )
+
+        # CROSS_DOMAIN: cap any single agent at ceil(top_k * 0.6) to ensure
+        # diversity across agents in aggregation queries.
+        if intent == _PoolQueryIntent.CROSS_DOMAIN:
+            discounted.sort(key=lambda x: x[1], reverse=True)
+            agent_cap = math.ceil(top_k * 0.6)
+            agent_counts: dict[str, int] = {}
+            capped: list[tuple[Fact, float]] = []
+            for fact, score in discounted:
+                aid = fact.origin_agent_id or "__self__"
+                cnt = agent_counts.get(aid, 0)
+                if cnt < agent_cap:
+                    capped.append((fact, score))
+                    agent_counts[aid] = cnt + 1
+            discounted = capped
 
         discounted.sort(key=lambda x: x[1], reverse=True)
         top_results = discounted[:top_k]
 
         # Track recall hits only for facts actually returned — not over-fetched
         # candidates that were discarded after trust discount.
+        auto_promote_ids: list[str] = []
         for fact, _ in top_results:
             if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
                 self._used_count[fact.origin_agent_id] = (
                     self._used_count.get(fact.origin_agent_id, 0) + 1
                 )
+            # Track per-fact consumer agents for auto-promotion.
+            consumers = self._fact_consumers.setdefault(fact.id, set())
+            consumers.add(requesting_agent_id)
+            if fact.memory_tier == "pool" and len(consumers) >= self._AUTO_PROMOTE_THRESHOLD:
+                auto_promote_ids.append(fact.id)
+
+        # Auto-promote facts consumed by enough distinct agents.
+        if auto_promote_ids:
+            shared = self._storage.load(_SHARED_NAMESPACE)
+            promoted = 0
+            for f in shared:
+                if f.id in auto_promote_ids and f.memory_tier == "pool":
+                    f.memory_tier = "org"
+                    promoted += 1
+            if promoted:
+                self._storage.save(_SHARED_NAMESPACE, shared)
+                logger.info("Auto-promoted %d facts to 'org' tier", promoted)
+
+        # Compute coverage: fraction of returned results with meaningful scores.
+        relevant_count = sum(1 for _, s in top_results if s >= _COVERAGE_SCORE_FLOOR)
+        coverage = relevant_count / len(top_results) if top_results else 0.0
+        self._last_recall_meta = _RecallMeta(
+            intent=intent,
+            total_active=len(active),
+            returned=len(top_results),
+            coverage=coverage,
+            low_coverage=coverage < 0.5,
+        )
+
+        if _POOL_DEBUG:
+            logger.debug(
+                "pool_recall returned=%s coverage=%.2f intent=%s",
+                [(f.id[:8], f.origin_agent_id, round(s, 4)) for f, s in top_results],
+                coverage,
+                intent.value,
+            )
 
         return top_results
+
+    def promote(self, agent_id: str, fact_ids: list[str], *, tier: str = "pool") -> int:
+        """Manually promote pool facts to a higher memory tier.
+
+        Only facts currently in the shared pool (origin_agent_id == agent_id)
+        are eligible.  Returns the number of facts actually promoted.
+
+        Args:
+            agent_id: The agent requesting the promotion.
+            fact_ids: IDs of pool facts to promote.
+            tier: Target tier — ``"pool"`` (default) or ``"org"`` (future).
+
+        Raises:
+            ValueError: If *tier* is not a valid tier name.
+        """
+        if tier not in ("pool", "org"):
+            raise ValueError(f"Invalid tier {tier!r}; must be 'pool' or 'org'.")
+        shared = self._storage.load(_SHARED_NAMESPACE)
+        promoted = 0
+        for fact in shared:
+            if fact.id in fact_ids and fact.is_active() and fact.origin_agent_id == agent_id:
+                fact.memory_tier = tier
+                promoted += 1
+        if promoted:
+            self._storage.save(_SHARED_NAMESPACE, shared)
+            logger.info(
+                "Promoted %d facts from agent '%s' to tier '%s'",
+                promoted,
+                agent_id,
+                tier,
+            )
+        return promoted
+
+    def gc_pool(self, *, now: datetime | None = None) -> int:
+        """Garbage-collect stale pool facts that exceed the pool TTL.
+
+        Facts in the ``"org"`` tier are exempt from TTL (they are considered
+        permanently promoted).  Only ``"pool"`` tier facts whose
+        ``last_accessed`` is older than ``_POOL_TTL_SECONDS`` are expired.
+
+        Returns:
+            Number of facts expired.
+        """
+        now_dt = now or datetime.now(UTC)
+        cutoff = now_dt - timedelta(seconds=self._POOL_TTL_SECONDS)
+        shared = self._storage.load(_SHARED_NAMESPACE)
+        expired = 0
+        for fact in shared:
+            if (
+                fact.is_active(now_dt)
+                and fact.memory_tier == "pool"
+                and fact.last_accessed < cutoff
+            ):
+                fact.valid_until = now_dt
+                expired += 1
+        if expired:
+            self._storage.save(_SHARED_NAMESPACE, shared)
+            logger.info(
+                "Pool GC: expired %d stale facts (TTL=%ds)", expired, self._POOL_TTL_SECONDS
+            )
+        return expired
 
     def sync_dirty(self, agent_id: str) -> list[Fact]:
         """Pull facts changed by other agents since the last sync (MESI lazy invalidation).

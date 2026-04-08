@@ -192,8 +192,12 @@ class TestApplyDecay:
 
         for fact in updated:
             assert 0.0 <= fact.retention_score <= 1.0
-            # After ~10 months, retention should be well below 1.0
-            assert fact.retention_score < 1.0
+            # PROCEDURAL facts are decay-immune (ConflictPolicy), stay at 1.0.
+            if fact.type == MemoryType.PROCEDURAL:
+                assert fact.retention_score == 1.0
+            else:
+                # After ~10 months, retention should be well below 1.0
+                assert fact.retention_score < 1.0
 
     def test_empty_list(self) -> None:
         result = apply_decay([])

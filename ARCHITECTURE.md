@@ -15,23 +15,25 @@
 ## Layer diagram
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│  CLI (ai_knot.cli)              Integrations (*.integrations)    │
-├───────────────────────────────────────────────────────────────────┤
-│            KnowledgeBase  ←→  SharedMemoryPool                    │  ← public API
-│            (ai_knot.knowledge)                                     │
-├──────────────┬──────────────────┬────────────────────────────────┤
-│  Extractor   │  BM25Retriever   │  apply_decay / forgetting       │
-│  (LLM+ATC)   │  (Okapi BM25)    │  (power-law curve)              │
-│  tri-surface │  slot-exact      │                                  │
-│  slot normal │  char-trigram    │                                  │
-├──────────────┴──────────────────┴────────────────────────────────┤
-│         StorageBackend (protocol)                                  │
-│  YAMLStorage    SQLiteStorage    PostgresStorage                   │
-│  TemporalStorageCapable ← AtomicUpdateCapable ← SnapshotCapable  │
-├───────────────────────────────────────────────────────────────────┤
-│         Core types: Fact, MemoryType, MESIState, SlotDelta        │
-└───────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  CLI (ai_knot.cli)     MCP Server     Integrations (OpenClaw, …)    │
+├──────────────────────────────────────────────────────────────────────┤
+│  KnowledgeBase  ←→  SharedMemoryPool                                 │  ← public API
+│  (learn/recall)      (publish/recall/promote/gc_pool)                │
+├──────────┬───────────────────┬───────────────────────────────────────┤
+│ Extractor│ Retrievers        │ Forgetting + ConflictPolicy            │
+│ (LLM+ATC)│ BM25Retriever    │ apply_decay (power-law)                │
+│ tri-surf │ DenseRetriever   │ SlotStateMachinePolicy (SEMANTIC)      │
+│ slot norm│ HybridRetriever  │ ProcedureStabilityPolicy (PROCEDURAL)  │
+│          │ Intent Planner   │ EpisodicTimelinePolicy (EPISODIC)      │
+├──────────┴───────────────────┴───────────────────────────────────────┤
+│  StorageBackend (protocol)        EvidenceStore (protocol)            │
+│  YAML  SQLite  Postgres           InlineEvidenceStore (default)       │
+│  TemporalStorageCapable ← AtomicUpdateCapable ← SnapshotCapable     │
+├──────────────────────────────────────────────────────────────────────┤
+│  Core types: Fact, MemoryType, MESIState, SlotDelta, Provenance,     │
+│  ConflictPolicy, Evidence, _RecallMeta, _PoolQueryIntent             │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Dependency rules (no circular imports)
@@ -91,6 +93,7 @@ The atomic unit of knowledge. All fields are persisted by storage backends excep
 | `topic_channel` | `str` | `""` | Domain routing label for shared pool, e.g. `"devops"` |
 | `visibility_scope` | `str` | `"global"` | `"global"` = all agents, `"local"` = owning agent only |
 | `op` | `MemoryOp` | `ADD` | Extraction intent — not persisted by storage |
+| `memory_tier` | `str` | `"private"` | `"private"` / `"pool"` / `"org"` — internal tier for multi-agent promotion |
 
 ### `MemoryType`
 
@@ -137,6 +140,54 @@ Lightweight change record used by `sync_slot_deltas()`:
 | `fact_id` | `str` | ID of the new (or invalidated) fact |
 | `content` | `str` | Human-readable content |
 | `prompt_surface` | `str` | Compact prompt surface (may be empty) |
+
+### `ConflictPolicy` (protocol)
+
+Per-`MemoryType` strategy for conflict resolution and decay:
+
+```python
+class ConflictPolicy(Protocol):
+    def should_supersede(new_fact, existing) -> bool   # Policy-driven CAS override
+    def decay_immune(fact) -> bool                      # Skip retention decay?
+    def ttl_seconds(fact) -> float | None               # Time-to-live, or None
+```
+
+| Policy | Type | Supersedes? | Decay immune? | TTL |
+|---|---|---|---|---|
+| `SlotStateMachinePolicy` | SEMANTIC | Yes (different value) | No | None |
+| `ProcedureStabilityPolicy` | PROCEDURAL | Yes (different value) | **Yes** | None |
+| `EpisodicTimelinePolicy` | EPISODIC | **Never** (coexist) | No | 7 days (high-importance exempt) |
+
+Wired into `_resolve_phase()` (slot CAS policy override) and `apply_decay()` (procedural immunity).
+Explicit `op=UPDATE` bypasses the policy (user intent is authoritative).
+
+### `Provenance`
+
+Immutable lineage record for a fact:
+
+| Field | Type | Description |
+|---|---|---|
+| `origin_agent` | `str` | Agent that first created the fact |
+| `origin_turn` | `int` | Conversation turn index (-1 if unknown) |
+| `published_by` | `str` | Agent that published to pool |
+| `promoted_by` | `str` | Agent that promoted to higher tier |
+| `supersedes_id` | `str` | ID of the fact this one replaced via CAS |
+| `consolidation_ids` | `tuple[str, ...]` | Episodic facts consolidated into this one |
+
+### `Evidence`
+
+Source material record linked to a Fact:
+
+| Field | Type | Description |
+|---|---|---|
+| `fact_id` | `str` | Canonical fact this evidence supports |
+| `snippets` | `list[str]` | Raw source text snippets |
+| `spans` | `list[str]` | Character spans in original document |
+| `verbatim` | `str` | Exact source quote |
+| `support_confidence` | `float` | How strongly evidence supports the fact |
+
+`EvidenceStore` protocol provides the seam for future physical separation.
+Default `InlineEvidenceStore` reads evidence from Fact fields (zero cost).
 
 ---
 
@@ -306,15 +357,22 @@ pool.register("agent_b")
 Auto-trust is computed from observed behaviour — no manual configuration:
 
 ```
-trust(agent) = min(1, used / published) × (1 − quick_inv_rate)
-
-used           = number of times this agent's facts were in a top_k result
-published      = total facts published by this agent
-quick_inv_rate = fraction of published facts superseded by others shortly after publish
+trust(agent) = max(0.1, quality × (1 − inv_penalty))
+quality      = min(1.0, (used + PRIOR_WEIGHT × 0.8) / (published + PRIOR_WEIGHT))
+inv_penalty  = quick_inv_count / published
 ```
 
+Bayesian prior (`PRIOR_WEIGHT=3`) prevents untested agents from starting at trust=0.1.
 `_used_count` is incremented **only for facts in the final top_k result**, not for
 overfetch candidates — preventing inflated denominators from wide `top_k` values.
+
+### Tier-aware pool lifecycle
+
+- **Memory tiers**: `"private"` → `"pool"` (via publish) → `"org"` (via promote/auto)
+- **Auto-promotion**: facts consumed by ≥3 distinct agents auto-promote to `"org"` tier
+- **Tier scoring**: `"org"` facts get 1.05× multiplicative boost in recall
+- **Pool TTL**: `gc_pool()` expires `"pool"` facts unused for 30 days; `"org"` exempt
+- **Coverage hook**: `_last_recall_meta` tracks coverage/intent (internal, not public API)
 
 ### Delta sync
 
@@ -364,9 +422,32 @@ decay_exp = { semantic: 0.8, procedural: 1.0, episodic: 1.3 }
 5. **Char-trigram ranker** — Jaccard similarity on character trigrams closes the semantic
    gap for paraphrases and misspellings without embeddings.
 
-6. **RRF** (Reciprocal Rank Fusion) — combines 4 ranked lists: BM25, importance, retention,
-   recency. Default weights `(5.0, 2.0, 2.0, 1.0)`, configurable via
-   `KnowledgeBase(rrf_weights=(...))`.
+6. **RRF** (Reciprocal Rank Fusion) — combines 6 ranked lists: BM25, slot-exact, trigram,
+   importance, retention, recency. Default weights `(5.0, 3.0, 2.0, 1.5, 1.5, 1.0)`,
+   configurable via `KnowledgeBase(rrf_weights=(...))`.
+   Per-call `rrf_weights` override supported for intent-aware retrieval.
+
+### Dense and hybrid retrieval
+
+`DenseRetriever` — cosine similarity search over precomputed embeddings. Call
+`set_embeddings(vectors)` to load precomputed vectors (from `embedder.py`).
+
+`HybridRetriever` — fuses BM25 and dense retrieval via RRF. Falls back to BM25-only
+when no embeddings are available (seamless upgrade path). Default fusion weights:
+BM25=2.0, dense=1.0.
+
+### Intent-aware retrieval planner
+
+`_classify_pool_query(query, active_facts)` classifies queries into four intents:
+
+| Intent | RRF Override | Rerank | Post-filter |
+|---|---|---|---|
+| `ENTITY_LOOKUP` | slot-exact → 8.0 | default | — |
+| `INCIDENT` | recency → 3.0 | recency=0.12 | — |
+| `CROSS_DOMAIN` | default | default | agent cap ceil(top_k×0.6) |
+| `GENERAL` | default | default | — |
+
+Wired into both `SharedMemoryPool.recall()` and `KnowledgeBase._execute_recall()`.
 
 ### Tri-surface retrieval
 
@@ -427,7 +508,9 @@ slot_key  = f"{entity}::{attribute}" if entity and attribute else ""
 | What | Where | Interface |
 |---|---|---|
 | New storage backend | `src/ai_knot/storage/` | `StorageBackend` protocol; optionally also `TemporalStorageCapable`, `AtomicUpdateCapable`, `SnapshotCapable` |
+| New evidence store | `ai_knot.types` | `EvidenceStore` protocol: `get_evidence()`, `save_evidence()`, `delete_evidence()` |
+| New conflict policy | `ai_knot.types` | `ConflictPolicy` protocol + add to `CONFLICT_POLICIES` registry |
 | New LLM provider | `Extractor._call_<provider>` | Returns `list[dict]` from LLM |
 | New integration | `src/ai_knot/integrations/` | Import `KnowledgeBase`, wrap |
-| Custom retriever | Replace `BM25Retriever` | `.search(query, facts, top_k)` → `list[tuple[Fact, float]]` |
+| Custom retriever | `HybridRetriever(bm25, dense)` | BM25 + dense fusion with graceful fallback |
 | Custom decay | `KnowledgeBase(decay_config=...)` | Dict of `MemoryType.value → exponent` |

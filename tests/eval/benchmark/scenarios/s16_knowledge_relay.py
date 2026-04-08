@@ -8,18 +8,18 @@ inserts new facts that reference those concepts, and publishes to the shared poo
 Agent D (empty KB) must retrieve facts from all three layers.
 
 Flow:
-  Round 0: Agent A inserts 5 infra facts (argocd, grafana, redis, istio, helm)
+  Round 0: Agent A inserts 5 infra facts (fluxcd, datadog, memcached, linkerd, kustomize)
            and publishes to pool.
   Round 1: Agent B calls sync_dirty() — sees A's facts.
-           B inserts 5 API facts that reference A's service names (redis, argocd).
+           B inserts 5 API facts that reference A's service names (memcached, fluxcd).
            B publishes to pool.
   Round 2: Agent C calls sync_dirty() — sees A + B facts.
-           C inserts 5 frontend facts that reference B's API patterns (openapi).
+           C inserts 5 frontend facts that reference B's API patterns (graphql).
            C publishes to pool.
   Query:   Agent D (empty KB) queries pool with 3 targeted questions:
-             Q1 → expects A's fact  (keyword: argocd)
-             Q2 → expects B's fact  (keyword: redis)
-             Q3 → expects C's fact  (keyword: openapi)
+             Q1 → expects A's fact  (keyword: fluxcd)
+             Q2 → expects B's fact  (keyword: memcached)
+             Q3 → expects C's fact  (keyword: graphql)
 
 Metrics (deterministic):
   layer_a_recall  — 1.0 if D finds A's fact

@@ -47,38 +47,38 @@ SCENARIO_ID = "s13_concurrent_writers"
 _N_AGENTS = 4
 _NOISE_PER_AGENT = 5
 
-_SLOT_ENTITY = "Jordan Lee"
+_SLOT_ENTITY = "Mia Torres"
 _SLOT_ATTRIBUTE = "annual_salary"
 
 # Each agent publishes a different salary value for the same person.
 _SALARY_FACTS = [
-    "Jordan Lee's annual salary is $95,000.",
-    "Jordan Lee's annual salary is $110,000.",
-    "Jordan Lee's annual salary is $125,000.",
-    "Jordan Lee's annual salary is $140,000.",
+    "Mia Torres's annual salary is $88,000.",
+    "Mia Torres's annual salary is $105,000.",
+    "Mia Torres's annual salary is $120,000.",
+    "Mia Torres's annual salary is $145,000.",
 ]
 
 _NOISE_FACTS = [
-    "The deployment pipeline uses GitHub Actions.",
-    "Python 3.12 is the standard runtime for all services.",
-    "All services expose Prometheus /metrics endpoints.",
-    "Database migrations run via Alembic before each release.",
-    "Feature flags are managed through LaunchDarkly.",
-    "Redis is used for rate limiting at the API gateway.",
-    "All logs are shipped to OpenSearch via Fluent Bit.",
-    "gRPC is preferred over REST for inter-service calls.",
-    "Secrets are stored in HashiCorp Vault.",
-    "Load tests run nightly against the staging environment.",
+    "The release pipeline uses Buildkite with parallel steps.",
+    "Go 1.22 is the standard runtime for all backend services.",
+    "All services emit OpenTelemetry spans to the Tempo collector.",
+    "Schema migrations run via Atlas before each promotion.",
+    "Experiment toggles are managed through Unleash.",
+    "Memcached is used for throttle counters at the ingress gateway.",
+    "All logs are shipped to Loki via Vector.",
+    "NATS is preferred over HTTP for inter-service messaging.",
+    "Secrets are stored in CyberArk Conjur.",
+    "Soak tests run nightly against the shadow environment.",
     "The monorepo uses Bazel for hermetic builds.",
-    "All APIs require mTLS in production.",
-    "Database connection pools are capped at 20 per service.",
-    "SLO alerts page via PagerDuty.",
-    "Canary deployments use a 5% traffic split initially.",
-    "Container images are scanned with Trivy before push.",
-    "All S3 buckets enforce server-side AES-256 encryption.",
-    "Service mesh is Istio 1.20.",
-    "Code coverage must stay above 80% on the main branch.",
-    "GraphQL subscriptions are served via WebSockets.",
+    "All collector endpoints require mTLS in production.",
+    "Trace storage connection pools are capped at 25 per service.",
+    "Error budget alerts page via Opsgenie.",
+    "Shadow promotions mirror 5% of live traffic initially.",
+    "Collector binaries are scanned with Semgrep before release.",
+    "All GCS buckets enforce server-side CMEK encryption.",
+    "Service mesh is Linkerd 2.15.",
+    "Code coverage must stay above 85% on the release branch.",
+    "gRPC streaming is used for real-time span delivery.",
 ]
 
 

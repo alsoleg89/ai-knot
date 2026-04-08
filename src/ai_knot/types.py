@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
 
@@ -134,6 +135,15 @@ class Fact:
     state_confidence: float = 1.0
     topic_channel: str = ""
     visibility_scope: str = "global"
+    # Lightweight claim fingerprint for conflict detection in the shared pool (v1.4).
+    # Populated at publish time for unslotted facts; empty string = no claim extracted.
+    claim_key: str = ""
+    # Memory tier (v1.5): internal semantic lever for multi-agent promotion.
+    # "private" — visible only to owning agent (default).
+    # "pool" — promoted to shared pool via publish().
+    # "org" — promoted to organization-wide knowledge (future).
+    # Not exposed in public recall()/learn() signatures.
+    memory_tier: str = "private"
     # Extraction intent (v1.3): set by Extractor._parse_fact(); never persisted.
     # ADD = insert (default); UPDATE = force supersede; DELETE = close without insert;
     # NOOP = skip entirely. Storage backends do not serialize this field.
@@ -206,3 +216,235 @@ class ConversationTurn:
 
     role: str
     content: str
+
+
+# ---------------------------------------------------------------------------
+# Provenance (Phase 2): lineage tracking for facts
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Provenance:
+    """Immutable provenance record for a fact.
+
+    Tracks the origin and transformation history of a fact through the
+    learn/publish/promote pipeline.
+
+    Attributes:
+        origin_agent: Agent that first created the fact.
+        origin_turn: Conversation turn index that produced it (0-based), or -1.
+        published_by: Agent that published the fact to the pool (empty if private).
+        promoted_by: Agent that promoted the fact to a higher tier (empty if not promoted).
+        supersedes_id: ID of the fact this one replaced via CAS (empty if no predecessor).
+        consolidation_ids: IDs of episodic facts consolidated into this one (empty list if none).
+    """
+
+    origin_agent: str = ""
+    origin_turn: int = -1
+    published_by: str = ""
+    promoted_by: str = ""
+    supersedes_id: str = ""
+    consolidation_ids: tuple[str, ...] = ()
+
+
+# ---------------------------------------------------------------------------
+# ConflictPolicy protocol (Phase 2): per-type conflict resolution strategy
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class ConflictPolicy(Protocol):
+    """Strategy for resolving conflicts between new and existing facts.
+
+    Each MemoryType can have a different policy governing how conflicts
+    are detected and resolved during the learn() resolve phase.
+    """
+
+    @staticmethod
+    def should_supersede(new_fact: Fact, existing: Fact) -> bool:
+        """Return True if *new_fact* should supersede *existing*."""
+        ...
+
+    @staticmethod
+    def decay_immune(fact: Fact) -> bool:
+        """Return True if *fact* is immune to retention decay."""
+        ...
+
+    @staticmethod
+    def ttl_seconds(fact: Fact) -> float | None:
+        """Return a TTL in seconds for *fact*, or None for no expiry."""
+        ...
+
+
+class SlotStateMachinePolicy:
+    """Conflict policy for SEMANTIC facts — existing slot CAS logic.
+
+    Semantic facts use deterministic slot_key-based CAS: same slot + same value
+    reinforces confidence; same slot + different value supersedes; no slot = branch.
+    All semantic facts participate in retention decay normally.
+    """
+
+    @staticmethod
+    def should_supersede(new_fact: Fact, existing: Fact) -> bool:
+        if not new_fact.slot_key or new_fact.slot_key != existing.slot_key:
+            return False
+        return new_fact.value_text != existing.value_text
+
+    @staticmethod
+    def decay_immune(fact: Fact) -> bool:
+        return False
+
+    @staticmethod
+    def ttl_seconds(fact: Fact) -> float | None:
+        return None
+
+
+class ProcedureStabilityPolicy:
+    """Conflict policy for PROCEDURAL facts — stability-first.
+
+    Procedural facts represent user preferences and workflows. They are
+    immune to retention decay (pinned) and require explicit supersession
+    or DELETE to be removed. This prevents learned procedures from being
+    forgotten due to disuse.
+    """
+
+    @staticmethod
+    def should_supersede(new_fact: Fact, existing: Fact) -> bool:
+        if not new_fact.slot_key or new_fact.slot_key != existing.slot_key:
+            return False
+        return new_fact.value_text != existing.value_text
+
+    @staticmethod
+    def decay_immune(fact: Fact) -> bool:
+        return True
+
+    @staticmethod
+    def ttl_seconds(fact: Fact) -> float | None:
+        return None
+
+
+class EpisodicTimelinePolicy:
+    """Conflict policy for EPISODIC facts — TTL + consolidation path.
+
+    Episodic facts represent specific events. They have a default TTL of 7 days
+    and are never superseded by slot CAS — instead, multiple episodes with the
+    same slot coexist on a timeline. High-importance episodes (>= 0.9) are
+    exempt from TTL.
+    """
+
+    _DEFAULT_TTL: float = 7 * 24 * 3600.0  # 7 days
+
+    @staticmethod
+    def should_supersede(new_fact: Fact, existing: Fact) -> bool:
+        # Episodic facts don't supersede — they coexist on a timeline.
+        return False
+
+    @staticmethod
+    def decay_immune(fact: Fact) -> bool:
+        return False
+
+    @staticmethod
+    def ttl_seconds(fact: Fact) -> float | None:
+        if fact.importance >= 0.9:
+            return None  # High-importance episodes are kept indefinitely.
+        return EpisodicTimelinePolicy._DEFAULT_TTL
+
+
+# Registry mapping MemoryType to its conflict policy.
+CONFLICT_POLICIES: dict[MemoryType, ConflictPolicy] = {
+    MemoryType.SEMANTIC: SlotStateMachinePolicy(),
+    MemoryType.PROCEDURAL: ProcedureStabilityPolicy(),
+    MemoryType.EPISODIC: EpisodicTimelinePolicy(),
+}
+
+
+# ---------------------------------------------------------------------------
+# Evidence storage protocol (Phase 5): physical separation seam
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    """Extracted evidence record linked to a Fact by ``fact_id``.
+
+    Holds the raw source material that supports a canonical fact.
+    When evidence is stored inline (default), these fields live directly
+    on the Fact.  When physically separated, they live in an external store.
+
+    Attributes:
+        fact_id: ID of the canonical Fact this evidence supports.
+        snippets: Raw source text snippets.
+        spans: Character spans in the original document.
+        verbatim: Verbatim source quote.
+        witness_surface: Surface form as observed by the witness agent.
+        support_confidence: How strongly this evidence supports the fact (0.0-1.0).
+        verification_source: How the evidence was verified ("manual", "llm", etc.).
+    """
+
+    fact_id: str
+    snippets: list[str] = field(default_factory=list)
+    spans: list[str] = field(default_factory=list)
+    verbatim: str = ""
+    witness_surface: str = ""
+    support_confidence: float = 1.0
+    verification_source: str = "manual"
+
+
+@runtime_checkable
+class EvidenceStore(Protocol):
+    """Protocol for evidence storage backends (Phase 5).
+
+    Default implementation reads evidence inline from the Fact fields.
+    Future implementations may use a separate table/file for evidence,
+    enabling independent scaling and TTL for raw source material.
+    """
+
+    def get_evidence(self, fact_id: str) -> Evidence | None:
+        """Retrieve evidence for a single fact."""
+        ...
+
+    def save_evidence(self, evidence: list[Evidence]) -> None:
+        """Persist a batch of evidence records."""
+        ...
+
+    def delete_evidence(self, fact_ids: list[str]) -> None:
+        """Remove evidence for the given fact IDs."""
+        ...
+
+
+class InlineEvidenceStore:
+    """Default evidence store — reads evidence inline from Fact fields.
+
+    This is a zero-cost adapter: it extracts evidence from the Fact's
+    own fields (source_snippets, source_verbatim, etc.) without any
+    separate storage.  This is the Phase 5 "no-op" implementation that
+    preserves current behaviour while providing the protocol seam.
+    """
+
+    def __init__(self) -> None:
+        self._facts: dict[str, Fact] = {}
+
+    def set_facts(self, facts: list[Fact]) -> None:
+        """Load facts for inline evidence extraction."""
+        self._facts = {f.id: f for f in facts}
+
+    def get_evidence(self, fact_id: str) -> Evidence | None:
+        """Extract evidence from inline Fact fields."""
+        fact = self._facts.get(fact_id)
+        if fact is None:
+            return None
+        return Evidence(
+            fact_id=fact.id,
+            snippets=fact.source_snippets,
+            spans=fact.source_spans,
+            verbatim=fact.source_verbatim,
+            witness_surface=fact.witness_surface,
+            support_confidence=fact.support_confidence,
+            verification_source=fact.verification_source,
+        )
+
+    def save_evidence(self, evidence: list[Evidence]) -> None:
+        """No-op for inline store — evidence is saved with the Fact."""
+
+    def delete_evidence(self, fact_ids: list[str]) -> None:
+        """No-op for inline store — evidence is deleted with the Fact."""

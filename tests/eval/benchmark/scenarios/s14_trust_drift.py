@@ -38,48 +38,48 @@ _TRUST_LOW_THRESHOLD = 0.25
 
 # 9 slots split evenly across 3 superseding agents (3 each).
 _SLOTS = [
-    ("Alex Chen", "annual_salary"),
-    ("Alex Chen", "job_title"),
-    ("Alex Chen", "office_location"),
-    ("Jordan Lee", "annual_salary"),
-    ("Jordan Lee", "job_title"),
-    ("Jordan Lee", "office_location"),
-    ("Jordan Lee", "team_name"),
-    ("Jordan Lee", "start_date"),
-    ("Jordan Lee", "tech_lead"),
+    ("Mia Torres", "annual_salary"),
+    ("Mia Torres", "job_title"),
+    ("Mia Torres", "office_location"),
+    ("Liam Chen", "annual_salary"),
+    ("Liam Chen", "job_title"),
+    ("Liam Chen", "office_location"),
+    ("Liam Chen", "team_name"),
+    ("Liam Chen", "start_date"),
+    ("Liam Chen", "tech_lead"),
 ]
 
 _AGENT_A_VALUES = [
-    "Alex Chen's annual salary is $95,000.",
-    "Alex Chen's job title is Junior Engineer.",
-    "Alex Chen works in the London office.",
-    "Jordan Lee's annual salary is $110,000.",
-    "Jordan Lee's job title is Senior Engineer.",
-    "Jordan Lee works in the Berlin office.",
-    "Jordan Lee is on the Data team.",
-    "Jordan Lee's start date was January 2021.",
-    "Jordan Lee is not a tech lead.",
+    "Mia Torres's annual salary is $88,000.",
+    "Mia Torres's job title is Junior SRE.",
+    "Mia Torres works in the Dublin office.",
+    "Liam Chen's annual salary is $105,000.",
+    "Liam Chen's job title is Senior Engineer.",
+    "Liam Chen works in the Munich office.",
+    "Liam Chen is on the Observability team.",
+    "Liam Chen's start date was April 2020.",
+    "Liam Chen is not a tech lead.",
 ]
 
 # Agent B supersedes slots 0-2.
 _AGENT_B_VALUES = [
-    "Alex Chen's annual salary is $115,000 after promotion.",
-    "Alex Chen's job title is Senior Engineer after promotion.",
-    "Alex Chen works in the New York office after relocation.",
+    "Mia Torres's annual salary is $120,000 after promotion.",
+    "Mia Torres's job title is Senior SRE after promotion.",
+    "Mia Torres works in the Toronto office after relocation.",
 ]
 
 # Agent C supersedes slots 3-5.
 _AGENT_C_VALUES = [
-    "Jordan Lee's annual salary is $140,000 after promotion.",
-    "Jordan Lee's job title is Staff Engineer after promotion.",
-    "Jordan Lee works in the Singapore office after relocation.",
+    "Liam Chen's annual salary is $145,000 after promotion.",
+    "Liam Chen's job title is Principal Engineer after promotion.",
+    "Liam Chen works in the Seoul office after relocation.",
 ]
 
 # Agent D supersedes slots 6-8.
 _AGENT_D_VALUES = [
-    "Jordan Lee is now on the ML Platform team after reorg.",
-    "Jordan Lee joined the company in March 2020 (corrected record).",
-    "Jordan Lee is the tech lead for the ML Platform team.",
+    "Liam Chen is now on the Platform Reliability team after reorg.",
+    "Liam Chen joined the company in June 2019 (corrected record).",
+    "Liam Chen is the tech lead for the Platform Reliability team.",
 ]
 
 _N_FACTS = len(_SLOTS)
@@ -151,15 +151,15 @@ async def run(
     # queries, trust stays at the floor because the formula requires
     # used_count > 0 for quality > 0.
     _RECOVERY_QUERIES = [
-        "What is Alex Chen's salary?",
-        "What is Alex Chen's job title?",
-        "Where does Alex Chen work?",
-        "What is Jordan Lee's salary?",
-        "What is Jordan Lee's title?",
-        "Where does Jordan Lee work?",
-        "What team is Jordan Lee on?",
-        "When did Jordan Lee start?",
-        "Is Jordan Lee a tech lead?",
+        "What is Mia Torres's salary?",
+        "What is Mia Torres's job title?",
+        "Where does Mia Torres work?",
+        "What is Liam Chen's salary?",
+        "What is Liam Chen's title?",
+        "Where does Liam Chen work?",
+        "What team is Liam Chen on?",
+        "When did Liam Chen start?",
+        "Is Liam Chen a tech lead?",
     ]
     for q in _RECOVERY_QUERIES:
         await backend.pool_retrieve("agent_e", q, top_k=3)

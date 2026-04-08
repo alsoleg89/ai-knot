@@ -83,6 +83,23 @@ _MA_SCENARIO_CHOICES = ("s8_ma", "s9", "s10", "s11", "s12", "s13", "s14", "s15")
 _MODE_CHOICES = ("basic", "extended", "auto")
 _LANGUAGE_CHOICES = ("en", "ru", "both")
 
+# Default output filenames — used to detect whether the user overrode them.
+_DEFAULT_OUTPUT = "benchmark_report.md"
+_DEFAULT_RAW = "benchmark_raw.json"
+_DEFAULT_JSONL = "benchmark_live.jsonl"
+
+
+def _stamp_path(path: str, stamp: str) -> str:
+    """Insert ``_<stamp>`` before the file extension.
+
+    >>> _stamp_path("benchmark_report.md", "20260408_153012")
+    'benchmark_report_20260408_153012.md'
+    """
+    dot = path.rfind(".")
+    if dot == -1:
+        return f"{path}_{stamp}"
+    return f"{path[:dot]}_{stamp}{path[dot:]}"
+
 
 @click.command()
 @click.option(
@@ -110,13 +127,13 @@ _LANGUAGE_CHOICES = ("en", "ru", "both")
 )
 @click.option(
     "--output",
-    default="benchmark_report.md",
+    default=_DEFAULT_OUTPUT,
     show_default=True,
     help="Path for the Markdown report.",
 )
 @click.option(
     "--raw-output",
-    default="benchmark_raw.json",
+    default=_DEFAULT_RAW,
     show_default=True,
     help="Path for raw JSON results.",
 )
@@ -209,7 +226,7 @@ _LANGUAGE_CHOICES = ("en", "ru", "both")
 @click.option(
     "--jsonl-output",
     "jsonl_output",
-    default="benchmark_live.jsonl",
+    default=_DEFAULT_JSONL,
     show_default=True,
     help=(
         "Path for incremental JSONL output. Each scenario result is appended "
@@ -291,6 +308,15 @@ async def _run(
     jsonl_output: str = "benchmark_live.jsonl",
     ma_category: str = "all",
 ) -> None:
+    # Stamp default filenames with current datetime so runs don't overwrite each other.
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    if output == _DEFAULT_OUTPUT:
+        output = _stamp_path(output, stamp)
+    if raw_output == _DEFAULT_RAW:
+        raw_output = _stamp_path(raw_output, stamp)
+    if jsonl_output == _DEFAULT_JSONL:
+        jsonl_output = _stamp_path(jsonl_output, stamp)
+
     # --fast: mini fixtures + 2 backends. Real LLM still used (tests actual system).
     # Add --mock-judge explicitly if you need an offline/instant run (~20s, no LLM).
     if fast:
@@ -298,10 +324,10 @@ async def _run(
             scenarios_arg = "s1,s4,s7"
         if backends_override is None:
             backends_override = "ai_knot,baseline,qdrant"
-        if output == "benchmark_report.md":
-            output = "benchmark_fast.md"
-        if raw_output == "benchmark_raw.json":
-            raw_output = "benchmark_fast_raw.json"
+        if output == _stamp_path(_DEFAULT_OUTPUT, stamp):
+            output = _stamp_path("benchmark_fast.md", stamp)
+        if raw_output == _stamp_path(_DEFAULT_RAW, stamp):
+            raw_output = _stamp_path("benchmark_fast_raw.json", stamp)
 
     _fast_bundle = None  # professional scenarios use standalone fixtures, not LanguageBundle
 

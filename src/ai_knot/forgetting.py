@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 from datetime import UTC, datetime
 
-from ai_knot.types import Fact
+from ai_knot.types import CONFLICT_POLICIES, Fact, MemoryType
 
 # Base stability in hours (2 weeks). A fact with importance=1.0 and
 # access_count=0 will retain ~37% after 2 weeks.
@@ -146,5 +146,10 @@ def apply_decay(
     """
     now = now or datetime.now(UTC)
     for fact in facts:
-        fact.retention_score = calculate_retention(fact, now=now, type_exponents=type_exponents)
+        # ConflictPolicy: decay-immune facts (e.g. PROCEDURAL) keep retention=1.0.
+        policy = CONFLICT_POLICIES.get(fact.type, CONFLICT_POLICIES[MemoryType.SEMANTIC])
+        if policy.decay_immune(fact):
+            fact.retention_score = 1.0
+        else:
+            fact.retention_score = calculate_retention(fact, now=now, type_exponents=type_exponents)
     return facts

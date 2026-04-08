@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS facts (
     state_confidence  REAL NOT NULL DEFAULT 1.0,
     topic_channel     TEXT NOT NULL DEFAULT '',
     visibility_scope  TEXT NOT NULL DEFAULT 'global',
+    claim_key         TEXT NOT NULL DEFAULT '',
+    memory_tier       TEXT NOT NULL DEFAULT 'private',
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -82,8 +84,8 @@ _INSERT_FACTS_SQL = """INSERT INTO facts
     entity, attribute, version, mesi_state,
     canonical_surface, witness_surface, prompt_surface,
     slot_key, value_text, qualifiers, state_confidence,
-    topic_channel, visibility_scope)
-   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+    topic_channel, visibility_scope, claim_key, memory_tier)
+   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
 
 
 class SQLiteStorage:
@@ -148,6 +150,8 @@ class SQLiteStorage:
             "state_confidence": "REAL NOT NULL DEFAULT 1.0",
             "topic_channel": "TEXT NOT NULL DEFAULT ''",
             "visibility_scope": "TEXT NOT NULL DEFAULT 'global'",
+            "claim_key": "TEXT NOT NULL DEFAULT ''",
+            "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
         }
         with self._conn() as conn:
             cur = conn.execute("PRAGMA table_info(facts)")
@@ -245,6 +249,8 @@ class SQLiteStorage:
                 fact.state_confidence,
                 fact.topic_channel,
                 fact.visibility_scope,
+                fact.claim_key,
+                fact.memory_tier,
             )
             for fact in facts
         ]
@@ -301,6 +307,8 @@ class SQLiteStorage:
             state_confidence=float(row[30]) if row[30] is not None else 1.0,
             topic_channel=str(row[31]) if row[31] else "",
             visibility_scope=str(row[32]) if row[32] else "global",
+            claim_key=str(row[33]) if len(row) > 33 and row[33] else "",
+            memory_tier=str(row[34]) if len(row) > 34 and row[34] else "private",
         )
 
     def delete(self, agent_id: str, fact_id: str) -> None:
@@ -330,7 +338,8 @@ class SQLiteStorage:
                           entity, attribute, version, mesi_state,
                           canonical_surface, witness_surface, prompt_surface,
                           slot_key, value_text, qualifiers, state_confidence,
-                          topic_channel, visibility_scope"""
+                          topic_channel, visibility_scope, claim_key,
+                          memory_tier"""
 
     def load_active(self, agent_id: str) -> list[Fact]:
         """Load only currently-active facts (index-accelerated).

@@ -482,9 +482,9 @@ class TestTrustOrdering:
         pool_sqlite._quick_inv_count["agent_a"] = 1
         assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
 
-        # Give agent_b perfect trust.
+        # Give agent_b high trust (used >> published overcomes Bayesian prior).
         pool_sqlite._publish_count["agent_b"] = 1
-        pool_sqlite._used_count["agent_b"] = 1
+        pool_sqlite._used_count["agent_b"] = 5
         assert pool_sqlite.get_trust("agent_b") == pytest.approx(1.0)
 
         results = pool_sqlite.recall("Python ML", "agent_c", top_k=1)
