@@ -1,133 +1,115 @@
-"""S15 — Topic Channel Cross-Contamination (Leakage Test).
+"""S15 — Cross-Team Signal Contamination (Shared Terminology Isolation).
 
 Verifies that per-channel pool retrieval returns facts only from the
-requested channel — zero cross-channel leakage.
+requested channel, even when multiple channels contain the same terminology
+(e.g., "deployment", "latency", "monitoring" appear in devops, backend,
+and data channels).
 
-Unlike S12 (which tests publish gating), S15 focuses on retrieval isolation:
-after both channels are fully populated, queries scoped to one channel must
-NOT surface results from the other.
+Three agents publish to 3 channels with 2 "shared-term" facts each:
+  Agent A → devops  (6 facts, 2 mention "deployment" and "latency")
+  Agent B → backend (6 facts, 2 mention "deployment" and "latency")
+  Agent C → data    (6 facts, 2 mention "monitoring" and "latency")
 
-Flow:
-  1. Agent A inserts DEVOPS_FACTS and publishes them as "devops" channel.
-  2. Agent B inserts FRONTEND_FACTS and publishes them as "frontend" channel.
-  3. Agent C (no private knowledge) queries each channel:
-     a. Devops query via pool_retrieve_for_channel(channel="devops")
-        → must return devops facts, must NOT contain frontend keywords.
-     b. Frontend query via pool_retrieve_for_channel(channel="frontend")
-        → must return frontend facts, must NOT contain devops keywords.
-  4. Compute leakage: fraction of channel queries where the wrong-domain
-     keywords appear in results.
+Queries test both channel-specific and shared-term retrieval.
 
-Metrics (deterministic):
-  channel_isolation  — 1.0 - cross_channel_leakage_rate
-                        1.0 = perfect isolation, 0.0 = total leakage
-  devops_recall      — 1.0 if devops query returned ≥1 devops-domain result
-  frontend_recall    — 1.0 if frontend query returned ≥1 frontend-domain result
+Metrics:
+  channel_precision       — fraction of results from correct channel (standard queries)
+  shared_term_isolation   — fraction of shared-term queries returning correct channel
+  cross_contamination_rate — fraction of results from WRONG channel (lower=better)
 
 Only runs against MultiAgentMemoryBackend.
 """
 
 from __future__ import annotations
 
-from tests.eval.benchmark._eval_utils import has_domain_hit as _has_domain_hit
-from tests.eval.benchmark.base import MultiAgentMemoryBackend, RetrievalResult, ScenarioResult
+from tests.eval.benchmark.base import MultiAgentMemoryBackend, ScenarioResult
+from tests.eval.benchmark.fixtures import MULTI_AGENT_FIXTURE, MultiAgentFixture
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s15_topic_leakage"
 
-_DEVOPS_FACTS = [
-    "Kubernetes clusters are managed via Helm charts and ArgoCD.",
-    "Terraform provisions all cloud infrastructure on AWS.",
-    "Prometheus and Grafana handle observability and alerting.",
-    "Istio service mesh enforces mTLS between all microservices.",
-    "GitHub Actions pipelines run on self-hosted ARM runners.",
-]
-
-_FRONTEND_FACTS = [
-    "React 18 with TypeScript is the standard for all web UIs.",
-    "Vite is the build tool and Tailwind CSS handles styling.",
-    "Playwright is used for end-to-end browser testing.",
-    "Next.js 14 powers all customer-facing server-rendered pages.",
-    "Storybook documents every shared component in the design system.",
-]
-
-# Keywords unique to each domain — used to detect leakage.
-_DEVOPS_KEYWORDS = {"kubernetes", "terraform", "prometheus", "istio", "argocd"}
-_FRONTEND_KEYWORDS = {"react", "vite", "tailwind", "playwright", "next.js", "storybook"}
-
-_DEVOPS_QUERIES = [
-    "How are Kubernetes deployments managed?",
-    "What tool provisions cloud infrastructure?",
-]
-
-_FRONTEND_QUERIES = [
-    "What framework is used for web UI components?",
-    "How is end-to-end browser testing done?",
-]
+_CHANNELS = {
+    "agent_a": "devops",
+    "agent_b": "backend",
+    "agent_c": "data",
+}
+_QUERIER = "agent_d"
 
 
-async def _query_channel(
+async def run(
     backend: MultiAgentMemoryBackend,
-    queries: list[str],
-    channel: str,
-    own_kw: set[str],
-    leak_kw: set[str],
-) -> tuple[int, int]:
-    """Return (hits, leaks) across all queries for one channel."""
-    hits = leaks = 0
-    for query in queries:
-        r: RetrievalResult = await backend.pool_retrieve_for_channel(
-            "agent_c", query, top_k=5, topic_channel=channel
-        )
-        if _has_domain_hit(r.texts, own_kw):
-            hits += 1
-        if _has_domain_hit(r.texts, leak_kw):
-            leaks += 1
-    return hits, leaks
-
-
-async def run(backend: MultiAgentMemoryBackend, judge: BaseJudge) -> ScenarioResult:
+    judge: BaseJudge,
+    *,
+    fixture: MultiAgentFixture = MULTI_AGENT_FIXTURE,
+) -> ScenarioResult:
     await backend.reset()
 
-    for fact in _DEVOPS_FACTS:
-        await backend.insert_for_agent_with_meta(
-            "agent_a", fact, topic_channel="devops", importance=0.8
-        )
-    await backend.publish_to_pool("agent_a")
+    channel_facts = {
+        "agent_a": (fixture.contamination_devops_facts, "devops"),
+        "agent_b": (fixture.contamination_backend_facts, "backend"),
+        "agent_c": (fixture.contamination_data_facts, "data"),
+    }
 
-    for fact in _FRONTEND_FACTS:
-        await backend.insert_for_agent_with_meta(
-            "agent_b", fact, topic_channel="frontend", importance=0.8
-        )
-    await backend.publish_to_pool("agent_b")
+    # Phase 1: Insert facts with channel metadata.
+    for agent_id, (facts, channel) in channel_facts.items():
+        for fact in facts:
+            await backend.insert_for_agent_with_meta(
+                agent_id, fact, topic_channel=channel, importance=0.8
+            )
 
-    devops_hits, devops_leaks = await _query_channel(
-        backend, _DEVOPS_QUERIES, "devops", _DEVOPS_KEYWORDS, _FRONTEND_KEYWORDS
-    )
-    frontend_hits, frontend_leaks = await _query_channel(
-        backend, _FRONTEND_QUERIES, "frontend", _FRONTEND_KEYWORDS, _DEVOPS_KEYWORDS
-    )
+    # Publish sequentially — each team publishes its own channel.
+    for agent_id in channel_facts:
+        await backend.publish_to_pool(agent_id)
 
-    total_queries = len(_DEVOPS_QUERIES) + len(_FRONTEND_QUERIES)
-    total_leaks = devops_leaks + frontend_leaks
-    channel_isolation = max(0.0, 1.0 - total_leaks / max(total_queries, 1))
-    devops_recall = devops_hits / max(len(_DEVOPS_QUERIES), 1)
-    frontend_recall = frontend_hits / max(len(_FRONTEND_QUERIES), 1)
+    # Phase 2: Standard channel-specific queries.
+    channel_correct = 0
+    channel_total = 0
+    for query, channel, kw in fixture.contamination_channel_queries:
+        r = await backend.pool_retrieve_for_channel(_QUERIER, query, top_k=5, topic_channel=channel)
+        channel_total += 1
+        if any(kw.lower() in t.lower() for t in r.texts):
+            channel_correct += 1
+
+    channel_precision = channel_correct / max(channel_total, 1)
+
+    # Phase 3: Shared-term queries — terms that exist in multiple channels.
+    shared_correct = 0
+    shared_total = 0
+    cross_contamination = 0
+    total_results = 0
+
+    for query, channel, excl_kw in fixture.contamination_shared_term_queries:
+        r = await backend.pool_retrieve_for_channel(_QUERIER, query, top_k=5, topic_channel=channel)
+        shared_total += 1
+        if any(excl_kw.lower() in t.lower() for t in r.texts):
+            shared_correct += 1
+
+        # Count cross-contamination: results that clearly belong to another channel.
+        other_channel_kws = {
+            kw.lower() for q, ch, kw in fixture.contamination_channel_queries if ch != channel
+        }
+        for t in r.texts:
+            total_results += 1
+            if any(ok in t.lower() for ok in other_channel_kws):
+                cross_contamination += 1
+
+    shared_term_isolation = shared_correct / max(shared_total, 1)
+    cross_contamination_rate = cross_contamination / max(total_results, 1)
 
     notes = (
-        f"devops_hits={devops_hits}/{len(_DEVOPS_QUERIES)}, "
-        f"frontend_hits={frontend_hits}/{len(_FRONTEND_QUERIES)}, "
-        f"leaks={total_leaks}/{total_queries}, "
-        f"channel_isolation={channel_isolation:.2%}"
+        f"channels=3, shared_terms=3, "
+        f"channel_precision={channel_precision:.0%}, "
+        f"shared_term_isolation={shared_term_isolation:.0%}, "
+        f"cross_contamination_rate={cross_contamination_rate:.0%}"
     )
 
     return ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
-            "channel_isolation": [channel_isolation],
-            "devops_recall": [devops_recall],
-            "frontend_recall": [frontend_recall],
+            "channel_precision": [channel_precision],
+            "shared_term_isolation": [shared_term_isolation],
+            "cross_contamination_rate": [cross_contamination_rate],
         },
         insert_result=None,
         retrieval_result=None,

@@ -1,47 +1,88 @@
-"""ai-knot multi-agent backend for benchmark scenarios S8–S11.
+"""ai-knot multi-agent backend for benchmark scenarios S8–S20.
 
 Wraps multiple KnowledgeBase instances (one per agent) sharing a single
-SQLiteStorage and a SharedMemoryPool for cross-agent knowledge exchange.
+StorageBackend and a SharedMemoryPool for cross-agent knowledge exchange.
+
+Supports three storage backends selectable at construction time:
+  - "sqlite"   — SQLite file (default; fast, no extra deps)
+  - "yaml"     — YAML files (human-readable, Git-friendly)
+  - "postgres" — PostgreSQL (production-grade; requires psycopg and a running server)
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 import time
+from datetime import UTC, datetime
 
 from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
-from ai_knot.storage.sqlite_storage import SQLiteStorage
+from ai_knot.storage import StorageBackend, create_storage
 from ai_knot.types import SlotDelta
 from tests.eval.benchmark.base import InsertResult, MultiAgentMemoryBackend, RetrievalResult
 
-_POOL_AGENT_IDS = ("agent_a", "agent_b", "agent_c")
+_POOL_AGENT_IDS = ("agent_a", "agent_b", "agent_c", "agent_d")
+# Shared-pool namespace used internally by SharedMemoryPool.
+_SHARED_NAMESPACE = "__shared__"
 
 
 class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
     """ai-knot backend with SharedMemoryPool for multi-agent scenarios.
 
-    Creates up to three isolated KnowledgeBase instances sharing one
-    SQLiteStorage and a SharedMemoryPool.  Each agent has its own private
+    Creates up to four isolated KnowledgeBase instances sharing one
+    StorageBackend and a SharedMemoryPool.  Each agent has its own private
     namespace; the pool provides cross-agent retrieval with MESI coherence.
+
+    Args:
+        storage_type: One of "sqlite" (default), "yaml", "postgres".
+        postgres_dsn: DSN for PostgreSQL (required when storage_type="postgres").
+            Falls back to ``AI_KNOT_DSN`` env var.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        storage_type: str = "sqlite",
+        *,
+        postgres_dsn: str = "",
+    ) -> None:
+        self._storage_type = storage_type
+        self._postgres_dsn = postgres_dsn or os.environ.get("AI_KNOT_DSN", "")
         self._tmp_dir: str = ""
-        self._storage: SQLiteStorage | None = None
+        self._storage: StorageBackend | None = None
         self._kbs: dict[str, KnowledgeBase] = {}
         self._pool: SharedMemoryPool | None = None
 
     @property
     def name(self) -> str:
-        return "ai_knot_multi_agent"
+        suffix = f"_{self._storage_type}" if self._storage_type != "sqlite" else ""
+        return f"ai_knot_multi_agent{suffix}"
 
     async def reset(self) -> None:
         if self._tmp_dir:
             shutil.rmtree(self._tmp_dir, ignore_errors=True)
-        self._tmp_dir = tempfile.mkdtemp(prefix="aiknot_ma_bench_")
-        db_path = f"{self._tmp_dir}/ma_bench.db"
-        self._storage = SQLiteStorage(db_path)
+            self._tmp_dir = ""
+
+        if self._storage_type == "postgres":
+            storage = create_storage("postgres", dsn=self._postgres_dsn or None)
+            # Clear only benchmark-owned namespaces: static agents, shared pool,
+            # and any dynamic agents created in previous runs.
+            # SAFETY: never clear unknown namespaces — the DSN may point to a
+            # shared database with real ai-knot data.
+            benchmark_ns = {_SHARED_NAMESPACE, *_POOL_AGENT_IDS}
+            benchmark_ns.update(k for k in self._kbs if k not in _POOL_AGENT_IDS)
+            # Also discover agents that match the benchmark naming convention
+            # (agent_X) but were created by other benchmark processes.
+            for ns in storage.list_agents():  # type: ignore[attr-defined]
+                if ns.startswith("agent_") or ns == _SHARED_NAMESPACE:
+                    benchmark_ns.add(ns)
+            for ns in benchmark_ns:
+                storage.save(ns, [])  # type: ignore[attr-defined]
+        else:
+            self._tmp_dir = tempfile.mkdtemp(prefix=f"aiknot_ma_{self._storage_type}_")
+            storage = create_storage(self._storage_type, base_dir=self._tmp_dir)
+
+        self._storage = storage
         self._kbs = {}
         self._pool = SharedMemoryPool(storage=self._storage)
         for agent_id in _POOL_AGENT_IDS:
@@ -80,6 +121,17 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
         self, agent_id: str, content: str, *, entity: str, attribute: str
     ) -> None:
         kb = self._kb(agent_id)
+        # Supersede any existing active fact for the same slot within this agent's KB.
+        now = datetime.now(UTC)
+        facts = kb.list_facts()
+        for f in facts:
+            if (
+                f.is_active(now)
+                and f.entity.lower().strip() == entity.lower().strip()
+                and f.attribute.lower().strip() == attribute.lower().strip()
+            ):
+                f.valid_until = now
+        kb.replace_facts(facts)
         fact = kb.add(content)
         self._patch_fact_by_id(kb, fact.id, entity=entity, attribute=attribute)
 

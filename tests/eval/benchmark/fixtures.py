@@ -710,38 +710,174 @@ class LanguageBundle:
 
 @dataclass
 class MultiAgentFixture:
-    """Fixture data for multi-agent benchmark scenarios (S8–S11).
+    """Fixture data for multi-agent benchmark scenarios (S8–S15).
 
-    Contains two semantically distinct fact sets (DevOps vs Python) for
-    isolation testing, shared pool facts, and structured entity+attribute
-    data for MESI CAS and lazy-sync testing.
+    Contains four semantically distinct fact sets (DevOps / Python / Frontend / Data)
+    for isolation testing, shared pool facts distributed across three publishers,
+    and structured entity+attribute data for MESI CAS (4 versions) and lazy-sync
+    testing with three independent sync consumers.
     """
 
-    # S8 — private namespace isolation
+    # S8 — private namespace isolation (4 agents × 4 domains)
     agent_a_facts: list[str]  # DevOps / infra domain
     agent_b_facts: list[str]  # Python / coding domain
-    agent_a_queries: list[str]  # queries answered by agent_a's facts
-    agent_b_queries: list[str]  # queries answered by agent_b's facts
+    agent_c_facts: list[str]  # Frontend / UI domain
+    agent_d_facts: list[str]  # Data / ML domain
+    agent_a_queries: list[str]
+    agent_b_queries: list[str]
+    agent_c_queries: list[str]
+    agent_d_queries: list[str]
 
-    # S9 — shared pool publish + recall
+    # S9 — shared pool publish + recall (3 publishers, 1 querier)
+    # pool_facts[0:2] → agent_a, [2:4] → agent_b, [4:6] → agent_c
     pool_facts: list[str]
     pool_queries: list[tuple[str, str]]  # (query_text, expected_keyword_in_result)
 
-    # S10 — MESI entity CAS (two agents publish same entity+attribute)
-    cas_entity: str  # e.g. "Alex Chen"
-    cas_attribute: str  # e.g. "salary"
-    cas_fact_v1: str  # older version (Agent A publishes)
-    cas_fact_v2: str  # newer version (Agent B publishes)
-    cas_query: str  # query to retrieve the fact
-    cas_v2_keyword: str  # keyword that must appear in retrieved result
+    # S10 — MESI entity CAS (4 agents publish same entity+attribute sequentially)
+    cas_entity: str
+    cas_attribute: str
+    cas_fact_v1: str  # agent_a publishes first
+    cas_fact_v2: str  # agent_b supersedes
+    cas_fact_v3: str  # agent_c supersedes
+    cas_fact_v4: str  # agent_d supersedes — final winner
+    cas_query: str
+    cas_v2_keyword: str  # present only in v2
+    cas_v4_keyword: str  # present only in v4 — used to confirm v4 won
 
-    # S11 — MESI lazy sync (incremental dirty pull)
+    # S11 — MESI lazy sync (1 publisher, 3 independent sync consumers)
     sync_initial_facts: list[str]  # initial pool population (5 facts)
-    sync_update_entity: str  # entity for the updated fact
-    sync_update_attribute: str  # attribute for the updated fact
+    sync_update_entity: str
+    sync_update_attribute: str
     sync_fact_v1: str  # initial version of the updatable fact
-    sync_fact_v2: str  # updated version (triggers dirty flag)
-    sync_v2_keyword: str  # word present only in v2 (used to confirm v2 was synced)
+    sync_fact_v2: str  # updated version (triggers dirty flag for all consumers)
+    sync_v2_keyword: str  # word present only in v2
+
+    # S14 — trust recovery (agent_a publishes corrected values after trust floor)
+    agent_a_corrected_values: list[str]  # 9 corrected facts matching _SLOTS order
+
+    # S16 — knowledge relay (3 rounds: A → B builds on A → C builds on B)
+    relay_infra_facts: list[str]  # agent_a layer: argocd, grafana, redis, istio, helm
+    relay_api_facts: list[str]  # agent_b layer: references A's service names
+    relay_frontend_facts: list[str]  # agent_c layer: references B's API patterns
+    relay_queries: list[tuple[str, str]]  # (query, expected_keyword) × 3
+
+    # S17 — self-correction (agent_a detects supersession via sync_dirty, self-corrects)
+    self_corr_entity: str
+    self_corr_attribute: str
+    self_corr_v1: str  # A's wrong initial value
+    self_corr_v2: str  # B's correction (supersedes A)
+    self_corr_v3: str  # A's self-corrected value (after sync_dirty)
+    self_corr_v3_keyword: str  # keyword present only in v3
+    self_corr_query: str
+
+    # S18 — trust calibration (10 rounds: reliable agent_a vs unreliable agent_b)
+    trust_calib_n_rounds: int
+    trust_calib_reliable_facts: list[str]  # one unique fact per round for agent_a
+    trust_calib_unreliable_entity_tpl: str  # format with {i} → entity name per round
+    trust_calib_queries: list[tuple[str, str]]  # D's final queries (query, keyword)
+
+    # S19 — incident reconstruction (3-phase: alert → investigation → root cause)
+    incident_alert_fact: str
+    incident_deploy_fact: str
+    incident_migration_fact: str
+    incident_alert_keyword: str
+    incident_deploy_keyword: str
+    incident_migration_keyword: str
+    incident_queries: list[tuple[str, str]]  # (query, keyword) × 3
+
+    # S20 — belief revision (5 rounds: contradiction → authoritative → consensus)
+    belief_entity: str
+    belief_attribute: str
+    belief_v_a: str  # agent_a's initial claim
+    belief_v_b: str  # agent_b's initial claim (conflicts with A)
+    belief_v_c: str  # agent_c's authoritative version (round 2)
+    belief_v_final: str  # agent_c's round-5 correction
+    belief_keyword_round4: str  # keyword in v_c
+    belief_keyword_round5: str  # keyword in v_final
+    belief_query: str
+
+    # S19 upgrade — red herrings (noise facts that should NOT appear in top results)
+    incident_red_herring_facts: list[str]  # 5 noise facts injected before phase 1
+    incident_relevant_keywords: list[str]  # keywords present ONLY in relevant facts
+
+    # S21 — distributed product knowledge assembly (5 specialists + 1 querier)
+    assembly_technical_facts: list[str]  # agent_a: API, architecture, performance
+    assembly_business_facts: list[str]  # agent_b: pricing, tiers, contracts
+    assembly_ops_facts: list[str]  # agent_c: SLAs, regions, maintenance
+    assembly_historical_facts: list[str]  # agent_d: legacy, deprecations, evolution
+    assembly_integration_facts: list[str]  # agent_e: SDKs, connectors, OAuth
+    assembly_queries: list[tuple[str, list[str]]]  # (query, [relevant_kws from ≥2 agents])
+
+    # S22 — temporal staleness detection (3 rounds of updates, query must find LATEST)
+    staleness_v1_facts: list[tuple[str, str, str, str]]  # (entity, attr, content, old_kw)
+    staleness_v2_updates: list[tuple[str, str, str, str]]  # (entity, attr, content, new_kw)
+    staleness_v3_updates: list[tuple[str, str, str, str]]  # (entity, attr, content, latest_kw)
+    staleness_queries: list[tuple[str, str, str]]  # (query, latest_kw, stale_kw_to_avoid)
+
+    # S23 — adversarial noise injection (trust-weighted suppression)
+    adversarial_slots: list[tuple[str, str]]  # (entity, attr) × 5 CAS slots
+    adversarial_correct_values: list[tuple[str, str, str]]  # (entity, attr, content) × 5
+    adversarial_wrong_values: list[tuple[str, str, str]]  # adversary's wrong versions
+    adversarial_freestanding_correct: list[str]  # reliable agents' free-standing facts
+    adversarial_freestanding_wrong: list[str]  # adversary's free-standing wrong facts
+    adversarial_queries: list[tuple[str, str, str]]  # (query, correct_kw, wrong_kw)
+
+    # S24 — multi-round onboarding (knowledge absorption into private KB)
+    onboarding_pool_facts: list[str]  # facts already in pool from team agents
+    onboarding_round1_queries: list[tuple[str, str]]  # round 1: empty KB, pool queries
+    onboarding_absorb_facts: list[str]  # facts D inserts after round 1
+    onboarding_round3_kb_queries: list[tuple[str, str]]  # queries D can answer from KB
+
+    # S25 — knowledge conflict resolution at scale (10 slots, 4 wrong agents, 1 canonical)
+    conflict_slots: list[tuple[str, str]]  # 10 (entity, attribute) pairs
+    conflict_agent_a_values: list[str]  # agent_a's wrong values
+    conflict_agent_b_values: list[str]  # agent_b's wrong values
+    conflict_agent_c_values: list[str]  # agent_c's wrong values
+    conflict_agent_d_values: list[str]  # agent_d's wrong values
+    conflict_canonical_values: list[str]  # agent_e's correct canonical values
+    conflict_queries: list[tuple[str, str]]  # (query, canonical_keyword)
+
+    # S8v2 — multi-team knowledge commons (replaces S8 isolation)
+    commons_platform_facts: list[str]  # agent_a: 5 infra + 2 shared-API-limit facts
+    commons_backend_facts: list[str]  # agent_b: 5 service + 2 API-limit facts (different angle)
+    commons_frontend_facts: list[str]  # agent_c: 5 UI + 2 deployment facts
+    commons_data_facts: list[str]  # agent_d: 5 ML + 2 monitoring facts
+    commons_overlap_queries: list[tuple[str, list[str]]]  # expect ≥2 agent sources
+    commons_exclusive_queries: list[tuple[str, str]]  # (query, exclusive_keyword)
+
+    # S9v2 — competing documentation sources (replaces S9)
+    competing_facts_a: list[str]  # agent_a: 4 facts (some outdated)
+    competing_facts_b: list[str]  # agent_b: 4 facts (corrections + new)
+    competing_facts_c: list[str]  # agent_c: 4 facts (corrections + new)
+    competing_slot_entity: str  # entity for CAS supersession test
+    competing_slot_attribute: str
+    competing_slot_v1: str  # agent_a's outdated claim (superseded by self)
+    competing_slot_v2: str  # agent_a's corrected version
+    competing_queries: list[tuple[str, str, str]]  # (query, correct_kw, wrong_kw_to_avoid)
+
+    # S11v2 — progressive knowledge catchup (replaces S11 lazy sync)
+    catchup_initial_facts: list[str]  # 8 facts from agent_a at T=0
+    catchup_agent_b_facts: list[str]  # 5 facts agent_b publishes after first sync
+    catchup_agent_c_facts: list[str]  # 6 facts agent_c publishes concurrently
+    catchup_agent_a_updates: list[tuple[str, str, str]]  # 3 CAS updates while B offline
+    catchup_agent_c_extra_facts: list[str]  # 4 more facts from C while B offline
+    catchup_agent_d_urgent_facts: list[str]  # 3 urgent incident facts while B offline
+    catchup_agent_b_response_facts: list[str]  # 2 facts B publishes based on delta
+    catchup_b_response_queries: list[tuple[str, str]]  # (query, expected_keyword)
+
+    # S12v2 — priority triage under load (replaces S12)
+    triage_critical_facts: list[str]  # 8 critical facts (2 per agent, importance=0.85)
+    triage_routine_facts: list[str]  # 8 routine facts (2 per agent, importance=0.45)
+    triage_noise_facts: list[str]  # 8 noise facts (2 per agent, importance=0.15)
+    triage_incident_queries: list[tuple[str, str]]  # queries during incident (critical only)
+    triage_routine_queries: list[tuple[str, str]]  # queries after resolution
+
+    # S15v2 — cross-team signal contamination (replaces S15)
+    contamination_devops_facts: list[str]  # 6 devops facts (2 with shared terms)
+    contamination_backend_facts: list[str]  # 6 backend facts (2 with shared terms)
+    contamination_data_facts: list[str]  # 6 data facts (2 with shared terms)
+    contamination_channel_queries: list[tuple[str, str, str]]  # (query, channel, excl_kw)
+    contamination_shared_term_queries: list[tuple[str, str, str]]  # (query, channel, excl_kw)
 
 
 # ---------------------------------------------------------------------------
@@ -749,8 +885,8 @@ class MultiAgentFixture:
 # ---------------------------------------------------------------------------
 
 MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
-    # S8: Agent A knows DevOps; Agent B knows Python/coding.
-    # Queries are designed to be unambiguous about which domain answers them.
+    # S8: Four agents with distinct domains — DevOps, Python, Frontend, Data/ML.
+    # Queries are unambiguous: only the owning agent's facts can answer them.
     agent_a_facts=[
         "All services are deployed via Helm charts on Kubernetes 1.30.",
         "Grafana dashboards track per-service P99 latency; alert threshold is 200 ms.",
@@ -765,6 +901,20 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
         "Dataclasses are preferred over plain dicts for structured internal data.",
         "f-strings are the canonical string formatting method; %-formatting is banned.",
     ],
+    agent_c_facts=[
+        "React 18 with TypeScript is the standard for all UI components.",
+        "Vite is the build tool for all frontend projects.",
+        "Tailwind CSS is used for styling across all web applications.",
+        "Playwright handles end-to-end browser testing.",
+        "Storybook documents every shared component in the design system.",
+    ],
+    agent_d_facts=[
+        "All ML models are versioned and tracked in MLflow.",
+        "Feature engineering pipelines are built on Apache Spark 3.5.",
+        "Model inference is served via Triton Inference Server on GPU clusters.",
+        "Data quality checks are enforced by Great Expectations.",
+        "Experiment tracking uses Weights & Biases for hyperparameter sweeps.",
+    ],
     agent_a_queries=[
         "How are services deployed to Kubernetes?",
         "What happens when the Postgres primary goes down?",
@@ -773,29 +923,43 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
         "What are the rules for type annotations in Python?",
         "Which test runner must be used for Python projects?",
     ],
-    # S9: A set of general technical facts that Agent A publishes to the pool.
-    # Agent B (no private KB) should be able to find them via pool_retrieve.
+    agent_c_queries=[
+        "What frontend framework and language are used for UI components?",
+        "How is end-to-end browser testing handled?",
+    ],
+    agent_d_queries=[
+        "How are ML models versioned and tracked?",
+        "What serves model inference in production?",
+    ],
+    # S9: pool_facts are distributed across 3 publishing agents.
+    # pool_facts[0:2] → agent_a, [2:4] → agent_b, [4:6] → agent_c.
+    # agent_d (empty private KB) queries the pool and must find all 3 answers.
     pool_facts=[
         "The on-call rotation follows a 7-day shift; handoff happens every Monday at 09:00.",
         "Production incidents are classified P1–P3; P1 requires acknowledgement within 5 minutes.",
         "All API changes must be backwards-compatible for at least two release cycles.",
         "Database schema migrations run in a canary deploy before full rollout.",
         "Security scanning (Trivy) runs on every pull request targeting the main branch.",
+        "All code changes require at least one peer review before merging to main.",
     ],
     pool_queries=[
         ("How quickly must P1 incidents be acknowledged?", "5 minutes"),
         ("How long must APIs remain backwards-compatible?", "two release cycles"),
         ("When do security scans run?", "pull request"),
     ],
-    # S10: MESI CAS — two agents publish conflicting salary facts for the same entity.
+    # S10: MESI CAS — 4 agents publish conflicting salary facts sequentially.
+    # Each publish supersedes the previous; only v4 should remain active.
     cas_entity="Jordan Lee",
     cas_attribute="annual_salary",
     cas_fact_v1="Jordan Lee earns $95,000 per year as a backend engineer.",
-    cas_fact_v2="Jordan Lee's salary was updated to $140,000 after their promotion.",
+    cas_fact_v2="Jordan Lee's salary was updated to $110,000 after mid-year review.",
+    cas_fact_v3="Jordan Lee's salary was raised to $125,000 after Q3 performance review.",
+    cas_fact_v4="Jordan Lee's salary is now $140,000 following promotion to Staff Engineer.",
     cas_query="Jordan Lee salary compensation",
-    cas_v2_keyword="140",
-    # S11: MESI lazy sync — initial 5 facts published, then 1 fact is updated.
-    # sync_dirty() should return only the 1 changed fact on the second call.
+    cas_v2_keyword="110",
+    cas_v4_keyword="Staff",  # present only in v4
+    # S11: MESI lazy sync — initial pool published by agent_a, then 1 fact updated.
+    # Agents b, c, d each call sync_dirty() independently; all should see the same delta.
     sync_initial_facts=[
         "The deployment pipeline has four stages: build, test, stage, and production.",
         "All microservices expose a /metrics endpoint in Prometheus exposition format.",
@@ -807,7 +971,632 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
     sync_update_attribute="stage_count",
     sync_fact_v1="The deployment pipeline has four stages: build, test, stage, and production.",
     sync_fact_v2="The deployment pipeline was expanded to five stages: build, test, stage, canary, and production.",
-    sync_v2_keyword="canary",  # present only in v2, absent in v1
+    sync_v2_keyword="canary",
+    # S14 — trust recovery: agent_a publishes corrected versions of all 9 slots.
+    agent_a_corrected_values=[
+        "Alex Chen's annual salary is $115,000 (confirmed by HR).",
+        "Alex Chen's job title is Senior Engineer (HR-verified).",
+        "Alex Chen now works in the New York office (HR-verified).",
+        "Jordan Lee's annual salary is $140,000 (confirmed by HR).",
+        "Jordan Lee's job title is Staff Engineer (HR-verified).",
+        "Jordan Lee now works in the Singapore office (HR-verified).",
+        "Jordan Lee is on the ML Platform team (HR-verified).",
+        "Jordan Lee joined the company in March 2020 (HR-verified).",
+        "Jordan Lee is the tech lead for ML Platform (HR-verified).",
+    ],
+    # S16 — knowledge relay facts.
+    relay_infra_facts=[
+        "All services are deployed via ArgoCD with GitOps workflow.",
+        "Grafana Cloud collects metrics from all Kubernetes pods.",
+        "Redis 7 is the shared cache for all backend microservices.",
+        "Istio service mesh enforces mTLS between every service pod.",
+        "Helm chart versions are pinned per environment in values.yaml.",
+    ],
+    relay_api_facts=[
+        "The /health endpoint on every ArgoCD-managed pod returns readiness status.",
+        "Redis is used to store API rate-limit counters keyed by client ID.",
+        "The API gateway routes traffic to services via Kubernetes service discovery.",
+        "OpenAPI 3.1 specs are auto-generated from FastAPI and published to the portal.",
+        "All API responses include X-Request-ID correlated with Grafana traces.",
+    ],
+    relay_frontend_facts=[
+        "The React app calls the API gateway using the OpenAPI-generated TypeScript SDK.",
+        "WebSocket connections to the API gateway are load-balanced via Kubernetes.",
+        "Frontend feature flags are cached in Redis with a 5-minute TTL.",
+        "Grafana Real User Monitoring panels track Core Web Vitals for every page.",
+        "The design system is rebuilt whenever a new Helm chart version is released.",
+    ],
+    relay_queries=[
+        ("What tool manages Kubernetes deployments?", "argocd"),
+        ("How is API rate limiting implemented?", "redis"),
+        ("How does the frontend consume backend APIs?", "openapi"),
+    ],
+    # S17 — self-correction data.
+    self_corr_entity="deployment_pipeline",
+    self_corr_attribute="rollback_strategy",
+    self_corr_v1="Rollback is manual: the on-call engineer runs kubectl rollout undo.",
+    self_corr_v2="Rollback is automated via ArgoCD sync with the --self-heal flag.",
+    self_corr_v3="Rollback is automated via ArgoCD sync --self-heal with a Slack alert sent to #incidents.",
+    self_corr_v3_keyword="Slack",
+    self_corr_query="How does the system roll back a failed deployment?",
+    # S18 — trust calibration: 10 rounds of reliable (A) vs unreliable (B superseded by C).
+    trust_calib_n_rounds=10,
+    trust_calib_reliable_facts=[
+        "On-call rotation follows a 7-day shift with Monday 09:00 handoff.",
+        "P1 incidents require acknowledgement within 5 minutes of alert.",
+        "All API changes must be backwards-compatible for two release cycles.",
+        "Database schema migrations run in canary deploy before full rollout.",
+        "Security scanning via Trivy runs on every pull request to main.",
+        "All code changes require at least one peer review before merge.",
+        "Service SLOs are tracked with a 30-day rolling window in Grafana.",
+        "Feature flags are managed via LaunchDarkly with per-environment overrides.",
+        "Runbooks for every P1 alert are stored in Confluence under /runbooks.",
+        "Post-mortems are required for every P1 incident within 48 hours.",
+    ],
+    trust_calib_unreliable_entity_tpl="service_config_{i}",
+    trust_calib_queries=[
+        ("What is the on-call rotation schedule?", "monday"),
+        ("What are the peer review requirements?", "peer review"),
+    ],
+    # S19 — incident reconstruction data.
+    incident_alert_fact="ServiceX returns HTTP 500 errors on all endpoints since 14:32 UTC.",
+    incident_deploy_fact="Deployment D-47 rolled out to ServiceX at 14:28 UTC.",
+    incident_migration_fact="Database migration M-12 ran on the ServiceX primary DB at 14:25 UTC.",
+    incident_alert_keyword="14:32",
+    incident_deploy_keyword="14:28",
+    incident_migration_keyword="migration",
+    incident_queries=[
+        ("What errors is ServiceX returning?", "500"),
+        ("What changed on ServiceX before the incident?", "deployment"),
+        ("Was there database activity before the outage?", "migration"),
+    ],
+    # S20 — belief revision data.
+    belief_entity="engineering_team",
+    belief_attribute="headcount",
+    belief_v_a="The engineering team has 5 members.",
+    belief_v_b="The engineering team has 8 members.",
+    belief_v_c="The engineering team has 7 members (confirmed by HR headcount system).",
+    belief_v_final="The engineering team has 6 members after one resignation.",
+    belief_keyword_round4="7",
+    belief_keyword_round5="6",
+    belief_query="How many people are on the engineering team?",
+    # S19 upgrade — red herring noise facts
+    incident_red_herring_facts=[
+        "Service Y experienced intermittent database timeouts at 15:10 UTC due to connection pool exhaustion.",
+        "Service X underwent routine configuration sync at 14:15 UTC as part of weekly maintenance cycle.",
+        "Deployment D-48 rolled out to Service Z at 14:22 UTC; no issues reported by the Z team.",
+        "Redis cluster in us-east-1 showed elevated P99 latency at 14:20 UTC (resolved within 2 minutes).",
+        "Service X had a similar HTTP 500 outage 3 days ago, which was resolved by flushing the CDN cache.",
+    ],
+    incident_relevant_keywords=["14:32", "14:28", "migration"],
+    # S21 — distributed product knowledge assembly
+    assembly_technical_facts=[
+        "Nexus Analytics Platform exposes a REST API with OpenAPI 3.1 specification and versioned endpoints.",
+        "Nexus processes up to 10,000 events per second per tenant in the standard tier configuration.",
+        "Nexus uses Apache Kafka as the underlying event streaming backbone for all real-time pipelines.",
+        "The Nexus API gateway enforces JWT authentication on all endpoints with RS256 signing.",
+        "Nexus supports webhooks for real-time event delivery to external HTTP endpoints.",
+    ],
+    assembly_business_facts=[
+        "Nexus standard tier is $79 per user per month; enterprise pricing starts at $299 per month.",
+        "Enterprise tier includes dedicated infrastructure, a named account manager, and SLA guarantees.",
+        "Nexus offers a 30-day free trial with full feature access and no credit card required.",
+        "Nexus counts active seats monthly; unused seats in a billing period are not charged.",
+        "Enterprise annual contracts receive a 20% discount compared to monthly billing.",
+    ],
+    assembly_ops_facts=[
+        "Nexus guarantees 99.9% monthly uptime for all paying customers; enterprise gets 99.95%.",
+        "Nexus is deployed in AWS us-east-1, eu-west-1, and ap-southeast-1 regions.",
+        "Enterprise customers can request a dedicated instance in their preferred AWS region.",
+        "SLA violations result in service credits equal to 10x the duration of unplanned downtime.",
+        "Scheduled maintenance windows occur on Sundays between 02:00 and 04:00 UTC.",
+    ],
+    assembly_historical_facts=[
+        "Nexus v1 API was deprecated in March 2023 and is still accessible but completely unsupported.",
+        "Nexus migrated from a monolithic PostgreSQL backend to a custom columnar storage engine in 2022.",
+        "The legacy webhook payload format (v1) was replaced by the CloudEvents standard in October 2023.",
+        "Nexus originally launched under the brand name 'DataStream Pro' before rebranding in 2021.",
+        "The Nexus batch import API reached end-of-life in December 2024, replaced by streaming ingestion.",
+    ],
+    assembly_integration_facts=[
+        "Nexus provides official Python and JavaScript SDKs published on PyPI and npm respectively.",
+        "Nexus integrates natively with Salesforce, HubSpot, and Zendesk via pre-built connectors.",
+        "The Nexus Python SDK uses asyncio for non-blocking I/O and requires Python 3.9 or higher.",
+        "Nexus provides an official Terraform provider for infrastructure-as-code provisioning of tenants.",
+        "Nexus supports OAuth 2.0 authorization code flow for secure third-party app integrations.",
+    ],
+    assembly_queries=[
+        ("What is the enterprise tier pricing and what SLA does it include?", ["299", "99.9"]),
+        ("Which cloud regions host the Nexus platform?", ["us-east", "eu-west"]),
+        ("Is the legacy v1 API still available?", ["deprecated", "unsupported"]),
+        ("How do I integrate Nexus with a Python application?", ["python", "sdk"]),
+        ("What happens if Nexus violates its uptime SLA?", ["credits", "10x"]),
+    ],
+    # S22 — temporal staleness detection
+    staleness_v1_facts=[
+        (
+            "nexus_api",
+            "rate_limit",
+            "Nexus API allows up to 100 requests per minute per client key.",
+            "100",
+        ),
+        (
+            "nexus_billing",
+            "monthly_price",
+            "Nexus standard tier costs $99 per user per month.",
+            "99",
+        ),
+        (
+            "nexus_platform",
+            "max_concurrent_users",
+            "Nexus supports up to 500 concurrent users per tenant.",
+            "500",
+        ),
+        (
+            "nexus_platform",
+            "supported_regions",
+            "Nexus is available in US-East and EU-West regions.",
+            "eu-west",
+        ),
+        (
+            "nexus_sla",
+            "uptime_guarantee",
+            "Nexus guarantees P99 API latency below 200 ms under normal load.",
+            "200 ms",
+        ),
+    ],
+    staleness_v2_updates=[
+        (
+            "nexus_api",
+            "rate_limit",
+            "Nexus API rate limit upgraded to 200 requests per minute after capacity expansion.",
+            "200",
+        ),
+        (
+            "nexus_billing",
+            "monthly_price",
+            "Nexus standard tier reduced to $79 per user per month (Q4 promotion).",
+            "79",
+        ),
+        (
+            "nexus_platform",
+            "max_concurrent_users",
+            "Nexus now supports up to 1000 concurrent users after scaling upgrade.",
+            "1000",
+        ),
+    ],
+    staleness_v3_updates=[
+        (
+            "nexus_api",
+            "rate_limit",
+            "Nexus API rate limit is now 500 requests per minute following the Q1 infrastructure overhaul.",
+            "500",
+        ),
+    ],
+    staleness_queries=[
+        ("What is the current API rate limit for Nexus?", "500", "100"),
+        ("How much does Nexus cost per month?", "79", "99"),
+        ("How many concurrent users can Nexus support?", "1000", "500"),
+        ("Which regions are available for Nexus?", "eu-west", ""),
+        ("What is the Nexus latency SLA guarantee?", "200 ms", ""),
+    ],
+    # S23 — adversarial noise injection
+    adversarial_slots=[
+        ("nexus_config", "api_version"),
+        ("nexus_config", "auth_method"),
+        ("nexus_config", "rate_limit"),
+        ("nexus_config", "data_retention"),
+        ("nexus_config", "ssl_provider"),
+    ],
+    adversarial_correct_values=[
+        (
+            "nexus_config",
+            "api_version",
+            "Nexus current API version is v3.2 with full backward compatibility.",
+        ),
+        (
+            "nexus_config",
+            "auth_method",
+            "Nexus uses OAuth 2.0 with JWT tokens for all API authentication.",
+        ),
+        (
+            "nexus_config",
+            "rate_limit",
+            "Nexus enforces a rate limit of 1000 requests per minute per API key.",
+        ),
+        (
+            "nexus_config",
+            "data_retention",
+            "Nexus retains customer data for 365 days on standard tier.",
+        ),
+        (
+            "nexus_config",
+            "ssl_provider",
+            "Nexus uses Let's Encrypt certificates with automatic 90-day renewal.",
+        ),
+    ],
+    adversarial_wrong_values=[
+        (
+            "nexus_config",
+            "api_version",
+            "Nexus API version is v1.0 with no backward compatibility guarantees.",
+        ),
+        (
+            "nexus_config",
+            "auth_method",
+            "Nexus uses basic HTTP authentication with plaintext passwords.",
+        ),
+        (
+            "nexus_config",
+            "rate_limit",
+            "Nexus has no rate limiting and allows unlimited API requests.",
+        ),
+        (
+            "nexus_config",
+            "data_retention",
+            "Nexus deletes all customer data after 7 days automatically.",
+        ),
+        (
+            "nexus_config",
+            "ssl_provider",
+            "Nexus uses self-signed SSL certificates for all endpoints.",
+        ),
+    ],
+    adversarial_freestanding_correct=[
+        "Nexus platform achieves 99.99% uptime through multi-region active-active deployment.",
+        "Nexus encrypts all data at rest using AES-256 and in transit using TLS 1.3.",
+        "Nexus provides SOC 2 Type II and ISO 27001 compliance certifications.",
+        "Nexus supports automatic horizontal scaling up to 10,000 concurrent connections.",
+        "Nexus offers 24/7 enterprise support with 15-minute response time SLA.",
+    ],
+    adversarial_freestanding_wrong=[
+        "Nexus platform has 85% uptime and frequent unplanned outages every week.",
+        "Nexus stores all customer data in plaintext without any encryption at rest.",
+        "Nexus has no compliance certifications and has failed multiple security audits.",
+        "Nexus is limited to 50 concurrent connections and cannot scale horizontally.",
+        "Nexus offers email-only support with 5 business day response time.",
+    ],
+    adversarial_queries=[
+        ("What is the Nexus uptime guarantee?", "99.99", "85%"),
+        ("How does Nexus handle data encryption?", "aes-256", "plaintext"),
+        ("What compliance certifications does Nexus have?", "soc 2", "failed"),
+        ("How many concurrent connections does Nexus support?", "10,000", "50"),
+        ("What support options does Nexus offer?", "24/7", "5 business"),
+    ],
+    # S24 — multi-round onboarding (KB absorption)
+    onboarding_pool_facts=[
+        "Nexus deployments use blue-green strategy with automatic rollback on health check failure.",
+        "The Nexus Python SDK is installed via pip install nexus-analytics-client (requires Python 3.9+).",
+        "Enterprise trial runs for 30 days with full feature access and dedicated onboarding support.",
+        "Nexus primary deployment region is AWS us-east-1 with failover to us-west-2.",
+        "Nexus dashboard supports custom Vega-Lite visualization templates for analytics.",
+        "Cloudflare WAF provides DDoS protection and edge rate limiting for the Nexus API gateway.",
+        "Nexus streaming ingestion processes events with sub-100ms end-to-end delivery latency.",
+        "Volume pricing: 10% discount for 50+ seats, 20% for 100+ seats.",
+        "Nexus REST API supports JSON and Apache Parquet response formats.",
+        "Data lineage tracking is available for Pro and Enterprise tier customers.",
+        "Nexus GDPR Data Processing Agreement is downloadable from the customer compliance portal.",
+        "Incident response uses PagerDuty with automatic escalation after 15 minutes.",
+        "Database backups run every 6 hours with point-in-time recovery for Enterprise.",
+        "Nexus JavaScript SDK supports CommonJS and ESM imports; works with Next.js and Vite.",
+        "Nexus Zapier integration provides 45 triggers and 12 actions for no-code automation.",
+    ],
+    onboarding_round1_queries=[
+        ("How do I install the Nexus Python SDK?", "pip"),
+        ("What cloud regions does Nexus use?", "us-east"),
+        ("How long is the enterprise trial?", "30 days"),
+        ("What visualization tool does the dashboard support?", "vega-lite"),
+        ("How does Nexus handle DDoS protection?", "cloudflare"),
+    ],
+    onboarding_absorb_facts=[
+        "Install the Nexus Python SDK via pip install nexus-analytics-client (Python 3.9+ required).",
+        "Nexus runs primarily in AWS us-east-1 with us-west-2 failover.",
+        "Enterprise trial is 30 days with full features and onboarding support.",
+        "Nexus dashboard uses Vega-Lite for custom visualization templates.",
+        "Cloudflare WAF provides DDoS protection for the Nexus API.",
+    ],
+    onboarding_round3_kb_queries=[
+        ("How do I install the Python SDK for Nexus?", "pip"),
+        ("Where is Nexus hosted?", "us-east"),
+        ("What is the trial period for enterprise?", "30 days"),
+    ],
+    # S25 — knowledge conflict resolution at scale
+    conflict_slots=[
+        ("nexus_config", "api_version"),
+        ("nexus_config", "auth_method"),
+        ("nexus_config", "rate_limit"),
+        ("nexus_config", "data_retention"),
+        ("nexus_config", "ssl_provider"),
+        ("nexus_config", "max_file_upload_mb"),
+        ("nexus_config", "session_timeout_min"),
+        ("nexus_config", "mfa_required"),
+        ("nexus_config", "default_timezone"),
+        ("nexus_config", "audit_log_retention"),
+    ],
+    conflict_agent_a_values=[
+        "Nexus API version is v2.0.",
+        "Auth uses API keys only.",
+        "Rate limit is 50 req/min.",
+        "Data retained for 30 days.",
+        "SSL via DigiCert.",
+        "Max upload 10 MB.",
+        "Session timeout 15 min.",
+        "MFA not required.",
+        "Default timezone PST.",
+        "Audit logs kept 90 days.",
+    ],
+    conflict_agent_b_values=[
+        "Nexus API version is v2.5.",
+        "Auth uses SAML only.",
+        "Rate limit is 200 req/min.",
+        "Data retained for 180 days.",
+        "SSL via Comodo.",
+        "Max upload 25 MB.",
+        "Session timeout 30 min.",
+        "MFA optional.",
+        "Default timezone EST.",
+        "Audit logs kept 180 days.",
+    ],
+    conflict_agent_c_values=[
+        "Nexus API version is v1.9.",
+        "Auth uses LDAP.",
+        "Rate limit is 75 req/min.",
+        "Data retained for 60 days.",
+        "SSL via GoDaddy.",
+        "Max upload 5 MB.",
+        "Session timeout 10 min.",
+        "MFA enforced.",
+        "Default timezone CET.",
+        "Audit logs kept 60 days.",
+    ],
+    conflict_agent_d_values=[
+        "Nexus API version is v3.0.",
+        "Auth uses mTLS.",
+        "Rate limit is 500 req/min.",
+        "Data retained for 90 days.",
+        "SSL via AWS ACM.",
+        "Max upload 50 MB.",
+        "Session timeout 60 min.",
+        "MFA disabled.",
+        "Default timezone JST.",
+        "Audit logs kept 365 days.",
+    ],
+    conflict_canonical_values=[
+        "Nexus API is at version v3.2 with full backward compatibility to v2.x.",
+        "Authentication uses OAuth 2.0 with JWT tokens signed using RS256.",
+        "Rate limit is 1000 requests per minute per API key.",
+        "Customer data is retained for 365 days on standard tier.",
+        "SSL certificates are issued by Let's Encrypt with 90-day auto-renewal.",
+        "Maximum file upload size is 100 MB per request.",
+        "Session timeout is 60 minutes with sliding window refresh.",
+        "Multi-factor authentication is required for all admin accounts.",
+        "Default timezone is UTC for all API timestamps and logs.",
+        "Audit logs are retained for 730 days (2 years) for compliance.",
+    ],
+    conflict_queries=[
+        ("What is the current Nexus API version?", "v3.2"),
+        ("How does Nexus handle authentication?", "oauth"),
+        ("What is the API rate limit?", "1000"),
+        ("How long is customer data retained?", "365"),
+        ("What SSL certificates does Nexus use?", "encrypt"),
+        ("What is the max file upload size?", "100 mb"),
+        ("How long before a session times out?", "60 minutes"),
+        ("Is MFA required on Nexus?", "required"),
+        ("What timezone does Nexus use by default?", "utc"),
+        ("How long are audit logs retained?", "730"),
+    ],
+    # S8v2 — multi-team knowledge commons
+    commons_platform_facts=[
+        "All services are deployed via ArgoCD with automated GitOps sync every 5 minutes.",
+        "Grafana Cloud collects metrics from all Kubernetes pods using Prometheus exporters.",
+        "Redis 7 cluster provides shared caching with 8 shards and 4 GB RAM per shard.",
+        "Istio service mesh enforces mutual TLS between all service pods in the cluster.",
+        "Helm chart versions are pinned per environment in values.yaml with automatic drift detection.",
+        "Platform team sets the API gateway rate limit to 1000 req/min using Envoy filters.",
+        "Platform monitors API latency P99 via Grafana dashboards with 200ms alert threshold.",
+    ],
+    commons_backend_facts=[
+        "Backend services are built in Python 3.12 with FastAPI for all REST endpoints.",
+        "All database queries use SQLAlchemy ORM with connection pooling via PgBouncer.",
+        "Backend team manages the authentication service using OAuth 2.0 with Keycloak.",
+        "gRPC is used for inter-service communication within the backend service mesh.",
+        "Backend implements circuit breakers using Resilience4j for downstream service calls.",
+        "Backend team enforces API rate limiting at 500 req/min per client at the application layer.",
+        "Backend measures API latency per endpoint and reports to the central Grafana instance.",
+    ],
+    commons_frontend_facts=[
+        "React 18 with TypeScript is the standard for all customer-facing UI components.",
+        "Vite 5 is the build tool with hot module replacement for development.",
+        "Tailwind CSS 3 handles all styling with a custom design token system.",
+        "Playwright runs end-to-end browser tests against staging before every deployment.",
+        "Storybook 8 documents every shared component in the cross-team design system.",
+        "Frontend deploys independently via ArgoCD to a separate Kubernetes namespace.",
+        "Frontend team uses Vercel Edge Functions for server-side rendering and CDN caching.",
+    ],
+    commons_data_facts=[
+        "All ML models are versioned in MLflow with automatic experiment tracking.",
+        "Feature engineering runs on Apache Spark 3.5 with Delta Lake for ACID transactions.",
+        "Model inference is served via Triton Inference Server on GPU-enabled Kubernetes nodes.",
+        "Great Expectations validates data quality at every pipeline stage.",
+        "Weights & Biases tracks hyperparameter sweeps for all model training jobs.",
+        "Data pipelines publish metrics to Grafana using the same Prometheus exporter stack.",
+        "Data team monitors pipeline latency through custom Grafana dashboards with 5-min granularity.",
+    ],
+    commons_overlap_queries=[
+        ("What are the API rate limits in our system?", ["1000", "500"]),
+        ("How do teams deploy to production?", ["argocd", "gitops"]),
+        ("How is API latency monitored?", ["grafana", "latency"]),
+    ],
+    commons_exclusive_queries=[
+        ("Who manages the OAuth authentication service?", "keycloak"),
+        ("What ML model serving infrastructure do we use?", "triton"),
+    ],
+    # S9v2 — competing documentation sources
+    competing_facts_a=[
+        "P1 incident SLA requires acknowledgement within 5 minutes of the initial alert.",
+        "The public API supports both v1 and v2 endpoints for backward compatibility.",
+        "On-call rotation covers Monday through Friday business hours only.",
+        "Database schema migrations require a full maintenance window with downtime.",
+    ],
+    competing_facts_b=[
+        "P1 incident SLA was updated to 3 minutes acknowledgement in Q4 2024 policy revision.",
+        "API v2 introduced rate limiting at 1000 req/min; v1 remains at 100 req/min.",
+        "On-call coverage was expanded to 24/7 after the March 2024 weekend incident.",
+        "Database migrations now run online using gh-ost with zero-downtime schema changes.",
+    ],
+    competing_facts_c=[
+        "All code changes require two peer reviewers before merging (updated from one reviewer).",
+        "API v1 has been officially deprecated since March 2024; migration guide available in Confluence.",
+        "Security scanning via Trivy and Snyk runs on every pull request to the main branch.",
+        "Incident post-mortems must be published within 48 hours of resolution.",
+    ],
+    competing_slot_entity="incident_sla",
+    competing_slot_attribute="p1_ack_time",
+    competing_slot_v1="P1 incident acknowledgement SLA is 5 minutes from initial PagerDuty alert.",
+    competing_slot_v2="P1 incident acknowledgement SLA is 3 minutes (updated Q4 2024 policy revision).",
+    competing_queries=[
+        ("What is our P1 incident acknowledgement SLA?", "3 minutes", "5 minutes"),
+        ("Is API v1 still supported?", "deprecated", "backward compatibility"),
+        ("When is on-call coverage required?", "24/7", "monday through friday"),
+    ],
+    # S11v2 — progressive knowledge catchup
+    catchup_initial_facts=[
+        "Nexus API gateway routes all traffic through Envoy proxy with automatic retry logic.",
+        "Database connection pooling is managed by PgBouncer with a max of 200 connections.",
+        "Container images are built with Docker BuildKit and cached in Harbor registry.",
+        "Prometheus collects metrics from all services at 15-second scrape intervals.",
+        "Feature flags are managed through LaunchDarkly with per-environment targeting rules.",
+        "TLS certificates are provisioned automatically by cert-manager with Let's Encrypt.",
+        "Log aggregation uses Loki with 30-day retention and structured JSON format.",
+        "CI/CD pipeline runs in GitHub Actions with mandatory status checks on main branch.",
+    ],
+    catchup_agent_b_facts=[
+        "Backend services use connection pooling with a 60-second idle timeout.",
+        "All gRPC endpoints implement health checking via the gRPC health protocol.",
+        "Rate limiting middleware tracks per-client usage via Redis sliding window counters.",
+        "Request tracing uses OpenTelemetry with Jaeger backend for distributed trace collection.",
+        "Database migrations are versioned with Alembic and reviewed before production deploy.",
+    ],
+    catchup_agent_c_facts=[
+        "Frontend builds are deployed via Vercel with preview deployments for every PR.",
+        "React component library is published to the internal npm registry daily.",
+        "End-to-end tests run against a dedicated staging environment with synthetic data.",
+        "Performance budgets enforce maximum 200KB JS bundle size per route.",
+        "Accessibility audits run automatically using axe-core in the CI pipeline.",
+        "Design tokens are synced from Figma to code via Style Dictionary.",
+    ],
+    catchup_agent_a_updates=[
+        (
+            "database_config",
+            "max_connections",
+            "PgBouncer max connections increased to 500 after load test results.",
+        ),
+        (
+            "observability",
+            "scrape_interval",
+            "Prometheus scrape interval reduced to 10 seconds for critical services.",
+        ),
+        (
+            "ci_cd",
+            "pipeline_platform",
+            "CI/CD migrated from GitHub Actions to Buildkite for faster parallel execution.",
+        ),
+    ],
+    catchup_agent_c_extra_facts=[
+        "Web vitals monitoring added: LCP target under 2.5s, CLS under 0.1.",
+        "Service worker enabled for offline-first caching of static assets.",
+        "A/B testing framework integrated with LaunchDarkly for frontend experiments.",
+        "Bundle analyzer reports generated on every PR to track size regressions.",
+    ],
+    catchup_agent_d_urgent_facts=[
+        "URGENT: Payment service experiencing 30% timeout rate since 11:45 UTC.",
+        "URGENT: Root cause identified as database connection exhaustion on payment-db-primary.",
+        "URGENT: Temporary fix deployed — PgBouncer pool size doubled to 400 for payment service.",
+    ],
+    catchup_agent_b_response_facts=[
+        "Acknowledged payment service incident; increasing client-side retry budget from 3 to 5 attempts.",
+        "Verified that Buildkite migration does not affect our backend deployment workflow.",
+    ],
+    catchup_b_response_queries=[
+        ("What actions were taken for the payment service incident?", "retry"),
+        ("Is the CI/CD migration affecting backend deployments?", "buildkite"),
+    ],
+    # S12v2 — priority triage under load
+    triage_critical_facts=[
+        "API gateway returning 503 on all POST /checkout routes since 11:30 UTC.",
+        "Payment processing service is completely unresponsive; no successful transactions in 15 minutes.",
+        "Database primary node CPU at 98% utilization; read replicas lagging by 45 seconds.",
+        "Authentication service rejecting all OAuth token refresh requests with 500 errors.",
+        "CDN cache purge failed globally; serving stale content for the last 30 minutes.",
+        "Kubernetes cluster autoscaler stuck; unable to provision new nodes in us-east-1.",
+        "Message queue (Kafka) consumer group lag exceeding 1 million events on payment topic.",
+        "DNS resolution failures affecting 40% of internal service-to-service calls.",
+    ],
+    triage_routine_facts=[
+        "Deployment D-47 scheduled for next Thursday; includes database schema migration.",
+        "Quarterly security audit by external firm begins next Monday.",
+        "Team offsite planned for March 15-17; reduced on-call coverage during that period.",
+        "New hire onboarding: two backend engineers starting on April 1st.",
+        "Dependency update: upgrading FastAPI from 0.109 to 0.111 for security patches.",
+        "Documentation sprint: API reference refresh planned for next sprint.",
+        "Cost optimization review: AWS reserved instance renewals due in 60 days.",
+        "Performance testing scheduled: load test for the new recommendation engine next week.",
+    ],
+    triage_noise_facts=[
+        "There are 3 open Jira tickets about minor UI alignment issues in the admin panel.",
+        "The office coffee machine on floor 3 is still broken; facilities ticket pending.",
+        "Team lunch scheduled for Friday at 12:30 in the main conference room.",
+        "Parking lot B will be closed for resurfacing this weekend.",
+        "The annual company hackathon theme will be announced next Tuesday.",
+        "Marketing requested a banner color change from blue to teal on the landing page.",
+        "The internal wiki has 47 pages flagged as potentially outdated.",
+        "Desk booking system shows 65% office occupancy for next week.",
+    ],
+    triage_incident_queries=[
+        ("What services are currently experiencing outages?", "503"),
+        ("Are there any payment processing issues?", "unresponsive"),
+        ("What is the current database health status?", "98%"),
+        ("Are there authentication problems right now?", "rejecting"),
+    ],
+    triage_routine_queries=[
+        ("What deployments are scheduled this week?", "thursday"),
+        ("When is the security audit?", "monday"),
+    ],
+    # S15v2 — cross-team signal contamination
+    contamination_devops_facts=[
+        "Kubernetes clusters are provisioned with Terraform and managed via ArgoCD GitOps.",
+        "All deployments go through a canary phase with 10% traffic before full rollout.",
+        "Prometheus and Alertmanager handle infrastructure monitoring and alert routing.",
+        "Infrastructure secrets are stored in HashiCorp Vault with automatic rotation.",
+        "Deployment rollbacks are automated via ArgoCD when Prometheus health checks fail.",
+        "API gateway latency is monitored by the platform team using Grafana dashboards.",
+    ],
+    contamination_backend_facts=[
+        "FastAPI handles all REST endpoints with Pydantic validation on request/response models.",
+        "Backend services use Redis for session caching and distributed locking.",
+        "Database connection pooling via PgBouncer ensures sub-5ms query latency under load.",
+        "gRPC streams are used for real-time backend-to-backend event propagation.",
+        "Backend deployment pipeline includes integration tests against a staging database.",
+        "API endpoint latency is tracked per-route with P99 alerts above 150ms.",
+    ],
+    contamination_data_facts=[
+        "Apache Spark 3.5 processes batch ETL jobs on a daily schedule at 02:00 UTC.",
+        "MLflow tracks all model versions with automatic A/B test promotion criteria.",
+        "Data pipeline monitoring uses custom Grafana dashboards with 5-minute granularity.",
+        "Delta Lake provides ACID transactions for all data lake write operations.",
+        "Feature store serves pre-computed features with sub-10ms latency via Redis.",
+        "Pipeline deployment uses Airflow DAGs managed through the data team's GitOps workflow.",
+    ],
+    contamination_channel_queries=[
+        ("How are Kubernetes clusters provisioned?", "devops", "terraform"),
+        ("What framework handles REST endpoints?", "backend", "fastapi"),
+        ("What processes batch ETL jobs?", "data", "spark"),
+    ],
+    contamination_shared_term_queries=[
+        ("How is deployment done?", "devops", "canary"),
+        ("How is latency monitored?", "backend", "per-route"),
+        ("How is monitoring done?", "data", "pipeline"),
+    ],
 )
 
 

@@ -1303,6 +1303,10 @@ class SharedMemoryPool:
                             quick_inv_updates[old.origin_agent_id] = (
                                 quick_inv_updates.get(old.origin_agent_id, 0) + 1
                             )
+                    # If the fact was previously published (INVALID), remove the stale
+                    # copy so that re-activating it via CAS does not create a duplicate.
+                    if new_fact.id in existing_ids:
+                        shared[:] = [f for f in shared if f.id != new_fact.id]
                 elif new_fact.id not in existing_ids:
                     new_fact.mesi_state = MESIState.SHARED
                     new_fact.version = next_version

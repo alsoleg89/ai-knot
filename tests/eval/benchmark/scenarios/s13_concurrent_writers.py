@@ -7,17 +7,28 @@ exactly one active fact remains and all superseded versions are properly closed.
 Flow:
   1. N_AGENTS agents each insert a fact for the same entity+attribute slot
      (salary update) with a distinct value, plus NOISE_PER_AGENT unrelated facts.
-  2. All agents publish to the pool sequentially (simulating serial resolution
-     of concurrent intent — the threading.Lock in SharedMemoryPool guarantees
-     this serialization in production; here we test the semantic invariants).
+  2. All agents publish to the pool concurrently via ThreadPoolExecutor — each
+     call runs in its own OS thread, genuinely contending for
+     SharedMemoryPool._publish_lock.  This exercises the real serialisation
+     path (threading.Lock + AtomicUpdateCapable/BEGIN EXCLUSIVE where available).
   3. After all publishes:
      - Count active facts for the slot → must be exactly 1 (no_lost_updates).
      - Count total facts (active + invalid) for the slot → must equal N_AGENTS
        (version_chain_integrity: every write was recorded, none silently dropped).
 
+Why threading and not asyncio.gather:
+  pool.publish() is synchronous.  asyncio.gather on async wrappers around it
+  gives the event loop no await points to switch on — calls execute in strict
+  sequence and _publish_lock is never contended.  ThreadPoolExecutor forces
+  N_AGENTS OS threads to race for the lock simultaneously.
+
+  For backends that do not expose _pool/_kbs, the test falls back to sequential
+  publish_to_pool() calls (semantic invariants are still verified).
+
 Metrics (deterministic):
   no_lost_updates          — 1.0 if exactly 1 active fact for the slot, else 0.0
   version_chain_integrity  — 1.0 if total slot versions == N_AGENTS, else 0.0
+  used_threads             — 1.0 if real OS threads were used, 0.0 if fallback
 
 Only runs against MultiAgentMemoryBackend.
 """
@@ -25,6 +36,8 @@ Only runs against MultiAgentMemoryBackend.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+import threading
 
 from tests.eval.benchmark.base import MultiAgentMemoryBackend, ScenarioResult
 from tests.eval.benchmark.judge import BaseJudge
@@ -86,8 +99,29 @@ async def run(backend: MultiAgentMemoryBackend, judge: BaseJudge) -> ScenarioRes
         for j in range(_NOISE_PER_AGENT):
             await backend.insert_for_agent(agent_id, _NOISE_FACTS[(offset + j) % len(_NOISE_FACTS)])
 
-    # All agents publish concurrently — tests real slot-key integrity under parallel writes.
-    await asyncio.gather(*[backend.publish_to_pool(agent_id) for agent_id in agent_ids])
+    # Publish concurrently via real OS threads so _publish_lock is genuinely contended.
+    # Backends that expose _pool/_kbs get the threaded path; others fall back to sequential.
+    pool = getattr(backend, "_pool", None)
+    kbs: dict = getattr(backend, "_kbs", {})
+    used_threads = pool is not None and bool(kbs)
+
+    if used_threads:
+        barrier = threading.Barrier(_N_AGENTS)
+
+        def _publish_sync(agent_id: str) -> None:
+            kb = kbs[agent_id]
+            fact_ids = [f.id for f in kb.list_facts() if f.is_active()]
+            barrier.wait()  # all threads start publish() simultaneously
+            pool.publish(agent_id, fact_ids, kb=kb, utility_threshold=0.0)  # type: ignore[union-attr]
+
+        loop = asyncio.get_running_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_N_AGENTS) as executor:
+            await asyncio.gather(
+                *[loop.run_in_executor(executor, _publish_sync, aid) for aid in agent_ids]
+            )
+    else:
+        for agent_id in agent_ids:
+            await backend.publish_to_pool(agent_id)
 
     # Measure slot integrity.
     active_count = await backend.pool_count_active_for_entity(_SLOT_ENTITY, _SLOT_ATTRIBUTE)
@@ -102,6 +136,7 @@ async def run(backend: MultiAgentMemoryBackend, judge: BaseJudge) -> ScenarioRes
 
     notes = (
         f"agents={_N_AGENTS}, "
+        f"threads={'yes' if used_threads else 'no (fallback)'}, "
         f"active_slot_count={active_count} (expected=1), "
         f"total_slot_versions={total_count} (expected={_N_AGENTS}), "
         f"no_lost_updates={no_lost_updates:.0%}"
@@ -112,7 +147,10 @@ async def run(backend: MultiAgentMemoryBackend, judge: BaseJudge) -> ScenarioRes
         )
     )
 
-    judge_scores: dict[str, list[float]] = {"no_lost_updates": [no_lost_updates]}
+    judge_scores: dict[str, list[float]] = {
+        "no_lost_updates": [no_lost_updates],
+        "used_threads": [1.0 if used_threads else 0.0],
+    }
     if version_chain_integrity is not None:
         judge_scores["version_chain_integrity"] = [version_chain_integrity]
 

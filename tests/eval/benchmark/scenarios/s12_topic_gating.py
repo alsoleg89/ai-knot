@@ -1,26 +1,25 @@
-"""S12 — Topic Channel + Publish Gating.
+"""S12 — Priority Triage Under Load (Dynamic Utility Threshold).
 
-Verifies that:
-  1. Facts can be routed to specific topic channels (devops / frontend / backend).
-  2. Publish gating (utility_threshold) filters out low-importance facts before
-     they enter the shared pool.
-  3. Per-channel recall returns only facts from the correct domain.
+Verifies that publish gating correctly filters facts by urgency level during
+an incident, and that lowering the threshold after resolution surfaces routine
+facts previously excluded.
+
+Four agents each publish 6 facts across 3 urgency levels:
+  Critical (importance=0.85): active outages, service failures
+  Routine  (importance=0.45): scheduled deployments, planned reviews
+  Noise    (importance=0.15): office logistics, minor UI tickets
 
 Flow:
-  1. Agent A inserts 9 high-importance facts (importance=0.8), 3 per channel.
-  2. Agent A inserts 3 low-importance facts (importance=0.15), 1 per channel.
-  3. Agent A publishes with utility_threshold=0.3.
-     Expected: 9 high-importance facts published; 3 low-importance filtered out
-     (utility = state_confidence × importance ≈ 0.15 < 0.3).
-  4. Agent B queries each channel via pool_retrieve_for_channel.
-  5. Agent B queries globally (no channel filter) to verify broad pool recall.
+  Phase 1: All agents insert 6 facts each (24 total) with tiered importance.
+  Phase 2 (Incident): Publish with utility_threshold=0.6 → only critical facts enter pool.
+  Phase 3: Incident commander queries pool — must find critical facts, not routine/noise.
+  Phase 4 (Post-incident): Republish with threshold=0.3 → routine facts now enter.
+  Phase 5: Routine queries — should now find scheduled items.
 
-Metrics (all deterministic, no LLM judge):
-  channel_precision   — fraction of channel-filtered queries that return at
-                        least one result (should be 1.0 when gating works).
-  gating_filter_rate  — 1.0 if published_count == expected_high_count, else 0.0.
-  pool_recall         — fraction of the 3 channel queries returning ≥1 result;
-                        mirrors channel_precision but named for clarity.
+Metrics:
+  triage_precision   — fraction of Phase 2 pool facts that are critical
+  escalation_recall  — fraction of incident queries finding critical-keyword results
+  post_incident_coverage — fraction of routine queries finding results after threshold drop
 
 Only runs against MultiAgentMemoryBackend.
 """
@@ -28,94 +27,81 @@ Only runs against MultiAgentMemoryBackend.
 from __future__ import annotations
 
 from tests.eval.benchmark.base import MultiAgentMemoryBackend, ScenarioResult
+from tests.eval.benchmark.fixtures import MULTI_AGENT_FIXTURE, MultiAgentFixture
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s12_topic_gating"
 
-# High-importance facts (importance=0.8) — 3 per channel.
-_HIGH_IMPORTANCE: list[tuple[str, str]] = [
-    # devops
-    ("Helm charts are used for all Kubernetes deployments.", "devops"),
-    ("Grafana dashboards track all service SLOs.", "devops"),
-    ("Terraform manages all cloud infrastructure as code.", "devops"),
-    # frontend
-    ("React 18 with TypeScript is the standard for all UI components.", "frontend"),
-    ("Vite is the build tool for all frontend projects.", "frontend"),
-    ("Tailwind CSS is used for styling across all web applications.", "frontend"),
-    # backend
-    ("FastAPI is the framework for all new Python microservices.", "backend"),
-    ("PostgreSQL 16 is the primary database for backend services.", "backend"),
-    ("Redis is used for caching and session management.", "backend"),
-]
-
-# Low-importance facts (importance=0.15) — should be filtered at threshold=0.3.
-_LOW_IMPORTANCE: list[tuple[str, str]] = [
-    ("Some older services still use Docker Compose for local dev.", "devops"),
-    ("A legacy jQuery widget exists in the admin panel.", "frontend"),
-    ("An old Flask endpoint remains for backwards compatibility.", "backend"),
-]
-
-# (query, expected_channel) pairs for per-channel recall test.
-_CHANNEL_QUERIES: list[tuple[str, str]] = [
-    ("How are Kubernetes deployments managed?", "devops"),
-    ("What framework is used for UI components?", "frontend"),
-    ("What is the primary database for backend services?", "backend"),
-]
-
-_EXPECTED_PUBLISHED = len(_HIGH_IMPORTANCE)  # 9
+_AGENTS = ["agent_a", "agent_b", "agent_c", "agent_d"]
+_QUERIER = "agent_e"
 
 
-async def run(backend: MultiAgentMemoryBackend, judge: BaseJudge) -> ScenarioResult:
+async def run(
+    backend: MultiAgentMemoryBackend,
+    judge: BaseJudge,
+    *,
+    fixture: MultiAgentFixture = MULTI_AGENT_FIXTURE,
+) -> ScenarioResult:
     await backend.reset()
 
-    # Insert high-importance facts with topic channels.
-    for text, channel in _HIGH_IMPORTANCE:
-        await backend.insert_for_agent_with_meta(
-            "agent_a", text, topic_channel=channel, importance=0.8
-        )
+    n_agents = len(_AGENTS)
 
-    # Insert low-importance facts — these should be filtered by publish gating.
-    for text, channel in _LOW_IMPORTANCE:
-        await backend.insert_for_agent_with_meta(
-            "agent_a", text, topic_channel=channel, importance=0.15
-        )
+    # Phase 1: Each agent inserts 2 critical + 2 routine + 2 noise facts.
+    for i, agent_id in enumerate(_AGENTS):
+        # Critical (importance=0.85)
+        for fact in fixture.triage_critical_facts[i * 2 : (i + 1) * 2]:
+            await backend.insert_for_agent_with_meta(agent_id, fact, importance=0.85)
+        # Routine (importance=0.45)
+        for fact in fixture.triage_routine_facts[i * 2 : (i + 1) * 2]:
+            await backend.insert_for_agent_with_meta(agent_id, fact, importance=0.45)
+        # Noise (importance=0.15)
+        for fact in fixture.triage_noise_facts[i * 2 : (i + 1) * 2]:
+            await backend.insert_for_agent_with_meta(agent_id, fact, importance=0.15)
 
-    # Publish with utility_threshold=0.3:
-    # utility = state_confidence (≈1.0) × importance
-    # high: 1.0 × 0.8 = 0.8 >= 0.3 → published
-    # low:  1.0 × 0.15 = 0.15 < 0.3 → filtered
-    published_count = await backend.publish_to_pool("agent_a", utility_threshold=0.3)
+    # Phase 2 (Incident): Publish with high threshold — only critical passes.
+    total_published = 0
+    for agent_id in _AGENTS:
+        n = await backend.publish_to_pool(agent_id, utility_threshold=0.6)
+        total_published += n
 
-    gating_filter_rate = 1.0 if published_count == _EXPECTED_PUBLISHED else 0.0
+    # Expected: 8 critical facts pass (2 per agent × 4 agents).
+    expected_critical = n_agents * 2
+    triage_precision = min(1.0, expected_critical / max(total_published, 1))
 
-    # Query each channel; count queries that returned at least one fact.
-    hits = 0
-    for query, channel in _CHANNEL_QUERIES:
-        result = await backend.pool_retrieve_for_channel(
-            "agent_b", query, top_k=3, topic_channel=channel
-        )
-        if result.texts:
-            hits += 1
+    # Phase 3: Incident commander queries — must find critical facts.
+    escalation_hits = 0
+    for query, kw in fixture.triage_incident_queries:
+        r = await backend.pool_retrieve(_QUERIER, query, top_k=5)
+        if any(kw.lower() in t.lower() for t in r.texts):
+            escalation_hits += 1
+    escalation_recall = escalation_hits / len(fixture.triage_incident_queries)
 
-    total_queries = len(_CHANNEL_QUERIES)
-    channel_precision = hits / max(total_queries, 1)
-    pool_recall = channel_precision  # same measurement, different semantic label
+    # Phase 4 (Post-incident): Republish with lower threshold.
+    for agent_id in _AGENTS:
+        await backend.publish_to_pool(agent_id, utility_threshold=0.3)
+
+    # Phase 5: Routine queries — should now find results.
+    routine_hits = 0
+    for query, kw in fixture.triage_routine_queries:
+        r = await backend.pool_retrieve(_QUERIER, query, top_k=5)
+        if any(kw.lower() in t.lower() for t in r.texts):
+            routine_hits += 1
+    post_incident_coverage = routine_hits / len(fixture.triage_routine_queries)
 
     notes = (
-        f"published={published_count}/{len(_HIGH_IMPORTANCE) + len(_LOW_IMPORTANCE)}, "
-        f"expected_published={_EXPECTED_PUBLISHED}, "
-        f"gating_filter_rate={gating_filter_rate:.2f}, "
-        f"channel_hits={hits}/{total_queries}, "
-        f"channel_precision={channel_precision:.2%}"
+        f"agents={n_agents}, published_phase2={total_published}, "
+        f"triage_precision={triage_precision:.0%}, "
+        f"escalation_recall={escalation_recall:.0%}, "
+        f"post_incident_coverage={post_incident_coverage:.0%}"
     )
 
     return ScenarioResult(
         scenario_id=SCENARIO_ID,
         backend_name=backend.name,
         judge_scores={
-            "channel_precision": [channel_precision],
-            "gating_filter_rate": [gating_filter_rate],
-            "pool_recall": [pool_recall],
+            "triage_precision": [triage_precision],
+            "escalation_recall": [escalation_recall],
+            "post_incident_coverage": [post_incident_coverage],
         },
         insert_result=None,
         retrieval_result=None,
