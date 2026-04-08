@@ -5,6 +5,8 @@ from __future__ import annotations
 import abc
 from dataclasses import dataclass, field
 
+from ai_knot.types import Fact
+
 
 @dataclass
 class InsertResult:
@@ -24,6 +26,7 @@ class RetrievalResult:
     scores: list[float]  # backend-native scores (BM25, cosine, etc.)
     retrieve_ms: float
     evidence_texts: list[str] = field(default_factory=list)  # enriched with source_snippets
+    facts: list[Fact] = field(default_factory=list)  # full Fact objects (pool_retrieve only)
 
 
 @dataclass
@@ -233,3 +236,18 @@ class MultiAgentMemoryBackend(abc.ABC):
         Override in backends that support topic channel routing.
         """
         return await self.pool_retrieve(agent_id, query, top_k=top_k)
+
+    async def absorb_from_pool(self, agent_id: str, facts: list[Fact]) -> int:  # noqa: B027
+        """Absorb pool facts into agent's private KB preserving structured metadata.
+
+        Default: inserts each fact's text verbatim via insert_for_agent (no metadata).
+        Override in backends that can carry over full Fact provenance.
+
+        Returns:
+            Number of facts absorbed.
+        """
+        absorbed = 0
+        for f in facts:
+            await self.insert_for_agent(agent_id, f.answer_surface)
+            absorbed += 1
+        return absorbed

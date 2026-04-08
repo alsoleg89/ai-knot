@@ -84,41 +84,78 @@ _INCIDENT_KEYWORDS = frozenset(
         "rollout",
     }
 )
-_CROSS_DOMAIN_KEYWORDS = frozenset({"include", "pricing", "sla", "tier", "regions", "integrate"})
+# Stemmed keyword sets — built once at module load so matching is consistent with
+# _tokenize() applied to query tokens (prevents "outages?" → split → no match).
+_INCIDENT_STEMS = frozenset(
+    stem
+    for kw in {"error", "outage", "incident", "alert", "failure", "timeout", "deploy", "rollout"}
+    for stem in _tokenize(kw)
+)
+_MULTI_SOURCE_STEMS = frozenset(
+    stem
+    for kw in {"include", "pricing", "sla", "tier", "region", "integrate", "across", "compare"}
+    for stem in _tokenize(kw)
+)
 
 
 class _PoolQueryIntent(StrEnum):
-    """Inferred intent of a shared-pool query."""
+    """Retrieval mode required by a shared-pool query.
 
-    ENTITY_LOOKUP = "entity_lookup"
-    INCIDENT = "incident"
-    CROSS_DOMAIN = "cross_domain"
-    GENERAL = "general"
-
-
-def _classify_pool_query(query: str, active_facts: list[Fact]) -> _PoolQueryIntent:
-    """Classify a pool query by intent using lexical heuristics.
-
-    Rules (evaluated in priority order):
-    1. INCIDENT — time patterns or error/outage keywords.
-    2. ENTITY_LOOKUP — query mentions a known entity from the pool.
-    3. CROSS_DOMAIN — aggregation signals (conjunctions in long queries,
-       pricing/sla/tier keywords).
-    4. GENERAL — fallback.
+    Names reflect what the retrieval system needs to do, not which scenario
+    exercises the intent.  All routing decisions must be derivable from the
+    query text, agent state, or candidate distribution — never from scenario
+    metadata.
     """
-    q_lower = query.lower()
-    tokens = set(q_lower.split())
 
-    if _TIME_PATTERN.search(q_lower) or tokens & _INCIDENT_KEYWORDS:
+    ENTITY_LOOKUP = "entity_lookup"  # Query targets a known entity — prefer canonical slot truth
+    INCIDENT = "incident"  # Query is about events/timeline — prefer diversity + recency
+    BROAD_DISCOVERY = "broad_discovery"  # Agent has thin local KB — cast wide net, flat weights
+    MULTI_SOURCE = "multi_source"  # Query needs synthesis from multiple domains
+    GENERAL = "general"  # Default — balanced retrieval
+
+
+def _classify_pool_query(
+    query: str,
+    active_facts: list[Fact],
+    *,
+    requesting_agent_fact_count: int = -1,
+    topic_channel: str = "",
+) -> _PoolQueryIntent:
+    """Classify a pool query by retrieval mode using observable signals.
+
+    Signals evaluated in priority order:
+    1. INCIDENT — time patterns or incident/error stems (content-based, highest priority).
+    2. BROAD_DISCOVERY — agent has empty KB + diverse pool (agent-state-based).
+    3. ENTITY_LOOKUP — query text mentions a known pool entity (length > 2).
+    4. MULTI_SOURCE — cross-domain aggregation stems or long conjunctive queries.
+    5. GENERAL — fallback.
+    """
+    tokens = set(_tokenize(query))
+    q_lower = query.lower()
+
+    # Signal 1: Time patterns or incident/error vocabulary — always takes priority.
+    # Content-based signals override agent-state signals because an incident query
+    # needs incident-specific retrieval regardless of the agent's KB state.
+    if _TIME_PATTERN.search(q_lower) or tokens & _INCIDENT_STEMS:
         return _PoolQueryIntent.INCIDENT
 
-    entity_names = {f.entity.lower() for f in active_facts if f.entity}
-    for ent in entity_names:
-        if ent in q_lower:
+    # Signal 2: Agent state — zero private facts AND diverse pool → broad discovery.
+    # Skip for channel-scoped queries (narrow channel needs BM25 precision).
+    # Require 3+ distinct publishers in the active pool — a thin pool (1-2 agents)
+    # means the agent is a simple querier, not doing multi-source onboarding.
+    if requesting_agent_fact_count == 0 and not topic_channel:
+        pool_publishers = len({f.origin_agent_id for f in active_facts if f.origin_agent_id})
+        if pool_publishers >= 3:
+            return _PoolQueryIntent.BROAD_DISCOVERY
+
+    # Signal 3: Query mentions a known pool entity (guard len > 2 to filter noise).
+    for f in active_facts:
+        if f.entity and len(f.entity) > 2 and f.entity.lower() in q_lower:
             return _PoolQueryIntent.ENTITY_LOOKUP
 
-    if tokens & _CROSS_DOMAIN_KEYWORDS or ("and" in tokens and len(query.split()) > 6):
-        return _PoolQueryIntent.CROSS_DOMAIN
+    # Signal 4: Cross-domain aggregation vocabulary or long conjunctive query.
+    if tokens & _MULTI_SOURCE_STEMS or ("and" in tokens and len(query.split()) > 6):
+        return _PoolQueryIntent.MULTI_SOURCE
 
     return _PoolQueryIntent.GENERAL
 
@@ -1388,14 +1425,19 @@ def _pool_rerank(
     *,
     recency_weight: float = 0.05,
     freshness_weight: float = 0.03,
+    slot_winner_weight: float = 0.10,
 ) -> list[tuple[Fact, float]]:
-    """Rerank pool retrieval results with recency and freshness boosts.
+    """Rerank pool retrieval results with recency, freshness, and slot-winner boosts.
 
     Signals applied multiplicatively to the incoming score:
     1. Recency: newer facts (by ``created_at``) receive up to
        ``+recency_weight`` boost (linear rank-normalised).
     2. Freshness: facts in MODIFIED or SHARED MESI state receive
        ``+freshness_weight`` boost (active CAS winners).
+    3. Slot winner: CAS-updated facts (MODIFIED + slot_key) receive
+       ``+slot_winner_weight`` boost.  This is a slot property, not an
+       intent property — the latest canonical version should rank first
+       for any query that matches its slot.
     """
     if len(pairs) <= 1:
         return pairs
@@ -1410,6 +1452,8 @@ def _pool_rerank(
         boost += recency_weight * recency_rank.get(fact.id, 0.0)
         if fact.mesi_state in (MESIState.MODIFIED, MESIState.SHARED):
             boost += freshness_weight
+        if fact.slot_key and fact.mesi_state == MESIState.MODIFIED:
+            boost += slot_winner_weight
         reranked.append((fact, score * boost))
     return reranked
 
@@ -1791,7 +1835,15 @@ class SharedMemoryPool:
             return []
 
         # Classify query intent for downstream strategy selection.
-        intent = _classify_pool_query(query, active)
+        # Pass agent's private fact count so BROAD_DISCOVERY fires for thin-KB agents.
+        agent_private = self._storage.load(requesting_agent_id)
+        agent_fact_count = sum(1 for f in agent_private if f.is_active())
+        intent = _classify_pool_query(
+            query,
+            active,
+            requesting_agent_fact_count=agent_fact_count,
+            topic_channel=topic_channel,
+        )
 
         # Intent-aware RRF weights (BM25, slot-exact, trigram, importance,
         # retention, recency).  Default: (5.0, 3.0, 2.0, 1.5, 1.5, 1.0).
@@ -1801,6 +1853,8 @@ class SharedMemoryPool:
             _PoolQueryIntent.ENTITY_LOOKUP: (5.0, 8.0, 2.0, 1.5, 1.5, 1.0),
             # Boost recency ranker for incidents — recent facts more relevant.
             _PoolQueryIntent.INCIDENT: (5.0, 3.0, 2.0, 1.5, 1.5, 3.0),
+            # BROAD_DISCOVERY uses default weights — diversity is handled by the
+            # adaptive monopoly breaker (Stage 1), not by weakening BM25.
         }
         rrf_override = intent_rrf.get(intent)
 
@@ -1849,8 +1903,17 @@ class SharedMemoryPool:
             freshness_weight=rerank_params[1],
         )
 
-        # Resolve claim conflicts: among facts with same claim_key, keep winner.
-        discounted = _resolve_claim_conflicts(discounted, self.get_trust)
+        # Resolve claim conflicts only when query seeks canonical truth.
+        # Skip for INCIDENT (timeline diversity) and BROAD_DISCOVERY (coverage)
+        # and MULTI_SOURCE (cross-domain synthesis needs multiple viewpoints).
+        _CANONICAL_INTENTS = frozenset(
+            {
+                _PoolQueryIntent.ENTITY_LOOKUP,
+                _PoolQueryIntent.GENERAL,
+            }
+        )
+        if intent in _CANONICAL_INTENTS:
+            discounted = _resolve_claim_conflicts(discounted, self.get_trust)
 
         if _POOL_DEBUG:
             logger.debug(
@@ -1861,11 +1924,47 @@ class SharedMemoryPool:
                 ],
             )
 
-        # CROSS_DOMAIN: cap any single agent at ceil(top_k * 0.6) to ensure
-        # diversity across agents in aggregation queries.
-        if intent == _PoolQueryIntent.CROSS_DOMAIN:
+        # Stage 1 — Adaptive monopoly breaker: prevent single-agent dominance
+        # when 3+ credible agents have published.  Computed from candidate
+        # distribution, not from intent name.  ENTITY_LOOKUP exempt — one agent
+        # may be authoritative for a specific entity (e.g. CAS-updated slot).
+        # Only count agents with trust above the adversary floor — untrusted
+        # agents (adversaries, trust≈0.1) must not inflate the publisher count.
+        # Set to 0.2: below the Bayesian prior for fresh publishers (~0.3) but
+        # above the hard floor for adversaries after CAS supersession (0.1).
+        _TRUST_FLOOR_FOR_DIVERSITY = 0.2
+        n_publishers = len(
+            {
+                f.origin_agent_id
+                for f in active
+                if f.origin_agent_id
+                and self.get_trust(f.origin_agent_id) >= _TRUST_FLOOR_FOR_DIVERSITY
+            }
+        )
+        if n_publishers >= 3 and intent != _PoolQueryIntent.ENTITY_LOOKUP:
             discounted.sort(key=lambda x: x[1], reverse=True)
-            agent_cap = math.ceil(top_k * 0.6)
+            max_per_agent = max(1, top_k // n_publishers + 1)
+            _agent_counts: dict[str, int] = {}
+            _capped: list[tuple[Fact, float]] = []
+            for fact, score in discounted:
+                aid = fact.origin_agent_id or "__self__"
+                cnt = _agent_counts.get(aid, 0)
+                if cnt < max_per_agent:
+                    _capped.append((fact, score))
+                    _agent_counts[aid] = cnt + 1
+            discounted = _capped
+
+        # Stage 2 — Intent-specific floor for intents that structurally need
+        # wider multi-agent coverage.  Skip when Stage 1 already applied the
+        # adaptive cap — double-filtering crushes diversity further.
+        _intent_diversity_cap: dict[_PoolQueryIntent, float] = {
+            _PoolQueryIntent.MULTI_SOURCE: 0.6,
+            _PoolQueryIntent.BROAD_DISCOVERY: 0.4,
+        }
+        _diversity_cap = _intent_diversity_cap.get(intent)
+        if _diversity_cap is not None and n_publishers < 3:
+            discounted.sort(key=lambda x: x[1], reverse=True)
+            agent_cap = math.ceil(top_k * _diversity_cap)
             agent_counts: dict[str, int] = {}
             capped: list[tuple[Fact, float]] = []
             for fact, score in discounted:

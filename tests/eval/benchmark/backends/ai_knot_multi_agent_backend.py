@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 
 from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
 from ai_knot.storage import StorageBackend, create_storage
-from ai_knot.types import SlotDelta
+from ai_knot.types import Fact, SlotDelta
 from tests.eval.benchmark.base import InsertResult, MultiAgentMemoryBackend, RetrievalResult
 
 _POOL_AGENT_IDS = ("agent_a", "agent_b", "agent_c", "agent_d")
@@ -133,7 +133,8 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
                 f.valid_until = now
         kb.replace_facts(facts)
         fact = kb.add(content)
-        self._patch_fact_by_id(kb, fact.id, entity=entity, attribute=attribute)
+        slot_key = f"{entity.lower().strip()}::{attribute.lower().strip()}"
+        self._patch_fact_by_id(kb, fact.id, entity=entity, attribute=attribute, slot_key=slot_key)
 
     async def retrieve_for_agent(
         self, agent_id: str, query: str, *, top_k: int = 5
@@ -165,9 +166,11 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
         t0 = time.perf_counter()
         pairs = self._pool.recall(query, requesting_agent_id, top_k=top_k)
         return RetrievalResult(
-            texts=[f.source_verbatim or f.content for f, _ in pairs],
+            texts=[f.answer_surface for f, _ in pairs],
             scores=[s for _, s in pairs],
             retrieve_ms=(time.perf_counter() - t0) * 1000,
+            evidence_texts=[f.evidence_surface for f, _ in pairs],
+            facts=[f for f, _ in pairs],
         )
 
     async def pool_count_active_for_entity(self, entity: str, attribute: str) -> int:
@@ -214,10 +217,54 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
         t0 = time.perf_counter()
         pairs = self._pool.recall(query, agent_id, top_k=top_k, topic_channel=topic_channel)
         return RetrievalResult(
-            texts=[f.source_verbatim or f.content for f, _ in pairs],
+            texts=[f.answer_surface for f, _ in pairs],
             scores=[s for _, s in pairs],
             retrieve_ms=(time.perf_counter() - t0) * 1000,
+            evidence_texts=[f.evidence_surface for f, _ in pairs],
+            facts=[f for f, _ in pairs],
         )
+
+    async def absorb_from_pool(self, agent_id: str, facts: list[Fact]) -> int:
+        """Absorb pool facts into agent's KB preserving full structured metadata."""
+        kb = self._kb(agent_id)
+        existing = kb.list_facts()
+        now = datetime.now(UTC)
+        absorbed = 0
+        for f in facts:
+            # Supersede a local fact with the same slot when the pool version is newer.
+            if f.slot_key:
+                updated = False
+                for e in existing:
+                    if e.slot_key == f.slot_key and e.is_active(now) and f.version > e.version:
+                        e.valid_until = now
+                        updated = True
+                if updated:
+                    kb.replace_facts(existing)
+            new_fact = kb.add(f.content)
+            # Carry over ALL structured metadata from the pool fact.
+            patches: dict[str, object] = {
+                "entity": f.entity,
+                "attribute": f.attribute,
+                "slot_key": f.slot_key,
+                "canonical_surface": f.canonical_surface,
+                "prompt_surface": f.prompt_surface,
+                "source_verbatim": f.source_verbatim,
+                "witness_surface": f.witness_surface,
+                "value_text": f.value_text,
+                "claim_key": f.claim_key,
+                "importance": f.importance,
+                "state_confidence": f.state_confidence,
+                "source_snippets": list(f.source_snippets),
+                "tags": list(f.tags),
+            }
+            non_default = {
+                k: v for k, v in patches.items() if v and v != "" and v != [] and v != {}
+            }
+            if non_default:
+                self._patch_fact_by_id(kb, new_fact.id, **non_default)
+            existing = kb.list_facts()
+            absorbed += 1
+        return absorbed
 
     def __del__(self) -> None:
         if self._tmp_dir:

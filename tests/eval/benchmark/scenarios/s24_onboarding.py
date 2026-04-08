@@ -53,23 +53,24 @@ async def run(
         await backend.publish_to_pool(agent_id)
 
     # Phase 2 (Round 1): Agent D queries pool — learning phase.
-    # Collect retrieved texts for later absorption into private KB.
+    # Collect retrieved Facts for later structured absorption into private KB.
+    from ai_knot.types import Fact as _Fact  # local import to avoid base.py cycle
+
     pool_hits = 0
-    absorbed_texts: list[str] = []
+    absorbed_facts: list[_Fact] = []
+    seen_ids: set[str] = set()
     for query, kw in fixture.onboarding_round1_queries:
         r = await backend.pool_retrieve("agent_d", query, top_k=5)
         if any(kw.lower() in t.lower() for t in r.texts):
             pool_hits += 1
-        absorbed_texts.extend(r.texts)
+        for f in r.facts:
+            if f.id not in seen_ids:
+                seen_ids.add(f.id)
+                absorbed_facts.append(f)
     pool_retrieval_recall = pool_hits / len(fixture.onboarding_round1_queries)
 
-    # Phase 3: Agent D absorbs retrieved facts into private KB.
-    # Uses actual retrieval results (deduplicated), not pre-scripted facts.
-    seen: set[str] = set()
-    for text in absorbed_texts:
-        if text not in seen:
-            seen.add(text)
-            await backend.insert_for_agent("agent_d", text)
+    # Phase 3: Agent D absorbs retrieved Facts into private KB with full metadata.
+    await backend.absorb_from_pool("agent_d", absorbed_facts)
 
     # Phase 4 (Round 3): Agent D queries its own KB — retention test.
     kb_hits = 0
@@ -84,7 +85,7 @@ async def run(
     )
 
     notes = (
-        f"pool_facts=15, absorbed={len(seen)}, "
+        f"pool_facts=15, absorbed={len(absorbed_facts)}, "
         f"pool_recall={pool_retrieval_recall:.0%}, "
         f"kb_absorption={kb_absorption:.0%}, "
         f"retention_coverage={retention_coverage:.0%}"

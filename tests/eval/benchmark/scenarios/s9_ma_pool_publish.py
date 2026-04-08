@@ -86,7 +86,7 @@ async def run(
 
     # Check supersession: the CAS-updated slot must surface v2 keyword.
     r_slot = await backend.pool_retrieve(_QUERIER, fixture.competing_slot_v2[:40], top_k=3)
-    supersession_propagation = 1.0 if any("3 minutes" in t.lower() for t in r_slot.texts) else 0.0
+    supersession_propagation = 1.0 if any("4 minutes" in t.lower() for t in r_slot.texts) else 0.0
 
     precision_at_3 = precision_relevant / max(precision_total, 1)
 

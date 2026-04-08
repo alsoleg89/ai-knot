@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-knot"
-version = "0.9.1"
+version = "0.9.2"
 description = "Agent Knowledge Layer. Extract. Store. Retrieve. Any backend."
 readme = "README.md"
 license = {text = "MIT"}
