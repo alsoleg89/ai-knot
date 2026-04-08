@@ -26,6 +26,16 @@ class RetrievalResult:
 
 
 @dataclass
+class LongRunStats:
+    """Structured stats from a --long-run timed scenario execution."""
+
+    iterations: int
+    wall_time_s: float
+    avg_iter_s: float
+    metric_stdev: dict[str, float]  # metric name -> stdev across iterations
+
+
+@dataclass
 class ScenarioResult:
     """Results from one scenario run on one backend."""
 
@@ -37,6 +47,7 @@ class ScenarioResult:
     retrieval_result: RetrievalResult | None
     notes: str = ""
     language: str = "en"  # fixture language used for this run ("en" | "ru")
+    long_run_stats: LongRunStats | None = None  # populated in --long-run mode
 
 
 @dataclass

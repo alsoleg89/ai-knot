@@ -31,13 +31,21 @@ from __future__ import annotations
 import asyncio
 import functools
 import json
+import statistics
 import sys
+import time
 from datetime import UTC, datetime
 
 import click
 
 from tests.eval.benchmark._check_ollama import check_ollama_available
-from tests.eval.benchmark.base import BenchmarkMetrics, MemoryBackend, MultiAgentMemoryBackend
+from tests.eval.benchmark.base import (
+    BenchmarkMetrics,
+    LongRunStats,
+    MemoryBackend,
+    MultiAgentMemoryBackend,
+    ScenarioResult,
+)
 from tests.eval.benchmark.report import render_markdown
 
 _BACKEND_CHOICES = (
@@ -160,6 +168,67 @@ _LANGUAGE_CHOICES = ("en", "ru", "both")
         "normally appended to a standard run."
     ),
 )
+@click.option(
+    "--long-run",
+    "long_run",
+    is_flag=True,
+    default=False,
+    help=(
+        "Run each MA scenario in a timed loop for --duration seconds. "
+        "Reports aggregate metrics across all iterations."
+    ),
+)
+@click.option(
+    "--duration",
+    default=60,
+    show_default=True,
+    type=int,
+    help="Seconds per scenario in --long-run mode.",
+)
+@click.option(
+    "--ma-storage",
+    "ma_storage",
+    default="sqlite",
+    show_default=True,
+    help=(
+        "Comma-separated storage backends for multi-agent scenarios. "
+        "Options: sqlite, yaml, postgres. "
+        "Example: --ma-storage sqlite,yaml,postgres"
+    ),
+)
+@click.option(
+    "--ma-postgres-dsn",
+    "ma_postgres_dsn",
+    default="",
+    help=(
+        "PostgreSQL DSN for multi-agent postgres storage. "
+        "Overrides AI_KNOT_DSN env var. "
+        "Example: postgresql://user:pass@localhost:5432/bench"
+    ),
+)
+@click.option(
+    "--jsonl-output",
+    "jsonl_output",
+    default="benchmark_live.jsonl",
+    show_default=True,
+    help=(
+        "Path for incremental JSONL output. Each scenario result is appended "
+        "as a single JSON line immediately after completion, so you can "
+        "analyze results while the benchmark is still running."
+    ),
+)
+@click.option(
+    "--ma-category",
+    "ma_category",
+    default="all",
+    type=click.Choice(["all", "protocol", "retrieval"]),
+    show_default=True,
+    help=(
+        "Filter multi-agent scenarios by category: "
+        "'protocol' (CAS, sync, concurrency), "
+        "'retrieval' (ranking, trust, assembly), or 'all'."
+    ),
+)
 def main(
     mode: str,
     backends: str | None,
@@ -172,6 +241,12 @@ def main(
     fast: bool,
     multi_agent: bool,
     skip_multi_agent: bool,
+    long_run: bool,
+    duration: int,
+    ma_storage: str,
+    ma_postgres_dsn: str,
+    jsonl_output: str,
+    ma_category: str,
 ) -> None:
     """Run the ai-knot benchmark suite."""
     asyncio.run(
@@ -187,6 +262,12 @@ def main(
             fast,
             multi_agent=multi_agent,
             skip_multi_agent=skip_multi_agent,
+            long_run=long_run,
+            duration=duration,
+            ma_storage=ma_storage,
+            ma_postgres_dsn=ma_postgres_dsn,
+            jsonl_output=jsonl_output,
+            ma_category=ma_category,
         )
     )
 
@@ -203,6 +284,12 @@ async def _run(
     fast: bool = False,
     multi_agent: bool = False,
     skip_multi_agent: bool = False,
+    long_run: bool = False,
+    duration: int = 60,
+    ma_storage: str = "sqlite",
+    ma_postgres_dsn: str = "",
+    jsonl_output: str = "benchmark_live.jsonl",
+    ma_category: str = "all",
 ) -> None:
     # --fast: mini fixtures + 2 backends. Real LLM still used (tests actual system).
     # Add --mock-judge explicitly if you need an offline/instant run (~20s, no LLM).
@@ -239,6 +326,11 @@ async def _run(
 
         provider = OllamaProvider()
 
+    # Clear JSONL file at start of run.
+    with open(jsonl_output, "w", encoding="utf-8") as f:
+        f.write("")
+    click.echo(f"Live JSONL output → {jsonl_output}")
+
     # --- Multi-agent path ---
     if multi_agent:
         await _run_multi_agent(
@@ -246,6 +338,12 @@ async def _run(
             output=output,
             raw_output=raw_output,
             judge=judge,
+            long_run=long_run,
+            duration=duration,
+            ma_storage=ma_storage,
+            ma_postgres_dsn=ma_postgres_dsn,
+            jsonl_output=jsonl_output,
+            ma_category=ma_category,
         )
         return
 
@@ -282,7 +380,13 @@ async def _run(
         click.echo(f"\n=== Language: {bundle.language.upper()} ===")
         lang_metrics = await asyncio.gather(
             *[
-                _run_backend(backend, bound_scenarios, judge, language=bundle.language)
+                _run_backend(
+                    backend,
+                    bound_scenarios,
+                    judge,
+                    language=bundle.language,
+                    jsonl_output=jsonl_output,
+                )
                 for backend in selected_backends
             ]
         )
@@ -297,7 +401,14 @@ async def _run(
             from tests.eval.benchmark.backends.mem0_ma_backend import Mem0MultiAgentBackend
 
             extra_ma = [Mem0MultiAgentBackend()]
-        ma_metrics_list = await _run_multi_agent_inline(judge=judge, extra_ma_backends=extra_ma)
+        ma_metrics_list = await _run_multi_agent_inline(
+            judge=judge,
+            extra_ma_backends=extra_ma,
+            ma_storage=ma_storage,
+            ma_postgres_dsn=ma_postgres_dsn,
+            jsonl_output=jsonl_output,
+            ma_category=ma_category,
+        )
         all_metrics.extend(ma_metrics_list)
 
     _write_reports(all_metrics, output, raw_output)
@@ -309,6 +420,7 @@ async def _run_backend(
     judge: object,
     *,
     language: str = "en",
+    jsonl_output: str = "",
 ) -> BenchmarkMetrics:
     click.echo(f"\n>>> Backend: {backend.name} [{language}]")
     metrics = BenchmarkMetrics(backend_name=backend.name, language=language)
@@ -319,10 +431,87 @@ async def _run_backend(
             result = await scenario_fn(backend, judge)
             metrics.scenario_results.append(result)
             click.echo(f" done  ({result.notes[:60]})" if result.notes else " done")
+            if jsonl_output:
+                _append_jsonl(jsonl_output, result, backend.name, language=language)
         except Exception as exc:
             click.echo(f" ERROR: {exc}")
 
     return metrics
+
+
+async def _run_timed_scenario(
+    backend: MultiAgentMemoryBackend,
+    scenario_fn: object,
+    sid: str,
+    judge: object,
+    duration_s: int,
+) -> ScenarioResult:
+    """Loop a scenario for *duration_s* seconds, return aggregate ScenarioResult."""
+    deadline = time.monotonic() + duration_s
+    iteration = 0
+    all_scores: dict[str, list[float]] = {}
+    iter_times: list[float] = []
+    last_notes = ""
+    next_print = time.monotonic() + 10.0
+
+    while time.monotonic() < deadline:
+        t0 = time.monotonic()
+        result: ScenarioResult = await scenario_fn(backend, judge)  # type: ignore[call-arg]
+        elapsed = time.monotonic() - t0
+        iter_times.append(elapsed)
+        iteration += 1
+        last_notes = result.notes or ""
+        for k, v in result.judge_scores.items():
+            all_scores.setdefault(k, []).extend(v)
+
+        now = time.monotonic()
+        if now >= next_print:
+            remaining = max(0.0, deadline - now)
+            click.echo(
+                f"\r      [{sid}] iter={iteration}  "
+                f"avg={sum(iter_times) / iteration:.3f}s/iter  "
+                f"remaining={remaining:.0f}s      ",
+                nl=False,
+            )
+            next_print = now + 10.0
+
+    total_s = sum(iter_times)
+    avg_s = total_s / max(iteration, 1)
+
+    # Build aggregate scores: mean per metric + stdev annotation in notes.
+    agg_scores: dict[str, list[float]] = {}
+    metric_stdev: dict[str, float] = {}
+    metric_summary_parts: list[str] = []
+    for k, vals in all_scores.items():
+        mean = sum(vals) / len(vals)
+        agg_scores[k] = [mean]
+        if len(vals) > 1:
+            std = statistics.stdev(vals)
+            metric_stdev[k] = std
+            metric_summary_parts.append(f"{k}={mean:.3f}±{std:.3f}")
+        else:
+            metric_summary_parts.append(f"{k}={mean:.3f}")
+
+    notes = (
+        f"iters={iteration}, total={total_s:.1f}s, avg={avg_s:.3f}s/iter"
+        + (f" | {', '.join(metric_summary_parts)}" if metric_summary_parts else "")
+        + (f" | last: {last_notes}" if last_notes else "")
+    )
+
+    return ScenarioResult(
+        scenario_id=sid,
+        backend_name=backend.name,
+        judge_scores=agg_scores,
+        insert_result=None,
+        retrieval_result=None,
+        notes=notes,
+        long_run_stats=LongRunStats(
+            iterations=iteration,
+            wall_time_s=total_s,
+            avg_iter_s=avg_s,
+            metric_stdev=metric_stdev,
+        ),
+    )
 
 
 async def _run_multi_agent_inline(
@@ -330,8 +519,14 @@ async def _run_multi_agent_inline(
     judge: object,
     scenarios_arg: str = "all",
     extra_ma_backends: list[MultiAgentMemoryBackend] | None = None,
+    long_run: bool = False,
+    duration: int = 60,
+    ma_storage: str = "sqlite",
+    ma_postgres_dsn: str = "",
+    jsonl_output: str = "",
+    ma_category: str = "all",
 ) -> list[BenchmarkMetrics]:
-    """Run multi-agent scenarios (S8-MA through S12) and return metrics per backend.
+    """Run multi-agent scenarios and return metrics per backend.
 
     Used both by the inline path (appended to standard runs) and by
     ``_run_multi_agent()`` (standalone ``--multi-agent`` mode).
@@ -343,20 +538,23 @@ async def _run_multi_agent_inline(
     from tests.eval.benchmark.scenarios import get_ma_scenario_runners
 
     if scenarios_arg in ("all", "ma"):
-        runners = get_ma_scenario_runners()
+        runners = get_ma_scenario_runners(category=ma_category)
     else:
         names = [s.strip() for s in scenarios_arg.split(",")]
-        runners = get_ma_scenario_runners(names=names)
+        runners = get_ma_scenario_runners(names=names, category=ma_category)
         if not runners:
             return []
 
+    storage_types = [s.strip() for s in ma_storage.split(",") if s.strip()]
     backends: list[MultiAgentMemoryBackend] = [
-        AiKnotMultiAgentBackend(),
-        *(extra_ma_backends or []),
+        AiKnotMultiAgentBackend(st, postgres_dsn=ma_postgres_dsn) for st in storage_types
     ]
+    backends.extend(extra_ma_backends or [])
 
+    mode_label = f"long-run {duration}s/scenario" if long_run else "single-pass"
     click.echo(
-        f"\nRunning {len(runners)} multi-agent scenario(s) [{', '.join(sid for sid, _ in runners)}]"
+        f"\nRunning {len(runners)} multi-agent scenario(s) [{mode_label}]"
+        f" [{', '.join(sid for sid, _ in runners)}]"
     )
 
     all_ma_metrics: list[BenchmarkMetrics] = []
@@ -366,9 +564,16 @@ async def _run_multi_agent_inline(
         for sid, scenario_fn in runners:
             click.echo(f"    {sid} ...", nl=False)
             try:
-                result = await scenario_fn(backend, judge)
+                if long_run:
+                    click.echo(f" running for {duration}s ...")
+                    result = await _run_timed_scenario(backend, scenario_fn, sid, judge, duration)
+                    click.echo(f"\r    {sid} done  ({result.notes[:100]})")
+                else:
+                    result = await scenario_fn(backend, judge)  # type: ignore[call-arg]
+                    click.echo(f" done  ({result.notes[:80]})" if result.notes else " done")
                 metrics.scenario_results.append(result)
-                click.echo(f" done  ({result.notes[:80]})" if result.notes else " done")
+                if jsonl_output:
+                    _append_jsonl(jsonl_output, result, backend.name, language="en")
             except Exception as exc:
                 click.echo(f" ERROR: {exc}")
         all_ma_metrics.append(metrics)
@@ -382,9 +587,24 @@ async def _run_multi_agent(
     output: str,
     raw_output: str,
     judge: object,
+    long_run: bool = False,
+    duration: int = 60,
+    ma_storage: str = "sqlite",
+    ma_postgres_dsn: str = "",
+    jsonl_output: str = "",
+    ma_category: str = "all",
 ) -> None:
-    """Run multi-agent scenarios (S8-MA through S12) standalone (``--multi-agent`` flag)."""
-    metrics_list = await _run_multi_agent_inline(judge=judge, scenarios_arg=scenarios_arg)
+    """Run multi-agent scenarios standalone (``--multi-agent`` flag)."""
+    metrics_list = await _run_multi_agent_inline(
+        judge=judge,
+        scenarios_arg=scenarios_arg,
+        long_run=long_run,
+        duration=duration,
+        ma_storage=ma_storage,
+        ma_postgres_dsn=ma_postgres_dsn,
+        jsonl_output=jsonl_output,
+        ma_category=ma_category,
+    )
     if not metrics_list:
         click.echo(
             f"No multi-agent scenarios matched {scenarios_arg!r}. "
@@ -394,6 +614,32 @@ async def _run_multi_agent(
         sys.exit(1)
 
     _write_reports(metrics_list, output, raw_output)
+
+
+def _append_jsonl(
+    path: str, result: ScenarioResult, backend_name: str, language: str = "en"
+) -> None:
+    """Append a single scenario result as one JSON line."""
+    record: dict[str, object] = {
+        "ts": datetime.now(UTC).isoformat(),
+        "backend": backend_name,
+        "language": language,
+        "scenario": result.scenario_id,
+        "scores": {
+            k: v[0] if isinstance(v, list) and len(v) == 1 else v
+            for k, v in result.judge_scores.items()
+        },
+        "notes": result.notes or "",
+    }
+    if result.long_run_stats:
+        record["long_run"] = {
+            "iterations": result.long_run_stats.iterations,
+            "wall_time_s": result.long_run_stats.wall_time_s,
+            "avg_iter_s": result.long_run_stats.avg_iter_s,
+            "metric_stdev": result.long_run_stats.metric_stdev,
+        }
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def _write_reports(metrics: list[BenchmarkMetrics], output: str, raw_output: str) -> None:
@@ -561,6 +807,7 @@ def _build_scenarios(scenarios_arg: str, *, quick: bool = False) -> list[object]
 
 def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
     out: dict[str, object] = {
+        "schema_version": 2,
         "generated_at": datetime.now(UTC).isoformat(),
         "backends": {},
     }
@@ -568,8 +815,19 @@ def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
         key = f"{m.backend_name}:{m.language}"
         backend_data: dict[str, object] = {"language": m.language}
         for sr in m.scenario_results:
-            backend_data[sr.scenario_id] = {
-                "judge_scores": sr.judge_scores,
+            # Unified schema (v2): always {"mean": X, "stdev": Y} per metric.
+            enriched_scores: dict[str, object] = {}
+            for k, v in sr.judge_scores.items():
+                mean_val = sum(v) / len(v) if v else 0.0
+                stdev_val = (
+                    sr.long_run_stats.metric_stdev.get(k, 0.0)
+                    if sr.long_run_stats
+                    else (statistics.stdev(v) if len(v) > 1 else 0.0)
+                )
+                enriched_scores[k] = {"mean": mean_val, "stdev": stdev_val}
+
+            scenario_data: dict[str, object] = {
+                "judge_scores": enriched_scores,
                 "notes": sr.notes,
                 "insert": {
                     "facts_stored": sr.insert_result.facts_stored,
@@ -579,6 +837,13 @@ def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
                 if sr.insert_result
                 else None,
             }
+            if sr.long_run_stats:
+                scenario_data["long_run"] = {
+                    "iterations": sr.long_run_stats.iterations,
+                    "wall_time_s": sr.long_run_stats.wall_time_s,
+                    "avg_iter_s": sr.long_run_stats.avg_iter_s,
+                }
+            backend_data[sr.scenario_id] = scenario_data
         out["backends"][key] = backend_data  # type: ignore[index]
     return out
 

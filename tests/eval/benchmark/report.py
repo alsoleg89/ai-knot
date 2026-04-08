@@ -3,7 +3,7 @@
 Generates a single Markdown document with:
   1. Summary table (single-agent backends × key metrics)
   2. Multi-agent summary table (MA backends × MA scenario metrics)
-  3. Per-scenario detail sections (professional S1–S9, then legacy if present)
+  3. Per-scenario detail sections (professional S1–S9, MA S8–S25, then legacy if present)
 """
 
 from __future__ import annotations
@@ -48,6 +48,16 @@ _MA_SCENARIO_IDS = frozenset(
         "s13_concurrent_writers",
         "s14_trust_drift",
         "s15_topic_leakage",
+        "s16_knowledge_relay",
+        "s17_self_correction",
+        "s18_trust_calibration",
+        "s19_incident_reconstruction",
+        "s20_belief_revision",
+        "s21_partial_assembly",
+        "s22_temporal_staleness",
+        "s23_adversarial_noise",
+        "s24_onboarding",
+        "s25_conflict_resolution",
     }
 )
 
@@ -115,11 +125,23 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
             lines += section
             lines.append("")
 
-    # Sync Metrics
-    lines.append("### Sync Metrics\n")
-    sync_scenarios = [
+    # Sync & Performance Metrics
+    lines.append("### Sync & Performance Metrics\n")
+    perf_scenarios = [
         ("s8_throughput", "S8 — Latency & Throughput"),
         ("s9_scale", "S9 — Scale Sensitivity"),
+        ("s16_update_correctness", "S16 — Update Semantics"),
+        ("s_locomo", "S-LoCoMo — Long-Context Memory QA"),
+    ]
+    for sid, title in perf_scenarios:
+        section = _scenario_section(results, sid, title)
+        if section:
+            lines += section
+            lines.append("")
+
+    # Multi-Agent Scenarios
+    lines.append("### Multi-Agent Scenarios\n")
+    ma_scenarios = [
         ("s8_ma_isolation", "S8-MA — Multi-Agent Isolation"),
         ("s9_ma_pool_publish", "S9 — Pool Publish"),
         ("s10_ma_mesi_cas", "S10 — MESI CAS"),
@@ -128,10 +150,18 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
         ("s13_concurrent_writers", "S13 — Concurrent Writers"),
         ("s14_trust_drift", "S14 — Trust Drift"),
         ("s15_topic_leakage", "S15 — Topic Leakage"),
-        ("s16_update_correctness", "S16 — Update Semantics"),
-        ("s_locomo", "S-LoCoMo — Long-Context Memory QA"),
+        ("s16_knowledge_relay", "S16 — Knowledge Relay"),
+        ("s17_self_correction", "S17 — Self-Correction"),
+        ("s18_trust_calibration", "S18 — Trust Calibration"),
+        ("s19_incident_reconstruction", "S19 — Incident Reconstruction"),
+        ("s20_belief_revision", "S20 — Belief Revision"),
+        ("s21_partial_assembly", "S21 — Partial Assembly"),
+        ("s22_temporal_staleness", "S22 — Temporal Staleness"),
+        ("s23_adversarial_noise", "S23 — Adversarial Noise"),
+        ("s24_onboarding", "S24 — Onboarding"),
+        ("s25_conflict_resolution", "S25 — Conflict Resolution"),
     ]
-    for sid, title in sync_scenarios:
+    for sid, title in ma_scenarios:
         section = _scenario_section(results, sid, title)
         if section:
             lines += section
@@ -167,7 +197,17 @@ def _fmt(val: float, *, pct: bool = False, ms: bool = False) -> str:
     return f"{val:.2f}"
 
 
+def _has_metric(metrics: BenchmarkMetrics, sid: str, metric: str) -> bool:
+    """Return True if *metrics* actually contains scores for *sid*/*metric*."""
+    for r in metrics.scenario_results:
+        if r.scenario_id == sid:
+            return bool(r.judge_scores.get(metric))
+    return False
+
+
 def _cell(metrics: BenchmarkMetrics, sid: str, metric: str, **fmt_kwargs: bool) -> str:
+    if not _has_metric(metrics, sid, metric):
+        return "N/A"
     med = metrics.median_score(sid, metric)
     std = metrics.stdev_score(sid, metric)
     val_str = _fmt(med, **fmt_kwargs)
@@ -246,50 +286,48 @@ def _summary_table(results: list[BenchmarkMetrics]) -> list[str]:
 
 
 def _ma_summary_table(results: list[BenchmarkMetrics]) -> list[str]:
-    lines: list[str] = []
-    lines.append(
-        "| Backend"
-        " | S8-MA Isolation | S8-MA Self-Recall"
-        " | S9-MA Pool Recall"
-        " | S10 CAS | S10 Latest"
-        " | S11 InitSync | S11 IncrEff"
-        " | S12 ChPrec | S12 Gating"
-        " | S13 NoLostUpd | S13 VerChain"
-        " | S14 TrustFloor"
-        " | S15 Isolation |"
-    )
-    lines.append(
-        "|---------|"
-        "-----------------|------------------"
-        "|------------------"
-        "|---------|----------"
-        "|-------------|----------"
-        "|-----------|----------"
-        "|-------------|------------"
-        "|-------------"
-        "|---------------|"
-    )
+    """Compact MA summary split into Protocol Correctness and Retrieval & Behavior."""
 
-    for m in results:
-        row = (
-            f"| {_display(m.backend_name)}"
-            f" | {_cell(m, 's8_ma_isolation', 'isolation_score')}"
-            f" | {_cell(m, 's8_ma_isolation', 'self_recall')}"
-            f" | {_cell(m, 's9_ma_pool_publish', 'pool_recall')}"
-            f" | {_cell(m, 's10_ma_mesi_cas', 'cas_correctness')}"
-            f" | {_cell(m, 's10_ma_mesi_cas', 'latest_surfaced')}"
-            f" | {_cell(m, 's11_ma_mesi_sync', 'initial_sync_completeness')}"
-            f" | {_cell(m, 's11_ma_mesi_sync', 'incremental_efficiency')}"
-            f" | {_cell(m, 's12_topic_gating', 'channel_precision')}"
-            f" | {_cell(m, 's12_topic_gating', 'gating_filter_rate')}"
-            f" | {_cell(m, 's13_concurrent_writers', 'no_lost_updates')}"
-            f" | {_cell(m, 's13_concurrent_writers', 'version_chain_integrity')}"
-            f" | {_cell(m, 's14_trust_drift', 'trust_floor_reached')}"
-            f" | {_cell(m, 's15_topic_leakage', 'channel_isolation')} |"
-        )
-        lines.append(row)
+    _PROTOCOL_COLS: list[tuple[str, str, str]] = [
+        ("s10_ma_mesi_cas", "S10 CAS", "cas_correctness"),
+        ("s11_ma_mesi_sync", "S11 Delta", "delta_correctness"),
+        ("s13_concurrent_writers", "S13 NoLost", "no_lost_updates"),
+        ("s17_self_correction", "S17 CorrSurf", "correction_surfaced"),
+        ("s20_belief_revision", "S20 Consens", "final_consensus"),
+        ("s25_conflict_resolution", "S25 Canon", "canonical_coverage"),
+    ]
 
-    return lines
+    _RETRIEVAL_COLS: list[tuple[str, str, str]] = [
+        ("s8_ma_isolation", "S8 Overlap", "overlap_coverage"),
+        ("s9_ma_pool_publish", "S9 Conflict", "conflict_resolution"),
+        ("s12_topic_gating", "S12 Triage", "triage_precision"),
+        ("s14_trust_drift", "S14 Floor", "trust_floor_reached"),
+        ("s15_topic_leakage", "S15 ChPrec", "channel_precision"),
+        ("s16_knowledge_relay", "S16 Chain", "chain_depth"),
+        ("s18_trust_calibration", "S18 TrCal", "trust_calibration"),
+        ("s19_incident_reconstruction", "S19 EvPrec", "evidence_precision"),
+        ("s21_partial_assembly", "S21 Cover", "coverage"),
+        ("s22_temporal_staleness", "S22 Fresh", "freshness_recall"),
+        ("s23_adversarial_noise", "S23 SlotSup", "slot_suppression"),
+        ("s24_onboarding", "S24 PoolRec", "pool_retrieval_recall"),
+    ]
+
+    def _render_group(title: str, cols: list[tuple[str, str, str]]) -> list[str]:
+        lines: list[str] = [f"#### {title}\n"]
+        header = "| Backend | " + " | ".join(label for _, label, _ in cols) + " |"
+        sep = "|---------|" + "|".join("-" * (len(label) + 2) for _, label, _ in cols) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for m in results:
+            cells = " | ".join(_cell(m, sid, metric) for sid, _, metric in cols)
+            lines.append(f"| {_display(m.backend_name)} | {cells} |")
+        return lines
+
+    out: list[str] = []
+    out += _render_group("Protocol Correctness", _PROTOCOL_COLS)
+    out.append("")
+    out += _render_group("Retrieval & Behavior", _RETRIEVAL_COLS)
+    return out
 
 
 def _scenario_section(results: list[BenchmarkMetrics], sid: str, title: str) -> list[str] | None:
