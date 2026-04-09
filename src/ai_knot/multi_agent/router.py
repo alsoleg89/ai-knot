@@ -57,10 +57,7 @@ def _is_incident_query(tokens: set[str], q_lower: str) -> bool:
     is sufficient on its own.  Weak stems (deploy, rollout) only qualify when
     paired with one of the above — prevents "How do teams deploy?" → INCIDENT.
     """
-    if _TIME_PATTERN.search(q_lower) or tokens & _INCIDENT_STRONG_STEMS:
-        return True
-    # Weak stems alone are not sufficient.
-    return False
+    return bool(_TIME_PATTERN.search(q_lower) or tokens & _INCIDENT_STRONG_STEMS)
 
 
 # Stopword token set used by exploration mode classification —
