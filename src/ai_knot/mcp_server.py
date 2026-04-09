@@ -30,8 +30,29 @@ from ai_knot.storage import create_storage
 from ai_knot.types import ConversationTurn, MemoryType
 
 
+def _parse_float_tuple(raw: str) -> tuple[float, ...]:
+    """Parse a comma-separated string of floats into a tuple."""
+    return tuple(float(x.strip()) for x in raw.split(",") if x.strip())
+
+
 def _build_kb() -> KnowledgeBase:
     """Construct a KnowledgeBase from environment variables.
+
+    Supported env vars (all optional):
+
+    - ``AI_KNOT_AGENT_ID``          — agent namespace (default: "default")
+    - ``AI_KNOT_STORAGE``           — "yaml" or "sqlite" (default: "sqlite")
+    - ``AI_KNOT_DATA_DIR``          — base directory (default: ".ai_knot")
+    - ``AI_KNOT_DB_PATH``           — full path to SQLite file
+    - ``AI_KNOT_LLM_RECALL``        — "1" to enable LLM query expansion
+    - ``AI_KNOT_PROVIDER``          — LLM provider for llm_recall / learn
+    - ``AI_KNOT_API_KEY``           — API key for the LLM provider
+    - ``AI_KNOT_MODEL``             — model name override
+    - ``AI_KNOT_RRF_WEIGHTS``       — comma-separated RRF weights (6 floats)
+    - ``AI_KNOT_EXPANSION_WEIGHT``  — float, LLM expansion blend weight
+    - ``AI_KNOT_EPISODIC_TTL``      — float, episodic TTL in hours
+    - ``AI_KNOT_EMBED_URL``         — Ollama base URL for embeddings
+    - ``AI_KNOT_EMBED_MODEL``       — embedding model (default: nomic-embed-text)
 
     Returns:
         A configured KnowledgeBase instance.
@@ -43,7 +64,37 @@ def _build_kb() -> KnowledgeBase:
 
     dsn = db_path or os.path.join(data_dir, "ai_knot.db") if backend == "sqlite" else None
     storage = create_storage(backend, base_dir=data_dir, dsn=dsn)
-    return KnowledgeBase(agent_id=agent_id, storage=storage)
+
+    llm_recall = os.environ.get("AI_KNOT_LLM_RECALL", "") in ("1", "true", "yes")
+    provider = os.environ.get("AI_KNOT_PROVIDER")
+    api_key = os.environ.get("AI_KNOT_API_KEY")
+    model = os.environ.get("AI_KNOT_MODEL")
+
+    raw_rrf = os.environ.get("AI_KNOT_RRF_WEIGHTS")
+    rrf_weights = _parse_float_tuple(raw_rrf) if raw_rrf else None
+
+    raw_exp = os.environ.get("AI_KNOT_EXPANSION_WEIGHT")
+    expansion_weight = float(raw_exp) if raw_exp else None
+
+    raw_ttl = os.environ.get("AI_KNOT_EPISODIC_TTL")
+    episodic_ttl_hours = float(raw_ttl) if raw_ttl else 72.0
+
+    embed_url = os.environ.get("AI_KNOT_EMBED_URL", "http://localhost:11434")
+    embed_model = os.environ.get("AI_KNOT_EMBED_MODEL", "nomic-embed-text")
+
+    return KnowledgeBase(
+        agent_id=agent_id,
+        storage=storage,
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        llm_recall=llm_recall,
+        rrf_weights=rrf_weights,
+        expansion_weight=expansion_weight,
+        episodic_ttl_hours=episodic_ttl_hours,
+        embed_url=embed_url,
+        embed_model=embed_model,
+    )
 
 
 # ---------------------------------------------------------------------------

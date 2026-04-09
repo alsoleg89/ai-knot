@@ -30,6 +30,8 @@ export interface KnowledgeBaseOptions {
   dbPath?: string;
   /** Path to ai-knot-mcp binary. Default: "ai-knot-mcp". */
   command?: string;
+  /** Extra environment variables passed to the ai-knot-mcp subprocess. */
+  env?: Record<string, string>;
 }
 
 export interface AddOptions {

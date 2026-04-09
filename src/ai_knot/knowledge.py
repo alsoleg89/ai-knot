@@ -247,13 +247,21 @@ class KnowledgeBase:
         rrf_weights: tuple[float, ...] | None = None,
         expansion_weight: float | None = None,
         episodic_ttl_hours: float = 72.0,
+        embed_url: str = "http://localhost:11434",
+        embed_model: str = "nomic-embed-text",
         **provider_kwargs: str,
     ) -> None:
         self._agent_id = agent_id
         self._storage: StorageBackend = storage or YAMLStorage()
-        self._retriever = TFIDFRetriever(
+        self._bm25 = TFIDFRetriever(
             rrf_weights=rrf_weights or (5.0, 3.0, 2.0, 1.5, 1.5, 1.0),
         )
+        self._dense = DenseRetriever()
+        self._hybrid = HybridRetriever(self._bm25, self._dense)
+        self._retriever: TFIDFRetriever | HybridRetriever = self._bm25
+        self._embed_url = embed_url
+        self._embed_model = embed_model
+        self._embedded_ids: set[str] = set()
         self._default_provider = provider
         self._default_api_key = api_key
         self._default_model = model
@@ -1038,6 +1046,65 @@ class KnowledgeBase:
                 expansion[token] = self._expansion_weight or _LLM_EXPANSION_WEIGHT
         return query, expansion if expansion else None
 
+    def _embed_for_recall(
+        self,
+        facts: list[Fact],
+        query: str,
+    ) -> list[float] | None:
+        """Embed new facts and the query for hybrid retrieval.
+
+        Returns the query vector, or ``None`` if embedding is unavailable
+        (Ollama down, timeout, etc.) — callers fall back to BM25-only.
+        """
+        from ai_knot.embedder import embed_texts
+
+        new_facts = [f for f in facts if f.id not in self._embedded_ids]
+        texts_to_embed: list[str] = [f.content for f in new_facts] + [query]
+
+        try:
+            import contextlib
+
+            loop: asyncio.AbstractEventLoop | None = None
+            with contextlib.suppress(RuntimeError):
+                loop = asyncio.get_running_loop()
+
+            if loop is not None and loop.is_running():
+                # Already inside an event loop (e.g. Jupyter, MCP server) —
+                # can't nest asyncio.run().  Use a thread to avoid deadlock.
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    vectors = pool.submit(
+                        asyncio.run,
+                        embed_texts(
+                            texts_to_embed,
+                            base_url=self._embed_url,
+                            model=self._embed_model,
+                        ),
+                    ).result(timeout=60)
+            else:
+                vectors = asyncio.run(
+                    embed_texts(
+                        texts_to_embed,
+                        base_url=self._embed_url,
+                        model=self._embed_model,
+                    )
+                )
+        except Exception:
+            logger.debug("Embedding unavailable — falling back to BM25-only")
+            return None
+
+        if not vectors:
+            return None
+
+        # Store fact embeddings (all except the last which is the query).
+        fact_vectors = vectors[:-1]
+        for f, vec in zip(new_facts, fact_vectors, strict=True):
+            self._dense.add_embeddings({f.id: vec})
+            self._embedded_ids.add(f.id)
+
+        return vectors[-1]  # query vector
+
     def _execute_recall(
         self,
         query: str,
@@ -1090,13 +1157,27 @@ class KnowledgeBase:
         rrf_override = kb_rrf.get(intent)
 
         candidate_facts = [f for f in facts if f.id not in excluded_ids] if excluded_ids else facts
-        pairs = self._retriever.search(
-            expanded_query,
-            candidate_facts,
-            top_k=top_k,
-            expansion_weights=expansion,
-            rrf_weights=rrf_override,
-        )
+
+        # Embed facts + query for hybrid retrieval (best-effort).
+        query_vector = self._embed_for_recall(candidate_facts, expanded_query)
+
+        if query_vector is not None:
+            pairs = self._hybrid.search(
+                expanded_query,
+                candidate_facts,
+                top_k=top_k,
+                query_vector=query_vector,
+                expansion_weights=expansion,
+                rrf_weights=rrf_override,
+            )
+        else:
+            pairs = self._bm25.search(
+                expanded_query,
+                candidate_facts,
+                top_k=top_k,
+                expansion_weights=expansion,
+                rrf_weights=rrf_override,
+            )
         if not pairs:
             return []
 
