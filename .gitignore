@@ -34,5 +34,7 @@ Thumbs.db
 .claude/settings.local.json
 # Benchmark output files (all variants)
 benchmark_*.json
+benchmark_*.jsonl
 benchmark_*.md
+benchmark_results/
 MEMORY_ACTION_PLAN.md

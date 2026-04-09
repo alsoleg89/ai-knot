@@ -58,6 +58,7 @@ _MA_SCENARIO_IDS = frozenset(
         "s23_adversarial_noise",
         "s24_onboarding",
         "s25_conflict_resolution",
+        "s26_sparse_assembly",
     }
 )
 
@@ -160,6 +161,7 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
         ("s23_adversarial_noise", "S23 — Adversarial Noise"),
         ("s24_onboarding", "S24 — Onboarding"),
         ("s25_conflict_resolution", "S25 — Conflict Resolution"),
+        ("s26_sparse_assembly", "S26 — Sparse Assembly"),
     ]
     for sid, title in ma_scenarios:
         section = _scenario_section(results, sid, title)
@@ -310,6 +312,7 @@ def _ma_summary_table(results: list[BenchmarkMetrics]) -> list[str]:
         ("s22_temporal_staleness", "S22 Fresh", "freshness_recall"),
         ("s23_adversarial_noise", "S23 SlotSup", "slot_suppression"),
         ("s24_onboarding", "S24 PoolRec", "pool_retrieval_recall"),
+        ("s26_sparse_assembly", "S26 Recall", "target_shard_recall_at_10"),
     ]
 
     def _render_group(title: str, cols: list[tuple[str, str, str]]) -> list[str]:

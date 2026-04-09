@@ -52,6 +52,7 @@ from tests.eval.benchmark.scenarios.s22_temporal_staleness import run as s22_tem
 from tests.eval.benchmark.scenarios.s23_adversarial_noise import run as s23_adversarial_noise
 from tests.eval.benchmark.scenarios.s24_onboarding import run as s24_onboarding
 from tests.eval.benchmark.scenarios.s25_conflict_resolution import run as s25_conflict_resolution
+from tests.eval.benchmark.scenarios.s26_sparse_assembly import run as s26_sparse_assembly
 from tests.eval.benchmark.scenarios.s_locomo import run as s_locomo
 
 ScenarioFn = Callable[..., Coroutine[Any, Any, Any]]
@@ -107,6 +108,7 @@ _MA_RETRIEVAL: list[tuple[str, ScenarioFn]] = [
     ("s22_temporal_staleness", s22_temporal_staleness),
     ("s23_adversarial_noise", s23_adversarial_noise),
     ("s24_onboarding", s24_onboarding),
+    ("s26_sparse_assembly", s26_sparse_assembly),
 ]
 
 _MA: list[tuple[str, ScenarioFn]] = _MA_PROTOCOL + _MA_RETRIEVAL

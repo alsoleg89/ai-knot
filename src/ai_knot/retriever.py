@@ -415,6 +415,22 @@ class BM25Retriever:
         self._rrf_weights = rrf_weights
         self._skip_prf = skip_prf
 
+    def prf_expand(self, query: str, facts: list[Fact]) -> dict[str, float]:
+        """Compute PRF expansion terms for a query against facts.
+
+        Builds a temporary inverted index, runs initial BM25 scoring, and
+        extracts expansion terms from the top feedback documents using
+        simplified RM3 (Lavrenko & Croft, 2001).
+
+        Returns expansion_weights dict suitable for passing to search().
+        Returns empty dict if insufficient facts for PRF.
+        """
+        if not facts or not query.strip() or len(facts) < 4:
+            return {}
+        index = InvertedIndex(facts)
+        raw_scores = index.score(query)
+        return _prf_expand(index, query, raw_scores)
+
     def search(
         self,
         query: str,
@@ -598,8 +614,12 @@ class DenseRetriever:
         self._vectors: dict[str, list[float]] = {}  # fact_id -> embedding
 
     def set_embeddings(self, vectors: dict[str, list[float]]) -> None:
-        """Load precomputed embeddings (fact_id → vector)."""
+        """Load precomputed embeddings (fact_id → vector), replacing existing."""
         self._vectors = vectors
+
+    def add_embeddings(self, vectors: dict[str, list[float]]) -> None:
+        """Merge new embeddings into the existing set without rebuilding."""
+        self._vectors.update(vectors)
 
     def has_embeddings(self) -> bool:
         """Return True if at least one embedding is available."""

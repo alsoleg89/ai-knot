@@ -45,9 +45,11 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
         storage_type: str = "sqlite",
         *,
         postgres_dsn: str = "",
+        enable_embeddings: bool = False,
     ) -> None:
         self._storage_type = storage_type
         self._postgres_dsn = postgres_dsn or os.environ.get("AI_KNOT_DSN", "")
+        self._enable_embeddings = enable_embeddings
         self._tmp_dir: str = ""
         self._storage: StorageBackend | None = None
         self._kbs: dict[str, KnowledgeBase] = {}
@@ -56,7 +58,8 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
     @property
     def name(self) -> str:
         suffix = f"_{self._storage_type}" if self._storage_type != "sqlite" else ""
-        return f"ai_knot_multi_agent{suffix}"
+        emb = "_emb" if self._enable_embeddings else ""
+        return f"ai_knot_multi_agent{suffix}{emb}"
 
     async def reset(self) -> None:
         if self._tmp_dir:
@@ -164,7 +167,10 @@ class AiKnotMultiAgentBackend(MultiAgentMemoryBackend):
     ) -> RetrievalResult:
         assert self._pool is not None, "call reset() first"
         t0 = time.perf_counter()
-        pairs = self._pool.recall(query, requesting_agent_id, top_k=top_k)
+        if self._enable_embeddings:
+            pairs = await self._pool.arecall(query, requesting_agent_id, top_k=top_k)
+        else:
+            pairs = self._pool.recall(query, requesting_agent_id, top_k=top_k)
         return RetrievalResult(
             texts=[f.answer_surface for f, _ in pairs],
             scores=[s for _, s in pairs],

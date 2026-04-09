@@ -23,9 +23,17 @@ from ai_knot.extractor import (
     resolve_structured,
 )
 from ai_knot.forgetting import apply_decay
+from ai_knot.multi_agent.canonical import ClaimFamilyResolver
+from ai_knot.multi_agent.models import ExplorationMode, RetrievalIntent
+from ai_knot.multi_agent.recall_service import SharedPoolRecallService
+from ai_knot.multi_agent.router import (
+    _MULTI_SOURCE_STEMS,
+    QueryShapeRouter,
+    _is_incident_query,
+)
 from ai_knot.providers import LLMProvider, create_provider
 from ai_knot.query_expander import LLMQueryExpander
-from ai_knot.retriever import TFIDFRetriever
+from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever, TFIDFRetriever
 from ai_knot.storage.base import (
     AtomicUpdateCapable,
     SnapshotCapable,
@@ -70,32 +78,6 @@ _COVERAGE_SCORE_FLOOR: float = 0.01
 # ---------------------------------------------------------------------------
 
 _TIME_PATTERN = re.compile(r"\d{1,2}:\d{2}")
-_INCIDENT_KEYWORDS = frozenset(
-    {
-        "error",
-        "outage",
-        "incident",
-        "alert",
-        "failure",
-        "500",
-        "503",
-        "timeout",
-        "deploy",
-        "rollout",
-    }
-)
-# Stemmed keyword sets — built once at module load so matching is consistent with
-# _tokenize() applied to query tokens (prevents "outages?" → split → no match).
-_INCIDENT_STEMS = frozenset(
-    stem
-    for kw in {"error", "outage", "incident", "alert", "failure", "timeout", "deploy", "rollout"}
-    for stem in _tokenize(kw)
-)
-_MULTI_SOURCE_STEMS = frozenset(
-    stem
-    for kw in {"include", "pricing", "sla", "tier", "region", "integrate", "across", "compare"}
-    for stem in _tokenize(kw)
-)
 
 
 class _PoolQueryIntent(StrEnum):
@@ -112,6 +94,47 @@ class _PoolQueryIntent(StrEnum):
     BROAD_DISCOVERY = "broad_discovery"  # Agent has thin local KB — cast wide net, flat weights
     MULTI_SOURCE = "multi_source"  # Query needs synthesis from multiple domains
     GENERAL = "general"  # Default — balanced retrieval
+
+
+# Maps V3 RetrievalIntent → legacy _PoolQueryIntent for RRF weight selection.
+_V3_INTENT_MAP: dict[RetrievalIntent, _PoolQueryIntent] = {
+    RetrievalIntent.CANONICAL: _PoolQueryIntent.ENTITY_LOOKUP,
+    RetrievalIntent.INCIDENT: _PoolQueryIntent.INCIDENT,
+    RetrievalIntent.ASSEMBLY: _PoolQueryIntent.MULTI_SOURCE,
+    RetrievalIntent.INTEGRATION: _PoolQueryIntent.MULTI_SOURCE,
+    RetrievalIntent.GENERAL: _PoolQueryIntent.GENERAL,
+}
+
+# Intents that trigger canonical claim resolution before trust discount.
+# WIDE (empty-KB) queries also run the resolver — conflict-signal gating inside
+# ClaimFamilyResolver ensures only clusters with an explicit update marker are
+# collapsed, so complementary facts are never accidentally eliminated.
+_CANONICAL_RESOLVER_INTENTS = frozenset(
+    {
+        _PoolQueryIntent.ENTITY_LOOKUP,
+        _PoolQueryIntent.GENERAL,
+    }
+)
+
+# Intent-aware RRF weights (BM25, slot-exact, trigram, importance, retention, recency).
+# Default is (5.0, 3.0, 2.0, 1.5, 1.5, 1.0).
+_INTENT_RRF_WEIGHTS: dict[_PoolQueryIntent, tuple[float, ...]] = {
+    # Boost slot-exact for entity lookups — deterministic slot match > BM25 for known entities.
+    _PoolQueryIntent.ENTITY_LOOKUP: (5.0, 8.0, 2.0, 1.5, 1.5, 1.0),
+    # Boost recency for incidents — recent facts are more relevant.
+    _PoolQueryIntent.INCIDENT: (5.0, 3.0, 2.0, 1.5, 1.5, 3.0),
+}
+
+# Intent-aware pool rerank weights (recency_weight, freshness_weight).
+_INTENT_RERANK_WEIGHTS: dict[_PoolQueryIntent, tuple[float, float]] = {
+    _PoolQueryIntent.INCIDENT: (0.12, 0.05),
+}
+
+# Diversity cap per intent: maximum fraction of top-k from one agent.
+_INTENT_DIVERSITY_CAP: dict[_PoolQueryIntent, float] = {
+    _PoolQueryIntent.MULTI_SOURCE: 0.6,
+    _PoolQueryIntent.BROAD_DISCOVERY: 0.4,
+}
 
 
 def _classify_pool_query(
@@ -134,10 +157,17 @@ def _classify_pool_query(
     q_lower = query.lower()
 
     # Signal 1: Time patterns or incident/error vocabulary — always takes priority.
-    # Content-based signals override agent-state signals because an incident query
-    # needs incident-specific retrieval regardless of the agent's KB state.
-    if _TIME_PATTERN.search(q_lower) or tokens & _INCIDENT_STEMS:
+    if _is_incident_query(tokens, q_lower):
         return _PoolQueryIntent.INCIDENT
+
+    # Signal 1b: Strong conjunctive signal — comma-separated clauses with
+    # aggregation vocabulary.  Takes priority over BROAD_DISCOVERY because
+    # a clearly multi-facet query needs facet decomposition even when the
+    # agent has no private facts (e.g. S26 querier agent).
+    has_commas = "," in query
+    has_agg_stem = bool(tokens & _MULTI_SOURCE_STEMS)
+    if has_commas and has_agg_stem and len(query.split()) > 8:
+        return _PoolQueryIntent.MULTI_SOURCE
 
     # Signal 2: Agent state — zero private facts AND diverse pool → broad discovery.
     # Skip for channel-scoped queries (narrow channel needs BM25 precision).
@@ -154,7 +184,7 @@ def _classify_pool_query(
             return _PoolQueryIntent.ENTITY_LOOKUP
 
     # Signal 4: Cross-domain aggregation vocabulary or long conjunctive query.
-    if tokens & _MULTI_SOURCE_STEMS or ("and" in tokens and len(query.split()) > 6):
+    if has_agg_stem or ("and" in tokens and len(query.split()) > 6):
         return _PoolQueryIntent.MULTI_SOURCE
 
     return _PoolQueryIntent.GENERAL
@@ -1556,7 +1586,14 @@ class SharedMemoryPool:
 
     def __init__(self, storage: StorageBackend | None = None) -> None:
         self._storage: StorageBackend = storage or YAMLStorage()
-        self._retriever = TFIDFRetriever(skip_prf=True)
+        self._bm25 = BM25Retriever(skip_prf=True)
+        self._dense = DenseRetriever()
+        # Pool retrieval has a wider semantic gap than private KB recall:
+        # queries use abstract terms while facts contain technical specifics.
+        # Weight dense higher to bridge this gap (2:3 vs KnowledgeBase's 2:1).
+        self._retriever = HybridRetriever(
+            self._bm25, self._dense, bm25_weight=2.0, dense_weight=3.0
+        )
         self._agents: set[str] = set()
         self._publish_count: dict[str, int] = {}
         self._used_count: dict[str, int] = {}
@@ -1569,6 +1606,13 @@ class SharedMemoryPool:
         self._last_recall_meta: _RecallMeta | None = None
         # Per-fact usage tracking: fact_id -> set of agent_ids that recalled it.
         self._fact_consumers: dict[str, set[str]] = {}
+        # Tracks which fact IDs have been embedded to avoid re-embedding.
+        self._embedded_ids: set[str] = set()
+        # Transient query vector set by arecall() for hybrid search.
+        self._query_vector: list[float] | None = None
+        self._recall_service = SharedPoolRecallService()
+        self._claim_resolver = ClaimFamilyResolver()
+        self._query_router = QueryShapeRouter()
 
     def register(self, agent_id: str) -> None:
         """Register an agent to participate in the shared pool.
@@ -1834,35 +1878,63 @@ class SharedMemoryPool:
             )
             return []
 
-        # Classify query intent for downstream strategy selection.
-        # Pass agent's private fact count so BROAD_DISCOVERY fires for thin-KB agents.
         agent_private = self._storage.load(requesting_agent_id)
         agent_fact_count = sum(1 for f in agent_private if f.is_active())
-        intent = _classify_pool_query(
+
+        # --- V3 query analysis: separate semantic intent from exploration mode ---
+        v3_analysis = self._query_router.analyze(
             query,
-            active,
+            requesting_agent_id=requesting_agent_id,
+            active_facts=active,
             requesting_agent_fact_count=agent_fact_count,
             topic_channel=topic_channel,
         )
 
-        # Intent-aware RRF weights (BM25, slot-exact, trigram, importance,
-        # retention, recency).  Default: (5.0, 3.0, 2.0, 1.5, 1.5, 1.0).
-        intent_rrf: dict[_PoolQueryIntent, tuple[float, ...]] = {
-            # Boost slot-exact to 8.0 for entity lookups — deterministic
-            # slot match is more reliable than BM25 for known entities.
-            _PoolQueryIntent.ENTITY_LOOKUP: (5.0, 8.0, 2.0, 1.5, 1.5, 1.0),
-            # Boost recency ranker for incidents — recent facts more relevant.
-            _PoolQueryIntent.INCIDENT: (5.0, 3.0, 2.0, 1.5, 1.5, 3.0),
-            # BROAD_DISCOVERY uses default weights — diversity is handled by the
-            # adaptive monopoly breaker (Stage 1), not by weakening BM25.
-        }
-        rrf_override = intent_rrf.get(intent)
+        # --- Facet-aware MULTI_SOURCE path (V2 pipeline) ---
+        # Delegate to SharedPoolRecallService for conjunctive queries.
+        # Returns None if the query is not MULTI_SOURCE or decomposition fails,
+        # in which case we fall through to the existing flat retrieval below.
+        facet_result = self._recall_service.recall(
+            query,
+            requesting_agent_id=requesting_agent_id,
+            active_facts=active,
+            requesting_agent_fact_count=agent_fact_count,
+            top_k=top_k,
+            topic_channel=topic_channel,
+            get_trust=self.get_trust,
+        )
+        if facet_result is not None:
+            # Track recall hits for trust accounting (same as flat path).
+            for fact, _ in facet_result:
+                if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
+                    self._used_count[fact.origin_agent_id] = (
+                        self._used_count.get(fact.origin_agent_id, 0) + 1
+                    )
+                consumers = self._fact_consumers.setdefault(fact.id, set())
+                consumers.add(requesting_agent_id)
+            self._last_recall_meta = _RecallMeta(
+                intent=_PoolQueryIntent.MULTI_SOURCE,
+                total_active=len(active),
+                returned=len(facet_result),
+                coverage=1.0 if facet_result else 0.0,
+                low_coverage=not facet_result,
+            )
+            return facet_result
 
-        # Intent-aware rerank weights.
-        intent_rerank: dict[_PoolQueryIntent, tuple[float, float]] = {
-            # Incident queries: stronger recency signal.
-            _PoolQueryIntent.INCIDENT: (0.12, 0.05),
-        }
+        # --- Flat retrieval path (existing logic) ---
+        # Use V3 intent mapping for canonical resolver gating.
+        # WIDE exploration mode replaces BROAD_DISCOVERY as the "empty KB" signal.
+        # The canonical resolver runs for CANONICAL, GENERAL, and narrow WIDE queries —
+        # but NOT for WIDE queries, because WIDE means the agent is onboarding and
+        # the resolver would over-aggressively eliminate correct answers.
+        _v3_is_wide = v3_analysis.exploration_mode == ExplorationMode.WIDE
+
+        intent = _V3_INTENT_MAP.get(v3_analysis.intent, _PoolQueryIntent.GENERAL)
+        # Wide exploration maps to BROAD_DISCOVERY for downstream diversity logic.
+        if _v3_is_wide:
+            intent = _PoolQueryIntent.BROAD_DISCOVERY
+
+        rrf_override = _INTENT_RRF_WEIGHTS.get(intent)
 
         # Over-fetch so trust discount is applied before the top-k cutoff.
         # Without this, low-trust facts can displace better candidates by scoring
@@ -1872,8 +1944,11 @@ class SharedMemoryPool:
             query,
             active,
             top_k=overfetch_k,
+            query_vector=self._query_vector,
             rrf_weights=rrf_override,
         )
+        # Clear single-use query vector after search.
+        self._query_vector = None
 
         if _POOL_DEBUG:
             logger.debug(
@@ -1885,10 +1960,30 @@ class SharedMemoryPool:
                 [(f.id[:8], f.origin_agent_id, round(s, 4)) for f, s in pairs[:5]],
             )
 
+        # Resolve claim conflicts before applying trust discount.
+        # Running on raw BM25 scores ensures competing claims are identified by
+        # content relevance, not trust level.  Winner selection inside the resolver
+        # already uses get_trust() directly (trust × recency × score), so source
+        # quality still governs which competing claim survives.
+        # If this ran after trust discount, a correct fact from a low-trust agent
+        # could be ranked below unrelated facts from high-trust agents, displacing
+        # the correct answer out of top-k.
+        if intent in _CANONICAL_RESOLVER_INTENTS or _v3_is_wide:
+            pairs = self._claim_resolver.resolve(
+                pairs,
+                canonical_mode=True,
+                get_trust=self.get_trust,
+            )
+
         # Apply per-agent trust discount + tier boost before final cutoff.
+        # For WIDE (empty-KB) queries, skip trust discount: the querier has no
+        # interaction history with the pool and cannot know which agents are
+        # trustworthy.  Applying trust would unfairly penalise agents that
+        # happened not to appear in earlier (unrelated) queries.
+        apply_trust = not _v3_is_wide
         discounted: list[tuple[Fact, float]] = []
         for fact, score in pairs:
-            if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
+            if apply_trust and fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
                 trust = self.get_trust(fact.origin_agent_id)
                 score *= trust
             # Tier-aware scoring: org-tier facts get a small boost.
@@ -1896,24 +1991,12 @@ class SharedMemoryPool:
             discounted.append((fact, score))
 
         # Pool-specific reranking: recency + freshness boosts.
-        rerank_params = intent_rerank.get(intent, (0.05, 0.03))
+        rerank_params = _INTENT_RERANK_WEIGHTS.get(intent, (0.05, 0.03))
         discounted = _pool_rerank(
             discounted,
             recency_weight=rerank_params[0],
             freshness_weight=rerank_params[1],
         )
-
-        # Resolve claim conflicts only when query seeks canonical truth.
-        # Skip for INCIDENT (timeline diversity) and BROAD_DISCOVERY (coverage)
-        # and MULTI_SOURCE (cross-domain synthesis needs multiple viewpoints).
-        _CANONICAL_INTENTS = frozenset(
-            {
-                _PoolQueryIntent.ENTITY_LOOKUP,
-                _PoolQueryIntent.GENERAL,
-            }
-        )
-        if intent in _CANONICAL_INTENTS:
-            discounted = _resolve_claim_conflicts(discounted, self.get_trust)
 
         if _POOL_DEBUG:
             logger.debug(
@@ -1957,11 +2040,7 @@ class SharedMemoryPool:
         # Stage 2 — Intent-specific floor for intents that structurally need
         # wider multi-agent coverage.  Skip when Stage 1 already applied the
         # adaptive cap — double-filtering crushes diversity further.
-        _intent_diversity_cap: dict[_PoolQueryIntent, float] = {
-            _PoolQueryIntent.MULTI_SOURCE: 0.6,
-            _PoolQueryIntent.BROAD_DISCOVERY: 0.4,
-        }
-        _diversity_cap = _intent_diversity_cap.get(intent)
+        _diversity_cap = _INTENT_DIVERSITY_CAP.get(intent)
         if _diversity_cap is not None and n_publishers < 3:
             discounted.sort(key=lambda x: x[1], reverse=True)
             agent_cap = math.ceil(top_k * _diversity_cap)
@@ -1980,12 +2059,20 @@ class SharedMemoryPool:
 
         # Track recall hits only for facts actually returned — not over-fetched
         # candidates that were discarded after trust discount.
+        # Cap at one credit per agent per recall() call to prevent trust inflation
+        # from sessions where a single agent contributes multiple top-k results.
         auto_promote_ids: list[str] = []
+        credited_agents: set[str] = set()
         for fact, _ in top_results:
-            if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
+            if (
+                fact.origin_agent_id
+                and fact.origin_agent_id != requesting_agent_id
+                and fact.origin_agent_id not in credited_agents
+            ):
                 self._used_count[fact.origin_agent_id] = (
                     self._used_count.get(fact.origin_agent_id, 0) + 1
                 )
+                credited_agents.add(fact.origin_agent_id)
             # Track per-fact consumer agents for auto-promotion.
             consumers = self._fact_consumers.setdefault(fact.id, set())
             consumers.add(requesting_agent_id)
@@ -2024,6 +2111,66 @@ class SharedMemoryPool:
             )
 
         return top_results
+
+    async def embed_pool_facts(self) -> int:
+        """Embed all active pool facts that haven't been embedded yet.
+
+        Fetches facts from storage, embeds new ones via Ollama, and loads
+        the vectors into the DenseRetriever.  Returns the number of newly
+        embedded facts.  Returns 0 (no-op) if Ollama is unreachable.
+        """
+        from ai_knot.embedder import embed_texts
+
+        if isinstance(self._storage, TemporalStorageCapable):
+            active = self._storage.load_active(_SHARED_NAMESPACE)
+        else:
+            all_shared = self._storage.load(_SHARED_NAMESPACE)
+            active = [f for f in all_shared if f.is_active()]
+
+        new_facts = [f for f in active if f.id not in self._embedded_ids]
+        if not new_facts:
+            return 0
+
+        texts = [f.content for f in new_facts]
+        vectors = await embed_texts(texts)
+        if not vectors:
+            return 0  # Ollama unavailable — BM25-only fallback.
+
+        new_vectors = {f.id: vec for f, vec in zip(new_facts, vectors, strict=True)}
+        self._dense.add_embeddings(new_vectors)
+        self._embedded_ids.update(new_vectors.keys())
+        return len(new_vectors)
+
+    async def arecall(
+        self,
+        query: str,
+        requesting_agent_id: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        topic_channel: str = "",
+    ) -> list[tuple[Fact, float]]:
+        """Async variant of :meth:`recall` with embedding-based hybrid retrieval.
+
+        Embeds any new pool facts, embeds the query, then delegates to the
+        synchronous ``recall()`` with the dense signal available.  Falls back
+        to BM25-only if Ollama is unreachable.
+        """
+        from ai_knot.embedder import embed_texts
+
+        # Embed new pool facts (incremental — skips already-embedded).
+        await self.embed_pool_facts()
+
+        # Embed the query.
+        if self._dense.has_embeddings():
+            qvecs = await embed_texts([query])
+            self._query_vector = qvecs[0] if qvecs else None
+        else:
+            self._query_vector = None
+
+        return self.recall(
+            query, requesting_agent_id, top_k=top_k, now=now, topic_channel=topic_channel
+        )
 
     def promote(self, agent_id: str, fact_ids: list[str], *, tier: str = "pool") -> int:
         """Manually promote pool facts to a higher memory tier.
