@@ -272,3 +272,90 @@ npx tsx src/index.ts list
 5. **_query_specificity удалён из knowledge.py** — после замены Stage-3 greedy на RRF specificity перестала использоваться.
 
 6. **DDSA test fix** — E1.5 интентно отключает DDSA для FACTUAL (use_ddsa=False). Тест `test_ddsa_disabled_flag_skips_spreading_activation` проверял FACTUAL query для DDSA_ENABLED=True — заменён на EXPLORATORY query.
+
+---
+
+## Изменённые файлы и функции (коммит 484a9bc)
+
+### `src/ai_knot/_query_intent.py` — новый файл
+
+| Сущность | Тип | Описание |
+|----------|-----|----------|
+| `RecallIntent` | class (StrEnum) | 6 значений: FACTUAL, AGGREGATIONAL, EXPLORATORY, NAVIGATIONAL, PROCEDURAL, BROAD_CONTEXT |
+| `PipelineConfig` | frozen dataclass | skip_prf, rrf_weights (6-tuple), mmr_lambda, use_ddsa, sort_strategy, memory_type_filter, field_weights_override |
+| `_PIPELINE_CONFIGS` | dict | Матрица RecallIntent → PipelineConfig |
+| `classify_recall_intent()` | функция | Rule-based классификатор, priority order, без LLM |
+| `get_pipeline_config()` | функция | Lookup в _PIPELINE_CONFIGS |
+| `_STOP_SHORT_RECALL` | frozenset | Stopwords для content-token counting (local copy, без circular import) |
+| `_PROCEDURAL_PHRASES/TOKENS` | tuple/frozenset | Vocabulary для PROCEDURAL intent |
+| `_NAVIGATIONAL_PHRASES/TOKENS` | tuple/frozenset | Vocabulary для NAVIGATIONAL intent |
+| `_EXPLORATORY_PHRASES/TOKENS` | tuple/frozenset | Vocabulary для EXPLORATORY intent |
+| `_classify_pool_query()` | функция | Перенесена из knowledge.py (pool path, не трогаем) |
+| `_query_specificity()` | функция | Перенесена из knowledge.py |
+| `_PoolQueryIntent` | class | Перенесён из knowledge.py |
+| `_RecallMeta` | dataclass | Перенесён из knowledge.py |
+
+---
+
+### `src/ai_knot/_inverted_index.py` — изменён
+
+| Функция/property | Что изменилось |
+|-----------------|----------------|
+| `score()` | +kwarg `field_weights_override: dict[str, float] \| None = None`; локальные `w_content/w_tags/w_canonical/w_evidence` читаются из override или module-level default |
+| `content_postings` | новый property (expose для RRF trigram lookup) |
+| `tags_postings` | новый property |
+| `idf()` | новый метод (expose IDF для внешних вызовов) |
+| `median_idf()` | новый метод |
+| `_BM25_B_CONTENT` | добавлен inline-guard comment "Do not lower" |
+
+---
+
+### `src/ai_knot/knowledge.py` — изменён
+
+#### Новые/переработанные методы
+
+| Метод | Тип изменения | Описание |
+|-------|---------------|----------|
+| `_expand_query_for_embed()` | новый | Упрощённая версия `_expand_query` только для embed-пути |
+| `_build_entity_dictionary()` | новый | Вынесена логика построения словаря сущностей из `_execute_recall` |
+| `_build_entity_mention_index()` | новый | Вынесен index сущностей (для Channel C) |
+| `_select_topk()` | новый | Greedy select вынесен в отдельный метод (остался как helper, из main path убран) |
+| `_sandwich_reorder()` | новый | Sandwich ordering вынесен из inline-кода `recall()` |
+| `recall_facts_with_trace()` | новый | Diagnostic variant возвращает `(results, trace dict)` |
+| `_expand_query()` | **удалён** | Заменён на `_expand_query_for_embed` |
+
+#### Изменённые методы
+
+| Метод | Что изменилось |
+|-------|----------------|
+| `_execute_recall()` | **Stage 0 (новый):** `classify_recall_intent` + `get_pipeline_config` в начале функции. **Фильтр фактов:** +`memory_type_filter`. **Channel A:** `index.score(field_weights_override=config.field_weights_override)`. **Channel C:** token intersection вместо `entity_index.get(hop_key, [])` — guard `len(t) > 2`. **Stage 3 (заменён):** greedy `_select_topk` → 6-сигнальный RRF fusion (`bm25 + slot_exact + trigram + importance + retention + recency`), веса из `config.rrf_weights`. **Stage 4a:** DDSA gate `config.use_ddsa`. **Stage 4b:** MMR lambda `config.mmr_lambda`. **Trace:** `stage3_select` → `stage3_rrf` с полями `intent`, `rrf_weights`, `selected_ids`. |
+| `_mmr_select()` | +`sel_facts: list[Fact]` параллельно `sel_tokens`; в inner loop: `sim = 0.0` когда `f.slot_key == sel_f.slot_key and f.value_text != sel_f.value_text` (list items не конкурируют); `sel_facts.append(fact)` после выбора |
+| `recall()` | Заменён безусловный `_sandwich_reorder` на sort_strategy branch: `"sandwich"` → только для AGGREGATIONAL; `"chronological"` → top-15 sort по `created_at`; `"relevance"` → без изменений (RRF-order) |
+| `__init__` | Новые imports: `classify_recall_intent`, `get_pipeline_config`, `_char_trigrams`, `_slot_exact_score`, `_rrf_fuse` |
+| `add` / `add_episodic` | Минорные правки из Phase C (не Phase E) |
+| `recall_facts_with_scores()` | Минорные правки |
+
+---
+
+### Тесты — новые файлы
+
+| Файл | Тестирует | Тестов |
+|------|-----------|--------|
+| `tests/test_recall_intent.py` | `classify_recall_intent` (18 parametrized cases) + `PipelineConfig` matrix (10 checks) | 28 |
+| `tests/test_channel_c_entity_hop.py` | Token intersection: partial match, no FP oscar↔car, short tokens filtered, empty index no-op | 6 |
+| `tests/test_mmr_slot_protection.py` | Slot-aware Jaccard: 4 hobbies → 3+ survive, same slot different value, raw mode compat | 4 |
+| `tests/test_bm25_field_weights_override.py` | tags override boost, None = defaults, partial override, zero content weight, no mutation | 5 |
+| `tests/test_recall_mmr_dispatch.py` | AGGREGATIONAL → λ≤0.4, FACTUAL → λ≥0.75, EXPLORATORY → λ∈[0.5,0.75] | 3 |
+| `tests/test_recall_procedural_isolation.py` | memory_type_filter=None по умолчанию, SEMANTIC факты не дропаются, explicit filter API | 4 |
+| `tests/test_recall_trace.py` | stage3_rrf в trace dict, selected_ids subset of pool, mmr dropped_ids disjoint | 6 |
+| `tests/test_ddsa_integration.py` | DDSA_ENABLED flag, use_ddsa gate — EXPLORATORY query для DDSA_ENABLED=True check | (обновлён) |
+
+---
+
+### Прочие файлы
+
+| Файл | Изменение |
+|------|-----------|
+| `scripts/trace_cat1_misses.py` | `stage3_select` → `stage3_rrf` в 3 местах (classify_miss, trace_summary.selected_count, gold_in_selected) |
+| `research/phase_e_query_shape_routing.md` | этот файл |
+| `research/INDEX.md` | Phase E добавлен в "Текущая работа" |
