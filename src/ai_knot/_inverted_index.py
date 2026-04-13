@@ -10,6 +10,7 @@ from ai_knot.types import Fact
 # BM25F parameters.
 _BM25_K1: float = 1.5  # Term saturation parameter.
 _BM25_B_CONTENT: float = 0.75  # Length normalization for content field.
+# Do not lower: length normalisation is load-bearing for short extracted facts.
 _BM25_B_TAGS: float = 0.3  # Length normalization for tags field.
 _BM25_B_CANONICAL: float = 0.5  # Length normalization for canonical_surface field.
 _W_CONTENT: float = 1.0  # Content field weight.
@@ -161,6 +162,7 @@ class InvertedIndex:
         k1: float = _BM25_K1,
         b: float = _BM25_B_CONTENT,
         expansion_weights: dict[str, float] | None = None,
+        field_weights_override: dict[str, float] | None = None,
     ) -> dict[str, float]:
         """Return BM25F scores for all documents matching any query term.
 
@@ -169,10 +171,18 @@ class InvertedIndex:
             k1: BM25 saturation parameter.
             b: Length normalization parameter (used for content field).
             expansion_weights: Optional PRF expansion terms with weights.
+            field_weights_override: Optional per-field weight overrides.
+                Keys: 'content', 'tags', 'canonical', 'evidence'.
+                Overrides the module-level ``_W_*`` constants for this call only.
 
         Returns:
             Dict mapping document id to BM25F score.
         """
+        _fw = field_weights_override or {}
+        w_content = _fw.get("content", _W_CONTENT)
+        w_tags = _fw.get("tags", _W_TAGS)
+        w_canonical = _fw.get("canonical", _W_CANONICAL)
+        w_evidence = _fw.get("evidence", _W_EVIDENCE)
         query_tokens = _tokenize(query)
         # Build term weights: original query terms get weight 1.0.
         term_weights: dict[str, float] = {}
@@ -233,10 +243,10 @@ class InvertedIndex:
                 norm_tf_ev = tf_evidence / (1.0 + _BM25_B_EVIDENCE * (dl_ev / avg_ev - 1.0))
 
                 tf_bm25f = (
-                    _W_CONTENT * norm_tf_c
-                    + _W_TAGS * norm_tf_t
-                    + _W_CANONICAL * norm_tf_can
-                    + _W_EVIDENCE * norm_tf_ev
+                    w_content * norm_tf_c
+                    + w_tags * norm_tf_t
+                    + w_canonical * norm_tf_can
+                    + w_evidence * norm_tf_ev
                 )
                 tf_score = (k1 + 1.0) * tf_bm25f / (k1 + tf_bm25f)
                 scores[doc_id] = scores.get(doc_id, 0.0) + idf * tf_score * q_weight
@@ -269,9 +279,49 @@ class InvertedIndex:
         return self._evidence_trigrams
 
     @property
+    def content_postings(self) -> dict[str, dict[str, int]]:
+        """term → {fact_id: tf} for content field."""
+        return self._content_postings
+
+    @property
+    def tags_postings(self) -> dict[str, dict[str, int]]:
+        """term → {fact_id: tf} for tags field."""
+        return self._tags_postings
+
+    @property
     def slot_tokens(self) -> dict[str, frozenset[str]]:
         """Precomputed tokenised slot_key (id → token set)."""
         return self._slot_tokens
+
+    def idf(self, term: str) -> float:
+        """BM25 IDF for *term* — same formula as score().
+
+        Returns 0.0 when the term is unseen, filtered by the high-DF
+        threshold, or the index is empty.
+        """
+        df = self._combined_df(term)
+        if not df:
+            return 0.0
+        n = self._doc_count
+        if n >= 5 and df > _IDF_HIGH_DF_RATIO * n:
+            return 0.0
+        return math.log((n - df + 0.5) / (df + 0.5) + 1.0)
+
+    def median_idf(self) -> float:
+        """Median IDF across all terms in content + tags postings.
+
+        Returns 0.0 for an empty index.  Uses the median of all
+        positive-IDF terms so the threshold adapts to the corpus
+        distribution — no hardcoded value.
+        """
+        if not self._doc_count:
+            return 0.0
+        all_terms = set(self._content_postings) | set(self._tags_postings)
+        values = sorted(v for t in all_terms if (v := self.idf(t)) > 0)
+        if not values:
+            return 0.0
+        mid = len(values) // 2
+        return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2.0
 
 
 def _char_trigrams(text: str) -> frozenset[str]:
