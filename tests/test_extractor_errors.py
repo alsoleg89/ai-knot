@@ -171,3 +171,65 @@ class TestImportanceClamping:
             result = Extractor(api_key="key", provider="openai").extract(turns)
         assert len(result) == 1
         assert result[0].importance == 0.0
+
+    def test_importance_non_numeric_string_defaults(self, turns: list[ConversationTurn]) -> None:
+        """7B models sometimes return 'high'/'medium' instead of a float.
+
+        Regression: float('high') raised ValueError, crashing the entire batch.
+        """
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '[{"content": "test fact", "type": "semantic",'
+                        ' "importance": "high"}]'
+                    }
+                }
+            ]
+        }
+        with patch("httpx.post", return_value=mock_resp):
+            result = Extractor(api_key="key", provider="openai").extract(turns)
+        assert len(result) == 1
+        assert result[0].importance == 0.8
+
+
+class TestJsonWrappedEnvelope:
+    """7B models may wrap JSON array in an object like {"facts": [...]}."""
+
+    def test_wrapped_facts_key_parsed(self, turns: list[ConversationTurn]) -> None:
+        """Regression: wrapped JSON envelope silently returned empty list."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"facts": [{"content": "user likes Python",'
+                        ' "type": "semantic", "importance": 0.9}]}'
+                    }
+                }
+            ]
+        }
+        with patch("httpx.post", return_value=mock_resp):
+            result = Extractor(api_key="key", provider="openai").extract(turns)
+        assert len(result) == 1
+        assert result[0].content == "user likes Python"
+
+    def test_plain_array_still_works(self, turns: list[ConversationTurn]) -> None:
+        """Normal JSON array format must still work after the envelope fix."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '[{"content": "test", "type": "semantic", "importance": 0.8}]'
+                    }
+                }
+            ]
+        }
+        with patch("httpx.post", return_value=mock_resp):
+            result = Extractor(api_key="key", provider="openai").extract(turns)
+        assert len(result) == 1

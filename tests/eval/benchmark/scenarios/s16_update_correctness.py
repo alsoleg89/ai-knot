@@ -68,7 +68,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge) -> ScenarioResult:
         value_text="Acme",
         op=MemoryOp.DELETE,
     )
-    with patch("ai_knot.knowledge.Extractor.extract", return_value=[delete_fact]):
+    with patch("ai_knot.learning.Extractor.extract", return_value=[delete_fact]):
         inserted = kb.learn(_TURN, api_key="fake")
 
     delete_ok = len(inserted) == 0 and all(
@@ -89,7 +89,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge) -> ScenarioResult:
         value_text="95000",
         op=MemoryOp.NOOP,
     )
-    with patch("ai_knot.knowledge.Extractor.extract", return_value=[noop_fact]):
+    with patch("ai_knot.learning.Extractor.extract", return_value=[noop_fact]):
         inserted2 = kb.learn(_TURN, api_key="fake")
 
     stored_after_noop = kb.list_facts()
@@ -113,7 +113,7 @@ async def run(backend: MemoryBackend, judge: BaseJudge) -> ScenarioResult:
         value_text="95000",
         op=MemoryOp.UPDATE,
     )
-    with patch("ai_knot.knowledge.Extractor.extract", return_value=[update_fact]):
+    with patch("ai_knot.learning.Extractor.extract", return_value=[update_fact]):
         inserted3 = kb.learn(_TURN, api_key="fake")
 
     update_ok = len(inserted3) == 1 and inserted3[0].version == 1

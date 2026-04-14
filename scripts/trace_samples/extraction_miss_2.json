@@ -1,0 +1,10 @@
+{
+  "run_id": "pf3-conv2",
+  "conv_idx": 2,
+  "qa_idx": 41,
+  "question": "Does John live close to a beach or the mountains?",
+  "gold_answer": "beach",
+  "best_fact_content": "[5 February, 2023]  John: Yeah",
+  "best_score": 0.229,
+  "bucket": "extraction_miss"
+}

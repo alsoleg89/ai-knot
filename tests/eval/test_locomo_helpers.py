@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from tests.eval.benchmark.scenarios.s_locomo import (
     _best_f1_against,
     _evidence_recall_at_k,
@@ -62,8 +64,10 @@ class TestIterTurns:
             }
         )
         turns, dia_map = _iter_turns(sample)
-        assert turns == ["Alice: Hello", "Bob: Hi there"]
+        assert [t.text for t in turns] == ["Alice: Hello", "Bob: Hi there"]
         assert dia_map == {"D1:1": "Alice: Hello", "D1:2": "Bob: Hi there"}
+        # Timestamp parsed from session_1_date_time
+        assert turns[0].timestamp == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_skips_date_time_keys(self) -> None:
         sample = self._make_sample(
@@ -75,8 +79,10 @@ class TestIterTurns:
             }
         )
         turns, dia_map = _iter_turns(sample)
-        assert turns == ["Alice: No date"]
+        assert [t.text for t in turns] == ["Alice: No date"]
         assert dia_map == {"D1:1": "Alice: No date"}
+        # ISO format doesn't match LoCoMo date regex → timestamp is None
+        assert turns[0].timestamp is None
 
     def test_skips_non_session_keys(self) -> None:
         sample = {
@@ -88,7 +94,7 @@ class TestIterTurns:
             "qa": [{"question": "What?", "answer": "42"}],
         }
         turns, dia_map = _iter_turns(sample)
-        assert turns == ["Alice: Real turn"]
+        assert [t.text for t in turns] == ["Alice: Real turn"]
         assert dia_map == {"D1:1": "Alice: Real turn"}
 
     def test_default_speaker(self) -> None:
@@ -98,7 +104,7 @@ class TestIterTurns:
             }
         )
         turns, dia_map = _iter_turns(sample)
-        assert turns == ["speaker: No speaker field"]
+        assert [t.text for t in turns] == ["speaker: No speaker field"]
         assert dia_map == {"D1:1": "speaker: No speaker field"}
 
     def test_multiple_sessions_sorted(self) -> None:
@@ -116,7 +122,7 @@ class TestIterTurns:
             }
         )
         turns, dia_map = _iter_turns(sample)
-        assert turns == ["A: one", "B: two", "A: three"]
+        assert [t.text for t in turns] == ["A: one", "B: two", "A: three"]
         assert dia_map == {"D1:1": "A: one", "D2:1": "B: two", "D3:1": "A: three"}
 
     def test_empty_conversation(self) -> None:
@@ -131,7 +137,7 @@ class TestIterTurns:
             "session_1": [{"speaker": "X", "text": "hi", "dia_id": "D1:1"}],
         }
         turns, dia_map = _iter_turns(flat)
-        assert turns == ["X: hi"]
+        assert [t.text for t in turns] == ["X: hi"]
         assert dia_map == {"D1:1": "X: hi"}
 
     def test_turn_without_dia_id(self) -> None:
@@ -145,7 +151,7 @@ class TestIterTurns:
             }
         )
         turns, dia_map = _iter_turns(sample)
-        assert turns == ["A: has id", "B: no id"]
+        assert [t.text for t in turns] == ["A: has id", "B: no id"]
         assert dia_map == {"D1:1": "A: has id"}
 
 

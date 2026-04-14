@@ -58,14 +58,16 @@ git log --format="%B" | grep "https://claude\|session_"
 ### LOCOMO benchmark (aiknotbench — TypeScript)
 
 ```bash
-# Full run (all 10 conversations, 233 questions, dated-learn mode)
-cd aiknotbench && npx tsx src/index.ts run -r v1 --ingest-mode dated-learn --top-k 60
+# Full run (all 10 conversations, 233 questions)
+# Uses new target_query pipeline (raw-episodes + deterministic materialization).
+# LLM enrichment mode "dated-learn" is coming in v2.
+cd aiknotbench && npx tsx src/index.ts run -r v1 --top-k 60
 
 # Single category (e.g. Cat 2 = multi-hop)
-npx tsx src/index.ts run -r v1 --ingest-mode dated-learn --top-k 60 --types 2
+npx tsx src/index.ts run -r v1 --top-k 60 --types 2
 
-# Quick smoke test (1 conversation, 5 facts)
-npx tsx src/index.ts run -r smoke --ingest-mode dated-learn --top-k 5 --limit 1
+# Quick smoke test (1 conversation)
+npx tsx src/index.ts run -r smoke --top-k 5 --limit 1
 
 # List previous runs
 npx tsx src/index.ts list

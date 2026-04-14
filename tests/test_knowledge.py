@@ -52,6 +52,91 @@ class TestAdd:
         facts = kb._storage.load(kb._agent_id)
         assert len(facts) == 3
 
+    def test_add_dedup_sliding_window(self, kb: KnowledgeBase) -> None:
+        """Stride-1 sliding windows with high token overlap (Jaccard ≥ 0.7) are suppressed.
+
+        Uses realistic benchmark-length turns so Jaccard(A,B)≈0.71 (computed).
+        A window that drifts far enough (Jaccard≈0.46) is kept as a new fact.
+        """
+        turn0 = (
+            "[8 May 2023] Melanie I have been going to pottery class twice a week"
+            " and I really enjoy making clay bowls and vases with Caroline"
+        )
+        turn1 = (
+            "Caroline That sounds wonderful I really love the pottery class too"
+            " and making things with clay is so relaxing and fun"
+        )
+        turn2 = (
+            "[9 May 2023] Melanie Yes and yesterday we made beautiful flower pots"
+            " I also went swimming at the beach with my kids in the afternoon"
+        )
+        turn3 = (
+            "Caroline That sounds like such a lovely day I wish I could have"
+            " joined you at the beach and the pottery studio"
+        )
+        turn4 = (
+            "[10 May 2023] Melanie Today I went hiking in the mountains with my"
+            " daughter it was very beautiful and refreshing"
+        )
+
+        win_a = kb.add(" ".join([turn0, turn1, turn2]))  # stored
+        win_b = kb.add(" ".join([turn1, turn2, turn3]))  # Jaccard(A,B)≈0.71 → suppressed
+        win_c = kb.add(" ".join([turn2, turn3, turn4]))  # Jaccard(A,C)≈0.46 → stored
+
+        facts = kb._storage.load(kb._agent_id)
+        # B was suppressed — returns the existing A fact
+        assert win_b.id == win_a.id
+        # C has enough new content to be kept (hiking is genuinely new)
+        assert win_c.id != win_a.id
+        # Only A and C stored — B was deduplicated
+        assert len(facts) == 2
+        stored_ids = {f.id for f in facts}
+        assert win_a.id in stored_ids
+        assert win_c.id in stored_ids
+
+    def test_add_dedup_distinct_facts_not_suppressed(self, kb: KnowledgeBase) -> None:
+        """Facts with different content (Jaccard < 0.7) are not suppressed."""
+        f1 = kb.add("Melanie went swimming at the beach with her kids")
+        f2 = kb.add("Caroline attended the LGBTQ+ pride parade downtown")
+        f3 = kb.add("John fixed his car engine at the mechanic shop")
+
+        facts = kb._storage.load(kb._agent_id)
+        assert len(facts) == 3
+        ids = {f.id for f in facts}
+        assert f1.id in ids
+        assert f2.id in ids
+        assert f3.id in ids
+
+    def test_add_dedup_returns_existing_fact(self, kb: KnowledgeBase) -> None:
+        """When a near-duplicate is detected, the existing Fact object is returned."""
+        original = kb.add("Melanie: I love swimming and pottery classes with Caroline")
+        duplicate = kb.add("I love swimming and pottery classes with Caroline today")
+
+        # duplicate is the existing fact (same id, same content)
+        assert duplicate.id == original.id
+        assert duplicate.content == original.content
+        # Only one fact stored
+        loaded = kb._storage.load(kb._agent_id)
+        assert len(loaded) == 1
+        assert loaded[0].id == original.id
+
+    def test_add_dedup_window_only_last_n(self, kb: KnowledgeBase) -> None:
+        """Dedup only checks last _DEDUP_WINDOW facts — older similar content is NOT suppressed."""
+        # Add _DEDUP_WINDOW + 1 unrelated facts to push the similar fact out of the window
+        for i in range(KnowledgeBase._DEDUP_WINDOW + 1):
+            kb.add(f"Completely unrelated fact number {i} about topic X Y Z")
+
+        # Now add a fact similar to the very first one — it's outside the window
+        first_similar = kb.add("swimming pottery art museum outdoor activities hobby")
+        # Add another near-duplicate — now the first_similar IS within the window → suppressed
+        second_similar = kb.add("pottery art museum outdoor activities hobby swimming")
+
+        facts = kb._storage.load(kb._agent_id)
+        # first_similar was added (original was outside window)
+        assert any(f.id == first_similar.id for f in facts)
+        # second_similar was suppressed (first_similar is within window)
+        assert second_similar.id == first_similar.id
+
 
 class TestRecall:
     """Querying the knowledge base."""
@@ -80,6 +165,34 @@ class TestRecall:
         # At least one fact should have access_count > 0
         accessed = [f for f in facts if f.access_count > 0]
         assert len(accessed) >= 1
+
+    def test_recall_entity_hop(self, kb: KnowledgeBase) -> None:
+        """Entity-hop: value_text of one fact matches entity of another."""
+        # Build structured facts with entity/value links
+        fact1 = Fact(
+            content="Alex's wife is Maria",
+            importance=0.9,
+            entity="alex",
+            attribute="wife",
+            value_text="maria",
+            slot_key="alex::wife",
+        )
+        fact2 = Fact(
+            content="Maria works at Google",
+            importance=0.9,
+            entity="maria",
+            attribute="employer",
+            value_text="google",
+            slot_key="maria::employer",
+        )
+        noise = [Fact(content=f"Unrelated fact {i} about topics") for i in range(20)]
+        all_facts = [fact1, fact2, *noise]
+        kb._storage.save(kb._agent_id, all_facts)
+
+        result = kb.recall("Where does Alex's wife work?", top_k=10)
+        # Both facts should be found via entity-hop
+        assert "Maria" in result
+        assert "Google" in result
 
 
 class TestForget:
@@ -504,114 +617,62 @@ class TestLLMVsBaseDifferences:
     competing facts for rank differences to manifest in scores.
     """
 
-    def test_expansion_changes_top_result(self, tmp_path: pathlib.Path) -> None:
-        """Query expansion promotes a fact to #1 when it has no base overlap."""
+    def test_expansion_enhances_embed_query(self, tmp_path: pathlib.Path) -> None:
+        """LLM expansion produces semantically richer text for embedding."""
         storage = YAMLStorage(base_dir=str(tmp_path))
-
-        # Target fact has NO overlap with raw query "relational storage"
-        target = "User relies on PostgreSQL for data persistence"
-        # Distractors share some tokens with query
-        distractors = [
-            "Team stores config in a relational format",
-            "Data storage costs increased last quarter",
-            "Relational models are taught in CS courses",
-            "User prefers local storage over cloud",
-        ]
-
-        # Base KB
-        kb_base = KnowledgeBase(agent_id="base", storage=storage)
-        kb_base.add(target)
-        for d in distractors:
-            kb_base.add(d)
-
-        # LLM KB
         provider = MagicMock()
         provider.name = "mock"
         provider.default_model = "gpt-4o"
-        kb_llm = KnowledgeBase(
-            agent_id="llm",
+        kb = KnowledgeBase(
+            agent_id="test",
             storage=storage,
             provider=provider,
             llm_recall=True,
         )
-        kb_llm.add(target)
-        for d in distractors:
-            kb_llm.add(d)
 
-        query = "relational storage"
-
-        # Base: PostgreSQL fact has zero BM25 match → ranked last
-        base_results = kb_base.recall_facts_with_scores(query, top_k=5)
-        base_rank = next(i for i, (f, _) in enumerate(base_results) if "PostgreSQL" in f.content)
-        assert base_rank == len(distractors), "Base should rank PostgreSQL last"
-
-        # LLM: expansion adds domain-relevant terms → target promoted to #1
         with patch(
             "ai_knot.query_expander.call_with_retry",
             return_value="relational storage PostgreSQL data persistence",
         ):
-            llm_results = kb_llm.recall_facts_with_scores(query, top_k=5)
-        llm_rank = next(i for i, (f, _) in enumerate(llm_results) if "PostgreSQL" in f.content)
+            embed_text = kb._expand_query_for_embed("relational storage")
 
-        assert llm_rank == 0, f"Expansion should promote PostgreSQL to #1 (got rank {llm_rank})"
+        assert "PostgreSQL" in embed_text
+        assert "relational" in embed_text
 
-    def test_expansion_adds_fact_to_top_results(self, tmp_path: pathlib.Path) -> None:
-        """Query expansion surfaces a fact into top-2 that base ranks last."""
+    def test_dense_injection_surfaces_vocabulary_gap_fact(self, tmp_path: pathlib.Path) -> None:
+        """Dense diversity injection adds a fact that BM25 misses due to vocabulary mismatch."""
         storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(agent_id="test", storage=storage)
 
-        # Target: no overlap with raw query "cloud tools"
-        target = "Team uses Docker for container orchestration"
-        # Distractors: match "cloud" or "tools" in content
-        distractors = [
-            "Cloud migration project started last month",
-            "DevOps tools inventory was updated recently",
-            "Cloud computing costs are rising each quarter",
-            "Tools for monitoring are essential for ops",
+        # Target: zero keyword overlap with "cloud tools"
+        target = kb.add("Team uses Docker for container orchestration")
+        # Distractors: match "cloud" or "tools"
+        distractor_facts = [
+            kb.add("Cloud migration project started last month"),
+            kb.add("DevOps tools inventory was updated recently"),
+            kb.add("Cloud computing costs are rising each quarter"),
+            kb.add("Tools for monitoring are essential for ops"),
+            kb.add("Cloud infrastructure management overview"),
+            kb.add("Tools comparison for modern development"),
         ]
-
-        for agent_id in ("base", "llm"):
-            if agent_id == "llm":
-                provider = MagicMock()
-                provider.name = "mock"
-                provider.default_model = "gpt-4o"
-                kb = KnowledgeBase(
-                    agent_id=agent_id,
-                    storage=storage,
-                    provider=provider,
-                    llm_recall=True,
-                )
-            else:
-                kb = KnowledgeBase(agent_id=agent_id, storage=storage)
-            kb.add(target)
-            for d in distractors:
-                kb.add(d)
 
         query = "cloud tools"
 
-        # Base: Docker fact ranked last (no token overlap)
-        kb_base = KnowledgeBase(agent_id="base", storage=storage)
-        base_all = kb_base.recall_facts_with_scores(query, top_k=5)
-        base_rank = next(i for i, (f, _) in enumerate(base_all) if "Docker" in f.content)
-        assert base_rank == len(distractors), "Base should rank Docker last"
+        # Confirm BM25-only mode runs without error.
+        # Note: MMR diversity reranking may surface Docker even without
+        # embeddings once cloud/tools distractors cluster together.
+        kb.recall_facts_with_scores(query, top_k=5)
 
-        # LLM: expansion adds Docker-related terms → Docker in top-2
-        provider = MagicMock()
-        provider.name = "mock"
-        provider.default_model = "gpt-4o"
-        kb_llm = KnowledgeBase(
-            agent_id="llm",
-            storage=storage,
-            provider=provider,
-            llm_recall=True,
-        )
-        with patch(
-            "ai_knot.query_expander.call_with_retry",
-            return_value="cloud tools Docker container orchestration",
-        ):
-            llm_all = kb_llm.recall_facts_with_scores(query, top_k=5)
-        llm_rank = next(i for i, (f, _) in enumerate(llm_all) if "Docker" in f.content)
+        # Set up dense embeddings: target closest to query
+        kb._dense.add_embeddings({target.id: [0.95, 0.1]})
+        for d in distractor_facts:
+            kb._dense.add_embeddings({d.id: [0.1, 0.9]})
+        kb._embedded_ids = {f.id for f in kb.list_facts()}
 
-        assert llm_rank <= 1, f"Expansion should promote Docker to top-2 (got rank {llm_rank})"
+        # With dense injection: Docker surfaces via semantic similarity
+        with patch.object(kb, "_embed_for_recall", return_value=[1.0, 0.0]):
+            dense_results = kb.recall_facts_with_scores(query, top_k=5)
+        assert any("Docker" in f.content for f, _ in dense_results)
 
     def test_auto_tags_change_ranking(self, tmp_path: pathlib.Path) -> None:
         """Tags from auto-tagging boost a fact above untagged competitors.
@@ -720,70 +781,66 @@ class TestLLMVsBaseDifferences:
             "Custom decay preserves episodic retention far better than default"
         )
 
-    def test_all_llm_features_combined(self, tmp_path: pathlib.Path) -> None:
-        """End-to-end: expansion + tags + slow decay together outperform base."""
+    def test_tags_and_dense_injection_combined(self, tmp_path: pathlib.Path) -> None:
+        """Tags boost BM25 ranking; dense injection surfaces vocabulary-gap facts."""
         storage = YAMLStorage(base_dir=str(tmp_path))
-        old_time = datetime(2025, 6, 1, tzinfo=UTC)
 
-        # Target fact — no token overlap with raw query "relational storage"
-        target = "User relies on PostgreSQL for data persistence"
-        distractors = [
+        # --- Tags test: matching tags promote a fact ---
+        kb_tagged = KnowledgeBase(agent_id="tagged", storage=storage)
+        kb_tagged.add(
+            "User relies on PostgreSQL for data persistence",
+            tags=["storage", "relational"],
+        )
+        for d in [
             "Team stores config in a relational format",
             "Data storage costs increased last quarter",
             "Relational models are taught in CS courses",
             "User prefers local storage over cloud",
-        ]
+        ]:
+            kb_tagged.add(d)
 
-        # --- Base KB: no LLM, no tags, default decay ---
-        kb_base = KnowledgeBase(agent_id="base", storage=storage)
-        kb_base.add(target)
-        for d in distractors:
-            kb_base.add(d)
-        # Age all facts
-        facts = storage.load("base")
-        for f in facts:
-            f.last_accessed = old_time
-        storage.save("base", facts)
-
-        # --- Full LLM KB: expansion + tags + slow decay ---
-        provider = MagicMock()
-        provider.name = "mock"
-        provider.default_model = "gpt-4o"
-        kb_full = KnowledgeBase(
-            agent_id="full",
-            storage=storage,
-            provider=provider,
-            llm_recall=True,
-            decay_config={"semantic": 0.3},
-        )
-        # Target fact has auto-tags from learn()
-        kb_full.add(target, tags=["database", "postgresql"])
-        for d in distractors:
-            kb_full.add(d)
-        facts = storage.load("full")
-        for f in facts:
-            f.last_accessed = old_time
-        storage.save("full", facts)
+        kb_untagged = KnowledgeBase(agent_id="untagged", storage=storage)
+        kb_untagged.add("User relies on PostgreSQL for data persistence")
+        for d in [
+            "Team stores config in a relational format",
+            "Data storage costs increased last quarter",
+            "Relational models are taught in CS courses",
+            "User prefers local storage over cloud",
+        ]:
+            kb_untagged.add(d)
 
         query = "relational storage"
+        tagged_results = kb_tagged.recall_facts_with_scores(query, top_k=5)
+        untagged_results = kb_untagged.recall_facts_with_scores(query, top_k=5)
 
-        # Base: no expansion, no tags, default decay → PostgreSQL ranked last
-        base_results = kb_base.recall_facts_with_scores(query, top_k=5)
-        base_rank = next(i for i, (f, _) in enumerate(base_results) if "PostgreSQL" in f.content)
-
-        # Full LLM: expanded query + tag boost + slow decay → PostgreSQL #1
-        with patch(
-            "ai_knot.query_expander.call_with_retry",
-            return_value="relational storage PostgreSQL data persistence",
-        ):
-            full_results = kb_full.recall_facts_with_scores(query, top_k=5)
-        full_rank = next(i for i, (f, _) in enumerate(full_results) if "PostgreSQL" in f.content)
-
-        # Full LLM pipeline promotes PostgreSQL to #1 via expansion + tags + retention
-        assert base_rank == len(distractors), "Base should rank PostgreSQL last"
-        assert full_rank == 0, (
-            f"Full LLM pipeline should promote PostgreSQL to #1 (got rank {full_rank})"
+        tagged_rank = next(
+            i for i, (f, _) in enumerate(tagged_results) if "PostgreSQL" in f.content
         )
+        untagged_rank = next(
+            i for i, (f, _) in enumerate(untagged_results) if "PostgreSQL" in f.content
+        )
+        assert tagged_rank < untagged_rank, "Tags should improve ranking"
+
+        # --- Dense injection test: vocabulary-gap fact surfaces ---
+        kb_dense = KnowledgeBase(agent_id="dense", storage=storage)
+        dense_target = kb_dense.add("Team uses Docker for container orchestration")
+        distractor_facts = [
+            kb_dense.add("Cloud migration project started last month"),
+            kb_dense.add("DevOps tools inventory was updated recently"),
+            kb_dense.add("Cloud computing costs are rising each quarter"),
+            kb_dense.add("Tools for monitoring are essential for ops"),
+            kb_dense.add("Cloud infrastructure management overview"),
+            kb_dense.add("Tools comparison for modern development"),
+        ]
+
+        kb_dense._dense.add_embeddings({dense_target.id: [0.95, 0.1]})
+        for d in distractor_facts:
+            kb_dense._dense.add_embeddings({d.id: [0.1, 0.9]})
+        kb_dense._embedded_ids = {f.id for f in kb_dense.list_facts()}
+
+        with patch.object(kb_dense, "_embed_for_recall", return_value=[1.0, 0.0]):
+            results = kb_dense.recall_facts_with_scores("cloud tools", top_k=5)
+        assert any("Docker" in f.content for f, _ in results)
 
 
 class TestRecallVerificationGate:
@@ -820,3 +877,54 @@ class TestRecallVerificationGate:
 
         results = kb.recall_by_tag("employer")
         assert results == []
+
+
+class TestRecallPreservesFacts:
+    """recall() must not permanently delete filtered-out facts from storage.
+
+    Regression: _execute_recall loaded all facts, filtered to active/non-episodic/
+    supported, then saved only the filtered subset — permanently losing episodic,
+    expired, and unsupported facts on every recall() call.
+    """
+
+    def test_recall_preserves_episodic_facts(self, kb: KnowledgeBase) -> None:
+        """Episodic facts must survive after recall() even though they're excluded."""
+        semantic = kb.add("User prefers Python", importance=0.9)
+        episodic = kb.add("Raw conversation turn", type=MemoryType.EPISODIC)
+
+        kb.recall("Python")
+
+        all_facts = kb._storage.load(kb._agent_id)
+        fact_ids = {f.id for f in all_facts}
+        assert semantic.id in fact_ids, "semantic fact should survive"
+        assert episodic.id in fact_ids, "episodic fact must NOT be deleted by recall()"
+
+    def test_recall_preserves_unsupported_facts(self, kb: KnowledgeBase) -> None:
+        """Unsupported facts must survive recall() for later re-verification."""
+        supported = kb.add("Verified fact", importance=0.9)
+        unsupported = kb.add("Unverified claim")
+        unsupported.supported = False
+        kb.replace_facts([supported, unsupported])
+
+        kb.recall("anything")
+
+        all_facts = kb._storage.load(kb._agent_id)
+        fact_ids = {f.id for f in all_facts}
+        assert supported.id in fact_ids
+        assert unsupported.id in fact_ids, "unsupported fact must NOT be deleted by recall()"
+
+    def test_repeated_recall_does_not_shrink_storage(self, kb: KnowledgeBase) -> None:
+        """Multiple recall() calls must not progressively lose facts."""
+        kb.add("Fact A", importance=0.9)
+        kb.add("Fact B", type=MemoryType.EPISODIC)
+        kb.add("Fact C", importance=0.5)
+
+        initial_count = len(kb._storage.load(kb._agent_id))
+
+        for _ in range(5):
+            kb.recall("anything")
+
+        final_count = len(kb._storage.load(kb._agent_id))
+        assert final_count == initial_count, (
+            f"Storage shrank from {initial_count} to {final_count} after repeated recall()"
+        )

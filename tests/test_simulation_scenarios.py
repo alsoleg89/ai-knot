@@ -208,13 +208,21 @@ class TestMemoryScenarios:
             facts.append(fact)
             kb.replace_facts(facts)
 
-        # Add 5 fresh, high-importance facts
-        for i in range(5):
-            kb.add(f"Fresh important fact {i} about deployment", importance=0.95)
+        # Add 5 fresh, high-importance facts — all about deployment (query term)
+        # and mutually distinct (pairwise Jaccard ≈ 0.12, well below 0.7 threshold).
+        fresh_topics = [
+            "Fresh deployment pipeline stage one completed successfully on production cluster",
+            "Fresh deployment rollback triggered automatic recovery environment restored",
+            "Fresh deployment health check passed all pods running kubernetes nodes",
+            "Fresh deployment artifact image version bumped tagged pushed registry",
+            "Fresh deployment monitoring alert cleared latency within normal threshold",
+        ]
+        for content in fresh_topics:
+            kb.add(content, importance=0.95)
 
         result = kb.recall("deployment", top_k=5)
         lines = result.strip().split("\n")
-        fresh_count = sum(1 for line in lines if "Fresh important" in line)
+        fresh_count = sum(1 for line in lines if "Fresh deployment" in line)
         assert fresh_count >= 3  # Most results should be fresh
 
     def test_13_importance_boundaries(self) -> None:

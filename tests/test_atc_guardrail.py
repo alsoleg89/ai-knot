@@ -142,6 +142,37 @@ class TestVerifyFactsAtc:
         _verify_facts_atc(facts, source, threshold=1.0)
         assert facts[0].supported is True
 
+    def test_witness_surface_rescues_paraphrased_content(self) -> None:
+        """Fact with paraphrased content but verbatim witness_surface should be supported.
+
+        Regression: 7B models paraphrase fact.content but witness_surface
+        quotes the original. ATC must check both and take the max score.
+        """
+        fact = Fact(
+            content="Caroline is a nurse by profession",
+            type=MemoryType.SEMANTIC,
+            importance=0.8,
+            witness_surface="I've been working at the hospital for years, nursing is my passion",
+        )
+        source = "Caroline: I've been working at the hospital for years, nursing is my passion"
+        _verify_facts_atc([fact], source, threshold=0.6)
+        assert fact.supported is True, (
+            "witness_surface matches source but fact was rejected — "
+            "ATC must check witness_surface, not just content"
+        )
+
+    def test_witness_surface_empty_falls_back_to_content(self) -> None:
+        """When witness_surface is empty, only content is checked (no crash)."""
+        fact = Fact(
+            content="user works at Sber",
+            type=MemoryType.SEMANTIC,
+            importance=0.8,
+            witness_surface="",
+        )
+        source = "user works at Sber as Operations Director"
+        _verify_facts_atc([fact], source, threshold=0.6)
+        assert fact.supported is True
+
 
 # ---------------------------------------------------------------------------
 # Integration tests: ATC in the full extraction pipeline

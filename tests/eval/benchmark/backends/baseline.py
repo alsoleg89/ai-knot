@@ -8,6 +8,7 @@ Represents the current state of most production agents that dump raw context.
 from __future__ import annotations
 
 import time
+from datetime import datetime
 
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
 
@@ -22,7 +23,7 @@ class BaselineBackend(MemoryBackend):
     def name(self) -> str:
         return "baseline"
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         t0 = time.perf_counter()
         self._texts.append(text)
         return InsertResult(

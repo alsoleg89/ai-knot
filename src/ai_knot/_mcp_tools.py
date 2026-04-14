@@ -367,7 +367,7 @@ def tool_query(
     try:
         answer = kb.query(question, top_k=top_k, render=render)
         return answer.text
-    except RuntimeError:
+    except (RuntimeError, NotImplementedError):
         # Storage does not support v2 planes — fall back to legacy recall.
         return kb.recall(question, top_k=min(top_k, 10))
 
@@ -395,7 +395,7 @@ def tool_query_json(
     """
     try:
         return json.dumps(kb.query_json(question, top_k=top_k, render=render), ensure_ascii=False)
-    except RuntimeError as exc:
+    except (RuntimeError, NotImplementedError) as exc:
         return json.dumps({"error": str(exc)}, ensure_ascii=False)
 
 

@@ -398,3 +398,54 @@ def tokenize(text: str) -> list[str]:
     text = _CAMEL_RE.sub(r"\1 \2", text)
     tokens = _TOKEN_RE.findall(text.lower())
     return [_stem(t) for t in tokens]
+
+
+_QUERY_STOPWORDS = frozenset(
+    {
+        "what",
+        "where",
+        "when",
+        "who",
+        "how",
+        "which",
+        "do",
+        "doe",
+        "did",
+        "ha",
+        "have",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "the",
+        "a",
+        "an",
+        "to",
+        "of",
+        "in",
+        "for",
+        "and",
+        "or",
+        "but",
+        "not",
+        "with",
+        "from",
+        "by",
+        "at",
+        "on",
+    }
+)
+
+
+def tokenize_query(text: str) -> list[str]:
+    """Tokenize a search query, removing stopwords.
+
+    Same as tokenize() but filters out common question words that add
+    noise to BM25 scoring (high DF, near-zero IDF).
+    """
+    tokens = tokenize(text)
+    cleaned = [t for t in tokens if t not in _QUERY_STOPWORDS]
+    return cleaned if cleaned else tokens

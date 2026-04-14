@@ -13,6 +13,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 from tests.eval.benchmark.base import InsertResult, MemoryBackend, RetrievalResult
@@ -44,7 +45,7 @@ class MemvidBackend(MemoryBackend):
         self._dirty = False
         self._retriever = None
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         t0 = time.perf_counter()
         self._chunks.append(text)
         self._dirty = True

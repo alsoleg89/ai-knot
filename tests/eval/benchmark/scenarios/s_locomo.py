@@ -36,6 +36,8 @@ import re
 import tempfile
 import urllib.request
 from collections import defaultdict
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -86,19 +88,74 @@ def _load_locomo(local_path: str | None = None) -> list[dict[str, Any]]:
         return result
 
 
-def _iter_turns(sample: dict[str, Any]) -> tuple[list[str], dict[str, str]]:
-    """Flatten all sessions in a LoCoMo sample into turn strings and a dia_id map.
+# Flexible date patterns found in LoCoMo's session_N_date_time and event_summary.
+# Examples: "8 May, 2023", "1:56 pm on 8 May, 2023", "20 July, 2023".
+_DATE_RE = re.compile(r"(\d{1,2})\s+(\w+),?\s+(\d{4})")
+_MONTH_MAP: dict[str, int] = {
+    "january": 1,
+    "jan": 1,
+    "february": 2,
+    "feb": 2,
+    "march": 3,
+    "mar": 3,
+    "april": 4,
+    "apr": 4,
+    "may": 5,
+    "june": 6,
+    "jun": 6,
+    "july": 7,
+    "jul": 7,
+    "august": 8,
+    "aug": 8,
+    "september": 9,
+    "sep": 9,
+    "october": 10,
+    "oct": 10,
+    "november": 11,
+    "nov": 11,
+    "december": 12,
+    "dec": 12,
+}
+
+
+def _parse_session_date(raw: str) -> datetime | None:
+    """Best-effort parse of LoCoMo session date strings into UTC datetime."""
+    m = _DATE_RE.search(raw)
+    if not m:
+        return None
+    day, month_str, year = int(m.group(1)), m.group(2).lower(), int(m.group(3))
+    month = _MONTH_MAP.get(month_str)
+    if month is None:
+        return None
+    try:
+        return datetime(year, month, day, tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+@dataclass
+class _LocomoTurn:
+    """A conversation turn with optional session timestamp."""
+
+    text: str
+    timestamp: datetime | None
+
+
+def _iter_turns(sample: dict[str, Any]) -> tuple[list[_LocomoTurn], dict[str, str]]:
+    """Flatten all sessions in a LoCoMo sample into turn objects and a dia_id map.
 
     The real LoCoMo schema stores sessions inside ``sample["conversation"]``
     as ``session_1``, ``session_2``, …  alongside ``session_N_date_time`` keys
     and ``speaker_a`` / ``speaker_b``.  We extract only ``session_N`` lists,
-    sort them by *N*, and yield each turn.
+    sort them by *N*, and yield each turn with its session timestamp.
 
     Returns:
-        Tuple of (turn_texts, dia_map) where dia_map maps ``dia_id`` to the
+        Tuple of (turns, dia_map) where dia_map maps ``dia_id`` to the
         corresponding ``"speaker: text"`` string for evidence-based evaluation.
     """
     conversation = sample.get("conversation", sample)
+    event_summary = sample.get("event_summary", {})
+
     # Collect (session_number, key) pairs and sort by number.
     numbered: list[tuple[int, str]] = []
     for key in conversation:
@@ -107,17 +164,30 @@ def _iter_turns(sample: dict[str, Any]) -> tuple[list[str], dict[str, str]]:
             numbered.append((int(m.group(1)), key))
     numbered.sort()
 
-    turns: list[str] = []
+    turns: list[_LocomoTurn] = []
     dia_map: dict[str, str] = {}
-    for _n, key in numbered:
+    for n, key in numbered:
         session = conversation[key]
         if not isinstance(session, list):
             continue
+
+        # Resolve session date from event_summary or session_N_date_time.
+        ts: datetime | None = None
+        ev_key = f"events_session_{n}"
+        ev = event_summary.get(ev_key)
+        if isinstance(ev, dict) and ev.get("date"):
+            ts = _parse_session_date(str(ev["date"]))
+        if ts is None:
+            dt_key = f"session_{n}_date_time"
+            raw_dt = conversation.get(dt_key)
+            if isinstance(raw_dt, str):
+                ts = _parse_session_date(raw_dt)
+
         for turn in session:
             if isinstance(turn, dict) and "text" in turn:
                 speaker = turn.get("speaker", "speaker")
                 turn_text = f"{speaker}: {turn['text']}"
-                turns.append(turn_text)
+                turns.append(_LocomoTurn(text=turn_text, timestamp=ts))
                 dia_id = turn.get("dia_id")
                 if isinstance(dia_id, str):
                     dia_map[dia_id] = turn_text
@@ -223,11 +293,11 @@ async def run(
     for conv in dataset:
         await backend.reset()
 
-        # Phase 1: ingest all turns.
-        turn_texts, dia_map = _iter_turns(conv)
-        for turn_text in turn_texts:
-            await backend.insert(turn_text)
-        total_turns_ingested += len(turn_texts)
+        # Phase 1: ingest all turns (with session timestamps as metadata).
+        locomo_turns, dia_map = _iter_turns(conv)
+        for lt in locomo_turns:
+            await backend.insert(lt.text, timestamp=lt.timestamp)
+        total_turns_ingested += len(locomo_turns)
 
         # Phase 2: answer QA pairs.
         qa_pairs: list[dict[str, Any]] = conv.get("qa", [])

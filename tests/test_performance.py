@@ -17,6 +17,7 @@ Research references:
 from __future__ import annotations
 
 import threading
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -27,6 +28,22 @@ from ai_knot.knowledge import KnowledgeBase
 from ai_knot.retriever import TFIDFRetriever, _tokenize
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import Fact, MemoryType
+
+
+@pytest.fixture(autouse=True)
+def _no_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent all performance tests from hitting Ollama.
+
+    Performance tests measure BM25/storage/tokenizer throughput — not
+    embedding latency.  Without this fixture, tests that call kb.recall()
+    block on Ollama when it happens to be running locally, making the
+    suite non-deterministic.
+    """
+    monkeypatch.setattr(
+        "ai_knot.embedder.embed_texts",
+        AsyncMock(return_value=[]),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Realistic facts corpus (20+ distinct topics for accurate TF-IDF scoring)
@@ -446,6 +463,9 @@ def test_concurrent_reads_no_corruption(
     YAML storage is atomic on writes (tmpfile→rename) but has no cross-thread
     lock on reads. This test verifies that concurrent reads do not corrupt
     in-memory state or raise exceptions.
+
+    embed_texts is mocked so the test is deterministic regardless of whether
+    Ollama is running locally.
     """
     storage = YAMLStorage(base_dir=str(tmp_path))
     storage.save("agent", _make_facts(500))
@@ -463,14 +483,17 @@ def test_concurrent_reads_no_corruption(
             with lock:
                 errors.append(exc)
 
-    threads = [threading.Thread(target=do_recall) for _ in range(8)]
+    n_threads = 8
+    threads = [threading.Thread(target=do_recall) for _ in range(n_threads)]
     for t in threads:
         t.start()
     for t in threads:
         t.join(timeout=10)
 
+    timed_out = [t for t in threads if t.is_alive()]
+    assert not timed_out, f"{len(timed_out)} thread(s) timed out"
     assert not errors, f"Concurrent read errors: {errors}"
-    assert len(results) == 8
+    assert len(results) == n_threads
 
 
 @pytest.mark.slow

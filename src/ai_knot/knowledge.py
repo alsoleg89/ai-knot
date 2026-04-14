@@ -27,7 +27,9 @@ from ai_knot.providers import LLMProvider, create_provider
 from ai_knot.query_expander import LLMQueryExpander
 from ai_knot.retriever import DenseRetriever, HybridRetriever, TFIDFRetriever
 from ai_knot.storage.base import (
+    ClaimStore,
     MaterializationMetaStore,
+    RawEpisodeStore,
     SnapshotCapable,
     StorageBackend,
 )
@@ -1351,7 +1353,11 @@ class KnowledgeBase(_LearningMixin):
         Returns:
             The created RawEpisode.
         """
-        from ai_knot.materialization import dirty_keys_for_claims, materialize_episode
+        from ai_knot.materialization import (
+            MATERIALIZATION_VERSION,
+            dirty_keys_for_claims,
+            materialize_episode,
+        )
         from ai_knot.query_types import RawEpisode, make_episode_id
 
         ep_id = make_episode_id(self._agent_id, session_id, turn_id)
@@ -1368,7 +1374,7 @@ class KnowledgeBase(_LearningMixin):
             parent_episode_id=parent_episode_id,
         )
 
-        if not hasattr(self._storage, "save_episodes"):
+        if not isinstance(self._storage, RawEpisodeStore):
             raise TypeError(
                 f"Storage backend {type(self._storage).__name__} does not support "
                 f"raw episodes. Use SQLiteStorage or PostgresStorage."
@@ -1404,6 +1410,18 @@ class KnowledgeBase(_LearningMixin):
                         rebuild_status=str(meta.get("rebuild_status", "ready")),
                     )
 
+            if claims and hasattr(self._storage, "save_bundles"):
+                from ai_knot.support_bundles import build_all_bundles
+
+                ep_bundles, ep_memberships = build_all_bundles(
+                    claims,
+                    [episode],
+                    agent_id=self._agent_id,
+                    materialization_version=MATERIALIZATION_VERSION,
+                )
+                if ep_bundles:
+                    self._storage.save_bundles(self._agent_id, ep_bundles, ep_memberships)
+
         return episode
 
     def ingest_episodes(self, episodes: Any, *, materialize: bool = True) -> None:
@@ -1413,12 +1431,16 @@ class KnowledgeBase(_LearningMixin):
             episodes:    Iterable of RawEpisode objects.
             materialize: If True, materialize all episodes in one pass.
         """
-        from ai_knot.materialization import dirty_keys_for_claims, rebuild_claims_from_raw
+        from ai_knot.materialization import (
+            MATERIALIZATION_VERSION,
+            dirty_keys_for_claims,
+            rebuild_claims_from_raw,
+        )
 
         eps = list(episodes)
         if not eps:
             return
-        if not hasattr(self._storage, "save_episodes"):
+        if not isinstance(self._storage, RawEpisodeStore):
             raise TypeError(
                 f"Storage backend {type(self._storage).__name__} does not support raw episodes."
             )
@@ -1462,6 +1484,18 @@ class KnowledgeBase(_LearningMixin):
                         rebuild_status=str(meta.get("rebuild_status", "ready")),
                     )
 
+                if hasattr(self._storage, "save_bundles"):
+                    from ai_knot.support_bundles import build_all_bundles
+
+                    batch_bundles, batch_memberships = build_all_bundles(
+                        claims,
+                        eps,
+                        agent_id=self._agent_id,
+                        materialization_version=MATERIALIZATION_VERSION,
+                    )
+                    if batch_bundles:
+                        self._storage.save_bundles(self._agent_id, batch_bundles, batch_memberships)
+
     def query(
         self,
         question: str,
@@ -1489,7 +1523,7 @@ class KnowledgeBase(_LearningMixin):
         """
         from ai_knot.query_runtime import execute_query
 
-        if not hasattr(self._storage, "load_claims"):
+        if not isinstance(self._storage, ClaimStore):
             raise RuntimeError(
                 "query() requires a storage backend that supports v2 query planes "
                 "(SQLiteStorage or PostgresStorage). Current backend: "
@@ -1576,8 +1610,18 @@ class KnowledgeBase(_LearningMixin):
             n_bundles = 0
             if hasattr(self._storage, "clear_all_bundles"):
                 self._storage.clear_all_bundles(self._agent_id)
-                # Bundles rebuilt lazily on first query — only count cleared.
-                n_bundles = 0
+            if hasattr(self._storage, "save_bundles") and claims:
+                from ai_knot.support_bundles import build_all_bundles
+
+                rebuilt_bundles, rebuilt_memberships = build_all_bundles(
+                    claims,
+                    list(episodes),
+                    agent_id=self._agent_id,
+                    materialization_version=MATERIALIZATION_VERSION,
+                )
+                if rebuilt_bundles:
+                    self._storage.save_bundles(self._agent_id, rebuilt_bundles, rebuilt_memberships)
+                n_bundles = len(rebuilt_bundles)
 
             if hasattr(self._storage, "save_materialization_meta"):
                 self._storage.save_materialization_meta(

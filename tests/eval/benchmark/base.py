@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from ai_knot.types import Fact
 
@@ -96,8 +97,14 @@ class MemoryBackend(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def insert(self, text: str) -> InsertResult:
-        """Store a text chunk (with optional extraction / embedding)."""
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
+        """Store a text chunk (with optional extraction / embedding).
+
+        Args:
+            text: The message text.
+            timestamp: When this message occurred (UTC).  Used by backends
+                with LLM extraction to resolve relative temporal references.
+        """
         ...
 
     @abc.abstractmethod

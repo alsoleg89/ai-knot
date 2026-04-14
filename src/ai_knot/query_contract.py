@@ -170,8 +170,40 @@ _EVENT_TIME_SIGNALS: frozenset[str] = frozenset(
     }
 )
 
-# Named entity detection — two or more capitalized consecutive words.
-_NAMED_ENTITY_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+# Named entity detection — one or more capitalized consecutive words.
+_NAMED_ENTITY_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b")
+
+# Question-opener words that are capitalized but are not entity names.
+_STOP_CAPS: frozenset[str] = frozenset(
+    {
+        "What",
+        "When",
+        "Who",
+        "Where",
+        "How",
+        "Why",
+        "Which",
+        "Is",
+        "Are",
+        "Was",
+        "Were",
+        "Did",
+        "Do",
+        "Does",
+        "Has",
+        "Have",
+        "Had",
+        "Will",
+        "Should",
+        "Could",
+        "Would",
+        "Can",
+        "Tell",
+        "List",
+        "Name",
+        "Describe",
+    }
+)
 
 # Verb-like focus relation signals.
 _RELATION_VERBS: frozenset[str] = frozenset(
@@ -201,11 +233,24 @@ def _tokenize_lower(text: str) -> list[str]:
 
 
 def _extract_focus_entities(question: str) -> list[str]:
-    """Extract named entities from the question (proper-name heuristic)."""
+    """Extract named entities from the question (proper-name heuristic).
+
+    Handles single-token names (Alice, Bob) and strips possessive suffixes
+    (Alice's → Alice).  Question-opener words (What, When, …) are excluded.
+    """
     seen: set[str] = set()
     entities: list[str] = []
     for m in _NAMED_ENTITY_RE.finditer(question):
-        e = m.group(1)
+        raw = m.group(1)
+        # Strip possessive suffix.
+        if raw.endswith("'s"):
+            e = raw[:-2]
+        elif raw.endswith("'"):
+            e = raw[:-1]
+        else:
+            e = raw
+        if not e or e in _STOP_CAPS:
+            continue
         if e not in seen:
             seen.add(e)
             entities.append(e)
@@ -222,18 +267,19 @@ def _detect_geometry(question: str, tokens: list[str]) -> AnswerSpace:
     # Question begins with "what" + noun (likely set or description).
     token_set = set(tokens[:8])  # look at first 8 tokens
 
-    _SET_NOUNS = frozenset(
-        {
-            "all", "some", "list", "types", "kinds", "examples",
-            "activities", "hobbies", "foods", "places", "books",
-            "movies", "sports", "games", "people", "friends",
-        }
-    )
-    # "what ... [list-like noun]" → SET
-    if tokens and tokens[0] == "what" and token_set & _SET_NOUNS:
-        return AnswerSpace.SET
+    # Structural SET signals — avoids hardcoded noun lists.
+    if tokens and tokens[0] == "what":
+        tail = tokens[1:4]
+        # Plural-noun heuristic: ends in 's' (not 'ss'), length > 3, no apostrophe
+        # (apostrophe indicates possessive, not plural).
+        if any(
+            t.endswith("s") and not t.endswith("ss") and len(t) > 3 and "'" not in t for t in tail
+        ):
+            return AnswerSpace.SET
+        if "all" in tail or "list" in tail:
+            return AnswerSpace.SET
 
-    # "list / name all / what are all" → SET
+    # "list / enumerate / name all / what are all" → SET
     if token_set & {"list", "enumerate"}:
         return AnswerSpace.SET
     if "all" in token_set and "what" in token_set:

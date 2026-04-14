@@ -253,6 +253,11 @@ class SharedMemoryPool(_PoolRecallMixin):
                     if old.id == fact.id:
                         # Same fact already published as the active version — no-op.
                         continue
+                    # If this fact was previously published (now INVALID after CAS by
+                    # another agent), do not re-activate it.  Agents must create a new
+                    # fact via add_structured to reassert a superseded claim.
+                    if new_fact.id in existing_ids:
+                        continue
                     # Slot-addressed CAS: close old version, insert new.
                     old.valid_until = now
                     old.mesi_state = MESIState.INVALID
@@ -266,10 +271,6 @@ class SharedMemoryPool(_PoolRecallMixin):
                             quick_inv_updates[old.origin_agent_id] = (
                                 quick_inv_updates.get(old.origin_agent_id, 0) + 1
                             )
-                    # If the fact was previously published (INVALID), remove the stale
-                    # copy so that re-activating it via CAS does not create a duplicate.
-                    if new_fact.id in existing_ids:
-                        shared[:] = [f for f in shared if f.id != new_fact.id]
                 elif new_fact.id not in existing_ids:
                     new_fact.mesi_state = MESIState.SHARED
                     new_fact.version = next_version

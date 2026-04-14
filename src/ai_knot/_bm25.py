@@ -128,9 +128,11 @@ class BM25Retriever:
         facts: list[Fact],
         *,
         top_k: int = 5,
+        faithfulness_k: int | None = None,
         expansion_weights: dict[str, float] | None = None,
         rrf_weights: tuple[float, ...] | None = None,
         bm25f_only: bool = False,
+        skip_prf: bool = False,
     ) -> list[tuple[Fact, float]]:
         """Find the most relevant facts for a query.
 
@@ -138,10 +140,17 @@ class BM25Retriever:
             query: The search query string.
             facts: Facts to search through.
             top_k: Maximum number of results to return.
+            faithfulness_k: Threshold for the faithfulness floor check.  When
+                ``None`` (default), uses ``top_k``.  Set to the *original*
+                ``top_k`` when overfetching to prevent the larger ``top_k``
+                from disabling the floor.
             expansion_weights: Optional LLM expansion terms with weights.
                 Merged with PRF expansion; original query terms keep weight 1.0.
             bm25f_only: When True, return raw BM25F scores without RRF fusion.
                 Used by HybridRetriever to avoid double-RRF.
+            skip_prf: When True, skip pseudo-relevance feedback for this search.
+                Useful for aggregation queries where PRF reinforces top matches
+                instead of broadening coverage.
 
         Returns:
             List of (Fact, score) pairs sorted by relevance (most relevant first).
@@ -158,7 +167,7 @@ class BM25Retriever:
         # reinforcing initial retrieval bias (Xu & Croft 1996).
         if expansion_weights:
             raw_scores = index.score(query, expansion_weights=expansion_weights)
-        elif not self._skip_prf and len(facts) >= 4:
+        elif not (self._skip_prf or skip_prf) and len(facts) >= 4:
             prf = _prf_expand(index, query, raw_scores)
             if prf:
                 raw_scores = index.score(query, expansion_weights=prf)
@@ -271,7 +280,8 @@ class BM25Retriever:
 
         results: list[tuple[Fact, float]] = []
         eligible_ids = scored_ids | slot_matched_ids
-        if len(eligible_ids) >= top_k:
+        floor_k = faithfulness_k if faithfulness_k is not None else top_k
+        if len(eligible_ids) >= floor_k:
             for fact in facts:
                 if fact.id in eligible_ids:
                     results.append((fact, fused.get(fact.id, 0.0)))

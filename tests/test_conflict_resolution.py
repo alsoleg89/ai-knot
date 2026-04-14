@@ -152,7 +152,7 @@ class TestLearnConflictResolution:
 
     def _mock_extract(self, facts: list[Fact]):  # type: ignore[return]
         """Patch Extractor.extract to return a fixed list of facts."""
-        return patch("ai_knot.knowledge.Extractor.extract", return_value=facts)
+        return patch("ai_knot.learning.Extractor.extract", return_value=facts)
 
     def test_learn_closes_old_and_inserts_new_version(self, kb: KnowledgeBase) -> None:
         """A near-duplicate closes the old fact and inserts a new version."""

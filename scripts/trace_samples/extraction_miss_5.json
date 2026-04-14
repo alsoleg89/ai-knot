@@ -1,0 +1,10 @@
+{
+  "run_id": "pf3-conv1",
+  "conv_idx": 1,
+  "qa_idx": 31,
+  "question": "How long did it take for Jon to open his studio?",
+  "gold_answer": "six months",
+  "best_fact_content": "[16 March, 2023]  Jon: thanks for",
+  "best_score": 0.326,
+  "bucket": "extraction_miss"
+}

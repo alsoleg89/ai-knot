@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import time
 import uuid
+from datetime import datetime
 
 import httpx
 
@@ -86,7 +87,7 @@ class QdrantRealBackend(MemoryBackend):
             )
         self._point_id_counter = 0
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         client = await self._get_client()
         t0 = time.perf_counter()
 

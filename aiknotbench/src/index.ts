@@ -5,7 +5,7 @@ import {
   resolveModel,
 } from "./models.js";
 import { runBenchmark, listRuns } from "./runner.js";
-import type { IngestMode, QueryMode } from "./aiknot.js";
+import type { IngestMode } from "./aiknot.js";
 
 // ---- CLI arg parsing --------------------------------------------------------
 
@@ -21,7 +21,6 @@ export interface RunArgs {
   topK: number;
   maxTurns?: number;
   ingestMode: IngestMode;
-  queryMode: QueryMode;
   aiKnotEnv: Record<string, string>;
   force: boolean;
 }
@@ -51,8 +50,7 @@ function parseRunArgs(args: string[]): RunArgs {
   let types: number[] | undefined;
   let topK = 60;
   let maxTurns: number | undefined;
-  let ingestMode: IngestMode = "raw";
-  let queryMode: QueryMode = "legacy_recall";
+  let ingestMode: IngestMode = "dated";
   const aiKnotEnv: Record<string, string> = {};
   let force = false;
 
@@ -88,18 +86,11 @@ function parseRunArgs(args: string[]): RunArgs {
       maxTurns = parseInt(next, 10);
       i++;
     } else if (a === "--ingest-mode" && next) {
-      if (next === "raw" || next === "session" || next === "dated" || next === "learn" || next === "dated-learn" || next === "raw-episodes") {
+      // v1: only "dated" is supported. "dated-learn" (LLM enrichment) coming in v2.
+      if (next === "dated") {
         ingestMode = next;
       } else {
-        console.error(`Error: --ingest-mode must be raw|session|dated|learn|dated-learn|raw-episodes (got "${next}")`);
-        process.exit(1);
-      }
-      i++;
-    } else if (a === "--query-mode" && next) {
-      if (next === "legacy_recall" || next === "target_query") {
-        queryMode = next;
-      } else {
-        console.error(`Error: --query-mode must be legacy_recall|target_query (got "${next}")`);
+        console.error(`Error: --ingest-mode must be dated (got "${next}"). LLM mode "dated-learn" is coming in v2.`);
         process.exit(1);
       }
       i++;
@@ -120,7 +111,7 @@ function parseRunArgs(args: string[]): RunArgs {
     process.exit(1);
   }
 
-  return { command: "run", runId, judgeModel, answerModel, limit, convs, sample, types, topK, maxTurns, ingestMode, queryMode, aiKnotEnv, force };
+  return { command: "run", runId, judgeModel, answerModel, limit, convs, sample, types, topK, maxTurns, ingestMode, aiKnotEnv, force };
 }
 
 function parseListArgs(args: string[]): ListArgs {
@@ -157,8 +148,7 @@ Run options:
   --sample <n>         Max QA pairs per conversation
   --types <1,2,3,4>    Question categories to evaluate (default: all)
   --top-k <n>          Facts to recall per query (default: 60)
-  --ingest-mode <m>    Ingestion mode: raw|session|dated|learn|dated-learn|raw-episodes (default: raw)
-  --query-mode <m>     Query mode: legacy_recall|target_query (default: legacy_recall)
+  --ingest-mode <m>    Ingestion mode: dated (default). LLM mode "dated-learn" coming in v2.
   --knot-env K=V       Pass env var to ai-knot-mcp (repeatable)
   --force              Delete existing run data and start fresh
 
@@ -231,7 +221,6 @@ async function main(): Promise<void> {
     topK,
     maxTurns,
     ingestMode: parsed.ingestMode,
-    queryMode: parsed.queryMode,
     limit,
     convs,
     sample,

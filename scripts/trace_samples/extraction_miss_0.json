@@ -1,0 +1,10 @@
+{
+  "run_id": "v097-learn-cat3",
+  "conv_idx": 0,
+  "qa_idx": 59,
+  "question": "Would Caroline be considered religious?",
+  "gold_answer": "Somewhat, but not extremely religious",
+  "best_fact_content": "Melanie recently bought new shoes for running.",
+  "best_score": 0.41,
+  "bucket": "extraction_miss"
+}

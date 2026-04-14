@@ -1,6 +1,6 @@
 # Research Index — ai-knot
 
-**Обновлён:** 2026-04-12
+**Обновлён:** 2026-04-13
 
 Навигация по всем материалам в `research/`. Организовано по темам.
 
@@ -40,6 +40,7 @@
 
 | Файл | Что внутри |
 |------|-----------|
+| [raw_first_memory_architecture_20260413.md](raw_first_memory_architecture_20260413.md) | Финальная архитектурная позиция: raw-first memory substrate, typed materialization, deterministic raw-mode operators, competitor comparison, MIT-style analysis + Harvard-style critique. |
 | [architecture_synthesis.md](architecture_synthesis.md) | Синтез архитектуры: что выжило после критики. Финальные принципы дизайна. |
 | [approach_evolution_20260410.md](approach_evolution_20260410.md) | Эволюция подходов: entity scoping → pattern memory. История решений. |
 | [analysis_approach_critique.md](analysis_approach_critique.md) | Критика подходов: почему большинство не сработает. Что может. |

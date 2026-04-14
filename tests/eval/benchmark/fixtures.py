@@ -1063,10 +1063,10 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
     # S19 upgrade — red herring noise facts
     incident_red_herring_facts=[
         "InventoryService experienced intermittent cache timeouts at 10:15 UTC due to eviction storms.",
-        "OrderService underwent routine certificate rotation at 09:20 UTC as part of weekly ops cycle.",
+        "AccountingService ran its monthly batch reconciliation job at 09:20 UTC without errors.",
         "Release R-84 rolled out to ShippingService at 09:35 UTC; no issues reported by the logistics team.",
         "Memcached cluster in us-west-2 showed elevated miss rate at 09:30 UTC (resolved within 3 minutes).",
-        "OrderService had a similar gRPC UNAVAILABLE event 5 days ago, which was resolved by restarting the proxy.",
+        "PaymentGateway processed 98% of transactions successfully with no errors in the last 24 hours.",
     ],
     incident_relevant_keywords=["09:47", "09:41", "migration"],
     # S21 — distributed product knowledge assembly
@@ -1109,7 +1109,7 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
         ("What is the enterprise tier pricing and what SLA does it include?", ["199", "99.9"]),
         ("Which cloud regions host the Pulse platform?", ["us-central", "eu-west"]),
         ("Is the legacy v1 collector protocol still available?", ["deprecated", "unsupported"]),
-        ("How do I integrate Pulse with a Go application?", ["go", "sdk"]),
+        ("Which Go SDK does Pulse provide and what are its requirements?", ["go", "sdk"]),
         ("What happens if Pulse violates its uptime SLA?", ["credits", "15x"]),
     ],
     # S22 — temporal staleness detection
@@ -1433,9 +1433,9 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
     ],
     # S9v2 — competing documentation sources
     competing_facts_a=[
-        "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page.",
-        "The collector API supports both gRPC and REST endpoints for backward compatibility.",
-        "Incident commander rotation covers weekdays during business hours only.",
+        "Sev1 alert routing uses primary on-call then backup then team-lead escalation path.",
+        "The collector API accepts telemetry data over both gRPC and REST transport protocols.",
+        "Incident commander scheduling and rotation is tracked via PagerDuty escalation policies.",
         "Collector config changes require a full restart with a 60-second drain period.",
     ],
     competing_facts_b=[
@@ -1556,7 +1556,7 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
         ("What services are currently experiencing outages?", "502"),
         ("Are there any billing processing issues?", "unresponsive"),
         ("What is the current trace storage health status?", "97%"),
-        ("Are there identity service problems right now?", "rejecting"),
+        ("Is the identity service rejecting OIDC token requests?", "rejecting"),
     ],
     triage_routine_queries=[
         ("What releases are scheduled this week?", "wednesday"),
@@ -1595,7 +1595,7 @@ MULTI_AGENT_FIXTURE: MultiAgentFixture = MultiAgentFixture(
     contamination_shared_term_queries=[
         ("How is promotion done?", "devops", "shadow"),
         ("How is latency monitored?", "backend", "per-route"),
-        ("How is monitoring done?", "data", "pipeline"),
+        ("How are data pipelines monitored?", "data", "pipeline"),
     ],
 )
 

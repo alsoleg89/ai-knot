@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import functools
 import time
+from datetime import datetime
 
 from tests.eval.benchmark.backends._mem0_utils import (
     MEM0_SEM as _SEM,
@@ -71,7 +72,7 @@ class Mem0RealBackend(MemoryBackend):
             memory.delete_all(user_id=self._user_id)  # type: ignore[union-attr]
         self._stored_count = 0
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         memory = await self._get_memory()
         t0 = time.perf_counter()
         loop = asyncio.get_running_loop()

@@ -7,11 +7,14 @@ The LLM is instructed to return structured JSON with extracted facts.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import logging
 import re
 from typing import Any
+from uuid import uuid4
 
+from ai_knot._date_enrichment import enrich_date_tags
 from ai_knot._resolve import (
     deduplicate_facts,
     resolve_against_existing,
@@ -25,56 +28,176 @@ from ai_knot.types import ConversationTurn, Fact, MemoryOp, MemoryType
 logger = logging.getLogger(__name__)
 
 _EXTRACTION_SYSTEM_PROMPT = """You are a knowledge extraction engine.
-Given a conversation, extract ONLY meaningful facts worth remembering.
+Given a conversation, extract ALL meaningful facts worth remembering.
 
 Rules:
-- Skip greetings, thanks, filler ("ok", "got it", "thanks").
+- Extract every factual statement: names, places, dates, events,
+  preferences, plans, relationships, opinions.
+- Skip ONLY greetings, thanks, and pure filler ("ok", "got it", "thanks").
 - Each fact must be a single, self-contained statement.
-- Classify each fact as: semantic (about user/world), procedural (preferences/how-to),
-  episodic (specific events).
-- Rate importance from 0.0 to 1.0.
-- Include 1-3 short domain tags per fact (lowercase, single words).
-- Add "canonical": a short, normalised paraphrase for deduplication and search
-  (remove names/pronouns where possible; keep the core proposition).
-- Add "witness": copy the KEY PHRASE or rule EXACTLY as it appears in the source
-  text. This is the verbatim evidence span used for grounding and audit.
-  Omit only when there is no distinct quotable phrase.
-- For facts about a person, organization, or object: add "entity" (the subject,
-  e.g. "Alex Chen") and "attribute" (the property, e.g. "salary", "job_title",
-  "employer"), and "value" (the specific value, e.g. "95000").
-  Add "qualifiers" as a JSON object for temporal or conditional context,
-  e.g. {"since": "2024-01", "currency": "USD"}.
-  Omit entity/attribute/value/qualifiers for general statements where they don't apply.
 - When messages have timestamps (shown as [DATE] prefixes), resolve relative
   temporal references to absolute dates in the extracted fact content.
   E.g. if the timestamp is [8 May, 2023] and the speaker says "yesterday",
-  write "7 May 2023" in the fact content.  Keep the original phrasing in
-  the "witness" field (verbatim evidence).
-- Add "op" to signal extraction intent (string, one of: "add", "update", "delete", "noop"):
-  "add"    — new fact not previously known (default when omitted).
-  "update" — conversation explicitly corrects an existing value
-             (e.g. "actually my salary is now $120k", "I switched to TypeScript").
-  "delete" — conversation explicitly removes knowledge
-             (e.g. "forget that I work at Acme", "I no longer use Redis").
-  "noop"   — conversation merely confirms already-known information; nothing new.
+  write "7 May 2023" in the fact content.
+- For facts about a person, organization, or object: add "entity" (the subject,
+  e.g. "Alex Chen") and "attribute" (the property, e.g. "job_title",
+  "employer"), and "value" (the specific value, e.g. "Senior PM").
+  Omit entity/attribute/value for general statements where they don't apply.
 
-Return a JSON array. Example:
+Return a JSON array. Each element needs only these fields:
+  "content" (string, required) — the fact
+  "type" (string) — "semantic", "procedural", or "episodic"
+  "importance" (number) — 0.0 to 1.0
+  "tags" (array of strings) — 1-3 domain labels
+  "entity", "attribute", "value" (strings, optional) — for structured facts
+
+Example:
 [
   {"content": "Alex Chen works at FinServe Capital as Senior PM", "type": "semantic",
    "importance": 0.9, "tags": ["employer", "role"],
-   "canonical": "person works at company as role",
-   "witness": "Alex Chen, Senior Product Manager at FinServe Capital",
-   "entity": "Alex Chen", "attribute": "job_title", "value": "Senior PM",
-   "qualifiers": {}, "op": "add"},
+   "entity": "Alex Chen", "attribute": "job_title", "value": "Senior PM"},
   {"content": "User prefers Python over Java",
-   "type": "procedural", "importance": 0.85,
-   "tags": ["python", "preferences"],
-   "canonical": "prefers Python over Java",
-   "witness": "I prefer Python over Java", "op": "add"}
+   "type": "procedural", "importance": 0.85, "tags": ["python", "preferences"]}
 ]
 
 If no meaningful facts exist, return an empty array: []
 Return ONLY the JSON array, no other text."""
+
+# ---------------------------------------------------------------------------
+# C6b — Enumeration split helpers
+# ---------------------------------------------------------------------------
+
+# Comma-separated: "A, B, C" or "A, B, and C" — ≥ 3 items.
+# First captured group is a SINGLE word so the regex anchors at the first list
+# item rather than absorbing the preceding verb into the match.
+_ENUM_PATTERN_COMMA = re.compile(
+    r"\b(\w+)(?:,\s*\w+(?:\s+\w+)?){2,}"
+    r"(?:,?\s+(?:and|or)\s+\w+(?:\s+\w+)?)?",
+    re.I,
+)
+# Semicolon-separated: "A; B; C" or "A; B; and C" — ≥ 3 items.
+_ENUM_PATTERN_SEMI = re.compile(
+    r"\b(\w+)(?:;\s*\w+(?:\s+\w+)?){2,}"
+    r"(?:;?\s+(?:and|or)\s+\w+(?:\s+\w+)?)?",
+    re.I,
+)
+_ITEM_SPLIT_COMMA = re.compile(r",\s*", re.I)
+_ITEM_SPLIT_SEMI = re.compile(r";\s*", re.I)
+_LEADING_CONJ = re.compile(r"^(?:and|or)\s+", re.I)
+_MAX_ITEM_LEN = 20  # chars per item; guards against splitting long phrases
+
+# Matches a leading "[date]" bracket prefix (e.g. "[27 June, 2023] ").
+_DATE_PREFIX_RE = re.compile(r"^\s*\[[^\]]+\]\s*")
+
+
+def _extract_enum_items(match_text: str, splitter: re.Pattern[str]) -> list[str]:
+    """Split an enumeration match into individual items, filtered by length.
+
+    Handles the common pattern "X, Y, and Z" where the separator before "and"
+    may leave "and Z" as the last raw chunk — we strip the leading conjunction.
+    """
+    raw = splitter.split(match_text.strip())
+    items = [_LEADING_CONJ.sub("", t).strip(" .!?-") for t in raw if t.strip()]
+    return [it for it in items if 1 < len(it) <= _MAX_ITEM_LEN]
+
+
+def _build_verb_prefix(content: str, match_start: int) -> str:
+    """Extract a clean verb prefix from *content* up to *match_start*.
+
+    For plain facts the prefix is simply everything before the enumeration
+    match.  For dated-window content that contains ``[date]`` prefix and
+    ``/``-separated turns, we:
+
+    1. Strip and re-attach the leading ``[date]`` bracket so children still
+       carry the date (required for ``enrich_date_tags`` to work on them).
+    2. Trim the body prefix to the nearest turn separator (``/``) or sentence
+       boundary (``". "``) so we don't drag previous turns into child content.
+
+    Examples::
+
+        "[2023-06-27] Alice: I love pottery, camping, swimming"
+        → "[2023-06-27] Alice: I love"   (clean; no prior-turn noise)
+
+        "[2023-06-27] Bob: hi / Alice: I love pottery, camping, swimming"
+        → "[2023-06-27] Alice: I love"   (trimmed at "/" — prior turn dropped)
+
+        "Melanie enjoys pottery, camping, swimming"
+        → "Melanie enjoys"               (unchanged — no date prefix or "/" sep)
+    """
+    date_m = _DATE_PREFIX_RE.match(content)
+    date_prefix = date_m.group(0) if date_m else ""
+    body = content[len(date_prefix) :]
+    body_before = body[: match_start - len(date_prefix)] if date_m else content[:match_start]
+
+    # Trim to the latest turn-separator or sentence boundary.
+    cut = max(body_before.rfind("/"), body_before.rfind(". "))
+    verb_body = body_before[cut + 1 :] if cut >= 0 else body_before
+
+    # Strip trailing whitespace and list-intro punctuation (; — -) but NOT
+    # colons, so that "Hobbies:" is preserved as a valid verb prefix.
+    return (date_prefix + verb_body).rstrip(" ;—-")
+
+
+def split_enumerations(facts: list[Fact]) -> list[Fact]:
+    """Emit one child Fact per enumerated item alongside the original list-fact.
+
+    Detects comma-separated **or** semicolon-separated lists with ≥ 3 short
+    items (≤ 20 chars each) and emits additional atomic facts for each item
+    while keeping the original list-fact intact for deduplication downstream.
+
+    Works on **all** ingest modes:
+    - ``learn`` / ``dated-learn``: called inside ``Extractor.extract()`` before
+      ``deduplicate_facts``.
+    - ``raw`` / ``dated``: called inside ``KnowledgeBase.add()`` after
+      ``enrich_date_tags``.
+
+    For dated-window content the leading ``[date]`` bracket is preserved on
+    child facts so ``enrich_date_tags`` can annotate them with temporal tags.
+    Turn-separator (``/``) noise from prior windows is trimmed from the prefix.
+
+    Structured fields (``entity``, ``attribute``, ``tags``, ``type``,
+    ``slot_key``) are copied to derived facts; ``importance`` is reduced by
+    0.05 to rank derived facts slightly below the source.
+    ``source_snippets`` are reset to ``[]`` so ``_populate_source_snippets``
+    can re-populate them based on the narrower item content.
+    """
+    extras: list[Fact] = []
+    for f in facts:
+        if not f.content:
+            continue
+
+        # Try comma first, then semicolon.
+        m = _ENUM_PATTERN_COMMA.search(f.content)
+        splitter = _ITEM_SPLIT_COMMA
+        if m is None:
+            m = _ENUM_PATTERN_SEMI.search(f.content)
+            splitter = _ITEM_SPLIT_SEMI
+        if m is None:
+            continue
+
+        items = _extract_enum_items(m.group(0), splitter)
+        if len(items) < 3:
+            continue
+
+        verb_prefix = _build_verb_prefix(f.content, m.start())
+        for item in items:
+            new_content = f"{verb_prefix} {item}".strip() if verb_prefix else item
+            extras.append(
+                dataclasses.replace(
+                    f,
+                    id=uuid4().hex[:8],
+                    content=new_content,
+                    importance=max(0.0, f.importance - 0.05),
+                    tags=list(f.tags),  # copy — don't share the mutable list
+                    source_snippets=[],  # reset; ATC re-populates for this content
+                    access_intervals=[],
+                )
+            )
+    return facts + extras
+
+
+# Keep old private name as alias so any internal callers still work.
+_split_enumerations = split_enumerations
 
 
 def _format_turn(turn: ConversationTurn) -> str:
@@ -170,6 +293,7 @@ __all__ = [
     "resolve_against_existing",
     "resolve_by_slot",
     "resolve_structured",
+    "split_enumerations",
 ]
 
 
@@ -231,12 +355,17 @@ class Extractor:
             all_raw.extend(self._call_llm(chunk))
 
         facts = [self._parse_fact(entry) for entry in all_raw if isinstance(entry, dict)]
+        # C6b: expand list-facts into per-item atomic facts before dedup.
+        facts = _split_enumerations(facts)
         facts = deduplicate_facts(facts)
         _verify_facts_atc(facts, source_text)
         # Source snippets use timestamped turn text so evidence contains the date
         # context and BM25 can match temporal query tokens.
         turn_texts = [_format_turn(t) for t in turns]
         _populate_source_snippets(facts, turn_texts)
+        # C6c: inject canonical date tags so temporal queries match via BM25F.
+        for f in facts:
+            enrich_date_tags(f)
         return facts
 
     def _call_llm(self, turns: list[ConversationTurn]) -> list[dict[str, Any]]:
@@ -303,8 +432,13 @@ class Extractor:
         # Derive deterministic slot key when entity+attribute are both present.
         slot_key = f"{entity}::{attribute}" if entity and attribute else ""
 
+        # Accept witness/canonical/op from LLM if provided, otherwise derive.
         witness = str(entry.get("witness", "") or entry.get("verbatim", ""))
+        content = str(entry.get("content", ""))
         canonical = str(entry.get("canonical", ""))
+        if not canonical and content:
+            # Auto-generate canonical: lowercase, strip leading articles.
+            canonical = re.sub(r"^(the|a|an)\s+", "", content.lower()).strip()
 
         # Parse LLM-signalled extraction intent (defaults to ADD when absent/invalid).
         op = MemoryOp.ADD
@@ -313,7 +447,7 @@ class Extractor:
             op = MemoryOp(str(raw_op).lower())
 
         return Fact(
-            content=str(entry.get("content", "")),
+            content=content,
             type=memory_type,
             importance=importance,
             tags=tags,

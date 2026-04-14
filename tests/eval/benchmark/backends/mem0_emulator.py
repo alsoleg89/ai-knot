@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import datetime
 
 import httpx
 
@@ -46,7 +47,7 @@ class Mem0Emulator(QdrantEmulator):
     def name(self) -> str:
         return "mem0_emulator"
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         t0 = time.perf_counter()
 
         # Wrap sync Extractor in executor — frees event loop for other coroutines.

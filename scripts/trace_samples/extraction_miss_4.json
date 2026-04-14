@@ -1,0 +1,10 @@
+{
+  "run_id": "pf3-conv1",
+  "conv_idx": 1,
+  "qa_idx": 25,
+  "question": "What does Jon's dance studio offer?",
+  "gold_answer": "one-on-one metoring and training to dancers,  workshops and classes to local schools and centers",
+  "best_fact_content": "[20 January, 2023] Jon: Yeah definitely! Wanna see my moves next Fri? Can't wait! / Gina: Sounds great, Jon! Next Friday works. Let's boogie! / Jon: Wow, I'm excited too! This is gonna be great!",
+  "best_score": 0.324,
+  "bucket": "extraction_miss"
+}

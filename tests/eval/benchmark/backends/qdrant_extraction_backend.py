@@ -14,6 +14,7 @@ Requires: Ollama running at http://localhost:11434
 from __future__ import annotations
 
 import time
+from datetime import datetime
 
 from ai_knot.extractor import Extractor
 from ai_knot.types import ConversationTurn
@@ -43,7 +44,7 @@ class QdrantWithExtractionBackend(MemoryBackend):
         await self._qdrant.reset()
         self._total_stored = 0
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         t0 = time.perf_counter()
         turns = [ConversationTurn(role="user", content=text)]
         facts = self._extractor.extract(turns)

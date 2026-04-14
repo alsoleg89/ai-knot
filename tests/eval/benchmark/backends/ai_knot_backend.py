@@ -63,7 +63,7 @@ class AiKnotBackend(MemoryBackend):
         self._kb = KnowledgeBase("bench", storage=storage, provider=self._provider)
         self._session_seen = set()
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         assert self._kb is not None, "call reset() before insert()"
         t0 = time.perf_counter()
 
@@ -77,7 +77,7 @@ class AiKnotBackend(MemoryBackend):
                 extraction_tokens=0,
             )
 
-        turns = [ConversationTurn(role="user", content=text)]
+        turns = [ConversationTurn(role="user", content=text, timestamp=timestamp)]
         new_facts = await self._kb.learn_async(turns)
         stored = len(self._kb.list_facts())
         return InsertResult(

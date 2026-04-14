@@ -56,17 +56,20 @@ class TestUnicode:
 class TestDuplicates:
     """Adding similar or identical facts."""
 
-    def test_exact_duplicate_allowed(self, kb: KnowledgeBase) -> None:
-        kb.add("User prefers Python")
-        kb.add("User prefers Python")
+    def test_exact_duplicate_suppressed(self, kb: KnowledgeBase) -> None:
+        """Exact duplicates are suppressed by fuzzy dedup (Jaccard=1.0 ≥ 0.7)."""
+        f1 = kb.add("User prefers Python")
+        f2 = kb.add("User prefers Python")
         facts = kb._storage.load(kb._agent_id)
-        # Both stored — dedup is extractor's job, not add's
-        assert len(facts) == 2
+        # Second add returns the existing fact — only one stored
+        assert len(facts) == 1
+        assert f2.id == f1.id
 
-    def test_different_ids_for_same_content(self, kb: KnowledgeBase) -> None:
-        f1 = kb.add("Same content")
-        f2 = kb.add("Same content")
-        assert f1.id != f2.id
+    def test_same_id_for_exact_duplicate_content(self, kb: KnowledgeBase) -> None:
+        """Near-duplicate detection returns the existing fact with the same id."""
+        f1 = kb.add("Same content here today")
+        f2 = kb.add("Same content here today")
+        assert f1.id == f2.id
 
 
 class TestScale:

@@ -1,0 +1,10 @@
+{
+  "run_id": "pf2-conv0",
+  "conv_idx": 0,
+  "qa_idx": 11,
+  "question": "Where did Caroline move from 4 years ago?",
+  "gold_answer": "Sweden",
+  "best_fact_content": "[13 September, 2023]  Melanie: Caro",
+  "best_score": 0.195,
+  "bucket": "extraction_miss"
+}

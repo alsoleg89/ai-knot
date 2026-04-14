@@ -1,0 +1,10 @@
+{
+  "run_id": "pf3-conv2",
+  "conv_idx": 2,
+  "qa_idx": 45,
+  "question": "Would John be open to moving to another country?",
+  "gold_answer": "No, he has goals specifically in the U.S. like joining the military and running for office.",
+  "best_fact_content": "[1 January, 2023]  It's been really inspiring sharing stories",
+  "best_score": 0.421,
+  "bucket": "extraction_miss"
+}

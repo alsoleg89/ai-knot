@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import type { LanguageModelV1 } from "ai";
 
 import { AiknotAdapter } from "./aiknot.js";
-import type { IngestMode, QueryMode } from "./aiknot.js";
+import type { IngestMode } from "./aiknot.js";
 import { answerQuestion, judgeAnswer } from "./evaluator.js";
 import type { Verdict, Usage } from "./evaluator.js";
 import { filterQA, loadDataset } from "./locomo.js";
@@ -65,7 +65,7 @@ interface Checkpoint {
   updatedAt: string;
   ingested: number[];
   results: CheckpointResult[];
-  queryMode?: QueryMode;
+  ingestMode?: IngestMode;
 }
 
 function loadCheckpoint(runId: string): Checkpoint | null {
@@ -161,8 +161,7 @@ export interface EvaluatorFns {
     command: string,
     env: Record<string, string>,
     topK: number,
-    ingestMode: IngestMode,
-    queryMode: QueryMode
+    ingestMode: IngestMode
   ) => AiknotAdapterLike;
 }
 
@@ -180,8 +179,8 @@ const defaultEvaluatorFns = (
   answerFn: (_, ctx, q) => answerQuestion(answerModel, ctx, q),
   judgeFn: (_, question, answer, gold) =>
     judgeAnswer(judgeModel, question, answer, gold),
-  adapterFactory: (dbPath, convIdx, _cmd, env, topK, ingestMode, queryMode) =>
-    new AiknotAdapter(dbPath, convIdx, command, env, topK, ingestMode, queryMode),
+  adapterFactory: (dbPath, convIdx, _cmd, env, topK, ingestMode) =>
+    new AiknotAdapter(dbPath, convIdx, command, env, topK, ingestMode),
 });
 
 interface LogEntry {
@@ -215,7 +214,6 @@ export interface RunOptions extends LoadOptions {
   topK?: number;
   maxTurns?: number;
   ingestMode?: IngestMode;
-  queryMode?: QueryMode;
   types?: number[];
   convs?: number[];
   sample?: number;
@@ -236,8 +234,7 @@ export async function runBenchmark(opts: RunOptions): Promise<Report> {
     aiKnotEnv = {},
     topK = 5,
     maxTurns,
-    ingestMode = "raw",
-    queryMode = "legacy_recall",
+    ingestMode = "dated",
     types,
     convs,
     sample,
@@ -264,7 +261,7 @@ export async function runBenchmark(opts: RunOptions): Promise<Report> {
       updatedAt: new Date().toISOString(),
       ingested: [],
       results: [],
-      queryMode,
+      ingestMode,
     };
     saveCheckpoint(cp);
   }
@@ -312,7 +309,7 @@ export async function runBenchmark(opts: RunOptions): Promise<Report> {
       continue;
     }
 
-    const adapter = fns.adapterFactory(dbPath(runId), conv.idx, aiKnotCommand, aiKnotEnv, topK, ingestMode, queryMode);
+    const adapter = fns.adapterFactory(dbPath(runId), conv.idx, aiKnotCommand, aiKnotEnv, topK, ingestMode);
 
     try {
       if (!cp!.ingested.includes(conv.idx)) {

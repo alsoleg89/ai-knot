@@ -14,6 +14,7 @@ import asyncio
 import math
 import time
 from collections import Counter
+from datetime import datetime
 
 import httpx
 
@@ -117,7 +118,7 @@ class QdrantEmulator(MemoryBackend):
         self._store.clear()
         self._ollama_ok = True
 
-    async def insert(self, text: str) -> InsertResult:
+    async def insert(self, text: str, *, timestamp: datetime | None = None) -> InsertResult:
         t0 = time.perf_counter()
         emb: list[float] = []
         if self._ollama_ok:

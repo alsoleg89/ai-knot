@@ -95,25 +95,36 @@ def expand_claims(
 ) -> list[AtomicClaim]:
     """Expand a list of bundles into their constituent AtomicClaims.
 
-    Loads bundle member IDs then fetches the full claim records.
+    Uses in-memory member_claim_ids first (works for synthetic fallback bundles
+    that are never persisted), then augments from storage for bundles without
+    inline members.
     """
     if not bundles:
         return []
 
+    # 1. Collect member IDs already available in-memory.
+    claim_ids: set[str] = set()
+    for b in bundles:
+        claim_ids.update(b.member_claim_ids or ())
+
+    # 2. Augment from storage for persisted bundles that have no inline members.
     bs = _get_bundle_store(storage)
+    persisted_bundle_ids = [b.id for b in bundles if not b.member_claim_ids]
+    if persisted_bundle_ids and hasattr(bs, "load_bundle_members"):
+        member_map: dict[str, list[str]] = bs.load_bundle_members(agent_id, persisted_bundle_ids)
+        for mids in member_map.values():
+            claim_ids.update(mids)
+
+    if not claim_ids:
+        return []
+
     cs = _get_claim_store(storage)
-
-    bundle_ids = [b.id for b in bundles]
-    if not hasattr(bs, "load_bundle_members"):
+    if not hasattr(cs, "load_claims"):
         return []
 
-    member_map: dict[str, list[str]] = bs.load_bundle_members(agent_id, bundle_ids)
-    claim_ids = sorted({cid for mids in member_map.values() for cid in mids})
-
-    if not claim_ids or not hasattr(cs, "load_claims"):
-        return []
-
-    return cast(list[AtomicClaim], cs.load_claims(agent_id, ids=claim_ids, active_only=active_only))
+    return cast(
+        list[AtomicClaim], cs.load_claims(agent_id, ids=sorted(claim_ids), active_only=active_only)
+    )
 
 
 def fallback_claim_search(
@@ -203,18 +214,23 @@ def bundle_kinds_for_contract(contract: AnswerContract | None) -> list[BundleKin
     """Map an AnswerContract to the preferred BundleKind list.
 
     Returns None (= all kinds) when no specific preference is inferrable.
+    Temporal queries are checked first so EVENT/INTERVAL questions are not
+    incorrectly routed to SET bundles.
     """
-    from ai_knot.query_types import TruthMode
+    from ai_knot.query_types import AnswerSpace, TruthMode
 
     if contract is None:
         return None
 
-    if contract.answer_space.SET:
-        # Aggregate over entity-topic bundles.
-        return [BundleKind.ENTITY_TOPIC, BundleKind.STATE_TIMELINE]
+    # Temporal first: EVENT/INTERVAL questions need event-neighbourhood bundles,
+    # not entity-topic ones (previously SET check here was always truthy due to
+    # attribute-lookup bug on the enum value).
     if contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL):
         return [BundleKind.EVENT_NEIGHBORHOOD, BundleKind.STATE_TIMELINE]
-    if contract.truth_mode == TruthMode.RECONSTRUCT:
+    if contract.answer_space is AnswerSpace.SET:
+        # Aggregate over entity-topic bundles.
+        return [BundleKind.ENTITY_TOPIC, BundleKind.STATE_TIMELINE]
+    if contract.truth_mode is TruthMode.RECONSTRUCT:
         return [BundleKind.STATE_TIMELINE, BundleKind.ENTITY_TOPIC]
     return None  # all kinds
 

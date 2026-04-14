@@ -130,7 +130,7 @@ class TestLearnSlotTransitions:
     """Integration tests for slot-based resolution in learn()."""
 
     def _mock_extract(self, facts: list[Fact]):  # type: ignore[return]
-        return patch("ai_knot.knowledge.Extractor.extract", return_value=facts)
+        return patch("ai_knot.learning.Extractor.extract", return_value=facts)
 
     # --- reinforce ---
 
@@ -283,7 +283,7 @@ class TestMemoryOpDeleteNoop:
     """learn() must honour DELETE and NOOP op signals from the extractor."""
 
     def _mock_extract(self, facts: list[Fact]):  # type: ignore[return]
-        return patch("ai_knot.knowledge.Extractor.extract", return_value=facts)
+        return patch("ai_knot.learning.Extractor.extract", return_value=facts)
 
     def test_delete_closes_matched_slot(self, kb: KnowledgeBase) -> None:
         """op=DELETE on a slotted fact closes the existing slot, inserts nothing."""
