@@ -97,13 +97,16 @@ def execute_query(
         claims, bundles, contract, profile, now, renderer
     )
 
-    # 7b. Raw-episode fallback for evidence_text.
+    # 7b. Raw-episode search for evidence_text enrichment.
     #
-    # We also trigger this when claims exist but did not produce answer_items:
-    # the materialized plane may be too sparse for structured answering, while
-    # raw episodes still contain the exact evidence needed by downstream LLMs.
+    # Always runs when focus_entities are known.  candidate_rank and other
+    # operators produce answer_items from atomic_claims whose value_text
+    # fragments are too coarse to reconstruct a full answer — the raw episodes
+    # that sourced those claims carry the actual evidence the LLM needs.
+    # _collect_evidence_episode_ids places raw-search ids FIRST so the LLM
+    # context is dominated by full episode texts, not short claim fragments.
     episode_search_ids: list[str] = []
-    if frame.focus_entities and (not claims or not answer_items):
+    if frame.focus_entities:
         search_fn = getattr(storage, "search_episodes_by_entities", None)
         if search_fn is not None:
             eps = search_fn(agent_id, frame.focus_entities, query=question, top_k=5)
