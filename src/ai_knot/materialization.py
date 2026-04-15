@@ -27,7 +27,7 @@ from ai_knot.query_types import (
     RawEpisode,
 )
 
-MATERIALIZATION_VERSION: int = 3
+MATERIALIZATION_VERSION: int = 4
 
 # ---------------------------------------------------------------------------
 # Regex patterns for deterministic extraction
@@ -135,23 +135,6 @@ _SENT_GARBAGE_OPENERS: frozenset[str] = frozenset(
         "So",
         "OK",
         "Okay",
-        # Conversational fillers and elisions added for pf5
-        "Any",
-        "Maybe",
-        "Got",
-        "Nice",
-        "Cool",
-        "Anyway",
-        "Anyways",
-        "Alright",
-        "Sounds",
-        "Wow",
-        "Awesome",
-        "Great",
-        "Interesting",
-        "Indeed",
-        "Absolutely",
-        "Certainly",
     }
 )
 
@@ -195,6 +178,9 @@ _FP_SATISFYING_RE = re.compile(
     r"(?:It(?:'s| is)(?: so| really)? satisfying to\s+(.+?)\.?\s*$"
     r"|I\s+(?:really\s+)?find\s+(.+?)\s+(?:so |really )?satisfying\.?\s*$)",
     re.IGNORECASE,
+)
+_FP_SELF_STATE_RE = re.compile(
+    r"^I\s+(?:am|'m)\s+(.+?)\.?\s*$", re.IGNORECASE,
 )
 
 # First-person action patterns (used when speaker is known).
@@ -368,20 +354,12 @@ def _is_garbage_sentence(sent: str) -> bool:
     Catches:
     - Sentences that end with '?' (questions without a capitalized opener).
     - Sentences whose first word is in _SENT_GARBAGE_OPENERS.
-    - Very short sentences (< 3 tokens after stripping punctuation) — fillers.
-    - Contraction-opener forms like "I'd", "I'm", "We're", "That's", "There's".
     """
     stripped = sent.strip().rstrip(".!,;:")
     if stripped.endswith("?"):
         return True
     parts = stripped.split()
-    if len(parts) < 3:
-        return True
-    first = parts[0].rstrip(",;:!?")
-    # First-person contraction openers: "I'd", "I'm", "I've", "I'll".
-    # Only block the "I" form — "It's", "That's", "There's" can start valid facts.
-    if first.lower().startswith("i'"):
-        return True
+    first = parts[0].rstrip(",;:!?") if parts else ""
     return first in _SENT_GARBAGE_OPENERS
 
 
@@ -460,6 +438,29 @@ def _extract_from_sentence(
                     )
                 )
                 return results
+
+        # --- FIRST-PERSON SELF-STATE (requires named speaker) -----------------------
+        m = _FP_SELF_STATE_RE.match(sent)
+        if m and speaker and speaker not in _PRONOUN_SUBJECTS:
+            value = m.group(1).strip()
+            claim_id = _make_claim_id(raw.id, f"self_state:{sent[:30]}")
+            results.append(
+                _make_claim(
+                    claim_id=claim_id,
+                    raw=raw,
+                    kind=ClaimKind.STATE,
+                    subject=speaker,
+                    relation="state",
+                    value_text=value,
+                    qualifiers={"source_sentence": sent[:120]},
+                    event_time=None,
+                    session_date=session_date,
+                    now=now,
+                    span=(0, len(sent)),
+                    slot_key=f"{speaker}::state",
+                )
+            )
+            return results
 
         # --- FIRST-PERSON ACTIONS (requires named speaker) ---------------
         m = _FP_DRIVES_RE.match(sent)
