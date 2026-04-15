@@ -309,6 +309,13 @@ class EvidenceProfile:
     temporal_span: tuple[datetime, datetime] | None
     coverage_ratio: float  # claims expanded / bundles retrieved
     has_explicit_event_time: bool
+    # Retrieval quality signals (with defaults for backward compatibility)
+    slot_bundle_hits: int = 0  # bundles with "entity::relation" topic
+    explicit_time_hits: int = 0  # claims with qualifiers['date_token']
+    fallback_used: bool = False  # BM25 fallback was needed
+    question_tokens: tuple[str, ...] = ()  # tokenized question for relevance scoring
+    focus_entities: tuple[str, ...] = ()  # from QueryFrame
+    focus_relation: str | None = None  # from QueryFrame
 
 
 # ---------------------------------------------------------------------------

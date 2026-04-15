@@ -67,9 +67,11 @@ def execute_query(
     _drain_dirty_keys(storage, agent_id)
 
     # 3. Retrieve support bundles.
-    topics = _sr.topics_for_entities(frame.focus_entities, contract)
-    kinds = _sr.bundle_kinds_for_contract(contract)
-    bundles = _sr.retrieve_bundles(
+    topics = _sr.topics_for_entities(
+        frame.focus_entities, contract, focus_relation=frame.focus_relation
+    )
+    kinds = _sr.bundle_kinds_for_contract(contract, focus_relation=frame.focus_relation)
+    bundles, fallback_used = _sr.retrieve_bundles(
         storage,
         agent_id,
         topics=topics,
@@ -83,7 +85,7 @@ def execute_query(
     claims = _sr.expand_claims(storage, agent_id, bundles, active_only=active_only)
 
     # 5. Build evidence profile.
-    profile = _build_evidence_profile(claims, bundles, contract, frame)
+    profile = _build_evidence_profile(claims, bundles, contract, frame, question, fallback_used)
 
     # 6. Choose strategy.
     strategy = choose_strategy(frame, contract, profile)
@@ -129,8 +131,12 @@ def _build_evidence_profile(
     bundles: list[SupportBundle],
     contract: AnswerContract,
     frame: QueryFrame,
+    question: str = "",
+    fallback_used: bool = False,
 ) -> EvidenceProfile:
     """Summarize the evidence landscape for the query."""
+    from ai_knot.tokenizer import tokenize as _tokenize
+
     n_support = sum(1 for c in claims if c.polarity == "support")
     n_contra = sum(1 for c in claims if c.polarity == "contra")
     n_ambiguous = len(claims) - n_support - n_contra
@@ -151,6 +157,17 @@ def _build_evidence_profile(
         c.event_time is not None and c.qualifiers.get("date_token") for c in claims
     )
 
+    # Slot bundle hits: bundles whose topic is "entity::relation" form.
+    slot_bundle_hits = sum(1 for b in bundles if "::" in b.topic)
+
+    # Explicit time hits: claims with a date_token qualifier.
+    explicit_time_hits = sum(
+        1 for c in claims if c.qualifiers.get("date_token") and c.event_time is not None
+    )
+
+    # Question tokens for relevance scoring in operators.
+    question_tokens = tuple(_tokenize(question)) if question else ()
+
     return EvidenceProfile(
         n_support=n_support,
         n_contra=n_contra,
@@ -159,6 +176,12 @@ def _build_evidence_profile(
         temporal_span=temporal_span,
         coverage_ratio=coverage,
         has_explicit_event_time=has_explicit_event_time,
+        slot_bundle_hits=slot_bundle_hits,
+        explicit_time_hits=explicit_time_hits,
+        fallback_used=fallback_used,
+        question_tokens=question_tokens,
+        focus_entities=frame.focus_entities,
+        focus_relation=frame.focus_relation,
     )
 
 

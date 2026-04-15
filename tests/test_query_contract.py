@@ -201,3 +201,81 @@ class TestSetHeuristicNarrowing:
         assert frame.answer_space is AnswerSpace.SET, (
             f"'{q}' must be classified as SET (structural aggregation cue)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Fix — entity extraction strips leading modal/aux openers
+# ---------------------------------------------------------------------------
+
+
+class TestEntityExtractionFix:
+    def test_would_caroline_extracts_caroline(self):
+        """'Would Caroline ...' must extract 'Caroline', not 'Would Caroline'."""
+        frame = analyze_query("Would Caroline be able to attend?")
+        assert "Caroline" in frame.focus_entities, (
+            f"Expected 'Caroline' in focus_entities, got {frame.focus_entities}"
+        )
+        assert not any("Would" in e for e in frame.focus_entities), (
+            f"'Would' must not appear in entity: {frame.focus_entities}"
+        )
+
+    def test_did_melanie_extracts_melanie(self):
+        """'Did Melanie ...' must extract 'Melanie', not 'Did Melanie'."""
+        frame = analyze_query("Did Melanie finish the project?")
+        assert "Melanie" in frame.focus_entities, (
+            f"Expected 'Melanie' in focus_entities, got {frame.focus_entities}"
+        )
+
+    def test_is_alice_extracts_alice(self):
+        """'Is Alice a doctor?' must extract 'Alice'."""
+        frame = analyze_query("Is Alice a doctor?")
+        assert "Alice" in frame.focus_entities, (
+            f"Expected 'Alice' in focus_entities, got {frame.focus_entities}"
+        )
+
+    def test_has_bob_extracts_bob(self):
+        frame = analyze_query("Has Bob visited Paris?")
+        assert "Bob" in frame.focus_entities
+
+
+# ---------------------------------------------------------------------------
+# Fix — relation extraction normalizes inflected verbs
+# ---------------------------------------------------------------------------
+
+
+class TestRelationExtractionFix:
+    def test_drives_normalized_to_drive(self):
+        """'What kind of car does Evan drive?' must give focus_relation='drive'."""
+        frame = analyze_query("What kind of car does Evan drive?")
+        assert frame.focus_relation == "drive", (
+            f"Expected focus_relation='drive', got {frame.focus_relation!r}"
+        )
+
+    def test_restoring_normalized_to_restore(self):
+        frame = analyze_query("What does Dave find satisfying about restoring old cars?")
+        assert frame.focus_relation in ("restore", "find", "satisfy", "finds_satisfying"), (
+            f"Expected relation from restoring/find/satisfy, got {frame.focus_relation!r}"
+        )
+
+    def test_passed_away_gives_historical_scope(self):
+        """'When did X's mother pass away?' must give temporal_scope='historical'."""
+        frame = analyze_query("When did Deborah's mother pass away?")
+        assert frame.temporal_scope in ("historical", "none"), (
+            f"Expected historical temporal scope, got {frame.temporal_scope!r}"
+        )
+        assert "Deborah" in frame.focus_entities, (
+            f"Expected 'Deborah' in focus_entities, got {frame.focus_entities}"
+        )
+
+    def test_passed_away_normalized_to_pass(self):
+        frame = analyze_query("When did Deborah's mother pass away?")
+        # "pass" or "die" depending on which verb token is seen first
+        assert frame.focus_relation in ("pass", "die", None), (
+            f"Unexpected relation {frame.focus_relation!r}"
+        )
+
+    def test_research_detected(self):
+        frame = analyze_query("What does Carol research at the university?")
+        assert frame.focus_relation == "research", (
+            f"Expected 'research', got {frame.focus_relation!r}"
+        )

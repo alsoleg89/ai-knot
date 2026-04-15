@@ -1432,7 +1432,7 @@ class KnowledgeBase(_LearningMixin):
                     self._storage.save_materialization_meta(
                         self._agent_id,
                         schema_version=int(meta.get("schema_version", 2)),
-                        materialization_version=int(meta.get("materialization_version", 0)),
+                        materialization_version=MATERIALIZATION_VERSION,
                         dirty_keys_json=_json.dumps(new_keys),
                         rebuild_status=str(meta.get("rebuild_status", "ready")),
                     )
@@ -1440,8 +1440,21 @@ class KnowledgeBase(_LearningMixin):
             if claims and hasattr(self._storage, "save_bundles"):
                 from ai_knot.support_bundles import build_all_bundles
 
+                # Load full claims for all touched subjects so that save_bundles
+                # (which replaces bundles for a (kind, topic) pair) does not
+                # truncate bundle members from prior episodes.
+                touched_subjects = [c.subject for c in claims if c.subject]
+                if touched_subjects and hasattr(self._storage, "load_claims"):
+                    full_claims = self._storage.load_claims(
+                        self._agent_id,
+                        subjects=list(dict.fromkeys(touched_subjects)),
+                        active_only=False,
+                    )
+                else:
+                    full_claims = claims
+
                 ep_bundles, ep_memberships = build_all_bundles(
-                    claims,
+                    full_claims or claims,
                     [episode],
                     agent_id=self._agent_id,
                     materialization_version=MATERIALIZATION_VERSION,
@@ -1511,7 +1524,7 @@ class KnowledgeBase(_LearningMixin):
                     self._storage.save_materialization_meta(
                         self._agent_id,
                         schema_version=int(meta.get("schema_version", 2)),
-                        materialization_version=int(meta.get("materialization_version", 0)),
+                        materialization_version=MATERIALIZATION_VERSION,
                         dirty_keys_json=_json.dumps(new_keys),
                         rebuild_status=str(meta.get("rebuild_status", "ready")),
                     )
@@ -1519,6 +1532,9 @@ class KnowledgeBase(_LearningMixin):
                 if hasattr(self._storage, "save_bundles"):
                     from ai_knot.support_bundles import build_all_bundles
 
+                    # For batch ingest, claims already cover all touched
+                    # episodes in this batch — no need to expand further since
+                    # rebuild_claims_from_raw already rebuilt from scratch.
                     batch_bundles, batch_memberships = build_all_bundles(
                         claims,
                         eps,

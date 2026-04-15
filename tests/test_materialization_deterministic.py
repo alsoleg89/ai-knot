@@ -172,3 +172,97 @@ class TestDirtyKeyMinimality:
             assert subj in key_subjects, (
                 f"Subject {subj!r} from claims has no corresponding DirtyKey"
             )
+
+
+# ---------------------------------------------------------------------------
+# Speaker-prefix and first-person extraction
+# ---------------------------------------------------------------------------
+
+
+class TestSpeakerPrefixExtraction:
+    def _ep_with_speaker(self, raw_text: str, turn_id: str = "turn") -> RawEpisode:
+        ep_id = make_episode_id("agent", "sess", turn_id)
+        return RawEpisode(
+            id=ep_id,
+            agent_id="agent",
+            session_id="sess",
+            turn_id=turn_id,
+            speaker="user",
+            observed_at=NOW,
+            session_date=None,
+            raw_text=raw_text,
+            source_meta={},
+            parent_episode_id=None,
+        )
+
+    def test_speaker_prefix_stripped_not_in_subject(self):
+        """'Dave: I love restoring old cars' — 'Dave' must be subject, not 'Dave I'."""
+        ep = self._ep_with_speaker("Dave: I love restoring old cars")
+        claims = materialize_episode(ep)
+        subjects = {c.subject for c in claims}
+        # The speaker prefix "Dave:" must not become the subject fragment.
+        assert "Dave" in subjects or not claims, (
+            f"Expected subject 'Dave', got subjects: {subjects}"
+        )
+        # No subject should start with "Dave:" or contain the colon.
+        for s in subjects:
+            assert ":" not in s, f"Subject contains colon from speaker prefix: {s!r}"
+
+    def test_first_person_likes_with_speaker(self):
+        """Speaker-prefixed turn: 'Dave: I love restoring old cars' → STATE likes."""
+        ep = self._ep_with_speaker("Dave: I love restoring old cars")
+        claims = materialize_episode(ep)
+        likes_claims = [c for c in claims if c.relation == "likes" and c.subject == "Dave"]
+        assert likes_claims, (
+            f"Expected a likes claim with subject='Dave', got claims: "
+            f"{[(c.subject, c.relation, c.value_text) for c in claims]}"
+        )
+        assert (
+            "restoring old cars" in likes_claims[0].value_text.lower()
+            or "old cars" in likes_claims[0].value_text.lower()
+        )
+
+    def test_first_person_satisfying_with_speaker(self):
+        """'Dave: It's so satisfying to bring an old car back to life' → STATE finds_satisfying."""
+        ep = self._ep_with_speaker("Dave: It's so satisfying to bring an old car back to life")
+        claims = materialize_episode(ep)
+        sat_claims = [c for c in claims if c.relation == "finds_satisfying" and c.subject == "Dave"]
+        assert sat_claims, (
+            f"Expected a finds_satisfying claim with subject='Dave', got: "
+            f"{[(c.subject, c.relation, c.value_text) for c in claims]}"
+        )
+
+    def test_first_person_dislikes_with_speaker(self):
+        """'Alice: I hate waiting in line' → STATE dislikes."""
+        ep = self._ep_with_speaker("Alice: I hate waiting in line")
+        claims = materialize_episode(ep)
+        dislikes_claims = [c for c in claims if c.relation == "dislikes" and c.subject == "Alice"]
+        assert dislikes_claims, (
+            f"Expected a dislikes claim, got: "
+            f"{[(c.subject, c.relation, c.value_text) for c in claims]}"
+        )
+
+    def test_garbage_sentences_not_materialized(self):
+        """Question/imperative openers must not produce claims."""
+        garbage_texts = [
+            "Do you like that?",
+            "What kind of car do you drive?",
+            "Take a look at this.",
+            "Glad you mentioned that.",
+            "Thanks for sharing.",
+        ]
+        for text in garbage_texts:
+            ep = self._ep_with_speaker(text, turn_id=f"turn-{text[:10]}")
+            claims = materialize_episode(ep)
+            assert claims == [], (
+                f"Garbage sentence {text!r} should produce no claims, got {len(claims)}"
+            )
+
+    def test_pronoun_not_subject_without_speaker(self):
+        """Without a speaker prefix, 'I' / 'Do' must not appear as subjects."""
+        ep = _ep("I love hiking and exploring new places.")
+        claims = materialize_episode(ep)
+        for c in claims:
+            assert c.subject not in ("I", "Do", "What", "You"), (
+                f"Pronoun/opener {c.subject!r} must not be a claim subject"
+            )

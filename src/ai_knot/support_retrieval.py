@@ -53,11 +53,13 @@ def retrieve_bundles(
     kinds: list[BundleKind] | None = None,
     question: str = "",
     top_k: int = 60,
-) -> list[SupportBundle]:
+) -> tuple[list[SupportBundle], bool]:
     """Load support bundles matching any of the given topics.
 
-    Falls back to synthesized single-claim bundles via BM25 when bundle
-    plane is empty or sparse.
+    Falls back to synthesized single-claim bundles via BM25 only when the
+    primary bundle plane has no slot bundle AND fewer than 2 entity-topic
+    bundles (to avoid diluting a valid slot bundle with unrelated fallback
+    claims).
 
     Args:
         storage:   Storage backend (must implement BundleStore + ClaimStore).
@@ -66,6 +68,9 @@ def retrieve_bundles(
         kinds:     Optional filter on BundleKind; None = all kinds.
         question:  Raw question string used for BM25 fallback.
         top_k:     Maximum bundles to return.
+
+    Returns:
+        (bundles, fallback_used) where fallback_used=True means BM25 was used.
     """
     bs = _get_bundle_store(storage)
 
@@ -74,16 +79,19 @@ def retrieve_bundles(
     if topics and hasattr(bs, "load_bundles_by_topic"):
         bundles = bs.load_bundles_by_topic(agent_id, topics, kinds)
 
-    # 2. Fallback: BM25 over claim value_text when bundle plane is sparse.
-    if len(bundles) < 3 and question:
+    # 2. Fallback: BM25 only when no slot bundle and primary is sparse.
+    has_slot_bundle = any("::" in b.topic for b in bundles)
+    fallback_used = False
+    if not has_slot_bundle and len(bundles) < 2 and question:
         fallback = fallback_claim_search(storage, agent_id, question, top_k=top_k)
         if fallback:
             synth = _synthesize_bundles_for_claims(
                 fallback, agent_id=agent_id, kind=BundleKind.ENTITY_TOPIC
             )
             bundles.extend(synth)
+            fallback_used = True
 
-    return bundles[:top_k]
+    return bundles[:top_k], fallback_used
 
 
 def expand_claims(
@@ -97,15 +105,20 @@ def expand_claims(
 
     Uses in-memory member_claim_ids first (works for synthetic fallback bundles
     that are never persisted), then augments from storage for bundles without
-    inline members.
+    inline members.  Preserves bundle member_rank ordering (no set de-dup).
     """
     if not bundles:
         return []
 
-    # 1. Collect member IDs already available in-memory.
-    claim_ids: set[str] = set()
+    # 1. Collect member IDs in bundle member_rank order — use ordered de-dup
+    #    (dict.fromkeys preserves insertion order, eliminates duplicates).
+    ordered_ids: list[str] = []
+    seen_ids: set[str] = set()
     for b in bundles:
-        claim_ids.update(b.member_claim_ids or ())
+        for cid in b.member_claim_ids or ():
+            if cid not in seen_ids:
+                seen_ids.add(cid)
+                ordered_ids.append(cid)
 
     # 2. Augment from storage for persisted bundles that have no inline members.
     bs = _get_bundle_store(storage)
@@ -113,9 +126,12 @@ def expand_claims(
     if persisted_bundle_ids and hasattr(bs, "load_bundle_members"):
         member_map: dict[str, list[str]] = bs.load_bundle_members(agent_id, persisted_bundle_ids)
         for mids in member_map.values():
-            claim_ids.update(mids)
+            for cid in mids:
+                if cid not in seen_ids:
+                    seen_ids.add(cid)
+                    ordered_ids.append(cid)
 
-    if not claim_ids:
+    if not ordered_ids:
         return []
 
     cs = _get_claim_store(storage)
@@ -123,7 +139,7 @@ def expand_claims(
         return []
 
     return cast(
-        list[AtomicClaim], cs.load_claims(agent_id, ids=sorted(claim_ids), active_only=active_only)
+        list[AtomicClaim], cs.load_claims(agent_id, ids=ordered_ids, active_only=active_only)
     )
 
 
@@ -199,28 +215,44 @@ def apply_pending_dirty_keys(
 def topics_for_entities(
     entities: tuple[str, ...],
     contract: AnswerContract | None = None,
+    *,
+    focus_relation: str | None = None,
 ) -> list[str]:
     """Convert focus entities to bundle topic strings.
 
-    For slot-level queries (RELATION/STATE focused), also adds "entity::relation".
+    When focus_relation is provided, "entity::relation" slot topics are
+    prepended so that STATE_TIMELINE / RELATION_SUPPORT bundles are retrieved
+    first before entity-topic bundles.
     """
-    topics: list[str] = list(entities)
-    # Topic strings are just the entity strings for now.
-    # Future: add "entity::relation" for targeted slot queries.
+    topics: list[str] = []
+    for entity in entities:
+        if focus_relation:
+            topics.append(f"{entity}::{focus_relation}")
+        topics.append(entity)
     return list(dict.fromkeys(topics))  # deduplicate preserving order
 
 
-def bundle_kinds_for_contract(contract: AnswerContract | None) -> list[BundleKind] | None:
+def bundle_kinds_for_contract(
+    contract: AnswerContract | None,
+    *,
+    focus_relation: str | None = None,
+) -> list[BundleKind] | None:
     """Map an AnswerContract to the preferred BundleKind list.
 
     Returns None (= all kinds) when no specific preference is inferrable.
     Temporal queries are checked first so EVENT/INTERVAL questions are not
-    incorrectly routed to SET bundles.
+    incorrectly routed to SET bundles.  When focus_relation is set, slot
+    bundles (STATE_TIMELINE, RELATION_SUPPORT) are prioritized.
     """
     from ai_knot.query_types import AnswerSpace, TruthMode
 
     if contract is None:
         return None
+
+    # Slot-first: when we have a focus relation, prefer STATE_TIMELINE and
+    # RELATION_SUPPORT so the slot bundle is retrieved before entity-topic.
+    if focus_relation:
+        return [BundleKind.STATE_TIMELINE, BundleKind.RELATION_SUPPORT, BundleKind.ENTITY_TOPIC]
 
     # Temporal first: EVENT/INTERVAL questions need event-neighbourhood bundles,
     # not entity-topic ones (previously SET check here was always truthy due to

@@ -205,7 +205,7 @@ _STOP_CAPS: frozenset[str] = frozenset(
     }
 )
 
-# Verb-like focus relation signals.
+# Verb-like focus relation signals (canonical lemma forms).
 _RELATION_VERBS: frozenset[str] = frozenset(
     {
         "work",
@@ -224,8 +224,149 @@ _RELATION_VERBS: frozenset[str] = frozenset(
         "eat",
         "drive",
         "use",
+        "research",
+        "restore",
+        "pursue",
+        "find",
+        "pass",
+        "satisfy",
+        "grow",
+        "build",
+        "buy",
+        "sell",
+        "like",
+        "enjoy",
+        "hate",
+        "prefer",
+        "move",
+        "join",
+        "leave",
+        "start",
+        "stop",
+        "retire",
+        "die",
     }
 )
+
+# Inflected verb → canonical lemma.  Checked before _RELATION_VERBS lookup so
+# that question tokens like "drives", "restoring" can be normalized to their
+# infinitive form before becoming focus_relation.
+_VERB_LEMMA_MAP: dict[str, str] = {
+    "drives": "drive",
+    "driving": "drive",
+    "driven": "drive",
+    "researches": "research",
+    "researching": "research",
+    "researched": "research",
+    "restores": "restore",
+    "restoring": "restore",
+    "restored": "restore",
+    "pursues": "pursue",
+    "pursuing": "pursue",
+    "pursued": "pursue",
+    "finds": "find",
+    "finding": "find",
+    "found": "find",
+    "passes": "pass",
+    "passing": "pass",
+    "passed": "pass",
+    "satisfies": "satisfy",
+    "satisfying": "satisfy",
+    "satisfied": "satisfy",
+    "grows": "grow",
+    "growing": "grow",
+    "grew": "grow",
+    "grown": "grow",
+    "builds": "build",
+    "building": "build",
+    "built": "build",
+    "buys": "buy",
+    "buying": "buy",
+    "bought": "buy",
+    "sells": "sell",
+    "selling": "sell",
+    "sold": "sell",
+    "likes": "like",
+    "liking": "like",
+    "liked": "like",
+    "enjoys": "enjoy",
+    "enjoying": "enjoy",
+    "enjoyed": "enjoy",
+    "hates": "hate",
+    "hating": "hate",
+    "hated": "hate",
+    "prefers": "prefer",
+    "preferring": "prefer",
+    "preferred": "prefer",
+    "moves": "move",
+    "moving": "move",
+    "moved": "move",
+    "joins": "join",
+    "joining": "join",
+    "joined": "join",
+    "leaves": "leave",
+    "leaving": "leave",
+    "left": "leave",
+    "starts": "start",
+    "starting": "start",
+    "started": "start",
+    "stops": "stop",
+    "stopping": "stop",
+    "stopped": "stop",
+    "retires": "retire",
+    "retiring": "retire",
+    "retired": "retire",
+    "dies": "die",
+    "dying": "die",
+    "died": "die",
+    "works": "work",
+    "working": "work",
+    "worked": "work",
+    "lives": "live",
+    "living": "live",
+    "lived": "live",
+    "studies": "study",
+    "studying": "study",
+    "studied": "study",
+    "knows": "know",
+    "knowing": "know",
+    "knew": "know",
+    "known": "know",
+    "meets": "meet",
+    "meeting": "meet",
+    "met": "meet",
+    "loves": "love",
+    "loving": "love",
+    "loved": "love",
+    "marries": "marry",
+    "marrying": "marry",
+    "married": "marry",
+    "plays": "play",
+    "playing": "play",
+    "played": "play",
+    "attends": "attend",
+    "attending": "attend",
+    "attended": "attend",
+    "visits": "visit",
+    "visiting": "visit",
+    "visited": "visit",
+    "reads": "read",
+    "reading": "read",
+    "watches": "watch",
+    "watching": "watch",
+    "watched": "watch",
+    "drinks": "drink",
+    "drinking": "drink",
+    "drank": "drink",
+    "drunk": "drink",
+    "eats": "eat",
+    "eating": "eat",
+    "ate": "eat",
+    "eaten": "eat",
+    "uses": "use",
+    "using": "use",
+    "used": "use",
+}
 
 
 def _tokenize_lower(text: str) -> list[str]:
@@ -236,7 +377,9 @@ def _extract_focus_entities(question: str) -> list[str]:
     """Extract named entities from the question (proper-name heuristic).
 
     Handles single-token names (Alice, Bob) and strips possessive suffixes
-    (Alice's → Alice).  Question-opener words (What, When, …) are excluded.
+    (Alice's → Alice).  Question-opener words (What, When, Would, Did, …)
+    are excluded even when they appear as the first word in a multi-word span
+    (e.g. "Would Caroline" → entity "Caroline").
     """
     seen: set[str] = set()
     entities: list[str] = []
@@ -244,11 +387,14 @@ def _extract_focus_entities(question: str) -> list[str]:
         raw = m.group(1)
         # Strip possessive suffix.
         if raw.endswith("'s"):
-            e = raw[:-2]
+            raw = raw[:-2]
         elif raw.endswith("'"):
-            e = raw[:-1]
-        else:
-            e = raw
+            raw = raw[:-1]
+        # Strip leading stop-cap words (e.g. "Would Caroline" → "Caroline").
+        words = raw.split()
+        while words and words[0] in _STOP_CAPS:
+            words = words[1:]
+        e = " ".join(words)
         if not e or e in _STOP_CAPS:
             continue
         if e not in seen:
@@ -363,9 +509,17 @@ def _derive_evidence_regime(answer_space: AnswerSpace) -> EvidenceRegime:
 
 
 def _extract_focus_relation(question: str, entities: list[str]) -> str | None:
-    """Try to extract a verb-like focus relation from the question."""
+    """Try to extract a verb-like focus relation from the question.
+
+    Normalizes inflected verb forms (drives → drive, restoring → restore)
+    via _VERB_LEMMA_MAP before checking against _RELATION_VERBS.
+    Returns the canonical lemma form.
+    """
     tokens = _tokenize_lower(question)
     for t in tokens:
+        lemma = _VERB_LEMMA_MAP.get(t)
+        if lemma:
+            return lemma
         if t in _RELATION_VERBS:
             return t
     return None

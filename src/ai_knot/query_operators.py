@@ -66,7 +66,7 @@ def choose_strategy(
     Rules (in order of priority):
     1. SET → set_collect (always, regardless of surface form)
     2. TIME axis → time_resolve
-    3. Direct single strong evidence, no contra → exact_state
+    3. Direct single strong evidence, no contra, and slot-level retrieval → exact_state
     4. BOOL with distributed / conflicting evidence → bounded_hypothesis_test
     5. Multiple support candidates → candidate_rank
     6. Fallback → narrative_cluster_render
@@ -80,11 +80,29 @@ def choose_strategy(
     if contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL):
         return "time_resolve"
 
+    # Fallback-only with no slot bundle on a description question: candidate_rank
+    # or narrative (don't exact_state on generic unrelated claims).
+    if (
+        profile.fallback_used
+        and profile.slot_bundle_hits == 0
+        and contract.answer_space is AnswerSpace.DESCRIPTION
+    ):
+        if profile.n_support >= 1:
+            return "candidate_rank"
+        return "narrative_cluster_render"
+
     # Rule 3: single strong direct evidence without contradiction.
+    # Require a slot-level bundle hit OR a non-DESCRIPTION answer space to
+    # avoid routing generic description questions with arbitrary claims to
+    # exact_state.
     if (
         profile.n_support >= 1
         and profile.n_contra == 0
         and contract.evidence_regime is EvidenceRegime.SINGLE
+        and (
+            profile.slot_bundle_hits >= 1
+            or contract.answer_space in (AnswerSpace.BOOL, AnswerSpace.SCALAR, AnswerSpace.ENTITY)
+        )
     ):
         return "exact_state"
 
@@ -115,8 +133,9 @@ def exact_state(
 ) -> OperatorResult:
     """Return the single best state/value for the queried slot.
 
-    Selects the claim with highest state_confidence * salience.
-    For STATE kind, prefers most recent valid_from when tied.
+    Composite score = slot_match + question_relevance + confidence*salience + recency.
+    Slot_match: +1.0 when claim.slot_key == "entity::relation" from the query frame.
+    Question_relevance: Jaccard overlap of claim value_tokens with question_tokens.
     """
     notes: list[str] = []
 
@@ -133,11 +152,30 @@ def exact_state(
     if not state_claims:
         return [], 0.0, ["no supporting claims found"]
 
-    def _score(c: AtomicClaim) -> tuple[float, datetime]:
-        return (c.confidence * c.salience, c.valid_from)
+    # Build expected slot keys from frame for slot_match scoring.
+    slot_keys: set[str] = set()
+    if profile.focus_relation:
+        for ent in profile.focus_entities:
+            slot_keys.add(f"{ent}::{profile.focus_relation}")
+
+    q_tokens = set(profile.question_tokens)
+
+    def _score(c: AtomicClaim) -> float:
+        slot_match = 1.0 if (slot_keys and c.slot_key in slot_keys) else 0.0
+        q_relevance = 0.0
+        if q_tokens and c.value_tokens:
+            v_tokens = set(c.value_tokens)
+            union = q_tokens | v_tokens
+            q_relevance = len(q_tokens & v_tokens) / len(union) if union else 0.0
+        base = c.confidence * c.salience
+        recency = _recency_bonus(c, now)
+        return slot_match + q_relevance + base + recency
 
     best = max(state_claims, key=_score)
-    notes.append(f"selected claim {best.id!r} (kind={best.kind}, conf={best.confidence:.2f})")
+    notes.append(
+        f"selected claim {best.id!r} (kind={best.kind}, conf={best.confidence:.2f}, "
+        f"slot_match={best.slot_key in slot_keys})"
+    )
 
     item = AnswerItem(
         value=best.value_text,
@@ -242,8 +280,23 @@ def time_resolve(
         notes.append(f"resolved temporal interval from {len(event_claims)} claims")
         return [item], 0.8, notes
 
-    # For EVENT/CURRENT, return the most precisely-dated claim.
-    best = event_claims[0] if contract.time_axis is TimeAxis.CURRENT else event_claims[-1]
+    # For EVENT: require at least one claim with an explicit event_time or
+    # EVENT/TRANSITION/DURATION kind to avoid returning session dates.
+    if contract.time_axis is TimeAxis.EVENT:
+        explicit_event_claims = [
+            c
+            for c in event_claims
+            if (c.qualifiers.get("date_token") and c.event_time is not None)
+            or c.kind in (ClaimKind.EVENT, ClaimKind.TRANSITION, ClaimKind.DURATION)
+        ]
+        if not explicit_event_claims:
+            notes.append("no explicit event time found — refusing to return session date")
+            return [], 0.0, notes
+        best = explicit_event_claims[-1]  # most recent event
+    else:
+        # CURRENT: most recent state.
+        best = event_claims[0]
+
     t = _get_time(best, contract)
     notes.append(
         f"resolved time from claim {best.id!r} event_time={best.event_time} "
@@ -293,13 +346,26 @@ def candidate_rank(
     if not support:
         return [], 0.0, ["no supporting claims"]
 
-    # Score: salience * confidence + proximity bonus (recency) - contra penalty.
+    # Build expected slot keys from profile for slot_match bonus.
+    slot_keys: set[str] = set()
+    if profile.focus_relation:
+        for ent in profile.focus_entities:
+            slot_keys.add(f"{ent}::{profile.focus_relation}")
+    q_tokens = set(profile.question_tokens)
+
+    # Score: slot_match + question_relevance + salience*confidence + recency - contra penalty.
     scored: list[tuple[float, AtomicClaim]] = []
     for c in support:
+        slot_match = 1.0 if (slot_keys and c.slot_key in slot_keys) else 0.0
+        q_relevance = 0.0
+        if q_tokens and c.value_tokens:
+            v_tokens = set(c.value_tokens)
+            union = q_tokens | v_tokens
+            q_relevance = len(q_tokens & v_tokens) / len(union) if union else 0.0
         base = c.salience * c.confidence
         recency = _recency_bonus(c, now)
         contra_pen = 0.1 if c.id in contra_ids else 0.0
-        score = base + recency - contra_pen
+        score = slot_match + q_relevance + base + recency - contra_pen
         scored.append((score, c))
 
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -362,6 +428,26 @@ def bounded_hypothesis_test(
     else:
         verdict = "no"
         conf = _sigmoid(-score)
+
+    # If we have focus entities/relation, check that at least one support/contra
+    # claim is actually relevant to the subject being asked about.  Generic
+    # claims unrelated to the query subject should yield "uncertain".
+    if profile.focus_entities or profile.focus_relation:
+        relevant_claims = [
+            c
+            for c in claims
+            if c.polarity in ("support", "contra")
+            and (not profile.focus_entities or any(c.subject == e for e in profile.focus_entities))
+        ]
+        if not relevant_claims:
+            notes.append("no claims matched focus subject — returning uncertain")
+            item = AnswerItem(
+                value="uncertain",
+                confidence=0.0,
+                source_claim_ids=(),
+                source_episode_ids=(),
+            )
+            return [item], 0.0, notes
 
     notes.append(
         f"hypothesis: support={n_support} contra={n_contra} ambig={n_ambiguous} "

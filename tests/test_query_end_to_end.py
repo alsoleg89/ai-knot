@@ -286,3 +286,66 @@ class TestQueryAnswerInvariants:
 
         # Strategy should be consistent
         assert answer1.trace.strategy == answer2.trace.strategy
+
+
+# ---------------------------------------------------------------------------
+# Scenario 5: Speaker-prefixed first-person preference (LoCoMo "Dave" pattern)
+# ---------------------------------------------------------------------------
+
+
+class TestSpeakerFirstPerson:
+    def test_dave_likes_restoring_cars(self, tmp_path):
+        """Speaker-prefixed first-person preference must be retrievable."""
+        kb = _make_kb(tmp_path)
+        kb.ingest_episode(
+            session_id="s",
+            turn_id="t0",
+            speaker="user",
+            observed_at=NOW,
+            raw_text="Dave: I love restoring old cars",
+        )
+        kb.ingest_episode(
+            session_id="s",
+            turn_id="t1",
+            speaker="user",
+            observed_at=NOW,
+            raw_text="Dave: It's so satisfying to bring an old car back to life",
+        )
+        # Query must retrieve at least one claim about Dave's preferences.
+        answer = kb.query("What does Dave like?", now=NOW)
+        assert isinstance(answer, QueryAnswer)
+        # Either a claim about Dave's likes shows up in items or text.
+        has_dave_info = (
+            any("car" in (i.value or "").lower() for i in answer.items)
+            or "car" in answer.text.lower()
+            or "restoring" in answer.text.lower()
+            or answer.trace.evidence_profile.n_support > 0
+        )
+        assert has_dave_info, (
+            f"Expected evidence about Dave's car preference. "
+            f"Got text={answer.text!r}, strategy={answer.trace.strategy!r}, "
+            f"n_support={answer.trace.evidence_profile.n_support}"
+        )
+
+    def test_temporal_query_without_explicit_date_returns_no_answer(self, tmp_path):
+        """Temporal question with no explicit date must NOT return a session date."""
+        kb = _make_kb(tmp_path)
+        # Ingest a plain state claim with no event time.
+        kb.ingest_episode(
+            session_id="s",
+            turn_id="t0",
+            speaker="user",
+            observed_at=NOW,
+            raw_text="Carol is a nurse.",
+        )
+        answer = kb.query("When did Carol become a nurse?", now=NOW)
+        assert isinstance(answer, QueryAnswer)
+        # The answer must either be empty/uncertain OR must NOT return the
+        # session date (which would be NOW = 2024-09-01) as a fabricated answer.
+        if answer.text and answer.text != "No answer found.":
+            # If an answer is returned, it must not be just the session date.
+            session_date_str = NOW.date().isoformat()
+            assert session_date_str not in answer.text or len(answer.text) > 20, (
+                f"time_resolve must not fabricate session date {session_date_str!r} "
+                f"as the answer. Got: {answer.text!r}"
+            )

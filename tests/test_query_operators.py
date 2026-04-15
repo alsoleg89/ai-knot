@@ -442,3 +442,166 @@ def test_operators_registry_complete():
         "narrative_cluster_render",
     }
     assert set(OPERATORS.keys()) == expected
+
+
+# ---------------------------------------------------------------------------
+# Relevance-aware operator fixes
+# ---------------------------------------------------------------------------
+
+
+class TestExactStateRelevance:
+    def test_prefers_slot_matched_claim_over_unrelated(self):
+        """exact_state must prefer the slot-matched claim over a more recent but irrelevant one."""
+        relevant = _claim(
+            subject="Evan",
+            relation="drive",
+            value="a pickup truck",
+            confidence=0.8,
+            salience=1.0,
+        )
+        # Irrelevant claim — different slot, slightly higher confidence.
+        irrelevant = _claim(
+            subject="Evan",
+            relation="state",
+            value="happy",
+            confidence=0.85,
+            salience=1.0,
+        )
+        profile = EvidenceProfile(
+            n_support=2,
+            n_contra=0,
+            n_ambiguous=0,
+            density_per_entity=2.0,
+            temporal_span=None,
+            coverage_ratio=1.0,
+            has_explicit_event_time=False,
+            slot_bundle_hits=1,
+            focus_entities=("Evan",),
+            focus_relation="drive",
+            question_tokens=("what", "car", "evan", "drive"),
+        )
+        items, _, _ = exact_state([relevant, irrelevant], [], _contract(), profile, NOW)
+        assert items[0].value == "a pickup truck", (
+            f"Expected slot-matched claim 'a pickup truck', got {items[0].value!r}"
+        )
+
+
+class TestTimeResolveNoSessionDate:
+    def test_returns_empty_when_no_explicit_event_time(self):
+        """time_resolve must return empty when no claim has an explicit date_token."""
+        from ai_knot.query_types import TimeAxis
+
+        # Claim with valid_from (session date) but no explicit event_time/date_token.
+        claim_no_date = _claim(
+            kind=ClaimKind.STATE,
+            event_time=None,
+            valid_from=datetime(2024, 1, 1, tzinfo=UTC),
+            qualifiers={},  # no date_token
+        )
+        contract = _contract(time_axis=TimeAxis.EVENT)
+        profile = EvidenceProfile(
+            n_support=1,
+            n_contra=0,
+            n_ambiguous=0,
+            density_per_entity=1.0,
+            temporal_span=None,
+            coverage_ratio=1.0,
+            has_explicit_event_time=False,
+            explicit_time_hits=0,
+        )
+        items, conf, notes = time_resolve([claim_no_date], [], contract, profile, NOW)
+        assert items == [], f"Expected empty items when no explicit event time, got {items}"
+        assert conf == 0.0
+
+
+class TestBoundedHypothesisRelevance:
+    def test_returns_uncertain_when_no_subject_match(self):
+        """bounded_hypothesis_test must return 'uncertain' for unrelated subject claims."""
+        # Claims about "Dave" when question is about "Caroline".
+        unrelated_claims = [
+            _claim(subject="Dave", relation="state", value="happy", polarity="support"),
+            _claim(subject="Dave", relation="job", value="carpenter", polarity="support"),
+        ]
+        profile = EvidenceProfile(
+            n_support=2,
+            n_contra=0,
+            n_ambiguous=0,
+            density_per_entity=2.0,
+            temporal_span=None,
+            coverage_ratio=1.0,
+            has_explicit_event_time=False,
+            focus_entities=("Caroline",),
+            focus_relation=None,
+        )
+        items, conf, notes = bounded_hypothesis_test(
+            unrelated_claims, [], _contract(answer_space=AnswerSpace.BOOL), profile, NOW
+        )
+        assert items[0].value == "uncertain", (
+            f"Expected 'uncertain' for unrelated subject claims, got {items[0].value!r}"
+        )
+
+    def test_passes_when_subject_matches(self):
+        """bounded_hypothesis_test succeeds when claims match focus entity."""
+        matching_claims = [
+            _claim(subject="Bob", relation="job", value="carpenter", polarity="support"),
+        ]
+        profile = EvidenceProfile(
+            n_support=1,
+            n_contra=0,
+            n_ambiguous=0,
+            density_per_entity=1.0,
+            temporal_span=None,
+            coverage_ratio=1.0,
+            has_explicit_event_time=False,
+            focus_entities=("Bob",),
+            focus_relation=None,
+        )
+        items, conf, _ = bounded_hypothesis_test(
+            matching_claims, [], _contract(answer_space=AnswerSpace.BOOL), profile, NOW
+        )
+        assert items[0].value == "yes"
+
+
+class TestChooseStrategyFixes:
+    def test_description_with_fallback_and_no_slot_bundle_goes_to_candidate_rank(self):
+        """choose_strategy must avoid exact_state for fallback-only description queries."""
+        frame = _frame(answer_space=AnswerSpace.DESCRIPTION, evidence_regime=EvidenceRegime.SINGLE)
+        contract = _contract(
+            answer_space=AnswerSpace.DESCRIPTION, evidence_regime=EvidenceRegime.SINGLE
+        )
+        profile = EvidenceProfile(
+            n_support=5,
+            n_contra=0,
+            n_ambiguous=0,
+            density_per_entity=5.0,
+            temporal_span=None,
+            coverage_ratio=1.0,
+            has_explicit_event_time=False,
+            slot_bundle_hits=0,
+            fallback_used=True,
+            focus_entities=("Alice",),
+        )
+        strategy = choose_strategy(frame, contract, profile)
+        assert strategy != "exact_state", (
+            f"description+fallback+no_slot should not route to exact_state, got {strategy!r}"
+        )
+
+    def test_description_with_slot_bundle_can_use_exact_state(self):
+        """choose_strategy may use exact_state when a slot bundle is present."""
+        frame = _frame(answer_space=AnswerSpace.DESCRIPTION, evidence_regime=EvidenceRegime.SINGLE)
+        contract = _contract(
+            answer_space=AnswerSpace.DESCRIPTION, evidence_regime=EvidenceRegime.SINGLE
+        )
+        profile = EvidenceProfile(
+            n_support=1,
+            n_contra=0,
+            n_ambiguous=0,
+            density_per_entity=1.0,
+            temporal_span=None,
+            coverage_ratio=1.0,
+            has_explicit_event_time=False,
+            slot_bundle_hits=1,
+            fallback_used=False,
+        )
+        strategy = choose_strategy(frame, contract, profile)
+        assert strategy == "exact_state"

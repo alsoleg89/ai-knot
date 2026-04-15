@@ -695,13 +695,18 @@ class SQLiteStorage:
         return [_row_to_claim(r) for r in rows]
 
     def iter_value_text(self, agent_id: str) -> list[tuple[str, str]]:
-        """Return [(claim_id, value_text)] for BM25 retrieval."""
+        """Return [(claim_id, search_text)] for BM25 retrieval.
+
+        search_text = "{subject} {relation} {value_text}" for richer matching
+        on subject and relation terms, not just value text.
+        """
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT id, value_text FROM atomic_claims WHERE agent_id=? AND valid_until IS NULL",
+                "SELECT id, subject, relation, value_text FROM atomic_claims "
+                "WHERE agent_id=? AND valid_until IS NULL",
                 (agent_id,),
             ).fetchall()
-        return [(r[0], r[1]) for r in rows]
+        return [(r[0], f"{r[1] or ''} {r[2] or ''} {r[3]}".strip()) for r in rows]
 
     def replace_claims_for_episodes(
         self, agent_id: str, episode_ids: list[str], new_claims: list[Any]
@@ -823,7 +828,8 @@ class SQLiteStorage:
             rows = conn.execute(
                 f"SELECT id, agent_id, kind, topic, bundle_score, score_formula, "
                 f"built_from_materialization_version, built_at "
-                f"FROM support_bundles WHERE {where}",
+                f"FROM support_bundles WHERE {where} "
+                f"ORDER BY kind, topic, built_at DESC, id",
                 params,
             ).fetchall()
         return [_row_to_bundle(r) for r in rows]
