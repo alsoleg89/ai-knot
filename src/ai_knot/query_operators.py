@@ -235,6 +235,40 @@ def set_collect(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_claim_time(
+    c: AtomicClaim,
+    contract: AnswerContract,
+) -> tuple[datetime | None, str]:
+    """Return (resolved_datetime, resolution_method) for a claim.
+
+    Priority:
+    1. explicit event_time with date_token qualifier → ("exact", time)
+    2. qualifiers["time_anchor"] == "session_date" + optional relative_time:
+       - "yesterday" → valid_from - 1 day  → ("resolved-relative", time)
+       - "today"     → valid_from           → ("resolved-relative", time)
+       - "tomorrow"  → valid_from + 1 day   → ("resolved-relative", time)
+       - otherwise   → valid_from           → ("anchored", time)
+    3. fallback      → (None, "none")
+    """
+    from datetime import timedelta
+
+    if c.qualifiers.get("date_token") and c.event_time is not None:
+        return c.event_time, "exact"
+    if c.qualifiers.get("time_anchor") == "session_date":
+        base = c.valid_from
+        if base is None:
+            return None, "none"
+        rel = c.qualifiers.get("relative_time", "")
+        if rel == "yesterday":
+            return base - timedelta(days=1), "resolved-relative"
+        if rel == "tomorrow":
+            return base + timedelta(days=1), "resolved-relative"
+        if rel == "today":
+            return base, "resolved-relative"
+        return base, "anchored"
+    return None, "none"
+
+
 def time_resolve(
     claims: list[AtomicClaim],
     bundles: list[SupportBundle],
@@ -250,6 +284,8 @@ def time_resolve(
     2. valid_from for STATE/TRANSITION claims.
     3. observed_at as last resort.
     """
+    from ai_knot.relation_vocab import matches_relation  # lazy import
+
     notes: list[str] = []
 
     event_claims = sorted(
@@ -259,6 +295,15 @@ def time_resolve(
 
     if not event_claims:
         return [], 0.0, ["no temporal claims found"]
+
+    # Filter by focus_relation if set — prefer matching claims but don't
+    # return empty if no matches.
+    if profile.focus_relation:
+        relation_claims = [
+            c for c in event_claims if matches_relation(c.relation, profile.focus_relation)
+        ]
+        if relation_claims:
+            event_claims = relation_claims
 
     # For INTERVAL, return the full range.
     if contract.time_axis is TimeAxis.INTERVAL:
@@ -280,14 +325,11 @@ def time_resolve(
         notes.append(f"resolved temporal interval from {len(event_claims)} claims")
         return [item], 0.8, notes
 
-    # For EVENT: require at least one claim with an explicit event_time or
-    # EVENT/TRANSITION/DURATION kind to avoid returning session dates.
+    # For EVENT: require at least one claim with a resolved time to avoid
+    # returning bare session dates.
     if contract.time_axis is TimeAxis.EVENT:
         explicit_event_claims = [
-            c
-            for c in event_claims
-            if (c.qualifiers.get("date_token") and c.event_time is not None)
-            or c.kind in (ClaimKind.EVENT, ClaimKind.TRANSITION, ClaimKind.DURATION)
+            c for c in event_claims if _resolve_claim_time(c, contract)[1] != "none"
         ]
         if not explicit_event_claims:
             notes.append("no explicit event time found — refusing to return session date")
@@ -297,11 +339,8 @@ def time_resolve(
         # CURRENT: most recent state.
         best = event_claims[0]
 
-    t = _get_time(best, contract)
-    notes.append(
-        f"resolved time from claim {best.id!r} event_time={best.event_time} "
-        f"valid_from={best.valid_from}"
-    )
+    t, method = _resolve_claim_time(best, contract)
+    notes.append(f"resolved time from claim {best.id!r} method={method!r}")
     item = AnswerItem(
         value=t.date().isoformat() if t else best.value_text,
         confidence=best.confidence * best.salience,
@@ -340,6 +379,9 @@ def candidate_rank(
     """Rank supporting claims by a composite score and return top candidates."""
     notes: list[str] = []
 
+    from ai_knot._text_guards import is_deictic_subject, is_evaluative_predicate
+    from ai_knot.relation_vocab import matches_relation
+
     support = [c for c in claims if c.polarity == "support"]
     contra_ids = {c.id for c in claims if c.polarity == "contra"}
 
@@ -357,7 +399,7 @@ def candidate_rank(
             slot_keys.add(b.topic)
     q_tokens = set(profile.question_tokens)
 
-    # Score: slot_match + question_relevance + salience*confidence + recency - contra penalty.
+    # Score: slot_match + question_relevance + salience*confidence + recency - penalties.
     scored: list[tuple[float, AtomicClaim]] = []
     for c in support:
         slot_match = 1.0 if (slot_keys and c.slot_key in slot_keys) else 0.0
@@ -369,7 +411,27 @@ def candidate_rank(
         base = c.salience * c.confidence
         recency = _recency_bonus(c, now)
         contra_pen = 0.1 if c.id in contra_ids else 0.0
-        score = slot_match + q_relevance + base + recency - contra_pen
+
+        # Penalty for combined discourse noise (deictic subject + evaluative predicate).
+        discourse_pen = (
+            0.3
+            if (is_deictic_subject(c.subject or "") and is_evaluative_predicate(c.value_text or ""))
+            else 0.0
+        )
+
+        # Penalty for relation mismatch when focus_relation is specified.
+        relation_pen = 0.0
+        if (
+            profile.focus_relation
+            and c.subject
+            in (set(profile.focus_entities) if profile.focus_entities else {c.subject})
+            and not matches_relation(c.relation, profile.focus_relation)
+        ):
+            relation_pen = 0.2
+
+        score = (
+            slot_match + q_relevance + base + recency - contra_pen - discourse_pen - relation_pen
+        )
         scored.append((score, c))
 
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -434,17 +496,20 @@ def bounded_hypothesis_test(
         conf = _sigmoid(-score)
 
     # If we have focus entities/relation, check that at least one support/contra
-    # claim is actually relevant to the subject being asked about.  Generic
-    # claims unrelated to the query subject should yield "uncertain".
+    # claim is actually relevant to the subject/relation being asked about.
+    # Generic claims unrelated to the query should yield "uncertain".
     if profile.focus_entities or profile.focus_relation:
+        from ai_knot.relation_vocab import matches_relation
+
         relevant_claims = [
             c
             for c in claims
             if c.polarity in ("support", "contra")
             and (not profile.focus_entities or any(c.subject == e for e in profile.focus_entities))
+            and (not profile.focus_relation or matches_relation(c.relation, profile.focus_relation))
         ]
         if not relevant_claims:
-            notes.append("no claims matched focus subject — returning uncertain")
+            notes.append("no claims matched focus subject/relation — returning uncertain")
             item = AnswerItem(
                 value="uncertain",
                 confidence=0.0,

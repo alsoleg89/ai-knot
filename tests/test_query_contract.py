@@ -288,3 +288,43 @@ def test_what_is_alice_like_has_no_focus_relation() -> None:
 
 def test_work_as_maps_to_role() -> None:
     assert analyze_query("What does Alice work as?").focus_relation == "role"
+
+
+def test_calendar_tokens_dropped_in_temporal_context():
+    """'When did Melanie go camping in June?' → only Melanie, not June."""
+    from ai_knot.query_contract import build_answer_contract
+
+    contract, frame = build_answer_contract("When did Melanie go camping in June?")
+    entities = list(frame.focus_entities)
+    assert "Melanie" in entities
+    assert "June" not in entities, f"June should be stripped as temporal token, got: {entities}"
+
+
+def test_calendar_tokens_preserved_as_name():
+    """'May called Bob yesterday' → both May and Bob extracted (May is a name here)."""
+    from ai_knot.query_contract import build_answer_contract
+
+    contract, frame = build_answer_contract("What did May tell Bob?")
+    entities = list(frame.focus_entities)
+    # May is in subject position without temporal preposition — should be kept
+    assert "Bob" in entities
+    # May should be kept (it's used as a person name, not as a temporal marker)
+    assert "May" in entities, f"May (name) should be preserved, got: {entities}"
+
+
+def test_implicit_set_books_has_read():
+    """'What books has Alice read?' → AnswerSpace.SET."""
+    from ai_knot.query_contract import build_answer_contract
+
+    contract, frame = build_answer_contract("What books has Alice read?")
+    assert contract.answer_space is AnswerSpace.SET, f"Expected SET, got {contract.answer_space}"
+
+
+def test_what_is_description_not_set():
+    """'What is Alice's job?' → AnswerSpace.DESCRIPTION (anti-regression)."""
+    from ai_knot.query_contract import build_answer_contract
+
+    contract, frame = build_answer_contract("What is Alice's job?")
+    assert contract.answer_space is not AnswerSpace.SET, (
+        f"'What is X's Y?' should not be SET, got {contract.answer_space}"
+    )

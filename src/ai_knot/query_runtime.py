@@ -91,6 +91,15 @@ def execute_query(
     # 6. Choose strategy.
     strategy = choose_strategy(frame, contract, profile)
 
+    # 6b. Temporal anchor guard: session-anchored event claims must not
+    # degrade to hypothesis/candidate_rank — time_resolve can handle them.
+    if (
+        contract.time_axis is TimeAxis.EVENT
+        and (profile.has_explicit_event_time or profile.has_temporal_anchor)
+        and strategy not in ("time_resolve", "set_collect")
+    ):
+        strategy = "time_resolve"
+
     # 7. Execute operator.
     operator_fn = OPERATORS[strategy]
     answer_items, confidence, decision_notes = operator_fn(
@@ -103,7 +112,7 @@ def execute_query(
     # 3-turn window (prev → center → next) so the answer-model LLM sees full
     # conversational context, not just the matching turn.  Cap: ≤ 8 unique
     # episode ids (covers ~5 overlapping windows before context budget is hit).
-    # _collect_evidence_episode_ids places raw-search ids FIRST.
+    # _collect_evidence_episode_ids uses raw-search as fallback (items → claims → search).
     episode_search_ids: list[str] = []
     if frame.focus_entities:
         search_fn = getattr(storage, "search_episodes_by_entities", None)
@@ -194,6 +203,7 @@ def _build_evidence_profile(
     has_explicit_event_time = any(
         c.event_time is not None and c.qualifiers.get("date_token") for c in claims
     )
+    has_temporal_anchor = any(c.qualifiers.get("time_anchor") == "session_date" for c in claims)
 
     # Slot bundle hits: bundles whose topic is "entity::relation" form.
     slot_bundle_hits = sum(1 for b in bundles if "::" in b.topic)
@@ -214,6 +224,7 @@ def _build_evidence_profile(
         temporal_span=temporal_span,
         coverage_ratio=coverage,
         has_explicit_event_time=has_explicit_event_time,
+        has_temporal_anchor=has_temporal_anchor,
         slot_bundle_hits=slot_bundle_hits,
         explicit_time_hits=explicit_time_hits,
         fallback_used=fallback_used,
@@ -264,7 +275,7 @@ def _collect_evidence_episode_ids(
     episode_search_ids: list[str] | None = None,
     cap: int = 5,
 ) -> list[str]:
-    """Unique episode ids in retrieval order: raw-search → items → claims."""
+    """Unique episode ids: answer_items → claims → raw-search fallback."""
     seen: set[str] = set()
     out: list[str] = []
 
@@ -275,17 +286,20 @@ def _collect_evidence_episode_ids(
             return len(out) >= cap
         return False
 
-    if episode_search_ids:
-        for eid in episode_search_ids:
-            if _add(eid):
-                return out
+    # 1. Episodes from selected answer items (most relevant — came from operators)
     for it in items:
         for eid in it.source_episode_ids:
             if _add(eid):
                 return out
+    # 2. Episodes from all retrieved claims
     for c in claims:
         if _add(c.source_episode_id):
             return out
+    # 3. Raw search fallback — only if we still need more
+    if episode_search_ids:
+        for eid in episode_search_ids:
+            if _add(eid):
+                return out
     return out
 
 

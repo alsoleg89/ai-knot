@@ -134,25 +134,28 @@ def build_event_neighborhood_bundles(
             continue
         if not c.subject:
             continue
-        groups.setdefault(c.subject, []).append(c)
+        topic = (
+            f"{c.subject}::{c.relation}" if c.subject and c.relation else (c.subject or "unknown")
+        )
+        groups.setdefault(topic, []).append(c)
 
     bundles: list[SupportBundle] = []
     memberships: dict[str, list[str]] = {}
     now = datetime.now(UTC)
 
-    for subject, group in groups.items():
+    for topic_key, group in groups.items():
 
         def _event_sort_key(c: AtomicClaim) -> datetime:
             return c.event_time or ep_times.get(c.source_episode_id, c.observed_at)
 
         sorted_group = sorted(group, key=_event_sort_key)
         score = _aggregate_score(sorted_group)
-        bid = stable_bundle_id(BundleKind.EVENT_NEIGHBORHOOD, subject)
+        bid = stable_bundle_id(BundleKind.EVENT_NEIGHBORHOOD, topic_key)
         b = SupportBundle(
             id=bid,
             agent_id=agent_id,
             kind=BundleKind.EVENT_NEIGHBORHOOD,
-            topic=subject,
+            topic=topic_key,
             member_claim_ids=tuple(c.id for c in sorted_group),
             score_formula="mean(salience*confidence)|sorted_by_event_time",
             bundle_score=score,

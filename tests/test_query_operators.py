@@ -605,3 +605,292 @@ class TestChooseStrategyFixes:
         )
         strategy = choose_strategy(frame, contract, profile)
         assert strategy == "exact_state"
+
+
+# ---------------------------------------------------------------------------
+# time_resolve with focus_relation and session-anchored events
+# ---------------------------------------------------------------------------
+
+
+def test_time_resolve_uses_profile_focus_relation():
+    """When profile.focus_relation is set, only relation-matched claims are used."""
+    from datetime import UTC, datetime
+
+    from ai_knot.query_operators import time_resolve
+    from ai_knot.query_types import (
+        AnswerContract,
+        AnswerSpace,
+        AtomicClaim,
+        ClaimKind,
+        EvidenceProfile,
+        EvidenceRegime,
+        TimeAxis,
+        TruthMode,
+    )
+
+    now = datetime(2026, 4, 15, 12, 0, tzinfo=UTC)
+    session = datetime(2026, 4, 10, tzinfo=UTC)
+
+    def _claim(cid, relation, qualifiers=None):
+        return AtomicClaim(
+            id=cid,
+            agent_id="a",
+            kind=ClaimKind.EVENT,
+            subject="Alice",
+            relation=relation,
+            value_text="some event",
+            polarity="support",
+            confidence=0.9,
+            salience=0.9,
+            source_episode_id="ep1",
+            source_spans=((0, 10),),
+            observed_at=session,
+            valid_from=session,
+            value_tokens=(),
+            slot_key=f"Alice::{relation}",
+            qualifiers=qualifiers or {},
+            event_time=None,
+            valid_until=None,
+            materialization_version=1,
+            materialized_at=session,
+            version=1,
+            origin_agent_id="a",
+        )
+
+    attended = _claim("c1", "attended", {"time_anchor": "session_date", "relative_time": "today"})
+    bought = _claim("c2", "bought", {"time_anchor": "session_date", "relative_time": "yesterday"})
+
+    contract = AnswerContract(
+        answer_space=AnswerSpace.SCALAR,
+        truth_mode=TruthMode.DIRECT,
+        time_axis=TimeAxis.EVENT,
+        locality="point",
+        evidence_regime=EvidenceRegime.SINGLE,
+    )
+    profile = EvidenceProfile(
+        n_support=2,
+        n_contra=0,
+        n_ambiguous=0,
+        density_per_entity=2.0,
+        temporal_span=None,
+        coverage_ratio=1.0,
+        has_explicit_event_time=False,
+        focus_relation="attended",
+        focus_entities=("Alice",),
+    )
+
+    items, conf, notes = time_resolve([attended, bought], [], contract, profile, now)
+    assert items, "Expected answer item"
+    # Should resolve 'today' → session date (2026-04-10), not 'yesterday' (2026-04-09)
+    assert items[0].value == session.date().isoformat(), (
+        f"Expected {session.date()}, got {items[0].value}"
+    )
+
+
+def test_time_resolve_uses_anchor_yesterday():
+    """'yesterday' relative_time → valid_from - 1 day."""
+    from datetime import UTC, datetime, timedelta
+
+    from ai_knot.query_operators import time_resolve
+    from ai_knot.query_types import (
+        AnswerContract,
+        AnswerSpace,
+        AtomicClaim,
+        ClaimKind,
+        EvidenceProfile,
+        EvidenceRegime,
+        TimeAxis,
+        TruthMode,
+    )
+
+    session = datetime(2026, 4, 15, tzinfo=UTC)
+    now = session
+
+    claim = AtomicClaim(
+        id="c1",
+        agent_id="a",
+        kind=ClaimKind.EVENT,
+        subject="Alice",
+        relation="attended",
+        value_text="pottery workshop",
+        polarity="support",
+        confidence=0.9,
+        salience=0.9,
+        source_episode_id="ep1",
+        source_spans=((0, 10),),
+        observed_at=session,
+        valid_from=session,
+        value_tokens=(),
+        slot_key="Alice::attended",
+        qualifiers={"time_anchor": "session_date", "relative_time": "yesterday"},
+        event_time=None,
+        valid_until=None,
+        materialization_version=1,
+        materialized_at=session,
+        version=1,
+        origin_agent_id="a",
+    )
+
+    contract = AnswerContract(
+        answer_space=AnswerSpace.SCALAR,
+        truth_mode=TruthMode.DIRECT,
+        time_axis=TimeAxis.EVENT,
+        locality="point",
+        evidence_regime=EvidenceRegime.SINGLE,
+    )
+    profile = EvidenceProfile(
+        n_support=1,
+        n_contra=0,
+        n_ambiguous=0,
+        density_per_entity=1.0,
+        temporal_span=None,
+        coverage_ratio=1.0,
+        has_explicit_event_time=False,
+    )
+
+    items, conf, notes = time_resolve([claim], [], contract, profile, now)
+    assert items
+    expected = (session - timedelta(days=1)).date().isoformat()
+    assert items[0].value == expected, f"Expected {expected}, got {items[0].value}"
+
+
+def test_hypothesis_returns_uncertain_without_relation_relevant_claims():
+    """bounded_hypothesis_test → 'uncertain' when focus_relation doesn't match any claim."""
+    from datetime import UTC, datetime
+
+    from ai_knot.query_operators import bounded_hypothesis_test
+    from ai_knot.query_types import (
+        AnswerContract,
+        AnswerSpace,
+        AtomicClaim,
+        ClaimKind,
+        EvidenceProfile,
+        EvidenceRegime,
+        TimeAxis,
+        TruthMode,
+    )
+
+    now = datetime(2026, 4, 15, tzinfo=UTC)
+
+    # Alice likes coffee — but focus_relation is "signed_up_for"
+    claim = AtomicClaim(
+        id="c1",
+        agent_id="a",
+        kind=ClaimKind.STATE,
+        subject="Alice",
+        relation="likes",
+        value_text="coffee",
+        polarity="support",
+        confidence=0.9,
+        salience=0.9,
+        source_episode_id="ep1",
+        source_spans=((0, 10),),
+        observed_at=now,
+        valid_from=now,
+        value_tokens=(),
+        slot_key="Alice::likes",
+        qualifiers={},
+        event_time=None,
+        valid_until=None,
+        materialization_version=1,
+        materialized_at=now,
+        version=1,
+        origin_agent_id="a",
+    )
+
+    contract = AnswerContract(
+        answer_space=AnswerSpace.BOOL,
+        truth_mode=TruthMode.DIRECT,
+        time_axis=TimeAxis.NONE,
+        locality="point",
+        evidence_regime=EvidenceRegime.SUPPORT_VS_CONTRA,
+    )
+    profile = EvidenceProfile(
+        n_support=1,
+        n_contra=0,
+        n_ambiguous=0,
+        density_per_entity=1.0,
+        temporal_span=None,
+        coverage_ratio=1.0,
+        has_explicit_event_time=False,
+        focus_entities=("Alice",),
+        focus_relation="signed_up_for",
+    )
+
+    items, conf, notes = bounded_hypothesis_test([claim], [], contract, profile, now)
+    assert items
+    assert items[0].value == "uncertain", f"Expected 'uncertain', got {items[0].value!r}"
+    assert conf == 0.0
+
+
+def test_candidate_rank_penalizes_combined_discourse_noise():
+    """Deictic subject + evaluative predicate gets penalty vs normal claim."""
+    from datetime import UTC, datetime
+
+    from ai_knot.query_operators import candidate_rank
+    from ai_knot.query_types import (
+        AnswerContract,
+        AnswerSpace,
+        AtomicClaim,
+        ClaimKind,
+        EvidenceProfile,
+        EvidenceRegime,
+        TimeAxis,
+        TruthMode,
+    )
+
+    now = datetime(2026, 4, 15, tzinfo=UTC)
+
+    def _claim(cid, subject, value, relation="state"):
+        return AtomicClaim(
+            id=cid,
+            agent_id="a",
+            kind=ClaimKind.STATE,
+            subject=subject,
+            relation=relation,
+            value_text=value,
+            polarity="support",
+            confidence=0.8,
+            salience=0.8,
+            source_episode_id="ep1",
+            source_spans=((0, 10),),
+            observed_at=now,
+            valid_from=now,
+            value_tokens=("test",),
+            slot_key=f"{subject}::{relation}",
+            qualifiers={},
+            event_time=None,
+            valid_until=None,
+            materialization_version=1,
+            materialized_at=now,
+            version=1,
+            origin_agent_id="a",
+        )
+
+    noise_claim = _claim("c_noise", "that", "amazing")  # deictic + evaluative
+    real_claim = _claim("c_real", "Alice", "software engineer")  # normal
+
+    contract = AnswerContract(
+        answer_space=AnswerSpace.DESCRIPTION,
+        truth_mode=TruthMode.DIRECT,
+        time_axis=TimeAxis.NONE,
+        locality="point",
+        evidence_regime=EvidenceRegime.SINGLE,
+    )
+    profile = EvidenceProfile(
+        n_support=2,
+        n_contra=0,
+        n_ambiguous=0,
+        density_per_entity=1.0,
+        temporal_span=None,
+        coverage_ratio=1.0,
+        has_explicit_event_time=False,
+        question_tokens=("alice", "job"),
+    )
+
+    items, conf, notes = candidate_rank([noise_claim, real_claim], [], contract, profile, now)
+    assert items
+    # real_claim should rank above noise_claim
+    assert items[0].source_claim_ids == ("c_real",), (
+        f"Expected real_claim first, got {items[0].source_claim_ids}"
+    )

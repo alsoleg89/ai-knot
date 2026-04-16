@@ -60,30 +60,55 @@ npm install ai-knot
 
 ```python
 from ai_knot import KnowledgeBase
+from ai_knot.storage import SQLiteStorage
+
+kb = KnowledgeBase(agent_id="my_agent", storage=SQLiteStorage(db_path="./memory.db"))
+
+# Ingest a conversation turn — materialization is automatic (materialize=True by default)
+kb.ingest_episode(
+    session_id="sess-1",
+    turn_id="turn-0",
+    speaker="user",
+    raw_text="I deploy everything in Docker and prefer Python for backend work.",
+)
+
+# Query the materialized knowledge — structured, contract-first answers
+answer = kb.query("How does the user deploy?")
+print(answer.text)         # "Docker"
+print(answer.confidence)   # 0.0–1.0
+print(answer.evidence_text)  # raw episode context for downstream LLM
+```
+
+### Recovery / backfill / version bump
+
+Call `rebuild_materialized()` explicitly when:
+- `MATERIALIZATION_VERSION` has been bumped (e.g. after an upgrade)
+- Episodes were bulk-imported without `materialize=True`
+- You need a clean backfill after fixing extraction logic
+
+```python
+kb.rebuild_materialized(force=True)  # re-materializes all episodes
+```
+
+### Legacy API (v0.8.x compatible)
+
+```python
+from ai_knot import KnowledgeBase, ConversationTurn
 
 kb = KnowledgeBase(agent_id="my_agent")
 
-# Add facts manually
-kb.add("User is a senior backend developer at Acme Corp",
-       type="semantic", importance=0.95)
-kb.add("User prefers Python, dislikes async code",
-       type="procedural", importance=0.85)
-
-# Or extract automatically from a conversation
-from ai_knot import ConversationTurn
+# Extract from a conversation with an LLM
 turns = [
     ConversationTurn(role="user",      content="I deploy everything in Docker"),
     ConversationTurn(role="assistant", content="Got it, I'll use Docker examples"),
 ]
 kb.learn(turns, provider="openai", api_key="sk-...")  # LLM extracts + stores relevant facts
 
-# At inference time — get what matters
+# Retrieve as text for prompt injection
 context = kb.recall("how should I write this deployment script?")
 # -> "[procedural] User prefers Python, dislikes async code
-#     [semantic]   User deploys everything in Docker
-#     [semantic]   User is a senior backend developer at Acme Corp"
+#     [semantic]   User deploys everything in Docker"
 
-# Inject into your prompt
 response = openai_client.chat(...,
     system=f"You are a helpful assistant.\n\n{context}")
 ```

@@ -345,3 +345,60 @@ class TestBundleInvalidation:
 
         remaining = db.load_bundles_by_topic(AGENT, ["Alice"])
         assert remaining == []
+
+
+def test_event_bundles_split_by_relation():
+    """Two events for same subject with different relations → two EVENT_NEIGHBORHOOD bundles."""
+    now = datetime(2026, 4, 15, tzinfo=UTC)
+
+    def _event_claim(cid: str, relation: str, value: str) -> AtomicClaim:
+        return AtomicClaim(
+            id=cid,
+            agent_id="a",
+            kind=ClaimKind.EVENT,
+            subject="Alice",
+            relation=relation,
+            value_text=value,
+            polarity="support",
+            confidence=0.8,
+            salience=0.8,
+            source_episode_id="ep1",
+            source_spans=((0, 10),),
+            observed_at=now,
+            valid_from=now,
+            value_tokens=(),
+            slot_key=f"Alice::{relation}",
+            qualifiers={},
+            event_time=None,
+            valid_until=None,
+            materialization_version=5,
+            materialized_at=now,
+            version=0,
+            origin_agent_id="a",
+        )
+
+    claims = [
+        _event_claim("c1", "attended", "pottery workshop"),
+        _event_claim("c2", "bought", "new laptop"),
+    ]
+    raw_eps = [
+        RawEpisode(
+            id="ep1",
+            agent_id="a",
+            session_id="sess",
+            turn_id="ep1",
+            speaker="user",
+            observed_at=now,
+            session_date=now,
+            raw_text="test",
+            source_meta={},
+            parent_episode_id=None,
+        )
+    ]
+    bundles, memberships = build_event_neighborhood_bundles(
+        claims, raw_eps, agent_id="a", materialization_version=5
+    )
+    topics = {b.topic for b in bundles}
+    assert "Alice::attended" in topics, f"Expected Alice::attended, got {topics}"
+    assert "Alice::bought" in topics, f"Expected Alice::bought, got {topics}"
+    assert len(bundles) == 2, f"Expected 2 bundles, got {len(bundles)}"

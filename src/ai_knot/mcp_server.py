@@ -154,9 +154,13 @@ def _make_server(kb: KnowledgeBase) -> Any:
         "ai-knot",
         instructions=(
             "Use these tools to manage persistent agent memory. "
-            "learn: extract and store knowledge from a conversation (preferred). "
-            "add: store a single fact directly. recall: retrieve relevant context as text. "
-            "recall_json: retrieve relevant context as structured JSON. "
+            "query: retrieve answers from materialized knowledge (preferred). "
+            "query_json: retrieve answers as structured JSON. "
+            "rebuild_materialized: rebuild materialized claims after a version bump or backfill. "
+            "learn: extract and store knowledge from a conversation. "
+            "add: store a single fact directly. "
+            "recall: retrieve relevant context as text (legacy). "
+            "recall_json: retrieve relevant context as structured JSON (legacy). "
             "forget: remove a fact by ID. list_facts: view all stored facts as JSON. "
             "stats: memory statistics. snapshot/restore: version the memory state. "
             "list_snapshots: see available snapshots. "

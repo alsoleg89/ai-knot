@@ -317,6 +317,7 @@ class EvidenceProfile:
     question_tokens: tuple[str, ...] = ()  # tokenized question for relevance scoring
     focus_entities: tuple[str, ...] = ()  # from QueryFrame
     focus_relation: str | None = None  # from QueryFrame
+    has_temporal_anchor: bool = False  # any claim has qualifiers["time_anchor"]=="session_date"
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +394,7 @@ class AnswerTrace:
                 "question_tokens": list(self.evidence_profile.question_tokens),
                 "focus_entities": list(self.evidence_profile.focus_entities),
                 "focus_relation": self.evidence_profile.focus_relation,
+                "has_temporal_anchor": self.evidence_profile.has_temporal_anchor,
             },
             "strategy": self.strategy,
             "decision_notes": list(self.decision_notes),

@@ -18,6 +18,7 @@ from ai_knot.query_types import (
     SupportBundle,
     TimeAxis,
 )
+from ai_knot.relation_vocab import alias_relations as _alias_relations
 
 if TYPE_CHECKING:
     pass
@@ -232,23 +233,6 @@ def apply_pending_dirty_keys(
     return cast(int, bs.invalidate_by_keys(agent_id, keys))
 
 
-# Maps a query-extracted focus_relation (canonical lemma) to the set of
-# compound relation names the materializer may have stored under that entity.
-# Keeps the fan-out small and mechanical — no guessing, no LLM.
-_RELATION_ALIASES: dict[str, tuple[str, ...]] = {
-    "find": ("finds_satisfying",),
-    "like": ("likes",),
-    "love": ("likes",),
-    "enjoy": ("likes",),
-    "hate": ("dislikes",),
-    "dislike": ("dislikes",),
-    "drive": ("drives",),
-    "move": ("moved_to",),
-    "work": ("works_at", "works_as"),
-    "pass": ("passed_away",),
-}
-
-
 def topics_for_entities(
     entities: tuple[str, ...],
     contract: AnswerContract | None = None,
@@ -267,7 +251,7 @@ def topics_for_entities(
         if focus_relation:
             # Fan out to alias relations first (most specific match), then the
             # raw lemma form, then the bare entity topic.
-            aliases = _RELATION_ALIASES.get(focus_relation, ())
+            aliases = _alias_relations(focus_relation)
             for alias in aliases:
                 topics.append(f"{entity}::{alias}")
             topics.append(f"{entity}::{focus_relation}")

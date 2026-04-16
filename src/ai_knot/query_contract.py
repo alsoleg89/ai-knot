@@ -23,10 +23,23 @@ from ai_knot.query_types import (
     TimeAxis,
     TruthMode,
 )
+from ai_knot.relation_vocab import (
+    canonical_relation_for_phrase as _canon_phrase,
+)
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def build_answer_contract(question: str) -> tuple[AnswerContract, QueryFrame]:
+    """Convenience wrapper: derive both QueryFrame and AnswerContract from a question.
+
+    Returns (contract, frame) — callers that only need one can unpack accordingly.
+    """
+    frame = analyze_query(question)
+    contract = derive_answer_contract(frame)
+    return contract, frame
 
 
 def analyze_query(question: str) -> QueryFrame:
@@ -205,178 +218,56 @@ _STOP_CAPS: frozenset[str] = frozenset(
     }
 )
 
-# Verb-like focus relation signals (canonical lemma forms).
-_RELATION_VERBS: frozenset[str] = frozenset(
+# Calendar tokens that should not be extracted as named entities when they
+# appear in a clear temporal-modifier context.
+_CALENDAR_TOKENS: frozenset[str] = frozenset(
     {
-        "work",
-        "live",
-        "study",
-        "know",
-        "meet",
-        "love",
-        "marry",
-        "play",
-        "attend",
-        "visit",
-        "read",
-        "watch",
-        "drink",
-        "eat",
-        "drive",
-        "use",
-        "research",
-        "restore",
-        "pursue",
-        "find",
-        "pass",
-        "satisfy",
-        "grow",
-        "build",
-        "buy",
-        "sell",
-        "like",
-        "enjoy",
-        "hate",
-        "prefer",
-        "move",
-        "join",
-        "leave",
-        "start",
-        "stop",
-        "retire",
-        "die",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun",
     }
 )
+# Bare temporal tokens that are never proper names.
+_BARE_TEMPORAL: frozenset[str] = frozenset({"Today", "Yesterday", "Tomorrow"})
 
-# Inflected verb → canonical lemma.  Checked before _RELATION_VERBS lookup so
-# that question tokens like "drives", "restoring" can be normalized to their
-# infinitive form before becoming focus_relation.
-_VERB_LEMMA_MAP: dict[str, str] = {
-    "drives": "drive",
-    "driving": "drive",
-    "driven": "drive",
-    "researches": "research",
-    "researching": "research",
-    "researched": "research",
-    "restores": "restore",
-    "restoring": "restore",
-    "restored": "restore",
-    "pursues": "pursue",
-    "pursuing": "pursue",
-    "pursued": "pursue",
-    "finds": "find",
-    "finding": "find",
-    "found": "find",
-    "passes": "pass",
-    "passing": "pass",
-    "passed": "pass",
-    "satisfies": "satisfy",
-    "satisfying": "satisfy",
-    "satisfied": "satisfy",
-    "grows": "grow",
-    "growing": "grow",
-    "grew": "grow",
-    "grown": "grow",
-    "builds": "build",
-    "building": "build",
-    "built": "build",
-    "buys": "buy",
-    "buying": "buy",
-    "bought": "buy",
-    "sells": "sell",
-    "selling": "sell",
-    "sold": "sell",
-    "likes": "like",
-    "liking": "like",
-    "liked": "like",
-    "enjoys": "enjoy",
-    "enjoying": "enjoy",
-    "enjoyed": "enjoy",
-    "hates": "hate",
-    "hating": "hate",
-    "hated": "hate",
-    "prefers": "prefer",
-    "preferring": "prefer",
-    "preferred": "prefer",
-    "moves": "move",
-    "moving": "move",
-    "moved": "move",
-    "joins": "join",
-    "joining": "join",
-    "joined": "join",
-    "leaves": "leave",
-    "leaving": "leave",
-    "left": "leave",
-    "starts": "start",
-    "starting": "start",
-    "started": "start",
-    "stops": "stop",
-    "stopping": "stop",
-    "stopped": "stop",
-    "retires": "retire",
-    "retiring": "retire",
-    "retired": "retire",
-    "dies": "die",
-    "dying": "die",
-    "died": "die",
-    "works": "work",
-    "working": "work",
-    "worked": "work",
-    "lives": "live",
-    "living": "live",
-    "lived": "live",
-    "studies": "study",
-    "studying": "study",
-    "studied": "study",
-    "knows": "know",
-    "knowing": "know",
-    "knew": "know",
-    "known": "know",
-    "meets": "meet",
-    "meeting": "meet",
-    "met": "meet",
-    "loves": "love",
-    "loving": "love",
-    "loved": "love",
-    "marries": "marry",
-    "marrying": "marry",
-    "married": "marry",
-    "plays": "play",
-    "playing": "play",
-    "played": "play",
-    "attends": "attend",
-    "attending": "attend",
-    "attended": "attend",
-    "visits": "visit",
-    "visiting": "visit",
-    "visited": "visit",
-    "reads": "read",
-    "reading": "read",
-    "watches": "watch",
-    "watching": "watch",
-    "watched": "watch",
-    "drinks": "drink",
-    "drinking": "drink",
-    "drank": "drink",
-    "drunk": "drink",
-    "eats": "eat",
-    "eating": "eat",
-    "ate": "eat",
-    "eaten": "eat",
-    "uses": "use",
-    "using": "use",
-    "used": "use",
-}
-
-# Compound-phrase patterns that map a multi-token question fragment to the
-# materializer's compound relation name.  Checked before single-token lemma
-# lookup so that "find … satisfying" wins over plain "find".
-_COMPOUND_RELATION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\b(?:find|finds|found|finding)\b.*\bsatisfying\b", re.I), "finds_satisfying"),
-    (re.compile(r"\b(?:move|moves|moved|moving|relocate|relocated)\b\s+to\b", re.I), "moved_to"),
-    (re.compile(r"\b(?:work|works|worked|working)\b\s+as\b", re.I), "role"),
-    (re.compile(r"\b(?:pass|passes|passed|passing)\b\s+away\b", re.I), "passed_away"),
-]
+# Temporal prepositions that indicate a calendar token is used as time marker.
+_TEMPORAL_PREP_RE = re.compile(
+    r"\b(?:in|on|by|during|before|after|this|last|next|every)\s+([A-Z][a-zA-Z]+)\b"
+)
 
 
 def _tokenize_lower(text: str) -> list[str]:
@@ -407,6 +298,21 @@ def _extract_focus_entities(question: str) -> list[str]:
         e = " ".join(words)
         if not e or e in _STOP_CAPS:
             continue
+        # Drop bare temporal markers (never a proper name).
+        if e in _BARE_TEMPORAL:
+            continue
+        # Context-aware calendar drop: only drop if the token appears after a
+        # temporal preposition in the original question.
+        if e in _CALENDAR_TOKENS:
+            # Check whether this calendar word is preceded by a temporal prep.
+            tp_matches = {m2.group(1) for m2 in _TEMPORAL_PREP_RE.finditer(question)}
+            if e in tp_matches:
+                continue  # used as a time marker, not a name
+            # If it's only one token and appears in temporal position, drop.
+            if len(e.split()) == 1 and re.search(
+                r"\b(?:in|on|during|this|last|next)\s+" + re.escape(e) + r"\b", question, re.I
+            ):
+                continue
         if e not in seen:
             seen.add(e)
             entities.append(e)
@@ -441,6 +347,19 @@ def _detect_geometry(question: str, tokens: list[str]) -> AnswerSpace:
     if ("which are" in q_lower or "what are" in q_lower) and (
         "all" in token_set or "list" in token_set or "enumerate" in token_set
     ):
+        return AnswerSpace.SET
+
+    # Implicit SET: structural heuristic for "What X has/have/did Y verb?" forms.
+    # Conservative: requires has/have/did in early tokens AND plural noun or past verb signal.
+    if tokens and tokens[0] in {"what", "which"}:
+        early = set(tokens[1:5])
+        if early & {"has", "have", "did"}:
+            # Look for plural noun or past participle anywhere in the question tokens.
+            rest_str = " ".join(tokens[1:])
+            if re.search(r"\b\w+(?:ed|en)\b|\b\w+s\b", rest_str):
+                return AnswerSpace.SET
+    # "Where has/have X been/gone?" → SET of places
+    if tokens and tokens[0] == "where" and set(tokens[1:4]) & {"has", "have"}:
         return AnswerSpace.SET
 
     # "who" → ENTITY
@@ -528,17 +447,7 @@ def _extract_focus_relation(question: str, entities: list[str]) -> str | None:
     """
     if re.search(r"\bwhat(?:'s| is| was)\b.+\blike\b\s*\??\s*$", question, re.I):
         return None
-    for pattern, compound_relation in _COMPOUND_RELATION_PATTERNS:
-        if pattern.search(question):
-            return compound_relation
-    tokens = _tokenize_lower(question)
-    for t in tokens:
-        lemma = _VERB_LEMMA_MAP.get(t)
-        if lemma:
-            return lemma
-        if t in _RELATION_VERBS:
-            return t
-    return None
+    return _canon_phrase(question)
 
 
 def _derive_target_kind(answer_space: AnswerSpace, tokens: list[str], temporal_scope: str) -> str:

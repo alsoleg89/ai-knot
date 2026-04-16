@@ -232,3 +232,163 @@ class TestQueryStability:
         s2 = _make_and_query([2, 0, 1])
         # Same facts, different order → same strategy (deterministic materializer)
         assert s1 == s2
+
+
+# ---------------------------------------------------------------------------
+# Evidence profile: temporal anchor signal
+# ---------------------------------------------------------------------------
+
+
+def _make_claim(
+    cid: str,
+    kind: object,
+    subject: str,
+    relation: str,
+    value_text: str,
+    source_episode_id: str,
+    now: object,
+    qualifiers: dict,
+    polarity: str = "support",
+) -> object:
+    """Helper: build a minimal AtomicClaim with all required fields."""
+    from ai_knot.query_types import AtomicClaim
+
+    return AtomicClaim(
+        id=cid,
+        agent_id="a",
+        kind=kind,  # type: ignore[arg-type]
+        subject=subject,
+        relation=relation,
+        value_text=value_text,
+        value_tokens=(),
+        qualifiers=qualifiers,
+        polarity=polarity,
+        event_time=None,
+        observed_at=now,  # type: ignore[arg-type]
+        valid_from=now,  # type: ignore[arg-type]
+        valid_until=None,
+        confidence=0.9,
+        salience=0.9,
+        source_episode_id=source_episode_id,
+        source_spans=((0, 10),),
+        materialization_version=1,
+        materialized_at=now,  # type: ignore[arg-type]
+        slot_key=f"{subject}::{relation}",
+        version=1,
+        origin_agent_id="a",
+    )
+
+
+def test_evidence_profile_has_temporal_anchor():
+    """_build_evidence_profile sets has_temporal_anchor for session-anchored claims."""
+    from datetime import UTC, datetime
+
+    from ai_knot.query_runtime import _build_evidence_profile
+    from ai_knot.query_types import (
+        AnswerContract,
+        AnswerSpace,
+        ClaimKind,
+        EvidenceRegime,
+        QueryFrame,
+        TimeAxis,
+        TruthMode,
+    )
+
+    now = datetime(2026, 4, 15, tzinfo=UTC)
+
+    claim_anchored = _make_claim(
+        "c1",
+        ClaimKind.EVENT,
+        "Alice",
+        "attended",
+        "workshop",
+        "ep1",
+        now,
+        {"time_anchor": "session_date", "relative_time": "yesterday"},
+    )
+    claim_plain = _make_claim(
+        "c2",
+        ClaimKind.STATE,
+        "Alice",
+        "likes",
+        "coffee",
+        "ep2",
+        now,
+        {},
+    )
+
+    frame = QueryFrame(
+        focus_entities=("Alice",),
+        target_kind="event",
+        answer_space=AnswerSpace.SCALAR,
+        temporal_scope="historical",
+        epistemic_mode=TruthMode.DIRECT,
+        locality="point",
+        evidence_regime=EvidenceRegime.SINGLE,
+        focus_relation="attended",
+    )
+    contract = AnswerContract(
+        answer_space=AnswerSpace.SCALAR,
+        truth_mode=TruthMode.DIRECT,
+        time_axis=TimeAxis.EVENT,
+        locality="point",
+        evidence_regime=EvidenceRegime.SINGLE,
+    )
+
+    profile = _build_evidence_profile(
+        [claim_anchored, claim_plain],  # type: ignore[arg-type]
+        [],
+        contract,
+        frame,
+    )
+    assert profile.has_temporal_anchor is True, "Expected has_temporal_anchor=True"
+
+    profile_no_anchor = _build_evidence_profile(
+        [claim_plain],  # type: ignore[arg-type]
+        [],
+        contract,
+        frame,
+    )
+    assert profile_no_anchor.has_temporal_anchor is False
+
+
+def test_evidence_ids_prefer_answer_items():
+    """_collect_evidence_episode_ids returns answer_item episodes before raw-search."""
+    from datetime import UTC, datetime
+
+    from ai_knot.query_runtime import _collect_evidence_episode_ids
+    from ai_knot.query_types import AnswerItem, ClaimKind
+
+    now = datetime(2026, 4, 15, tzinfo=UTC)
+
+    items = [
+        AnswerItem(
+            value="v1",
+            confidence=0.9,
+            source_claim_ids=("c1",),
+            source_episode_ids=("ep_answer_1",),
+        ),
+    ]
+    claims = [
+        _make_claim(
+            "c2",
+            ClaimKind.STATE,
+            "Alice",
+            "likes",
+            "x",
+            "ep_claim_1",
+            now,
+            {},
+        )
+    ]
+    raw_search_ids = ["ep_raw_1", "ep_raw_2"]
+
+    result = _collect_evidence_episode_ids(
+        items,  # type: ignore[arg-type]
+        claims,  # type: ignore[arg-type]
+        episode_search_ids=raw_search_ids,
+        cap=5,
+    )
+    assert result[0] == "ep_answer_1", f"Answer episode should be first, got {result}"
+    assert "ep_raw_1" in result  # raw search still included (as fallback)
+    assert result.index("ep_answer_1") < result.index("ep_raw_1")

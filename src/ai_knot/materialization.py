@@ -19,6 +19,7 @@ import hashlib
 import re
 from datetime import UTC, datetime
 
+from ai_knot._text_guards import is_deictic_subject, is_evaluative_predicate
 from ai_knot.query_types import (
     DETERMINISTIC_CLAIM_KINDS,
     AtomicClaim,
@@ -27,7 +28,7 @@ from ai_knot.query_types import (
     RawEpisode,
 )
 
-MATERIALIZATION_VERSION: int = 4
+MATERIALIZATION_VERSION: int = 5
 
 # ---------------------------------------------------------------------------
 # Regex patterns for deterministic extraction
@@ -205,6 +206,69 @@ _FP_STARTED_RE = re.compile(
     r"^I\s+(?:started?|began?|took\s+up|picked\s+up)\s+(?:to\s+)?(.+?)\.?\s*$",
     re.IGNORECASE,
 )
+
+# First-person event/action patterns (used when speaker is known).
+# Each entry: relation_name → compiled regex.
+_FP_EVENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("attended", re.compile(r"^I\s+(?:attended?|went\s+to)\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    (
+        "joined",
+        re.compile(
+            r"^I\s+(?:joined?|became\s+(?:a\s+|an\s+)?member\s+of)\s+(.+?)\.?\s*$", re.IGNORECASE
+        ),
+    ),
+    (
+        "signed_up_for",
+        re.compile(
+            r"^I\s+(?:signed?\s+up\s+for|registered\s+for|enrolled\s+in)\s+(.+?)\.?\s*$",
+            re.IGNORECASE,
+        ),
+    ),
+    ("applied_to", re.compile(r"^I\s+(?:applied?\s+(?:to|for))\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    (
+        "visited",
+        re.compile(
+            r"^I\s+(?:visited?|stopped\s+by|went\s+to\s+(?:the\s+|a\s+)?(?:store|park|gym|hospital|restaurant|museum|gallery|library|cafe|office|campus|school|university))\s*(.{0,60})\.?\s*$",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "met_with",
+        re.compile(
+            r"^I\s+(?:met\s+(?:with\s+)?|had\s+a\s+meeting\s+with\s+|caught\s+up\s+with\s+)\s*(.+?)\.?\s*$",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "bought",
+        re.compile(r"^I\s+(?:bought?|purchased?|picked\s+up)\s+(.+?)\.?\s*$", re.IGNORECASE),
+    ),
+    ("read", re.compile(r"^I\s+(?:read|finished\s+(?:reading\s+)?)\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    (
+        "ran",
+        re.compile(
+            r"^I\s+(?:ran?|completed?\s+(?:a\s+|the\s+)?(?:5k|10k|marathon|half[\s-]marathon|race|run))\s*(.{0,60})\.?\s*$",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "created",
+        re.compile(
+            r"^I\s+(?:created?|built?|made?|launched?|released?|published?|wrote|written)\s+(.+?)\.?\s*$",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "spoke_at",
+        re.compile(
+            r"^I\s+(?:spoke?\s+at|presented?\s+at|gave\s+a\s+(?:talk|presentation|lecture)\s+at)\s+(.+?)\.?\s*$",
+            re.IGNORECASE,
+        ),
+    ),
+]
+
+# Relative-time markers used in event qualifier extraction.
+_RELATIVE_TIME_RE = re.compile(r"\b(today|yesterday|tomorrow)\b", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -565,6 +629,37 @@ def _extract_from_sentence(
             )
             return results
 
+        # --- FIRST-PERSON EVENTS (requires named speaker) ----------------
+        for relation, fp_re in _FP_EVENT_PATTERNS:
+            m = fp_re.match(sent)
+            if m:
+                value = m.group(1).strip() if m.lastindex and m.group(1) else sent[:80]
+                qualifiers: dict[str, str] = {
+                    "time_anchor": "session_date",
+                    "source_sentence": sent[:120],
+                }
+                rel_m = _RELATIVE_TIME_RE.search(sent)
+                if rel_m:
+                    qualifiers["relative_time"] = rel_m.group(1).lower()
+                claim_id = _make_claim_id(raw.id, f"fp_event_{relation}:{sent[:30]}")
+                results.append(
+                    _make_claim(
+                        claim_id=claim_id,
+                        raw=raw,
+                        kind=ClaimKind.EVENT,
+                        subject=speaker,
+                        relation=relation,
+                        value_text=value,
+                        qualifiers=qualifiers,
+                        event_time=None,  # resolved later by time_resolve()
+                        session_date=session_date,
+                        now=now,
+                        span=(0, len(sent)),
+                        slot_key=f"{speaker}::{relation}",
+                    )
+                )
+                return results
+
     # --- DURATION --------------------------------------------------------
     m = _DURATION_RE.search(sent)
     if m:
@@ -699,6 +794,9 @@ def _extract_from_sentence(
         subject, predicate = m.group(1).strip(), m.group(2).strip()
         if subject in _PRONOUN_SUBJECTS:
             return results
+        # Discourse guard: skip deictic subject + evaluative predicate combos.
+        if is_deictic_subject(subject) and is_evaluative_predicate(predicate):
+            return results
         if len(subject) >= 2 and len(predicate) >= 2:
             claim_id = _make_claim_id(raw.id, f"state:{sent[:30]}")
             results.append(
@@ -723,6 +821,9 @@ def _extract_from_sentence(
     if date_m:
         event_date = _parse_date_str(date_m.group(0)) or session_date
         subject = _extract_simple_subject(sent) or "unknown"
+        # Discourse guard: skip deictic + evaluative noise.
+        if is_deictic_subject(subject) and is_evaluative_predicate(sent[:80]):
+            return results
         claim_id = _make_claim_id(raw.id, f"event:{sent[:30]}")
         results.append(
             _make_claim(

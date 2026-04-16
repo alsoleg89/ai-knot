@@ -339,3 +339,98 @@ class TestSpeakerFirstPerson:
         assert not drives, (
             "Without named speaker, first-person action must not produce a drives claim"
         )
+
+
+# ---------------------------------------------------------------------------
+# First-person event extraction (v5)
+# ---------------------------------------------------------------------------
+
+
+def _make_raw_fp(text: str, speaker: str, session_date: datetime | None = None) -> RawEpisode:
+    """Helper: raw episode with speaker prefix."""
+    from datetime import UTC
+
+    sd = session_date or datetime(2026, 4, 15, tzinfo=UTC)
+    ep_id = make_episode_id("test-agent", "sess-fp", f"fp-{speaker}-{text[:10]}")
+    return RawEpisode(
+        id=ep_id,
+        agent_id="test-agent",
+        session_id="sess-fp",
+        turn_id=f"fp-{speaker}-{text[:10]}",
+        speaker=speaker,
+        observed_at=sd,
+        session_date=sd,
+        raw_text=f"{speaker}: {text}",
+        source_meta={},
+        parent_episode_id=None,
+    )
+
+
+def test_first_person_event_extraction():
+    """I attended … → EVENT claim with slot_key and time_anchor."""
+    ep = _make_raw_fp("I attended a pottery workshop yesterday", "Alice")
+    claims = materialize_episode(ep)
+    event_claims = [c for c in claims if c.kind is ClaimKind.EVENT]
+    assert event_claims, f"Expected EVENT claim, got: {claims}"
+    c = event_claims[0]
+    assert c.subject == "Alice"
+    assert c.relation == "attended"
+    assert c.slot_key == "Alice::attended"
+
+
+def test_time_anchor_qualifiers_present():
+    """Session-anchored event: time_anchor qualifier set, event_time NOT set."""
+    ep = _make_raw_fp("I signed up for pottery today", "Alice")
+    claims = materialize_episode(ep)
+    event_claims = [
+        c for c in claims if c.kind is ClaimKind.EVENT and c.relation == "signed_up_for"
+    ]
+    assert event_claims, "Expected signed_up_for EVENT claim"
+    c = event_claims[0]
+    assert c.qualifiers.get("time_anchor") == "session_date"
+    assert c.qualifiers.get("relative_time") == "today"
+    assert c.event_time is None, "event_time must NOT be set — time_resolve() computes it"
+
+
+def test_relative_time_yesterday_captured():
+    """'yesterday' is captured in qualifiers."""
+    ep = _make_raw_fp("I attended a workshop yesterday", "Alice")
+    claims = materialize_episode(ep)
+    event_claims = [c for c in claims if c.kind is ClaimKind.EVENT and c.relation == "attended"]
+    assert event_claims
+    assert event_claims[0].qualifiers.get("relative_time") == "yesterday"
+
+
+def test_discourse_guard_only_triggers_on_combined_signal():
+    """'That sounds wonderful' → no claim; 'Mary has a cool idea' → claim."""
+    sd = datetime(2026, 4, 15, tzinfo=UTC)
+    # Deictic + evaluative → suppressed
+    ep_noise = RawEpisode(
+        id=make_episode_id("test", "sess-noise", "t-noise"),
+        agent_id="test",
+        session_id="sess-noise",
+        turn_id="t-noise",
+        speaker="user",
+        observed_at=sd,
+        session_date=None,
+        raw_text="That sounds wonderful.",
+        source_meta={},
+        parent_episode_id=None,
+    )
+    assert materialize_episode(ep_noise) == []
+
+    # Non-deictic subject → should NOT be suppressed (Mary is a real subject)
+    ep_ok = RawEpisode(
+        id=make_episode_id("test", "sess-ok", "t-ok"),
+        agent_id="test",
+        session_id="sess-ok",
+        turn_id="t-ok",
+        speaker="user",
+        observed_at=sd,
+        session_date=None,
+        raw_text="Mary has a cool new idea.",
+        source_meta={},
+        parent_episode_id=None,
+    )
+    claims_ok = materialize_episode(ep_ok)
+    assert claims_ok, "Mary has a cool idea should produce a claim"
