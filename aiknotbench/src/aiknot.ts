@@ -169,7 +169,7 @@ export class AiknotAdapter {
     if (this.queryMode === "target_query") {
       try {
         const answer = await this.kb.query(question, { topK: this.topK });
-        return answer.text || "No answer found.";
+        return answer.evidence_text || answer.text || "No answer found.";
       } catch {
         // Fall back to legacy recall on error (e.g. no raw episodes ingested).
         return this.kb.recall(question, { topK: this.topK });
