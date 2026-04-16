@@ -16,6 +16,7 @@ so that rebuild_materialized() can detect stale claims.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from datetime import UTC, datetime
 
@@ -180,7 +181,8 @@ _FP_SATISFYING_RE = re.compile(
     re.IGNORECASE,
 )
 _FP_SELF_STATE_RE = re.compile(
-    r"^I\s+(?:am|'m)\s+(.+?)\.?\s*$", re.IGNORECASE,
+    r"^I\s+(?:am|'m)\s+(.+?)\.?\s*$",
+    re.IGNORECASE,
 )
 
 # First-person action patterns (used when speaker is known).
@@ -202,6 +204,32 @@ _FP_MOVE_RE = re.compile(
 )
 _FP_STARTED_RE = re.compile(
     r"^I\s+(?:started?|began?|took\s+up|picked\s+up)\s+(?:to\s+)?(.+?)\.?\s*$",
+    re.IGNORECASE,
+)
+
+# First-person event patterns (experimental — gated by AI_KNOT_ENABLE_FP_EVENTS).
+# Each entry: (relation_name, compiled_regex)
+_FP_EVENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("attended", re.compile(r"^I\s+(?:attended?|went\s+to)\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    ("joined", re.compile(r"^I\s+joined\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    (
+        "signed_up_for",
+        re.compile(r"^I\s+(?:signed?\s+up\s+for|registered\s+for)\s+(.+?)\.?\s*$", re.IGNORECASE),
+    ),
+    ("applied_to", re.compile(r"^I\s+applied\s+(?:to|for)\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    ("bought", re.compile(r"^I\s+(?:bought|purchased)\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    ("read", re.compile(r"^I\s+read\s+(.+?)\.?\s*$", re.IGNORECASE)),
+    (
+        "created",
+        re.compile(r"^I\s+(?:created?|made|built|wrote)\s+(.+?)\.?\s*$", re.IGNORECASE),
+    ),
+]
+
+# Relative time expressions (used for FP event time anchoring when enabled).
+_RELATIVE_TIME_RE = re.compile(
+    r"\b(yesterday|last\s+(?:week|month|year)|this\s+(?:week|month|year)|"
+    r"(?:a\s+)?(?:few|couple\s+of)\s+(?:days?|weeks?|months?)\s+ago|"
+    r"recently|just|earlier\s+today)\b",
     re.IGNORECASE,
 )
 
@@ -461,6 +489,30 @@ def _extract_from_sentence(
                 )
             )
             return results
+
+        # --- FIRST-PERSON EVENTS (experimental — requires AI_KNOT_ENABLE_FP_EVENTS=1) ---
+        if os.environ.get("AI_KNOT_ENABLE_FP_EVENTS", "0") == "1":
+            for fp_relation, fp_event_re in _FP_EVENT_PATTERNS:
+                m = fp_event_re.match(sent)
+                if m:
+                    claim_id = _make_claim_id(raw.id, f"fp_event_{fp_relation}:{sent[:30]}")
+                    results.append(
+                        _make_claim(
+                            claim_id=claim_id,
+                            raw=raw,
+                            kind=ClaimKind.EVENT,
+                            subject=speaker,
+                            relation=fp_relation,
+                            value_text=m.group(1).strip(),
+                            qualifiers={"source_sentence": sent[:120]},
+                            event_time=session_date,
+                            session_date=session_date,
+                            now=now,
+                            span=(0, len(sent)),
+                            slot_key=f"{speaker}::{fp_relation}",
+                        )
+                    )
+                    return results
 
         # --- FIRST-PERSON ACTIONS (requires named speaker) ---------------
         m = _FP_DRIVES_RE.match(sent)

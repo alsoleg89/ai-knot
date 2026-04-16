@@ -13,6 +13,7 @@ Enforced by: scripts/check_query_runtime_isolation.py (no storage access)
 
 from __future__ import annotations
 
+import os
 import re
 
 from ai_knot.query_types import (
@@ -507,16 +508,36 @@ def _detect_geometry(question: str, tokens: list[str]) -> AnswerSpace:
 
 
 def _detect_temporal_scope(question: str, tokens: list[str]) -> str:
-    """Classify temporal scope: current / historical / interval / none."""
+    """Classify temporal scope: current / historical / interval / none.
+
+    When AI_KNOT_ENABLE_CALENDAR_GUARD=1 (experimental), the "historical" scope
+    requires a stronger signal: either an explicit date token (EVENT_TIME_SIGNALS)
+    OR a historical-context signal combined with a past-tense auxiliary ("did",
+    "was", "were", "had").  This prevents weak "when"-questions from routing to
+    time_resolve when the question is really asking for a state description.
+    """
     token_set = set(tokens)
     if token_set & _CURRENT_SIGNALS:
         return "current"
     if token_set & _INTERVAL_SIGNALS:
         return "interval"
-    if token_set & _EVENT_TIME_SIGNALS:
-        return "historical"  # asking for a specific past event time
-    if token_set & _HISTORICAL_SIGNALS:
-        return "historical"
+
+    calendar_guard = os.environ.get("AI_KNOT_ENABLE_CALENDAR_GUARD", "0") == "1"
+    if calendar_guard:
+        # Stricter: EVENT_TIME_SIGNALS only fire historical when a past-tense
+        # auxiliary is also present (did/was/were/had) — prevents "when" in
+        # rhetorical questions from routing to time_resolve.
+        _PAST_AUX: frozenset[str] = frozenset({"did", "was", "were", "had", "have"})
+        if token_set & _EVENT_TIME_SIGNALS and token_set & _PAST_AUX:
+            return "historical"
+        if token_set & _HISTORICAL_SIGNALS:
+            return "historical"
+    else:
+        if token_set & _EVENT_TIME_SIGNALS:
+            return "historical"  # asking for a specific past event time
+        if token_set & _HISTORICAL_SIGNALS:
+            return "historical"
+
     # "what is X's Y" (present tense, no time signal) → current
     if tokens and tokens[0] in ("what", "who", "where") and "is" in token_set:
         return "current"

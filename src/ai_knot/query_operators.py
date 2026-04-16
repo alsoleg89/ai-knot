@@ -21,6 +21,7 @@ Enforced by: scripts/check_query_runtime_isolation.py
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -358,6 +359,11 @@ def candidate_rank(
     q_tokens = set(profile.question_tokens)
 
     # Score: slot_match + question_relevance + salience*confidence + recency - contra penalty.
+    # When AI_KNOT_CANDIDATE_RANK_PENALTIES=1 (experimental): stronger contra penalty
+    # (0.3 vs 0.1) and a slot-mismatch penalty (-0.2) for claims not matching any
+    # focus slot.  This makes the ranker more conservative when slot evidence is
+    # available.
+    rank_penalties = os.environ.get("AI_KNOT_CANDIDATE_RANK_PENALTIES", "0") == "1"
     scored: list[tuple[float, AtomicClaim]] = []
     for c in support:
         slot_match = 1.0 if (slot_keys and c.slot_key in slot_keys) else 0.0
@@ -368,8 +374,13 @@ def candidate_rank(
             q_relevance = len(q_tokens & v_tokens) / len(union) if union else 0.0
         base = c.salience * c.confidence
         recency = _recency_bonus(c, now)
-        contra_pen = 0.1 if c.id in contra_ids else 0.0
-        score = slot_match + q_relevance + base + recency - contra_pen
+        if rank_penalties:
+            contra_pen = 0.3 if c.id in contra_ids else 0.0
+            slot_miss_pen = 0.2 if (slot_keys and c.slot_key not in slot_keys) else 0.0
+        else:
+            contra_pen = 0.1 if c.id in contra_ids else 0.0
+            slot_miss_pen = 0.0
+        score = slot_match + q_relevance + base + recency - contra_pen - slot_miss_pen
         scored.append((score, c))
 
     scored.sort(key=lambda x: x[0], reverse=True)

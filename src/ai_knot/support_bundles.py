@@ -12,6 +12,7 @@ Four bundle kinds:
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 
 from ai_knot.query_types import (
@@ -160,13 +161,19 @@ def build_event_neighborhood_bundles(
     agent_id: str,
     materialization_version: int,
 ) -> tuple[list[SupportBundle], dict[str, list[str]]]:
-    """Group EVENT claims by subject, sorted by event_time.
+    """Group EVENT claims by subject (or subject::relation when flag is set), sorted by event_time.
 
     Episode context is used to enrich event_time when claims lack it.
+
+    When AI_KNOT_EVENT_BUNDLE_BY_RELATION=1 (experimental), each distinct
+    (subject, relation) pair gets its own bundle instead of all events for a
+    subject sharing one bundle.  Default is subject-only grouping (flag=0).
     """
     ep_times: dict[str, datetime] = {
         ep.id: ep.session_date or ep.observed_at for ep in raw_episodes
     }
+
+    event_bundle_by_relation = os.environ.get("AI_KNOT_EVENT_BUNDLE_BY_RELATION", "0") == "1"
 
     groups: dict[str, list[AtomicClaim]] = {}
     for c in claims:
@@ -174,25 +181,28 @@ def build_event_neighborhood_bundles(
             continue
         if not c.subject:
             continue
-        groups.setdefault(c.subject, []).append(c)
+        group_key = (
+            f"{c.subject}::{c.relation}" if (event_bundle_by_relation and c.relation) else c.subject
+        )
+        groups.setdefault(group_key, []).append(c)
 
     bundles: list[SupportBundle] = []
     memberships: dict[str, list[str]] = {}
     now = datetime.now(UTC)
 
-    for subject, group in groups.items():
+    for group_key, group in groups.items():
 
         def _event_sort_key(c: AtomicClaim) -> datetime:
             return c.event_time or ep_times.get(c.source_episode_id, c.observed_at)
 
         sorted_group = sorted(group, key=_event_sort_key)
         score = _aggregate_score(sorted_group)
-        bid = stable_bundle_id(BundleKind.EVENT_NEIGHBORHOOD, subject)
+        bid = stable_bundle_id(BundleKind.EVENT_NEIGHBORHOOD, group_key)
         b = SupportBundle(
             id=bid,
             agent_id=agent_id,
             kind=BundleKind.EVENT_NEIGHBORHOOD,
-            topic=subject,
+            topic=group_key,
             member_claim_ids=tuple(c.id for c in sorted_group),
             score_formula="mean(salience*confidence)|sorted_by_event_time",
             bundle_score=score,
