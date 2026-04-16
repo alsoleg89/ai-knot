@@ -8,7 +8,7 @@ Design rules:
     EvidenceProfile (i.e., when direct evidence is absent).
 
 Enforced by: scripts/check_query_runtime_isolation.py (no storage access)
-             tests/test_query_contract.py (product queries, no LoCoMo branching)
+             tests/test_query_contract.py (product queries, no benchmark-label branching)
 """
 
 from __future__ import annotations
@@ -170,10 +170,70 @@ _EVENT_TIME_SIGNALS: frozenset[str] = frozenset(
     }
 )
 
-# Named entity detection — two or more capitalized consecutive words.
-_NAMED_ENTITY_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+# Named entity detection — one or more capitalized consecutive words.
+_NAMED_ENTITY_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b")
 
-# Verb-like focus relation signals.
+# Question-opener words that are capitalized but are not entity names.
+_STOP_CAPS: frozenset[str] = frozenset(
+    {
+        "What",
+        "When",
+        "Who",
+        "Where",
+        "How",
+        "Why",
+        "Which",
+        "Is",
+        "Are",
+        "Was",
+        "Were",
+        "Did",
+        "Do",
+        "Does",
+        "Has",
+        "Have",
+        "Had",
+        "Will",
+        "Should",
+        "Could",
+        "Would",
+        "Can",
+        "Tell",
+        "List",
+        "Name",
+        "Describe",
+    }
+)
+
+# Aggregation noun heads that make "what/which + has/have/does + head" a SET question.
+_SET_NOUN_HEADS: frozenset[str] = frozenset(
+    {
+        "books",
+        "movies",
+        "films",
+        "shows",
+        "places",
+        "countries",
+        "cities",
+        "languages",
+        "hobbies",
+        "activities",
+        "sports",
+        "instruments",
+        "skills",
+        "jobs",
+        "courses",
+        "classes",
+        "events",
+        "awards",
+        "friends",
+        "pets",
+        "children",
+        "kids",
+    }
+)
+
+# Verb-like focus relation signals (canonical lemma forms).
 _RELATION_VERBS: frozenset[str] = frozenset(
     {
         "work",
@@ -192,8 +252,159 @@ _RELATION_VERBS: frozenset[str] = frozenset(
         "eat",
         "drive",
         "use",
+        "research",
+        "restore",
+        "pursue",
+        "find",
+        "pass",
+        "satisfy",
+        "grow",
+        "build",
+        "buy",
+        "sell",
+        "like",
+        "enjoy",
+        "hate",
+        "prefer",
+        "move",
+        "join",
+        "leave",
+        "start",
+        "stop",
+        "retire",
+        "die",
     }
 )
+
+# Inflected verb → canonical lemma.  Checked before _RELATION_VERBS lookup so
+# that question tokens like "drives", "restoring" can be normalized to their
+# infinitive form before becoming focus_relation.
+_VERB_LEMMA_MAP: dict[str, str] = {
+    "drives": "drive",
+    "driving": "drive",
+    "driven": "drive",
+    "researches": "research",
+    "researching": "research",
+    "researched": "research",
+    "restores": "restore",
+    "restoring": "restore",
+    "restored": "restore",
+    "pursues": "pursue",
+    "pursuing": "pursue",
+    "pursued": "pursue",
+    "finds": "find",
+    "finding": "find",
+    "found": "find",
+    "passes": "pass",
+    "passing": "pass",
+    "passed": "pass",
+    "satisfies": "satisfy",
+    "satisfying": "satisfy",
+    "satisfied": "satisfy",
+    "grows": "grow",
+    "growing": "grow",
+    "grew": "grow",
+    "grown": "grow",
+    "builds": "build",
+    "building": "build",
+    "built": "build",
+    "buys": "buy",
+    "buying": "buy",
+    "bought": "buy",
+    "sells": "sell",
+    "selling": "sell",
+    "sold": "sell",
+    "likes": "like",
+    "liking": "like",
+    "liked": "like",
+    "enjoys": "enjoy",
+    "enjoying": "enjoy",
+    "enjoyed": "enjoy",
+    "hates": "hate",
+    "hating": "hate",
+    "hated": "hate",
+    "prefers": "prefer",
+    "preferring": "prefer",
+    "preferred": "prefer",
+    "moves": "move",
+    "moving": "move",
+    "moved": "move",
+    "joins": "join",
+    "joining": "join",
+    "joined": "join",
+    "leaves": "leave",
+    "leaving": "leave",
+    "left": "leave",
+    "starts": "start",
+    "starting": "start",
+    "started": "start",
+    "stops": "stop",
+    "stopping": "stop",
+    "stopped": "stop",
+    "retires": "retire",
+    "retiring": "retire",
+    "retired": "retire",
+    "dies": "die",
+    "dying": "die",
+    "died": "die",
+    "works": "work",
+    "working": "work",
+    "worked": "work",
+    "lives": "live",
+    "living": "live",
+    "lived": "live",
+    "studies": "study",
+    "studying": "study",
+    "studied": "study",
+    "knows": "know",
+    "knowing": "know",
+    "knew": "know",
+    "known": "know",
+    "meets": "meet",
+    "meeting": "meet",
+    "met": "meet",
+    "loves": "love",
+    "loving": "love",
+    "loved": "love",
+    "marries": "marry",
+    "marrying": "marry",
+    "married": "marry",
+    "plays": "play",
+    "playing": "play",
+    "played": "play",
+    "attends": "attend",
+    "attending": "attend",
+    "attended": "attend",
+    "visits": "visit",
+    "visiting": "visit",
+    "visited": "visit",
+    "reads": "read",
+    "reading": "read",
+    "watches": "watch",
+    "watching": "watch",
+    "watched": "watch",
+    "drinks": "drink",
+    "drinking": "drink",
+    "drank": "drink",
+    "drunk": "drink",
+    "eats": "eat",
+    "eating": "eat",
+    "ate": "eat",
+    "eaten": "eat",
+    "uses": "use",
+    "using": "use",
+    "used": "use",
+}
+
+# Compound-phrase patterns that map a multi-token question fragment to the
+# materializer's compound relation name.  Checked before single-token lemma
+# lookup so that "find … satisfying" wins over plain "find".
+_COMPOUND_RELATION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\b(?:find|finds|found|finding)\b.*\bsatisfying\b", re.I), "finds_satisfying"),
+    (re.compile(r"\b(?:move|moves|moved|moving|relocate|relocated)\b\s+to\b", re.I), "moved_to"),
+    (re.compile(r"\b(?:work|works|worked|working)\b\s+as\b", re.I), "role"),
+    (re.compile(r"\b(?:pass|passes|passed|passing)\b\s+away\b", re.I), "passed_away"),
+]
 
 
 def _tokenize_lower(text: str) -> list[str]:
@@ -201,11 +412,29 @@ def _tokenize_lower(text: str) -> list[str]:
 
 
 def _extract_focus_entities(question: str) -> list[str]:
-    """Extract named entities from the question (proper-name heuristic)."""
+    """Extract named entities from the question (proper-name heuristic).
+
+    Handles single-token names (Alice, Bob) and strips possessive suffixes
+    (Alice's → Alice).  Question-opener words (What, When, Would, Did, …)
+    are excluded even when they appear as the first word in a multi-word span
+    (e.g. "Would Caroline" → entity "Caroline").
+    """
     seen: set[str] = set()
     entities: list[str] = []
     for m in _NAMED_ENTITY_RE.finditer(question):
-        e = m.group(1)
+        raw = m.group(1)
+        # Strip possessive suffix.
+        if raw.endswith("'s"):
+            raw = raw[:-2]
+        elif raw.endswith("'"):
+            raw = raw[:-1]
+        # Strip leading stop-cap words (e.g. "Would Caroline" → "Caroline").
+        words = raw.split()
+        while words and words[0] in _STOP_CAPS:
+            words = words[1:]
+        e = " ".join(words)
+        if not e or e in _STOP_CAPS:
+            continue
         if e not in seen:
             seen.add(e)
             entities.append(e)
@@ -222,22 +451,35 @@ def _detect_geometry(question: str, tokens: list[str]) -> AnswerSpace:
     # Question begins with "what" + noun (likely set or description).
     token_set = set(tokens[:8])  # look at first 8 tokens
 
-    _SET_NOUNS = frozenset(
-        {
-            "all", "some", "list", "types", "kinds", "examples",
-            "activities", "hobbies", "foods", "places", "books",
-            "movies", "sports", "games", "people", "friends",
-        }
-    )
-    # "what ... [list-like noun]" → SET
-    if tokens and tokens[0] == "what" and token_set & _SET_NOUNS:
+    # Structural SET signals — explicit aggregation cues only, no plural-noun heuristic.
+    if tokens and tokens[0] == "what":
+        tail = tokens[1:4]
+        if "all" in tail or "list" in tail or "enumerate" in tail:
+            return AnswerSpace.SET
+
+    # Imperative aggregation: "name every …", "list …", "enumerate …"
+    if tokens and tokens[0] in {"name", "list", "enumerate"}:
         return AnswerSpace.SET
 
-    # "list / name all / what are all" → SET
-    if token_set & {"list", "enumerate"}:
-        return AnswerSpace.SET
+    # "what are all …" — explicit all-enumeration phrasing
     if "all" in token_set and "what" in token_set:
         return AnswerSpace.SET
+
+    # "which are …" phrase
+    if ("which are" in q_lower or "what are" in q_lower) and (
+        "all" in token_set or "list" in token_set or "enumerate" in token_set
+    ):
+        return AnswerSpace.SET
+
+    # Implicit SET: conservative — only fire when a known aggregation noun head
+    # appears in "what/which + has/have/does/do" structure.
+    # e.g. "What books has X read?" / "What hobbies does Alice have?"
+    if tokens and tokens[0] in {"what", "which"}:
+        early = set(tokens[1:5])
+        if early & {"has", "have", "does", "do"}:
+            rest_tokens = tokens[1:]
+            if any(noun in rest_tokens for noun in _SET_NOUN_HEADS):
+                return AnswerSpace.SET
 
     # "who" → ENTITY
     if tokens and tokens[0] == "who":
@@ -315,9 +557,23 @@ def _derive_evidence_regime(answer_space: AnswerSpace) -> EvidenceRegime:
 
 
 def _extract_focus_relation(question: str, entities: list[str]) -> str | None:
-    """Try to extract a verb-like focus relation from the question."""
+    """Try to extract a verb-like focus relation from the question.
+
+    Checks compound-phrase patterns first (e.g. "find … satisfying" → "finds_satisfying"),
+    then normalizes inflected verb forms via _VERB_LEMMA_MAP, then falls back to
+    _RELATION_VERBS for single-token lemmas.
+    Returns the canonical compound or lemma form.
+    """
+    if re.search(r"\bwhat(?:'s| is| was)\b.+\blike\b\s*\??\s*$", question, re.I):
+        return None
+    for pattern, compound_relation in _COMPOUND_RELATION_PATTERNS:
+        if pattern.search(question):
+            return compound_relation
     tokens = _tokenize_lower(question)
     for t in tokens:
+        lemma = _VERB_LEMMA_MAP.get(t)
+        if lemma:
+            return lemma
         if t in _RELATION_VERBS:
             return t
     return None

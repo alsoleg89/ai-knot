@@ -67,9 +67,11 @@ def execute_query(
     _drain_dirty_keys(storage, agent_id)
 
     # 3. Retrieve support bundles.
-    topics = _sr.topics_for_entities(frame.focus_entities, contract)
-    kinds = _sr.bundle_kinds_for_contract(contract)
-    bundles = _sr.retrieve_bundles(
+    topics = _sr.topics_for_entities(
+        frame.focus_entities, contract, focus_relation=frame.focus_relation
+    )
+    kinds = _sr.bundle_kinds_for_contract(contract, focus_relation=frame.focus_relation)
+    bundles, fallback_used = _sr.retrieve_bundles(
         storage,
         agent_id,
         topics=topics,
@@ -82,22 +84,59 @@ def execute_query(
     active_only = contract.time_axis in (TimeAxis.CURRENT, TimeAxis.NONE)
     claims = _sr.expand_claims(storage, agent_id, bundles, active_only=active_only)
 
-    # 5. Build evidence profile.
-    profile = _build_evidence_profile(claims, bundles, contract, frame)
+    # 5. Raw-episode search for evidence_text enrichment (always runs).
+    episode_search_ids: list[str] = []
+    episode_fallback_used = False
+    if frame.focus_entities:
+        search_fn = getattr(storage, "search_episodes_by_entities", None)
+        if search_fn is not None:
+            eps = search_fn(agent_id, frame.focus_entities, query=question, top_k=5)
+            seen: set[str] = set()
+            window_ids: list[str] = []
+            for hit in eps:
+                for eid in (
+                    getattr(hit, "prev_id", None),
+                    hit.id,
+                    getattr(hit, "next_id", None),
+                ):
+                    if eid is not None and eid not in seen:
+                        seen.add(eid)
+                        window_ids.append(eid)
+                        if len(window_ids) >= 8:
+                            break
+                if len(window_ids) >= 8:
+                    break
+            episode_search_ids = window_ids
+            episode_fallback_used = bool(window_ids)
 
-    # 6. Choose strategy.
+    # 6. Build evidence profile.
+    profile = _build_evidence_profile(
+        claims,
+        bundles,
+        contract,
+        frame,
+        question,
+        fallback_used,
+        episode_fallback_used=episode_fallback_used,
+    )
+
+    # 7. Choose strategy.
     strategy = choose_strategy(frame, contract, profile)
 
-    # 7. Execute operator.
+    # 8. Execute operator.
     operator_fn = OPERATORS[strategy]
     answer_items, confidence, decision_notes = operator_fn(
         claims, bundles, contract, profile, now, renderer
     )
 
-    # 8. Render text.
+    # 9. Render text.
     text = _render_text(answer_items, contract)
 
-    # 9. Build trace.
+    # 10. Build evidence_text (raw-search first, then items, then claims).
+    ep_ids = _collect_evidence_episode_ids(answer_items, claims, episode_search_ids)
+    evidence_text = _render_evidence_context(storage, agent_id, ep_ids)
+
+    # 11. Build trace.
     latency_ms = (time.monotonic() - t0) * 1000.0
     trace = AnswerTrace(
         question=question,
@@ -116,7 +155,87 @@ def execute_query(
         items=tuple(answer_items),
         confidence=confidence,
         trace=trace,
+        evidence_text=evidence_text,
     )
+
+
+# ---------------------------------------------------------------------------
+# Evidence collection helpers
+# ---------------------------------------------------------------------------
+
+
+def _collect_evidence_episode_ids(
+    items: list[AnswerItem],
+    claims: list[AtomicClaim],
+    episode_search_ids: list[str] | None = None,
+    cap: int = 5,
+) -> list[str]:
+    """Collect episode IDs for evidence_text, raw-search results first."""
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _add(eid: str | None) -> bool:
+        if eid and eid not in seen:
+            seen.add(eid)
+            out.append(eid)
+        return len(out) >= cap
+
+    # 1. Raw-search results FIRST (highest priority).
+    for eid in episode_search_ids or ():
+        if _add(eid):
+            return out
+
+    # 2. Episodes from answer items.
+    for it in items:
+        for eid in it.source_episode_ids:
+            if _add(eid):
+                return out
+
+    # 3. Episodes from claims.
+    for c in claims:
+        if _add(c.source_episode_id):
+            return out
+
+    return out
+
+
+def _raw_text_has_speaker_prefix(raw: str) -> bool:
+    """Return True if raw text already starts with 'Speaker: ' prefix."""
+    if ": " not in raw:
+        return False
+    prefix, _, _ = raw.partition(": ")
+    # Speaker prefix is a single capitalized word with no spaces.
+    return " " not in prefix and prefix and prefix[0].isupper()
+
+
+def _render_evidence_context(
+    storage: object,
+    agent_id: str,
+    episode_ids: list[str],
+) -> str:
+    """Load raw episode texts and format as evidence context."""
+    if not episode_ids:
+        return ""
+
+    get_ep = getattr(storage, "get_episode", None)
+    if get_ep is None:
+        return ""
+
+    lines: list[str] = []
+    for eid in episode_ids:
+        ep = get_ep(agent_id, eid)
+        if ep is None:
+            continue
+        raw = ep.raw_text or ""
+        if not raw.strip():
+            continue
+        speaker = getattr(ep, "speaker", "") or ""
+        if speaker and not _raw_text_has_speaker_prefix(raw):
+            lines.append(f"{speaker}: {raw}")
+        else:
+            lines.append(raw)
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -129,8 +248,14 @@ def _build_evidence_profile(
     bundles: list[SupportBundle],
     contract: AnswerContract,
     frame: QueryFrame,
+    question: str = "",
+    fallback_used: bool = False,
+    *,
+    episode_fallback_used: bool = False,
 ) -> EvidenceProfile:
     """Summarize the evidence landscape for the query."""
+    from ai_knot.tokenizer import tokenize as _tokenize
+
     n_support = sum(1 for c in claims if c.polarity == "support")
     n_contra = sum(1 for c in claims if c.polarity == "contra")
     n_ambiguous = len(claims) - n_support - n_contra
@@ -151,6 +276,17 @@ def _build_evidence_profile(
         c.event_time is not None and c.qualifiers.get("date_token") for c in claims
     )
 
+    # Slot bundle hits: bundles whose topic is "entity::relation" form.
+    slot_bundle_hits = sum(1 for b in bundles if "::" in b.topic)
+
+    # Explicit time hits: claims with a date_token qualifier.
+    explicit_time_hits = sum(
+        1 for c in claims if c.qualifiers.get("date_token") and c.event_time is not None
+    )
+
+    # Question tokens for relevance scoring in operators.
+    question_tokens = tuple(_tokenize(question)) if question else ()
+
     return EvidenceProfile(
         n_support=n_support,
         n_contra=n_contra,
@@ -159,6 +295,13 @@ def _build_evidence_profile(
         temporal_span=temporal_span,
         coverage_ratio=coverage,
         has_explicit_event_time=has_explicit_event_time,
+        slot_bundle_hits=slot_bundle_hits,
+        explicit_time_hits=explicit_time_hits,
+        fallback_used=fallback_used,
+        episode_fallback_used=episode_fallback_used,
+        question_tokens=question_tokens,
+        focus_entities=frame.focus_entities,
+        focus_relation=frame.focus_relation,
     )
 
 

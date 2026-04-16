@@ -20,7 +20,31 @@ from ai_knot.query_types import (
     ClaimKind,
     RawEpisode,
     SupportBundle,
-    make_bundle_id,
+    stable_bundle_id,
+)
+
+# ---------------------------------------------------------------------------
+# Discourse subjects that should never anchor an entity bundle.
+# ---------------------------------------------------------------------------
+
+_DISCOURSE_SUBJECT_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        "It",
+        "This",
+        "That",
+        "These",
+        "Those",
+        "My",
+        "Our",
+        "Your",
+        "Their",
+        "His",
+        "Her",
+        "I",
+        "We",
+        "You",
+        "They",
+    }
 )
 
 # ---------------------------------------------------------------------------
@@ -36,6 +60,10 @@ def build_entity_topic_bundles(
 ) -> tuple[list[SupportBundle], dict[str, list[str]]]:
     """Group claims by subject; one bundle per distinct subject.
 
+    Entity filter: skip noise subjects.  Only create a bundle if the subject
+    is a proper noun (1-3 capitalised words, not in the discourse blocklist)
+    OR there are at least 2 claims about it.
+
     Returns (bundles, memberships) where memberships = {bundle_id: [claim_id]}.
     """
     groups: dict[str, list[AtomicClaim]] = {}
@@ -49,8 +77,20 @@ def build_entity_topic_bundles(
     now = datetime.now(UTC)
 
     for subject, group in groups.items():
+        # Entity filter: skip noise subjects.
+        words = subject.split()
+        is_proper_noun = (
+            len(words) <= 3
+            and subject[0].isupper()
+            and words[0].istitle()
+            and words[0] not in _DISCOURSE_SUBJECT_BLOCKLIST
+        )
+        is_multi_claim = len(group) >= 2
+        if not (is_proper_noun or is_multi_claim):
+            continue
+
         score = _aggregate_score(group)
-        bid = make_bundle_id()
+        bid = stable_bundle_id(BundleKind.ENTITY_TOPIC, subject)
         b = SupportBundle(
             id=bid,
             agent_id=agent_id,
@@ -95,7 +135,7 @@ def build_state_timeline_bundles(
         # Sort by valid_from desc so most recent state is first.
         sorted_group = sorted(group, key=lambda c: c.valid_from, reverse=True)
         score = _aggregate_score(sorted_group)
-        bid = make_bundle_id()
+        bid = stable_bundle_id(BundleKind.STATE_TIMELINE, slot_key)
         b = SupportBundle(
             id=bid,
             agent_id=agent_id,
@@ -147,7 +187,7 @@ def build_event_neighborhood_bundles(
 
         sorted_group = sorted(group, key=_event_sort_key)
         score = _aggregate_score(sorted_group)
-        bid = make_bundle_id()
+        bid = stable_bundle_id(BundleKind.EVENT_NEIGHBORHOOD, subject)
         b = SupportBundle(
             id=bid,
             agent_id=agent_id,
@@ -187,7 +227,7 @@ def build_relation_support_bundles(
 
     for key, group in groups.items():
         score = _aggregate_score(group)
-        bid = make_bundle_id()
+        bid = stable_bundle_id(BundleKind.RELATION_SUPPORT, key)
         b = SupportBundle(
             id=bid,
             agent_id=agent_id,

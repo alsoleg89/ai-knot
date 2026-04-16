@@ -208,6 +208,18 @@ def make_bundle_id() -> str:
     return uuid4().hex[:16]
 
 
+def stable_bundle_id(kind: BundleKind, topic: str) -> str:
+    """Deterministic id for a persisted bundle keyed by (kind, topic).
+
+    Schema PK is (agent_id, id); hashing (kind, topic) is sufficient to
+    prevent cross-topic collisions because topics are agent-scoped.
+    """
+    import hashlib
+
+    kind_val = kind.value if hasattr(kind, "value") else str(kind)
+    return hashlib.sha1(f"{kind_val}:{topic}".encode()).hexdigest()[:16]
+
+
 # ---------------------------------------------------------------------------
 # Dirty invalidation key (three-level granularity)
 # ---------------------------------------------------------------------------
@@ -297,6 +309,14 @@ class EvidenceProfile:
     temporal_span: tuple[datetime, datetime] | None
     coverage_ratio: float  # claims expanded / bundles retrieved
     has_explicit_event_time: bool
+    # Retrieval quality signals (with defaults for backward compatibility)
+    slot_bundle_hits: int = 0  # bundles with "entity::relation" topic
+    explicit_time_hits: int = 0  # claims with qualifiers['date_token']
+    fallback_used: bool = False  # BM25 fallback was needed
+    episode_fallback_used: bool = False  # raw-episode BM25 search was used
+    question_tokens: tuple[str, ...] = ()  # tokenized question for relevance scoring
+    focus_entities: tuple[str, ...] = ()  # from QueryFrame
+    focus_relation: str | None = None  # from QueryFrame
 
 
 # ---------------------------------------------------------------------------
@@ -386,11 +406,13 @@ class QueryAnswer:
     items: tuple[AnswerItem, ...]
     confidence: float
     trace: AnswerTrace
+    evidence_text: str = ""  # raw episode context for LLM rendering
 
     def to_json(self) -> dict[str, Any]:
         return {
             "text": self.text,
             "confidence": self.confidence,
+            "evidence_text": self.evidence_text,
             "items": [
                 {
                     "value": item.value,
