@@ -354,9 +354,11 @@ def _drain_dirty_keys(storage: object, agent_id: str) -> None:
     if dirty_json in ("[]", "", "null", None):
         return
 
-    invalidated = _sr.apply_pending_dirty_keys(storage, agent_id, dirty_json)
+    _sr.apply_pending_dirty_keys(storage, agent_id, dirty_json)
 
-    if invalidated > 0 and hasattr(storage, "save_bundles") and hasattr(storage, "load_claims"):
+    # Always rebuild bundles when dirty_keys are present — including the first-time
+    # build case where invalidated == 0 because no bundles existed yet.
+    if hasattr(storage, "save_bundles") and hasattr(storage, "load_claims"):
         # Rebuild bundles for the affected subjects so the slot plane is not left empty.
         import json as _json
 
@@ -380,7 +382,7 @@ def _drain_dirty_keys(storage: object, agent_id: str) -> None:
                 if rebuilt_bundles:
                     storage.save_bundles(agent_id, rebuilt_bundles, rebuilt_members)
 
-    if invalidated > 0 and hasattr(storage, "save_materialization_meta"):
+    if hasattr(storage, "save_materialization_meta"):
         # Clear dirty keys after draining.
         storage.save_materialization_meta(
             agent_id,
