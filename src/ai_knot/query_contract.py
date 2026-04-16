@@ -218,6 +218,34 @@ _STOP_CAPS: frozenset[str] = frozenset(
     }
 )
 
+# Aggregation noun heads that make "what/which + has/have + head" a SET question.
+_SET_NOUN_HEADS: frozenset[str] = frozenset(
+    {
+        "books",
+        "movies",
+        "films",
+        "shows",
+        "places",
+        "countries",
+        "cities",
+        "languages",
+        "hobbies",
+        "activities",
+        "sports",
+        "instruments",
+        "skills",
+        "jobs",
+        "courses",
+        "classes",
+        "events",
+        "awards",
+        "friends",
+        "pets",
+        "children",
+        "kids",
+    }
+)
+
 # Calendar tokens that should not be extracted as named entities when they
 # appear in a clear temporal-modifier context.
 _CALENDAR_TOKENS: frozenset[str] = frozenset(
@@ -349,18 +377,15 @@ def _detect_geometry(question: str, tokens: list[str]) -> AnswerSpace:
     ):
         return AnswerSpace.SET
 
-    # Implicit SET: structural heuristic for "What X has/have/did Y verb?" forms.
-    # Conservative: requires has/have/did in early tokens AND plural noun or past verb signal.
+    # Implicit SET: conservative — only fire when a known aggregation noun head
+    # appears in "what/which + has/have + noun_head" structure.
+    # e.g. "What books has X read?" / "What places has X visited?"
     if tokens and tokens[0] in {"what", "which"}:
         early = set(tokens[1:5])
-        if early & {"has", "have", "did"}:
-            # Look for plural noun or past participle anywhere in the question tokens.
-            rest_str = " ".join(tokens[1:])
-            if re.search(r"\b\w+(?:ed|en)\b|\b\w+s\b", rest_str):
+        if early & {"has", "have"}:
+            rest_tokens = tokens[1:]
+            if any(noun in rest_tokens for noun in _SET_NOUN_HEADS):
                 return AnswerSpace.SET
-    # "Where has/have X been/gone?" → SET of places
-    if tokens and tokens[0] == "where" and set(tokens[1:4]) & {"has", "have"}:
-        return AnswerSpace.SET
 
     # "who" → ENTITY
     if tokens and tokens[0] == "who":

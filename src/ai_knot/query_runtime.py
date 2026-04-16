@@ -275,7 +275,12 @@ def _collect_evidence_episode_ids(
     episode_search_ids: list[str] | None = None,
     cap: int = 5,
 ) -> list[str]:
-    """Unique episode ids: answer_items → claims → raw-search fallback."""
+    """Unique episode ids in retrieval order: raw-search → items → claims.
+
+    Raw-search runs on entity + query text so it finds the most topically
+    relevant episodes.  Operator items and claim sources are appended as
+    secondary and tertiary sources to fill up to cap.
+    """
     seen: set[str] = set()
     out: list[str] = []
 
@@ -286,20 +291,20 @@ def _collect_evidence_episode_ids(
             return len(out) >= cap
         return False
 
-    # 1. Episodes from selected answer items (most relevant — came from operators)
-    for it in items:
-        for eid in it.source_episode_ids:
-            if _add(eid):
-                return out
-    # 2. Episodes from all retrieved claims
-    for c in claims:
-        if _add(c.source_episode_id):
-            return out
-    # 3. Raw search fallback — only if we still need more
+    # 1. Raw-search results first — entity+query search finds topically relevant episodes.
     if episode_search_ids:
         for eid in episode_search_ids:
             if _add(eid):
                 return out
+    # 2. Episodes from selected answer items.
+    for it in items:
+        for eid in it.source_episode_ids:
+            if _add(eid):
+                return out
+    # 3. Episodes from all retrieved claims.
+    for c in claims:
+        if _add(c.source_episode_id):
+            return out
     return out
 
 

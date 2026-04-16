@@ -352,8 +352,8 @@ def test_evidence_profile_has_temporal_anchor():
     assert profile_no_anchor.has_temporal_anchor is False
 
 
-def test_evidence_ids_prefer_answer_items():
-    """_collect_evidence_episode_ids returns answer_item episodes before raw-search."""
+def test_evidence_ids_raw_search_first():
+    """_collect_evidence_episode_ids puts raw-search episodes first for topical relevance."""
     from datetime import UTC, datetime
 
     from ai_knot.query_runtime import _collect_evidence_episode_ids
@@ -389,6 +389,7 @@ def test_evidence_ids_prefer_answer_items():
         episode_search_ids=raw_search_ids,
         cap=5,
     )
-    assert result[0] == "ep_answer_1", f"Answer episode should be first, got {result}"
-    assert "ep_raw_1" in result  # raw search still included (as fallback)
-    assert result.index("ep_answer_1") < result.index("ep_raw_1")
+    # Raw-search episodes come first (topically relevant via entity+query text).
+    assert result[0] == "ep_raw_1", f"Raw-search episode should be first, got {result}"
+    assert "ep_answer_1" in result  # answer item episode still included
+    assert result.index("ep_raw_1") < result.index("ep_answer_1")
