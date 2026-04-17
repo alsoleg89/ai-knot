@@ -90,7 +90,7 @@ def execute_query(
     if frame.focus_entities:
         search_fn = getattr(storage, "search_episodes_by_entities", None)
         if search_fn is not None:
-            eps = search_fn(agent_id, frame.focus_entities, query=question, top_k=5)
+            eps = search_fn(agent_id, frame.focus_entities, query=question, top_k=60)
             seen: set[str] = set()
             window_ids: list[str] = []
             for hit in eps:
@@ -102,9 +102,9 @@ def execute_query(
                     if eid is not None and eid not in seen:
                         seen.add(eid)
                         window_ids.append(eid)
-                        if len(window_ids) >= 8:
+                        if len(window_ids) >= 200:
                             break
-                if len(window_ids) >= 8:
+                if len(window_ids) >= 200:
                     break
             episode_search_ids = window_ids
             episode_fallback_used = bool(window_ids)
@@ -134,6 +134,7 @@ def execute_query(
 
     # 10. Build evidence_text (raw-search first, then items, then claims).
     ep_ids = _collect_evidence_episode_ids(answer_items, claims, episode_search_ids)
+    ep_ids = _sort_episode_ids_by_date(storage, agent_id, ep_ids)
     evidence_text = _render_evidence_context(storage, agent_id, ep_ids)
 
     # 11. Build trace.
@@ -168,7 +169,7 @@ def _collect_evidence_episode_ids(
     items: list[AnswerItem],
     claims: list[AtomicClaim],
     episode_search_ids: list[str] | None = None,
-    cap: int = 5,
+    cap: int = 120,
 ) -> list[str]:
     """Collect episode IDs for evidence_text, raw-search results first."""
     out: list[str] = []
@@ -199,13 +200,35 @@ def _collect_evidence_episode_ids(
     return out
 
 
+def _sort_episode_ids_by_date(
+    storage: object,
+    agent_id: str,
+    episode_ids: list[str],
+) -> list[str]:
+    """Sort episode IDs chronologically by session_date, then turn_id."""
+    if not episode_ids:
+        return episode_ids
+    get_ep = getattr(storage, "get_episode", None)
+    if get_ep is None:
+        return episode_ids
+    dated: list[tuple[datetime | None, str, str]] = []
+    for eid in episode_ids:
+        ep = get_ep(agent_id, eid)
+        if ep is None:
+            dated.append((None, "", eid))
+        else:
+            dated.append((getattr(ep, "session_date", None), getattr(ep, "turn_id", ""), eid))
+    dated.sort(key=lambda t: (t[0] or datetime.min, t[1]))
+    return [eid for _, _, eid in dated]
+
+
 def _raw_text_has_speaker_prefix(raw: str) -> bool:
     """Return True if raw text already starts with 'Speaker: ' prefix."""
     if ": " not in raw:
         return False
     prefix, _, _ = raw.partition(": ")
     # Speaker prefix is a single capitalized word with no spaces.
-    return " " not in prefix and prefix and prefix[0].isupper()
+    return bool(" " not in prefix and prefix and prefix[0].isupper())
 
 
 def _render_evidence_context(
@@ -213,7 +236,12 @@ def _render_evidence_context(
     agent_id: str,
     episode_ids: list[str],
 ) -> str:
-    """Load raw episode texts and format as evidence context."""
+    """Load raw episode texts and format as 3-turn window evidence context.
+
+    For each episode ID, fetches the prev/center/next window and formats as
+    ``[date] prev_text / center_text / next_text`` — mirroring the dated
+    ingest format so the answer LLM sees comparable context volume.
+    """
     if not episode_ids:
         return ""
 
@@ -221,21 +249,46 @@ def _render_evidence_context(
     if get_ep is None:
         return ""
 
+    rendered: set[str] = set()
     lines: list[str] = []
     for eid in episode_ids:
         ep = get_ep(agent_id, eid)
-        if ep is None:
+        if ep is None or eid in rendered:
             continue
-        raw = ep.raw_text or ""
-        if not raw.strip():
-            continue
-        speaker = getattr(ep, "speaker", "") or ""
-        if speaker and not _raw_text_has_speaker_prefix(raw):
-            lines.append(f"{speaker}: {raw}")
-        else:
-            lines.append(raw)
+        rendered.add(eid)
 
-    return "\n".join(lines)
+        # Build 3-turn window: prev / center / next
+        window_parts: list[str] = []
+        for neighbor_id in (getattr(ep, "prev_id", None), eid, getattr(ep, "next_id", None)):
+            if neighbor_id is None:
+                continue
+            rendered.add(neighbor_id)
+            nep = get_ep(agent_id, neighbor_id) if neighbor_id != eid else ep
+            if nep is None:
+                continue
+            raw = nep.raw_text or ""
+            if not raw.strip():
+                continue
+            speaker = getattr(nep, "speaker", "") or ""
+            if speaker and not _raw_text_has_speaker_prefix(raw):
+                window_parts.append(f"{speaker}: {raw}")
+            else:
+                window_parts.append(raw)
+
+        if not window_parts:
+            continue
+
+        date = getattr(ep, "session_date", None) or ""
+        prefix = f"[{date}] " if date else ""
+        lines.append(f"{prefix}{' / '.join(window_parts)}")
+
+    result = "\n".join(lines)
+    # Cap evidence context to ~8K tokens (~32K chars) to test memory
+    # quality rather than raw-context recall.
+    max_chars = 32_000
+    if len(result) > max_chars:
+        result = result[:max_chars]
+    return result
 
 
 # ---------------------------------------------------------------------------

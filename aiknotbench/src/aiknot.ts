@@ -4,6 +4,13 @@ import type { Session } from "./locomo.js";
 export type IngestMode = "raw" | "session" | "dated" | "learn" | "dated-learn" | "raw-episodes";
 export type QueryMode = "legacy_recall" | "target_query";
 
+/** Convert "8 May, 2023" or "22 October, 2023" to "2023-05-08". */
+function toISODate(raw: string): string | undefined {
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return undefined;
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Per-conversation adapter around ai-knot KnowledgeBase.
  *
@@ -92,12 +99,13 @@ export class AiknotAdapter {
         // LoCoMo alternates: even = person1 (user), odd = person2 (assistant)
         const speaker = i % 2 === 0 ? "user" : "assistant";
 
+        const isoDate = session.date ? toISODate(session.date) : undefined;
         await this.kb.ingestEpisode({
           sessionId,
           turnId: `turn-${i}`,
           rawText: turnText,
           speaker,
-          sessionDate: session.date ?? undefined,
+          sessionDate: isoDate,
           sourceMeta: { dataset: "locomo", sessionIdx: sessions.indexOf(session) },
         });
       }
