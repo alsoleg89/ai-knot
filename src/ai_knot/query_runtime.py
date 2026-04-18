@@ -13,6 +13,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 import ai_knot.support_retrieval as _sr
 from ai_knot.query_contract import analyze_query, derive_answer_contract
@@ -95,22 +96,15 @@ def execute_query(
             eps = search_fn(
                 agent_id, frame.focus_entities, query=question, top_k=60, diversity=diversity
             )
-            seen: set[str] = set()
-            window_ids: list[str] = []
-            for hit in eps:
-                for eid in (
-                    getattr(hit, "prev_id", None),
-                    hit.id,
-                    getattr(hit, "next_id", None),
-                ):
-                    if eid is not None and eid not in seen:
-                        seen.add(eid)
-                        window_ids.append(eid)
-                        if len(window_ids) >= 200:
-                            break
-                if len(window_ids) >= 200:
-                    break
-            episode_search_ids = window_ids
+            # Contract-driven window: EVENT/INTERVAL → 5-turn (±2); others → 3-turn (±1)
+            if contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL):
+                window_ids = _expand_window_n_turns(eps, storage, agent_id, n=2)
+                q_date = _extract_explicit_date_from_question(question)
+                if q_date is not None:
+                    window_ids = _sort_by_date_proximity(storage, agent_id, window_ids, q_date)
+            else:
+                window_ids = _expand_window_n_turns(eps, storage, agent_id, n=1)
+            episode_search_ids = window_ids[:200]
             episode_fallback_used = bool(window_ids)
 
     # 6. Build evidence profile.
@@ -136,10 +130,21 @@ def execute_query(
     # 9. Render text.
     text = _render_text(answer_items, contract)
 
-    # 10. Build evidence_text (raw-search first, then items, then claims).
+    # 10. Build evidence_text: preference block first, then session-grouped main.
     ep_ids = _collect_evidence_episode_ids(answer_items, claims, episode_search_ids)
     ep_ids = _sort_episode_ids_by_date(storage, agent_id, ep_ids)
-    evidence_text = _render_evidence_context(storage, agent_id, ep_ids)
+
+    # Preference block (cat3 speculation support) — separate retrieval.
+    from ai_knot.preference_retrieval import retrieve_preference_episodes
+
+    pref_eps = []
+    if frame.focus_entities:
+        pref_eps = retrieve_preference_episodes(storage, agent_id, frame.focus_entities, top_k=20)
+    pref_ep_ids = [e.id for e in pref_eps if hasattr(e, "id")]
+    pref_block = _render_preference_block(storage, agent_id, pref_ep_ids, frame.focus_entities)
+
+    main_block = _render_evidence_context(storage, agent_id, ep_ids)
+    evidence_text = (pref_block + "\n" + main_block).strip() if pref_block else main_block
 
     # 11. Build trace.
     latency_ms = (time.monotonic() - t0) * 1000.0
@@ -204,6 +209,97 @@ def _collect_evidence_episode_ids(
     return out
 
 
+def _extract_explicit_date_from_question(question: str) -> datetime | None:
+    """Extract an explicit calendar date from the question text.
+
+    Only extracts absolute dates (January 19, 2023-01-19, etc.).
+    Relative phrases (yesterday, last Friday, next month) intentionally
+    return None — we never resolve relative time expressions.
+    """
+
+    from ai_knot.materialization import _DATE_RE
+
+    m = _DATE_RE.search(question)
+    if not m:
+        return None
+    from ai_knot.materialization import _parse_date_str
+
+    return _parse_date_str(m.group(1))
+
+
+def _expand_window_n_turns(
+    eps: list[Any],
+    storage: object,
+    agent_id: str,
+    n: int,
+) -> list[str]:
+    """Build ±n-turn window around each episode, returning ordered unique IDs.
+
+    n=1 → prev + center + next (3-turn, current default)
+    n=2 → prev.prev + prev + center + next + next.next (5-turn)
+    """
+    get_ep = getattr(storage, "get_episode", None)
+    seen: set[str] = set()
+    result: list[str] = []
+
+    def _add(eid: str | None) -> None:
+        if eid and eid not in seen:
+            seen.add(eid)
+            result.append(eid)
+
+    for hit in eps:
+        center_id = hit.id
+        # Walk backwards n steps
+        back_ids: list[str] = []
+        cur = hit
+        for _ in range(n):
+            pid = getattr(cur, "prev_id", None)
+            if pid is None:
+                break
+            back_ids.append(pid)
+            if get_ep is not None:
+                cur = get_ep(agent_id, pid) or cur
+            else:
+                break
+        for bid in reversed(back_ids):
+            _add(bid)
+        _add(center_id)
+        # Walk forwards n steps
+        cur = hit
+        for _ in range(n):
+            nid = getattr(cur, "next_id", None)
+            if nid is None:
+                break
+            _add(nid)
+            if get_ep is not None:
+                cur = get_ep(agent_id, nid) or cur
+            else:
+                break
+
+    return result
+
+
+def _sort_by_date_proximity(
+    storage: object,
+    agent_id: str,
+    episode_ids: list[str],
+    target_date: datetime,
+) -> list[str]:
+    """Sort episode IDs by proximity of session_date to target_date."""
+    get_ep = getattr(storage, "get_episode", None)
+    if get_ep is None:
+        return episode_ids
+
+    def _dist(eid: str) -> float:
+        ep = get_ep(agent_id, eid)
+        sd = getattr(ep, "session_date", None) if ep else None
+        if sd is None:
+            return float("inf")
+        return float(abs((sd - target_date).total_seconds()))
+
+    return sorted(episode_ids, key=_dist)
+
+
 def _sort_episode_ids_by_date(
     storage: object,
     agent_id: str,
@@ -235,6 +331,49 @@ def _raw_text_has_speaker_prefix(raw: str) -> bool:
     return bool(" " not in prefix and prefix and prefix[0].isupper())
 
 
+def _render_preference_block(
+    storage: object,
+    agent_id: str,
+    ep_ids: list[str],
+    focus_entities: tuple[str, ...],
+) -> str:
+    """Render preference/affect episodes as a separate evidence block.
+
+    Appears BEFORE the session-grouped main evidence so cat3 speculative
+    questions get the affect context prominently.
+    """
+    if not ep_ids:
+        return ""
+    get_ep = getattr(storage, "get_episode", None)
+    if get_ep is None:
+        return ""
+
+    entity_label = ", ".join(focus_entities) if focus_entities else "entity"
+    header = f"## Preferences & feelings ({entity_label})"
+    lines: list[str] = [header]
+    seen: set[str] = set()
+    for eid in ep_ids:
+        if eid in seen:
+            continue
+        seen.add(eid)
+        ep = get_ep(agent_id, eid)
+        if ep is None or not (ep.raw_text or "").strip():
+            continue
+        sd = getattr(ep, "session_date", None)
+        prefix = f"[{sd.date().isoformat()}] " if sd is not None else ""
+        speaker = getattr(ep, "speaker", "") or ""
+        raw = ep.raw_text or ""
+        if speaker and not _raw_text_has_speaker_prefix(raw):
+            lines.append(f"{prefix}{speaker}: {raw}")
+        else:
+            lines.append(f"{prefix}{raw}")
+
+    if len(lines) <= 1:  # only the header, no content
+        return ""
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _render_evidence_context(
     storage: object,
     agent_id: str,
@@ -246,7 +385,6 @@ def _render_evidence_context(
     ## Session YYYY-MM-DD, then individual turns with [date] Speaker: text.
     """
     from collections import OrderedDict
-    from typing import Any
 
     if not episode_ids:
         return ""
@@ -282,7 +420,7 @@ def _render_evidence_context(
     # Sort sessions chronologically by first date
     sorted_sids = sorted(
         sessions.keys(),
-        key=lambda s: (session_first_date[s] or datetime.min),
+        key=lambda s: session_first_date[s] or datetime.min,
     )
 
     rendered_eps: set[str] = set()
@@ -290,9 +428,7 @@ def _render_evidence_context(
     for sid in sorted_sids:
         # Build session header
         sd: datetime | None = session_first_date[sid]
-        hdr = (
-            f"## Session {sd.date().isoformat()}" if sd is not None else f"## Session {sid[:16]}"
-        )
+        hdr = f"## Session {sd.date().isoformat()}" if sd is not None else f"## Session {sid[:16]}"
         lines.append(hdr)
 
         for eid, ep in sessions[sid]:
