@@ -1,11 +1,11 @@
-"""Tests for _render_evidence_context — session-grouped evidence rendering."""
+"""Tests for _render_evidence_context — session-grouped and flat evidence rendering."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from ai_knot.query_runtime import _render_evidence_context
+from ai_knot.query_runtime import _render_evidence_context, _render_evidence_flat
 
 
 @dataclass
@@ -260,3 +260,77 @@ class TestEdgeCases:
         storage = _make_storage(eps)
         result = _render_evidence_context(storage, "agent1", ["some-session-id-xyz"])
         assert "## Session some-session-" in result
+
+
+class TestFlatRendering:
+    def test_flat_mode_has_no_session_headers(self) -> None:
+        eps = [
+            FakeEp(
+                id="ep-a1",
+                raw_text="Turn A",
+                session_id="sess-A",
+                session_date=_dt("2024-01-10"),
+            ),
+            FakeEp(
+                id="ep-b1",
+                raw_text="Turn B",
+                session_id="sess-B",
+                session_date=_dt("2024-03-05"),
+            ),
+        ]
+        storage = _make_storage(eps)
+        result = _render_evidence_flat(storage, "agent1", ["ep-a1", "ep-b1"])
+        assert "## Session" not in result
+        assert "Turn A" in result
+        assert "Turn B" in result
+
+    def test_flat_mode_preserves_input_order(self) -> None:
+        eps = [
+            FakeEp(
+                id="ep-later",
+                raw_text="Later episode",
+                session_id="sess-B",
+                session_date=_dt("2024-06-01"),
+            ),
+            FakeEp(
+                id="ep-earlier",
+                raw_text="Earlier episode",
+                session_id="sess-A",
+                session_date=_dt("2024-01-15"),
+            ),
+        ]
+        storage = _make_storage(eps)
+        result = _render_evidence_flat(storage, "agent1", ["ep-later", "ep-earlier"])
+        idx_later = result.index("Later episode")
+        idx_earlier = result.index("Earlier episode")
+        assert idx_later < idx_earlier, "Input (relevance) order must be preserved"
+
+    def test_flat_mode_inline_date(self) -> None:
+        eps = [
+            FakeEp(
+                id="ep-1",
+                raw_text="Hello world",
+                session_id="sess-A",
+                session_date=_dt("2024-05-27"),
+                speaker="Jon",
+            ),
+        ]
+        storage = _make_storage(eps)
+        result = _render_evidence_flat(storage, "agent1", ["ep-1"])
+        assert "[2024-05-27]" in result
+        assert "Hello world" in result
+
+    def test_render_evidence_context_flat_kwarg(self) -> None:
+        eps = [
+            FakeEp(
+                id="ep-1",
+                raw_text="Event text",
+                session_id="sess-A",
+                session_date=_dt("2024-05-01"),
+            ),
+        ]
+        storage = _make_storage(eps)
+        flat_result = _render_evidence_context(storage, "agent1", ["ep-1"], flat=True)
+        grouped_result = _render_evidence_context(storage, "agent1", ["ep-1"])
+        assert "## Session" not in flat_result
+        assert "## Session" in grouped_result

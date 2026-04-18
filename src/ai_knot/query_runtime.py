@@ -155,7 +155,10 @@ def execute_query(
     pref_ep_ids = [e.id for e in pref_eps if hasattr(e, "id")]
     pref_block = _render_preference_block(storage, agent_id, pref_ep_ids, frame.focus_entities)
 
-    main_block = _render_evidence_context(storage, agent_id, ep_ids)
+    # EVENT/INTERVAL queries use flat inline format (date visible per episode).
+    # All other queries use session-grouped format (better for cat3/cat4 context).
+    use_flat = contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL)
+    main_block = _render_evidence_context(storage, agent_id, ep_ids, flat=use_flat)
     evidence_text = (pref_block + "\n" + main_block).strip() if pref_block else main_block
 
     # 11. Build trace.
@@ -386,16 +389,79 @@ def _render_preference_block(
     return "\n".join(lines)
 
 
+def _render_evidence_flat(
+    storage: object,
+    agent_id: str,
+    episode_ids: list[str],
+) -> str:
+    """Flat episode rendering: each episode shown as prev / center / next on one line.
+
+    Used for EVENT/INTERVAL queries where per-episode date visibility matters most.
+    Preserves relevance order (input order) so the most BM25-matching episode is first.
+    """
+    if not episode_ids:
+        return ""
+    get_ep = getattr(storage, "get_episode", None)
+    if get_ep is None:
+        return ""
+
+    rendered_eps: set[str] = set()
+    lines: list[str] = []
+
+    for i, eid in enumerate(episode_ids):
+        if eid in rendered_eps:
+            continue
+        ep = get_ep(agent_id, eid)
+        if ep is None:
+            continue
+        rendered_eps.add(eid)
+
+        window_parts: list[str] = []
+        for neighbor_id in (
+            getattr(ep, "prev_id", None),
+            eid,
+            getattr(ep, "next_id", None),
+        ):
+            if neighbor_id is None:
+                continue
+            if neighbor_id in rendered_eps and neighbor_id != eid:
+                continue
+            rendered_eps.add(neighbor_id)
+            nep: Any = get_ep(agent_id, neighbor_id) if neighbor_id != eid else ep
+            if nep is None:
+                continue
+            raw: str = nep.raw_text or ""
+            if not raw.strip():
+                continue
+            sd: datetime | None = getattr(nep, "session_date", None)
+            date_prefix = f"[{sd.date().isoformat()}] " if sd is not None else ""
+            speaker: str = getattr(nep, "speaker", "") or ""
+            if speaker and not _raw_text_has_speaker_prefix(raw):
+                window_parts.append(f"{date_prefix}{speaker}: {raw}")
+            else:
+                window_parts.append(f"{date_prefix}{raw}")
+
+        if window_parts:
+            lines.append(f"[{i + 1}] " + " / ".join(window_parts))
+
+    return "\n".join(lines)
+
+
 def _render_evidence_context(
     storage: object,
     agent_id: str,
     episode_ids: list[str],
+    *,
+    flat: bool = False,
 ) -> str:
     """Load raw episodes and format grouped by session with headers.
 
     Groups episodes by session_id, renders each session with a header line
     ## Session YYYY-MM-DD, then individual turns with [date] Speaker: text.
+    When flat=True, uses inline prev/center/next format (better for temporal queries).
     """
+    if flat:
+        return _render_evidence_flat(storage, agent_id, episode_ids)
     from collections import OrderedDict
 
     if not episode_ids:
