@@ -146,18 +146,21 @@ def execute_query(
     # 10. Build evidence_text: preference block first, then session-grouped main.
     ep_ids = _collect_evidence_episode_ids(answer_items, claims, episode_search_ids)
 
-    # Preference block (cat3 speculation support) — separate retrieval.
+    # EVENT/INTERVAL queries use flat inline format (date visible per episode).
+    # All other queries use session-grouped format (better for cat3/cat4 context).
+    is_temporal = contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL)
+    use_flat = is_temporal
+
+    # Preference block: only for non-temporal queries (cat3 speculation, cat4 open-ended).
+    # For EVENT/INTERVAL, affect episodes add off-date noise and hurt temporal anchoring.
     from ai_knot.preference_retrieval import retrieve_preference_episodes
 
     pref_eps = []
-    if frame.focus_entities:
+    if frame.focus_entities and not is_temporal:
         pref_eps = retrieve_preference_episodes(storage, agent_id, frame.focus_entities, top_k=20)
     pref_ep_ids = [e.id for e in pref_eps if hasattr(e, "id")]
     pref_block = _render_preference_block(storage, agent_id, pref_ep_ids, frame.focus_entities)
 
-    # EVENT/INTERVAL queries use flat inline format (date visible per episode).
-    # All other queries use session-grouped format (better for cat3/cat4 context).
-    use_flat = contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL)
     main_block = _render_evidence_context(storage, agent_id, ep_ids, flat=use_flat)
     evidence_text = (pref_block + "\n" + main_block).strip() if pref_block else main_block
 
