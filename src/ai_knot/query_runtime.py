@@ -240,12 +240,14 @@ def _render_evidence_context(
     agent_id: str,
     episode_ids: list[str],
 ) -> str:
-    """Load raw episode texts and format as 3-turn window evidence context.
+    """Load raw episodes and format grouped by session with headers.
 
-    For each episode ID, fetches the prev/center/next window and formats as
-    ``[date] prev_text / center_text / next_text`` — mirroring the dated
-    ingest format so the answer LLM sees comparable context volume.
+    Groups episodes by session_id, renders each session with a header line
+    ## Session YYYY-MM-DD, then individual turns with [date] Speaker: text.
     """
+    from collections import OrderedDict
+    from typing import Any
+
     if not episode_ids:
         return ""
 
@@ -253,40 +255,83 @@ def _render_evidence_context(
     if get_ep is None:
         return ""
 
-    rendered: set[str] = set()
-    lines: list[str] = []
+    # Collect episodes, skip missing
+    ep_pairs: list[tuple[str, Any]] = []
+    seen_ids: set[str] = set()
     for eid in episode_ids:
+        if eid in seen_ids:
+            continue
+        seen_ids.add(eid)
         ep = get_ep(agent_id, eid)
-        if ep is None or eid in rendered:
-            continue
-        rendered.add(eid)
+        if ep is not None:
+            ep_pairs.append((eid, ep))
 
-        # Build 3-turn window: prev / center / next
-        window_parts: list[str] = []
-        for neighbor_id in (getattr(ep, "prev_id", None), eid, getattr(ep, "next_id", None)):
-            if neighbor_id is None:
+    if not ep_pairs:
+        return ""
+
+    # Group by session_id, preserving first-appearance order of sessions
+    sessions: OrderedDict[str, list[tuple[str, Any]]] = OrderedDict()
+    session_first_date: dict[str, datetime | None] = {}
+    for eid, ep in ep_pairs:
+        sid = getattr(ep, "session_id", None) or eid
+        if sid not in sessions:
+            sessions[sid] = []
+            session_first_date[sid] = getattr(ep, "session_date", None)
+        sessions[sid].append((eid, ep))
+
+    # Sort sessions chronologically by first date
+    sorted_sids = sorted(
+        sessions.keys(),
+        key=lambda s: (session_first_date[s] or datetime.min),
+    )
+
+    rendered_eps: set[str] = set()
+    lines: list[str] = []
+    for sid in sorted_sids:
+        # Build session header
+        sd: datetime | None = session_first_date[sid]
+        hdr = (
+            f"## Session {sd.date().isoformat()}" if sd is not None else f"## Session {sid[:16]}"
+        )
+        lines.append(hdr)
+
+        for eid, ep in sessions[sid]:
+            if eid in rendered_eps:
                 continue
-            rendered.add(neighbor_id)
-            nep = get_ep(agent_id, neighbor_id) if neighbor_id != eid else ep
-            if nep is None:
-                continue
-            raw = nep.raw_text or ""
-            if not raw.strip():
-                continue
-            speaker = getattr(nep, "speaker", "") or ""
-            if speaker and not _raw_text_has_speaker_prefix(raw):
-                window_parts.append(f"{speaker}: {raw}")
-            else:
-                window_parts.append(raw)
+            rendered_eps.add(eid)
 
-        if not window_parts:
-            continue
+            # Build 3-turn window: prev / center / next
+            window_parts: list[str] = []
+            for neighbor_id in (
+                getattr(ep, "prev_id", None),
+                eid,
+                getattr(ep, "next_id", None),
+            ):
+                if neighbor_id is None:
+                    continue
+                if neighbor_id in rendered_eps and neighbor_id != eid:
+                    continue
+                rendered_eps.add(neighbor_id)
+                nep: Any = get_ep(agent_id, neighbor_id) if neighbor_id != eid else ep
+                if nep is None:
+                    continue
+                raw: str = nep.raw_text or ""
+                if not raw.strip():
+                    continue
+                speaker: str = getattr(nep, "speaker", "") or ""
+                ep_sd: datetime | None = getattr(nep, "session_date", None)
+                date_prefix = f"[{ep_sd.date().isoformat()}] " if ep_sd is not None else ""
+                if speaker and not _raw_text_has_speaker_prefix(raw):
+                    window_parts.append(f"{date_prefix}{speaker}: {raw}")
+                else:
+                    window_parts.append(f"{date_prefix}{raw}")
 
-        sd = getattr(ep, "session_date", None)
-        prefix = f"[{sd.date().isoformat()}] " if sd is not None else ""
-        lines.append(f"{prefix}{' / '.join(window_parts)}")
+            for part in window_parts:
+                lines.append(part)
 
-    return "\n".join(lines)
+        lines.append("")  # blank line between sessions
+
+    return "\n".join(lines).rstrip()
 
 
 # ---------------------------------------------------------------------------

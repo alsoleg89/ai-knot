@@ -60,18 +60,14 @@ class TestEntityTopicFilter:
     def test_proper_noun_single_claim_survives(self) -> None:
         """Single claim about a proper noun should create a bundle."""
         claims = [_make_claim("Alice")]
-        bundles, _ = build_entity_topic_bundles(
-            claims, agent_id="test", materialization_version=4
-        )
+        bundles, _ = build_entity_topic_bundles(claims, agent_id="test", materialization_version=4)
         subjects = [b.topic for b in bundles]
         assert "Alice" in subjects
 
     def test_multi_claim_noise_subject_survives(self) -> None:
         """Subject with 2+ claims survives even if it looks like a filler."""
         claims = [_make_claim("My dream"), _make_claim("My dream", "role")]
-        bundles, _ = build_entity_topic_bundles(
-            claims, agent_id="test", materialization_version=4
-        )
+        bundles, _ = build_entity_topic_bundles(claims, agent_id="test", materialization_version=4)
         subjects = [b.topic for b in bundles]
         assert "My dream" in subjects
 
@@ -79,9 +75,7 @@ class TestEntityTopicFilter:
         """Single claim with a discourse subject (starts with 'My') should be filtered."""
         # "My" is in the discourse blocklist, so a single-claim bundle is skipped
         claims = [_make_claim("My new car")]
-        bundles, _ = build_entity_topic_bundles(
-            claims, agent_id="test", materialization_version=4
-        )
+        bundles, _ = build_entity_topic_bundles(claims, agent_id="test", materialization_version=4)
         subjects = [b.topic for b in bundles]
         # "My" is in the blocklist — filtered unless there are 2+ claims
         assert "My new car" not in subjects
@@ -89,18 +83,14 @@ class TestEntityTopicFilter:
     def test_discourse_pronoun_filtered(self) -> None:
         """'It' and 'This' should be filtered as discourse subjects."""
         claims = [_make_claim("It")]
-        bundles, _ = build_entity_topic_bundles(
-            claims, agent_id="test", materialization_version=4
-        )
+        bundles, _ = build_entity_topic_bundles(claims, agent_id="test", materialization_version=4)
         subjects = [b.topic for b in bundles]
         assert "It" not in subjects
 
     def test_proper_noun_two_words_survives(self) -> None:
         """Two-word proper noun with one claim should create a bundle."""
         claims = [_make_claim("John Smith")]
-        bundles, _ = build_entity_topic_bundles(
-            claims, agent_id="test", materialization_version=4
-        )
+        bundles, _ = build_entity_topic_bundles(claims, agent_id="test", materialization_version=4)
         subjects = [b.topic for b in bundles]
         assert "John Smith" in subjects
 
@@ -119,12 +109,8 @@ class TestEntityTopicFilter:
     def test_rebuild_produces_same_bundle_id(self) -> None:
         """Two builds from the same claims produce the same bundle ID."""
         claims = [_make_claim("Alice")]
-        bundles1, _ = build_entity_topic_bundles(
-            claims, agent_id="test", materialization_version=4
-        )
-        bundles2, _ = build_entity_topic_bundles(
-            claims, agent_id="test", materialization_version=4
-        )
+        bundles1, _ = build_entity_topic_bundles(claims, agent_id="test", materialization_version=4)
+        bundles2, _ = build_entity_topic_bundles(claims, agent_id="test", materialization_version=4)
         assert bundles1[0].id == bundles2[0].id
 
 
