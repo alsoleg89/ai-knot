@@ -146,10 +146,9 @@ def execute_query(
     # 10. Build evidence_text: preference block first, then session-grouped main.
     ep_ids = _collect_evidence_episode_ids(answer_items, claims, episode_search_ids)
 
-    # EVENT/INTERVAL queries use flat inline format (date visible per episode).
-    # All other queries use session-grouped format (better for cat3/cat4 context).
+    # EVENT/INTERVAL: chronological session ordering gives the model a timeline view.
+    # SET/SCALAR/open-ended: relevance ordering (highest-ranked session first).
     is_temporal = contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL)
-    use_flat = is_temporal
 
     # Preference block: only for non-temporal queries (cat3 speculation, cat4 open-ended).
     # For EVENT/INTERVAL, affect episodes add off-date noise and hurt temporal anchoring.
@@ -161,7 +160,7 @@ def execute_query(
     pref_ep_ids = [e.id for e in pref_eps if hasattr(e, "id")]
     pref_block = _render_preference_block(storage, agent_id, pref_ep_ids, frame.focus_entities)
 
-    main_block = _render_evidence_context(storage, agent_id, ep_ids, flat=use_flat)
+    main_block = _render_evidence_context(storage, agent_id, ep_ids, chronological=is_temporal)
     evidence_text = (pref_block + "\n" + main_block).strip() if pref_block else main_block
 
     # 11. Build trace.
@@ -456,12 +455,15 @@ def _render_evidence_context(
     episode_ids: list[str],
     *,
     flat: bool = False,
+    chronological: bool = False,
 ) -> str:
     """Load raw episodes and format grouped by session with headers.
 
     Groups episodes by session_id, renders each session with a header line
     ## Session YYYY-MM-DD, then individual turns with [date] Speaker: text.
-    When flat=True, uses inline prev/center/next format (better for temporal queries).
+    When flat=True, uses inline prev/center/next format.
+    When chronological=True, sessions appear in date order (timeline view for temporal queries).
+    When chronological=False (default), sessions appear in retrieval relevance order.
     """
     if flat:
         return _render_evidence_flat(storage, agent_id, episode_ids)
@@ -498,9 +500,12 @@ def _render_evidence_context(
             session_first_date[sid] = getattr(ep, "session_date", None)
         sessions[sid].append((eid, ep))
 
-    # Sessions in retrieval relevance order (first-appearance = highest ranked session first).
-    # Within each session, sort episodes chronologically so the reader sees turns in order.
-    sorted_sids = list(sessions.keys())
+    # Session ordering: chronological (timeline view) or relevance (first-appearance).
+    # Chronological is better for temporal queries (cat2); relevance for cat1/cat3/cat4.
+    if chronological:
+        sorted_sids = sorted(sessions.keys(), key=lambda s: session_first_date[s] or datetime.min)
+    else:
+        sorted_sids = list(sessions.keys())
     for sid in sorted_sids:
         sessions[sid].sort(
             key=lambda pair: (

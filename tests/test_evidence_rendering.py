@@ -334,3 +334,52 @@ class TestFlatRendering:
         grouped_result = _render_evidence_context(storage, "agent1", ["ep-1"])
         assert "## Session" not in flat_result
         assert "## Session" in grouped_result
+
+
+class TestChronologicalOrdering:
+    def test_chronological_kwarg_puts_earlier_session_first(self) -> None:
+        # ep-b1 (June, later) appears first in retrieval — but with chronological=True
+        # the earlier session (January) should come first in output.
+        eps = [
+            FakeEp(
+                id="ep-b1",
+                raw_text="Later session turn",
+                session_id="sess-B",
+                session_date=_dt("2024-06-01"),
+            ),
+            FakeEp(
+                id="ep-a1",
+                raw_text="Earlier session turn",
+                session_id="sess-A",
+                session_date=_dt("2024-01-15"),
+            ),
+        ]
+        storage = _make_storage(eps)
+        result = _render_evidence_context(
+            storage, "agent1", ["ep-b1", "ep-a1"], chronological=True
+        )
+        idx_a = result.index("## Session 2024-01-15")
+        idx_b = result.index("## Session 2024-06-01")
+        assert idx_a < idx_b, "Chronological mode must put earlier session first"
+
+    def test_default_mode_preserves_relevance_order(self) -> None:
+        # ep-b1 (later date) appears first in retrieval; default mode keeps that.
+        eps = [
+            FakeEp(
+                id="ep-b1",
+                raw_text="Later session turn",
+                session_id="sess-B",
+                session_date=_dt("2024-06-01"),
+            ),
+            FakeEp(
+                id="ep-a1",
+                raw_text="Earlier session turn",
+                session_id="sess-A",
+                session_date=_dt("2024-01-15"),
+            ),
+        ]
+        storage = _make_storage(eps)
+        result = _render_evidence_context(storage, "agent1", ["ep-b1", "ep-a1"])
+        idx_a = result.index("## Session 2024-01-15")
+        idx_b = result.index("## Session 2024-06-01")
+        assert idx_b < idx_a, "Default (relevance) mode must put first-retrieved session first"
