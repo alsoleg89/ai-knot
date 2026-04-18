@@ -278,8 +278,8 @@ def _render_evidence_context(
         if not window_parts:
             continue
 
-        date = getattr(ep, "session_date", None) or ""
-        prefix = f"[{date}] " if date else ""
+        sd = getattr(ep, "session_date", None)
+        prefix = f"[{sd.date().isoformat()}] " if sd is not None else ""
         lines.append(f"{prefix}{' / '.join(window_parts)}")
 
     result = "\n".join(lines)
