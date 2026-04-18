@@ -96,12 +96,17 @@ def execute_query(
             eps = search_fn(
                 agent_id, frame.focus_entities, query=question, top_k=60, diversity=diversity
             )
-            # Contract-driven window: EVENT/INTERVAL → 5-turn (±2); others → 3-turn (±1)
+            # Contract-driven window:
+            #   EVENT/INTERVAL → 5-turn (±2) + optional date-proximity sort
+            #   SET → 5-turn (±2) for wider recall across multi-fact sessions
+            #   others → 3-turn (±1)
             if contract.time_axis in (TimeAxis.EVENT, TimeAxis.INTERVAL):
                 window_ids = _expand_window_n_turns(eps, storage, agent_id, n=2)
                 q_date = _extract_explicit_date_from_question(question)
                 if q_date is not None:
                     window_ids = _sort_by_date_proximity(storage, agent_id, window_ids, q_date)
+            elif contract.answer_space is AnswerSpace.SET:
+                window_ids = _expand_window_n_turns(eps, storage, agent_id, n=2)
             else:
                 window_ids = _expand_window_n_turns(eps, storage, agent_id, n=1)
             episode_search_ids = window_ids[:200]
