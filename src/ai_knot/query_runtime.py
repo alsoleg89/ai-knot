@@ -417,11 +417,8 @@ def _render_evidence_context(
             session_first_date[sid] = getattr(ep, "session_date", None)
         sessions[sid].append((eid, ep))
 
-    # Sort sessions chronologically by first date
-    sorted_sids = sorted(
-        sessions.keys(),
-        key=lambda s: session_first_date[s] or datetime.min,
-    )
+    # Keep retrieval relevance order (first-appearance = highest ranked)
+    sorted_sids = list(sessions.keys())
 
     rendered_eps: set[str] = set()
     lines: list[str] = []

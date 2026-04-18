@@ -61,8 +61,8 @@ class TestSessionGrouping:
         assert "## Session 2024-01-10" in result
         assert "## Session 2024-03-05" in result
 
-    def test_sessions_appear_in_chronological_order(self) -> None:
-        # ep-b1 is listed first in episode_ids but its session date is LATER
+    def test_sessions_appear_in_retrieval_relevance_order(self) -> None:
+        # ep-b1 (later date) appears first in episode_ids — should be first in output
         eps = [
             FakeEp(
                 id="ep-b1",
@@ -82,7 +82,7 @@ class TestSessionGrouping:
 
         idx_a = result.index("## Session 2024-01-15")
         idx_b = result.index("## Session 2024-06-01")
-        assert idx_a < idx_b, "Earlier session must appear before later session"
+        assert idx_b < idx_a, "First-retrieved session must appear first (relevance order)"
 
     def test_episode_text_under_correct_session(self) -> None:
         eps = [
