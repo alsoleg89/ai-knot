@@ -28,7 +28,7 @@ from ai_knot.query_types import (
     RawEpisode,
 )
 
-MATERIALIZATION_VERSION: int = 5
+MATERIALIZATION_VERSION: int = 6
 
 # ---------------------------------------------------------------------------
 # Regex patterns for deterministic extraction
@@ -206,6 +206,14 @@ _FP_STARTED_RE = re.compile(
     r"^I\s+(?:started?|began?|took\s+up|picked\s+up)\s+(?:to\s+)?(.+?)\.?\s*$",
     re.IGNORECASE,
 )
+_FP_BECAME_RE = re.compile(
+    r"^I\s+(?:became?|turned\s+into)\s+(?:a\s+|an\s+)?(.+?)\.?\s*$",
+    re.IGNORECASE,
+)
+_FP_ACTIVITY_RE = re.compile(
+    r"^I(?:'ve|'ve|\s+have)\s+been\s+(.+?)(?:\s+(?:lately|recently|these\s+days|a\s+lot))?\.?\s*$",
+    re.IGNORECASE,
+)
 
 # First-person event/action patterns (used when speaker is known).
 # Each entry: relation_name → compiled regex.
@@ -262,6 +270,13 @@ _FP_EVENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         "spoke_at",
         re.compile(
             r"^I\s+(?:spoke?\s+at|presented?\s+at|gave\s+a\s+(?:talk|presentation|lecture)\s+at)\s+(.+?)\.?\s*$",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "acquired",
+        re.compile(
+            r"^I\s+(?:got|received|was\s+given|was\s+awarded)\s+(?:a\s+|an\s+|the\s+)?(.+?)\.?\s*$",
             re.IGNORECASE,
         ),
     ),
@@ -625,6 +640,46 @@ def _extract_from_sentence(
                     now=now,
                     span=(0, len(sent)),
                     slot_key=f"{speaker}::started",
+                )
+            )
+            return results
+        m = _FP_BECAME_RE.match(sent)
+        if m:
+            claim_id = _make_claim_id(raw.id, f"became:{sent[:30]}")
+            results.append(
+                _make_claim(
+                    claim_id=claim_id,
+                    raw=raw,
+                    kind=ClaimKind.TRANSITION,
+                    subject=speaker,
+                    relation="became",
+                    value_text=m.group(1).strip(),
+                    qualifiers={"source_sentence": sent[:120]},
+                    event_time=session_date,
+                    session_date=session_date,
+                    now=now,
+                    span=(0, len(sent)),
+                    slot_key=f"{speaker}::became",
+                )
+            )
+            return results
+        m = _FP_ACTIVITY_RE.match(sent)
+        if m:
+            claim_id = _make_claim_id(raw.id, f"activity:{sent[:30]}")
+            results.append(
+                _make_claim(
+                    claim_id=claim_id,
+                    raw=raw,
+                    kind=ClaimKind.STATE,
+                    subject=speaker,
+                    relation="activity_ongoing",
+                    value_text=m.group(1).strip(),
+                    qualifiers={"source_sentence": sent[:120]},
+                    event_time=None,
+                    session_date=session_date,
+                    now=now,
+                    span=(0, len(sent)),
+                    slot_key=f"{speaker}::activity_ongoing",
                 )
             )
             return results

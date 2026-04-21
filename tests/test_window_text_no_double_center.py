@@ -12,6 +12,7 @@ Key facts about how the function works:
 - Final score = max(bm25(window_tokens), bm25(center_tokens)).
   Centre benefits from short-doc length-norm; window provides cross-turn IDF.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -20,9 +21,7 @@ from ai_knot.query_types import RawEpisode
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 
 
-def _ep(
-    ep_id: str, session_id: str, turn_i: int, text: str, agent_id: str = "a"
-) -> RawEpisode:
+def _ep(ep_id: str, session_id: str, turn_i: int, text: str, agent_id: str = "a") -> RawEpisode:
     return RawEpisode(
         id=ep_id,
         agent_id=agent_id,
@@ -55,9 +54,9 @@ def test_cross_turn_context_boosts_center(tmp_path: object) -> None:
     storage.save_episodes(
         "a",
         [
-            _ep("a0", "s", 0, "APPOINTMENT scheduled today"),        # prev
-            _ep("a1", "s", 1, "DOCTOR visit confirmed"),              # center — matches DOCTOR
-            _ep("a2", "s", 2, "everything went fine"),                # next
+            _ep("a0", "s", 0, "APPOINTMENT scheduled today"),  # prev
+            _ep("a1", "s", 1, "DOCTOR visit confirmed"),  # center — matches DOCTOR
+            _ep("a2", "s", 2, "everything went fine"),  # next
         ],
     )
     # ep2: standalone DOCTOR episode — same entity but no window context about APPOINTMENT.
@@ -66,17 +65,14 @@ def test_cross_turn_context_boosts_center(tmp_path: object) -> None:
         [_ep("b0", "s2", 0, "DOCTOR work stuff random noise")],
     )
 
-    hits = storage.search_episodes_by_entities(
-        "a", ["DOCTOR"], query="DOCTOR APPOINTMENT", top_k=3
-    )
+    hits = storage.search_episodes_by_entities("a", ["DOCTOR"], query="DOCTOR APPOINTMENT", top_k=3)
 
     assert len(hits) >= 2, f"expected a1 and b0 in results, got {[h.id for h in hits]}"
     ids = [h.id for h in hits]
     # a1's window contains APPOINTMENT (from prev), so it must rank above b0 for
     # the query "DOCTOR APPOINTMENT".
     assert ids[0] == "a1", (
-        f"expected a1 (window contains APPOINTMENT) to rank 1st, got {ids[0]}; "
-        f"full ranking: {ids}"
+        f"expected a1 (window contains APPOINTMENT) to rank 1st, got {ids[0]}; full ranking: {ids}"
     )
 
 
