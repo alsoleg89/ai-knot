@@ -395,6 +395,55 @@ def test_evidence_ids_raw_search_first():
     assert result.index("ep_raw_1") < result.index("ep_claim_only")
 
 
+def test_expand_centers_first_orders_centers_before_neighbors():
+    """Centers (entity-scoped) must come before prev/next neighbors (unfiltered)."""
+    from types import SimpleNamespace
+
+    from ai_knot.query_runtime import _expand_centers_first
+
+    # Two ranked hits, each with prev+next neighbors. The neighbors would
+    # previously (interleaved order) show up before the second center and
+    # dominate a small render window.
+    eps = [
+        SimpleNamespace(id="center_1", prev_id="neighbor_1a", next_id="neighbor_1b"),
+        SimpleNamespace(id="center_2", prev_id="neighbor_2a", next_id="neighbor_2b"),
+    ]
+
+    result = _expand_centers_first(eps, cap=6)
+    assert result[:2] == ["center_1", "center_2"], f"Centers must lead: {result}"
+    assert set(result) == {
+        "center_1",
+        "center_2",
+        "neighbor_1a",
+        "neighbor_1b",
+        "neighbor_2a",
+        "neighbor_2b",
+    }
+
+
+def test_expand_centers_first_respects_cap_and_dedups():
+    """Cap is respected across centers + neighbors; duplicates are collapsed."""
+    from types import SimpleNamespace
+
+    from ai_knot.query_runtime import _expand_centers_first
+
+    # center_2 is also listed as neighbor of center_1; must appear only once.
+    eps = [
+        SimpleNamespace(id="center_1", prev_id=None, next_id="center_2"),
+        SimpleNamespace(id="center_2", prev_id=None, next_id="after"),
+        SimpleNamespace(id="center_3", prev_id=None, next_id=None),
+    ]
+
+    # Cap at 2 — only two centers fit, neighbors are skipped entirely.
+    result = _expand_centers_first(eps, cap=2)
+    assert result == ["center_1", "center_2"]
+
+    # Cap at 5 — all 3 centers + neighbor "after"; center_2 not duplicated.
+    full = _expand_centers_first(eps, cap=5)
+    assert full == ["center_1", "center_2", "center_3", "after"]
+    assert len(full) == len(set(full))
+
+
 def test_set_caps_widened_vs_scalar():
     """_caps_for_contract widens funnel for SET, leaves scalar unchanged."""
     from ai_knot.query_runtime import _PROFILE_CAPS, _caps_for_contract

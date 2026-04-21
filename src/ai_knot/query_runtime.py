@@ -15,6 +15,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from typing import Any
 
 import ai_knot.support_retrieval as _sr
 from ai_knot.query_contract import analyze_query, derive_answer_contract
@@ -198,22 +199,7 @@ def execute_query(
                 top_k=caps.raw_search_top_k,
                 diversity=diversity,
             )
-            seen: set[str] = set()
-            window_ids: list[str] = []
-            for hit in eps:
-                for eid in (
-                    getattr(hit, "prev_id", None),
-                    hit.id,
-                    getattr(hit, "next_id", None),
-                ):
-                    if eid is not None and eid not in seen:
-                        seen.add(eid)
-                        window_ids.append(eid)
-                        if len(window_ids) >= caps.window_dedup_cap:
-                            break
-                if len(window_ids) >= caps.window_dedup_cap:
-                    break
-            episode_search_ids = window_ids
+            episode_search_ids = _expand_centers_first(eps, caps.window_dedup_cap)
             if episode_search_ids:
                 profile = replace(profile, episode_fallback_used=True)
 
@@ -364,6 +350,35 @@ def _render_text(items: list[AnswerItem], contract: AnswerContract) -> str:
 # ---------------------------------------------------------------------------
 # Evidence context helpers
 # ---------------------------------------------------------------------------
+
+
+def _expand_centers_first(eps: list[Any], cap: int) -> list[str]:
+    """Expand raw-search hits to a 3-turn window, centers before neighbors.
+
+    ``search_episodes_by_entities`` returns episodes whose raw_text matches at
+    least one focus entity (``raw_text LIKE '%entity%'``); the returned hits'
+    ``prev_id`` / ``next_id`` neighbors are NOT entity-filtered and commonly
+    belong to the other speaker in the turn.  By collecting all entity-scoped
+    centers first and only then appending neighbors, the eventual
+    ``render_top_k`` slice of evidence context stays dominated by the focus
+    entity's turns instead of being diluted by counterparty context.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for hit in eps:
+        if hit.id not in seen:
+            seen.add(hit.id)
+            out.append(hit.id)
+            if len(out) >= cap:
+                return out
+    for hit in eps:
+        for eid in (getattr(hit, "prev_id", None), getattr(hit, "next_id", None)):
+            if eid is not None and eid not in seen:
+                seen.add(eid)
+                out.append(eid)
+                if len(out) >= cap:
+                    return out
+    return out
 
 
 def _collect_evidence_episode_ids(
