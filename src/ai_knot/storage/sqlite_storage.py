@@ -823,7 +823,7 @@ class SQLiteStorage:
             last = len(ordered) - 1
             prev_text = str(ordered[pos - 1][1]) if pos > 0 else ""
             next_text = str(ordered[pos + 1][1]) if pos < last else ""
-            return (center + " " + prev_text + " " + center + " " + next_text).strip()
+            return (prev_text + " " + center + " " + next_text).strip()
 
         def _recency(ep: Any) -> Any:
             return ep.session_date or ep.observed_at
