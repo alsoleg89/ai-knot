@@ -20,6 +20,12 @@ cd "$BENCH_ROOT"
 
 export AIKNOT_DEBUG_TRACE=1
 
+# Load .env so that tsx (Node) gets OPENAI_API_KEY, DEFAULT_ANSWER_MODEL etc.
+# Bun loads .env automatically; tsx/Node does not.
+if [[ -f ".env" ]]; then
+  set -a; source .env; set +a
+fi
+
 # Resolve ai-knot-mcp to the venv binary when it is not already on PATH.
 if ! command -v ai-knot-mcp &>/dev/null; then
   REPO_ROOT="$(cd "$BENCH_ROOT/.." && pwd)"
