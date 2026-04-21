@@ -192,31 +192,13 @@ def execute_query(
         search_fn = getattr(storage, "search_episodes_by_entities", None)
         if search_fn is not None:
             diversity = contract.answer_space is AnswerSpace.SET
-            rm3_disabled = os.environ.get("AIKNOT_RM3_DISABLE") == "1"
-            if rm3_disabled:
-                eps = search_fn(
-                    agent_id,
-                    frame.focus_entities,
-                    query=question,
-                    top_k=caps.raw_search_top_k,
-                    diversity=diversity,
-                )
-            else:
-                first_pass = search_fn(
-                    agent_id,
-                    frame.focus_entities,
-                    query=question,
-                    top_k=10,
-                    diversity=False,
-                )
-                expanded_query = _rm3_expand_query(question, first_pass)
-                eps = search_fn(
-                    agent_id,
-                    frame.focus_entities,
-                    query=expanded_query,
-                    top_k=caps.raw_search_top_k,
-                    diversity=diversity,
-                )
+            eps = search_fn(
+                agent_id,
+                frame.focus_entities,
+                query=question,
+                top_k=caps.raw_search_top_k,
+                diversity=diversity,
+            )
             episode_search_ids = _expand_centers_first(eps, caps.window_dedup_cap)
             if episode_search_ids:
                 profile = replace(profile, episode_fallback_used=True)
@@ -368,45 +350,6 @@ def _render_text(items: list[AnswerItem], contract: AnswerContract) -> str:
 # ---------------------------------------------------------------------------
 # Evidence context helpers
 # ---------------------------------------------------------------------------
-
-
-def _rm3_expand_query(
-    question: str,
-    hits: list[Any],
-    *,
-    top_m_terms: int = 8,
-) -> str:
-    """RM3-style query expansion: append top frequent content terms from top-N hits.
-
-    Classical pseudo-relevance feedback: take top-N retrieval hits, extract the
-    most frequent content terms (excluding stopwords and terms already in the
-    question), and append them to the original query for a second retrieval pass.
-
-    Published gains: +9pp on long-conversation single-hop retrieval (SmartSearch
-    arxiv 2603.15599 ablation). No new model, no LLM.
-    """
-    if not hits:
-        return question
-
-    from collections import Counter
-
-    from ai_knot.tokenizer import _QUERY_STOPWORDS, tokenize
-
-    q_tokens_set = set(tokenize(question))
-    counts: Counter[str] = Counter()
-    for hit in hits:
-        text = getattr(hit, "raw_text", "")
-        if not text:
-            continue
-        for tok in tokenize(str(text)):
-            if tok in _QUERY_STOPWORDS or tok in q_tokens_set or len(tok) < 3:
-                continue
-            counts[tok] += 1
-
-    expansion = [t for t, _ in counts.most_common(top_m_terms)]
-    if not expansion:
-        return question
-    return question + " " + " ".join(expansion)
 
 
 def _expand_centers_first(eps: list[Any], cap: int) -> list[str]:
