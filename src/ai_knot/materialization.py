@@ -28,7 +28,7 @@ from ai_knot.query_types import (
     RawEpisode,
 )
 
-MATERIALIZATION_VERSION: int = 7
+MATERIALIZATION_VERSION: int = 6
 
 # ---------------------------------------------------------------------------
 # Regex patterns for deterministic extraction
@@ -149,8 +149,6 @@ _PRONOUN_SUBJECTS: frozenset[str] = frozenset(
         "It",
         "This",
         "That",
-        "These",
-        "Those",
         "He",
         "She",
         "My",
@@ -165,23 +163,6 @@ _PRONOUN_SUBJECTS: frozenset[str] = frozenset(
         "Them",
     }
 )
-
-
-def _is_pronoun_or_pronoun_phrase(subject: str) -> bool:
-    """True for single-word pronouns OR phrases whose first word is a pronoun.
-
-    STATE_RE / ROLE_RE capture up to 40 chars before the verb, so the matched
-    subject is often a phrase like "My paintings", "Your store", "That photo",
-    "These colors", "Those kids".  The older single-word `in _PRONOUN_SUBJECTS`
-    guard let these noise subjects through, polluting the claim plane with
-    entries that can never be retrieved by an entity lookup (the proper subject
-    is the speaker, not "My / Your / ...") but still surface via BM25 fallback.
-    """
-    if not subject:
-        return True
-    first = subject.split(maxsplit=1)[0]
-    return first in _PRONOUN_SUBJECTS
-
 
 # First-person preference / sentiment patterns (used when speaker is known).
 _FP_LIKES_RE = re.compile(
@@ -839,7 +820,7 @@ def _extract_from_sentence(
     m = _ROLE_RE.match(sent)
     if m:
         subject, role = m.group(1).strip(), m.group(2).strip()
-        if _is_pronoun_or_pronoun_phrase(subject):
+        if subject in _PRONOUN_SUBJECTS:
             return results
         claim_id = _make_claim_id(raw.id, f"state_role:{sent[:30]}")
         slot_key = f"{subject}::role"
@@ -866,7 +847,7 @@ def _extract_from_sentence(
     m = _STATE_RE.match(sent)
     if m:
         subject, predicate = m.group(1).strip(), m.group(2).strip()
-        if _is_pronoun_or_pronoun_phrase(subject):
+        if subject in _PRONOUN_SUBJECTS:
             return results
         # Discourse guard: skip deictic subject + evaluative predicate combos.
         if is_deictic_subject(subject) and is_evaluative_predicate(predicate):

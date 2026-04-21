@@ -34,8 +34,8 @@ def _episode(text: str, speaker: str = "Alice") -> RawEpisode:
     )
 
 
-def test_version_is_current() -> None:
-    assert MATERIALIZATION_VERSION == 7
+def test_version_is_6() -> None:
+    assert MATERIALIZATION_VERSION == 6
 
 
 @pytest.mark.parametrize(

@@ -96,11 +96,11 @@ def _caps_for_contract(base: _CapSet, contract: AnswerContract) -> _CapSet:
     if contract.answer_space is not AnswerSpace.SET:
         return base
     return _CapSet(
-        raw_search_top_k=max(base.raw_search_top_k, 40),
-        window_dedup_cap=max(base.window_dedup_cap, 48),
-        collect_cap=max(base.collect_cap, 30),
-        render_top_k=max(base.render_top_k, 24),
-        char_budget=max(base.char_budget, 40_000),
+        raw_search_top_k=max(base.raw_search_top_k, 28),
+        window_dedup_cap=max(base.window_dedup_cap, 32),
+        collect_cap=max(base.collect_cap, 22),
+        render_top_k=max(base.render_top_k, 18),
+        char_budget=max(base.char_budget, 30_000),
         per_turn_max=base.per_turn_max,
     )
 
