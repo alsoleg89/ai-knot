@@ -100,6 +100,42 @@ bench settings must have a paired entry here before it lands on the branch.
 
 ---
 
+## 2026-04-21 — F1-alone (Z reverted, Move F1 centers-first expansion)
+
+**Commit:** `0b8f778` (revert of Move Z `fdb62dd`) on `feature/configurable-mcp-env-v0.9.4`
+**Baseline:** pf3-phase1-2conv, 59.2 % cat1-4 (gpt-4o-mini)
+**Run:** `gate-0b8f778-2conv` — canonical (gpt-4o-mini), COMPLETED
+**Config deviations:** none
+**Decision:** ACCEPT (no promote) — aggregate PASS, but cat1 -2.3pp so not strictly better than baseline
+**Reason:** F1 (centers-first window expansion) alone produced aggregate +0.9pp (60.1% vs 59.2% baseline) with gate PASS on all per-cat thresholds. However cat1 slipped 27.9% vs 30.2% baseline — retrieval bottleneck on single-hop factoids persists. cat2 gained +4.8pp (50.8%) confirming F1's value for multi-hop windowing. Previous stacked moves (G+Y crashed MCP subprocess; Z exhaustive entity union regressed cat1 to 21% at mid-run) both reverted.
+**gate-0b8f778 numbers (canonical):**
+  - cat1-4: 60.1 % (+0.9 pp) ✓ aggregate gate passed
+  - cat1: 27.9 % (-2.3 pp, within threshold >-8.2pp)
+  - cat2: 50.8 % (+4.8 pp ✓)
+  - cat3: 61.5 % (+0.0 pp)
+  - cat4: 77.2 % (-0.0 pp)
+**Next baseline update:** no — cat1 regression makes this not strictly better; branch kept for further moves
+
+---
+
+## 2026-04-21 — Move M RM3 pseudo-relevance feedback
+
+**Commit:** `e4488e7` → `59d139f` (revert) on `feature/configurable-mcp-env-v0.9.4`
+**Baseline:** pf3-phase1-2conv, 59.2 % cat1-4 (gpt-4o-mini)
+**Run:** `gate-e4488e7-2conv` — canonical (gpt-4o-mini), COMPLETED
+**Config deviations:** none
+**Decision:** REVERT — per `feedback_regression_stop_rule` (cat1 -4.6pp > 2pp threshold)
+**Reason:** RM3 two-pass expansion (first top_k=10, extract top-8 content terms, second full top_k) intended to replicate SmartSearch's published +9pp cat1 gain. Instead regressed cat1 -4.6pp. Failure mode: when first-pass top-10 already misses the fact-turn (which is the defining failure mode of LOCOMO cat1 R-type errors), RM3 expansion terms come from noise neighborhood and amplify mis-ranking. cat3 did gain +7.7pp (inference benefits from context diversification) but not worth the cat1 hit.
+**gate-e4488e7 numbers (canonical):**
+  - cat1-4: 59.7 % (+0.5 pp) ✓ aggregate gate passed
+  - cat1: 25.6 % (-4.6 pp ⚠ exceeds regression stop threshold 2pp)
+  - cat2: 50.8 % (+4.8 pp)
+  - cat3: 69.2 % (+7.7 pp ✓ inference context diversification)
+  - cat4: 76.3 % (-0.9 pp)
+**Next baseline update:** no (reverted)
+
+---
+
 ## Known bad artifacts
 
 ### `data/runs/ddsa-off/`
