@@ -1,0 +1,26 @@
+[
+  {
+    "label": "pf3-phase1-2conv",
+    "run_id": "pf3-phase1-2conv-RECONSTRUCTED",
+    "commit_sha": "1476f01",
+    "branch": "feature/configurable-mcp-env-v0.9.4",
+    "convs": [0, 1],
+    "date": "2026-04-19",
+    "settings": {
+      "judge_model": "gpt-4o-mini",
+      "answer_model": "gpt-4.1-nano",
+      "top_k": 60,
+      "profile": "balanced"
+    },
+    "cat1_4_aggregate": 0.592,
+    "per_cat": {
+      "1": 0.302,
+      "2": 0.460,
+      "3": 0.615,
+      "4": 0.772
+    },
+    "notes": "Manually reconstructed from memory note project_pf3_regression_chain_20260419.md. Run dir no longer on disk. Best known 2-conv baseline before regression chain.",
+    "upstream_label": null,
+    "verified": false
+  }
+]
