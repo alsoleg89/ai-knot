@@ -20,6 +20,15 @@ cd "$BENCH_ROOT"
 
 export AIKNOT_DEBUG_TRACE=1
 
+# Resolve ai-knot-mcp to the venv binary when it is not already on PATH.
+if ! command -v ai-knot-mcp &>/dev/null; then
+  REPO_ROOT="$(cd "$BENCH_ROOT/.." && pwd)"
+  VENV_MCP="${REPO_ROOT}/.venv/bin/ai-knot-mcp"
+  if [[ -x "$VENV_MCP" ]]; then
+    export AI_KNOT_COMMAND="$VENV_MCP"
+  fi
+fi
+
 CONVS="0,1"
 TOP_K="60"
 ALLOW_DRIFT=""
