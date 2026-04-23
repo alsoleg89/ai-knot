@@ -213,6 +213,30 @@ bench settings must have a paired entry here before it lands on the branch.
 
 ---
 
+## 2026-04-23 — Move 3R SET-conditional RRF weight flip (REVERTED)
+
+**Commit:** not committed — reverted before merge on `feature/configurable-mcp-env-v0.9.4`
+**Baseline:** `p1-1b-2conv` — canonical (gpt-4o-mini × gpt-4o-mini), cat1 30.2 %, cat1-4 62.7 %
+**Run:** `data/runs/p1-3r-2conv/report.json` (run dir deleted post-revert), canonical (deviations=[]), same models
+**Config deviations:** none
+**Decision:** REVERT — zero target-category GAINs; net negative cat1 and cat3
+**Reason:** Hypothesis (formed after diagnostic of the 30 cat1 WRONG: 25/30 are retrieval-miss; evidence for gold items exists in ingest but ranks below non-evidence Melanie-turns): generic-concept SET Q ("activities", "events", "books") fail because BM25-dominant RRF weights `[2.0, 1.0]` can't bridge synonymy between Q tokens and gold-verb tokens, so embeddings (weight 1.0) get outvoted. Change: in `search_episodes_by_entities`, flip to `[1.0, 2.0]` when `diversity=True` (SET gate). Scalar path unchanged. 10 LOC + 1 regression test (`test_search_episodes_rrf_weights_flip_for_set`) covering both code paths via fake embedder. All suite tests pass except pre-existing flaky `test_auto_tags_change_ranking`. Bench moved 8 Q verdicts (5 context changes) but net per-cat all zero or negative:
+  - cat1: 2 LOSS, 0 GAIN (both losses were temporal/complex Q, not SET — target SET Q unchanged)
+  - cat3: 1 LOSS, 0 GAIN
+  - cat4: 2 GAIN, 2 LOSS (±0)
+  - cat5: 1 LOSS, 0 GAIN
+**3R numbers (canonical gpt-4o-mini × gpt-4o-mini):**
+  - cat1: 25.6 % (−4.6 pp ⚠ target erased; identical to pre-1B baseline)
+  - cat2: 50.8 % (±0)
+  - cat3: 61.5 % (−7.7 pp, within floor but near stop-threshold)
+  - cat4: 80.7 % (±0)
+  - cat5: 25.4 % (−1.4 pp, within floor 20 %)
+  - cat1-4 aggregate: 61.4 % (−1.3 pp)
+**Rationale for REVERT:** zero GAINs in target category (cat1 SET Q) invalidates the hypothesis. The 19 cat1 SET retrieval-miss Q diagnosed on `p1-1b` did not flip to CORRECT under embedding-dominant RRF, so the synonymy-bridging hypothesis doesn't explain those failures. Side effects (cat1/cat3/cat5 losses) were non-SET Q where scalar-ish ranking was already near-optimal and the flip introduced noise. The diagnostic remains valid (83 % of cat1 failures are retrieval-miss, evidence exists in ingest) but the specific fix does not hold; the bottleneck is elsewhere (candidate-pool size? top_k cap? entity-substring filter too loose? claim-vs-episode retrieval divergence?).
+**Next baseline update:** no — `p1-1b-2conv` remains baseline.
+
+---
+
 ## Known bad artifacts
 
 ### `data/runs/ddsa-off/`
