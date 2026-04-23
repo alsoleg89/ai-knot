@@ -28,7 +28,7 @@ from ai_knot.query_types import (
     RawEpisode,
 )
 
-MATERIALIZATION_VERSION: int = 7
+MATERIALIZATION_VERSION: int = 6
 
 # ---------------------------------------------------------------------------
 # Regex patterns for deterministic extraction
@@ -307,78 +307,6 @@ _FP_EVENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 # Relative-time markers used in event qualifier extraction.
 _RELATIVE_TIME_RE = re.compile(r"\b(today|yesterday|tomorrow)\b", re.IGNORECASE)
 
-# Relative-date anchor — used in fallback EVENT path when no absolute date
-# is present. Matches colloquial narrative anchors that ground an action in
-# time relative to the turn's session_date.
-_RELATIVE_DATE_RE = re.compile(
-    r"\b("
-    r"yesterday|today|tonight"
-    r"|last\s+(?:night|week|weekend|month|year"
-    r"|spring|summer|fall|autumn|winter"
-    r"|monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
-    r"|(?:a\s+)?(?:few\s+|couple\s+(?:of\s+)?)?(?:days?|weeks?|months?|years?)\s+ago"
-    r"|recently|lately"
-    r"|earlier(?:\s+(?:today|this\s+\w+))?"
-    r"|this\s+(?:morning|afternoon|evening|weekend)"
-    r"|over\s+the\s+(?:weekend|past\s+\w+)"
-    r")\b",
-    re.IGNORECASE,
-)
-
-# Sentence-initial past-tense verbs that signal narrative past-action when the
-# speaker is known. Used ONLY as a gate for speaker-as-subject fallback in
-# verb-initial past-tense sentences like "Took a trip to Rome last week."
-# NOT a pattern list — does not emit claims by itself. Generic English past
-# tenses, not benchmark-specific.
-_PAST_VERB_OPENERS: frozenset[str] = frozenset(
-    {
-        "Took",
-        "Went",
-        "Came",
-        "Saw",
-        "Met",
-        "Got",
-        "Gave",
-        "Found",
-        "Left",
-        "Drove",
-        "Flew",
-        "Swam",
-        "Sat",
-        "Stood",
-        "Ate",
-        "Drank",
-        "Brought",
-        "Bought",
-        "Taught",
-        "Caught",
-        "Paid",
-        "Told",
-        "Said",
-        "Read",
-        "Wrote",
-        "Heard",
-        "Spent",
-        "Sent",
-        "Built",
-        "Felt",
-        "Kept",
-        "Chose",
-        "Led",
-        "Held",
-        "Became",
-        "Fell",
-        "Ran",
-        "Rose",
-        "Lost",
-        "Won",
-        "Rode",
-        "Made",
-        "Had",
-        "Did",
-    }
-)
-
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -503,89 +431,6 @@ def _parse_date_str(s: str) -> datetime | None:
         except ValueError:
             continue
     return None
-
-
-def _resolve_relative_date(token: str, session_date: datetime | None) -> datetime | None:
-    """Map a relative-time token to an approximate datetime anchored to session_date.
-
-    Returns None when session_date is unknown or the token is unmapped.
-    Approximations intentionally coarse: narrative past-actions don't need
-    exact dates — they need a session-relative anchor so the EVENT
-    neighborhood builder can bucket them.
-    """
-    if session_date is None:
-        return None
-    from datetime import timedelta
-
-    t = token.lower().strip()
-    # Direct named days
-    if t == "yesterday":
-        return session_date - timedelta(days=1)
-    if t in {"today", "tonight", "this morning", "this afternoon", "this evening"}:
-        return session_date
-    if t == "this weekend":
-        return session_date
-    if t in {"recently", "lately", "earlier"} or t.startswith("earlier "):
-        return session_date - timedelta(days=3)
-    # "last X" forms
-    if t.startswith("last "):
-        rest = t[5:].strip()
-        mapping: dict[str, int] = {
-            "night": 1,
-            "week": 7,
-            "weekend": 3,
-            "month": 30,
-            "year": 365,
-            "spring": 180,
-            "summer": 180,
-            "fall": 180,
-            "autumn": 180,
-            "winter": 180,
-            "monday": 7,
-            "tuesday": 7,
-            "wednesday": 7,
-            "thursday": 7,
-            "friday": 7,
-            "saturday": 7,
-            "sunday": 7,
-        }
-        delta = mapping.get(rest)
-        if delta is not None:
-            return session_date - timedelta(days=delta)
-    # "N days/weeks/months/years ago" forms
-    m = re.match(
-        r"^(?:a\s+)?(?:few\s+|couple\s+(?:of\s+)?)?(days?|weeks?|months?|years?)\s+ago$",
-        t,
-    )
-    if m:
-        unit = m.group(1).rstrip("s")
-        approx = {"day": 5, "week": 14, "month": 60, "year": 365}.get(unit)
-        if approx is not None:
-            return session_date - timedelta(days=approx)
-    # "over the weekend" / "over the past X"
-    if t.startswith("over the "):
-        return session_date - timedelta(days=3)
-    return None
-
-
-def _is_past_verb_opener(word: str) -> bool:
-    """True if sentence-initial token is a past-tense English verb.
-
-    Used ONLY as a gate for speaker-as-subject fallback in the EVENT path.
-    Recognizes common irregular past-tense forms and the regular "-ed" suffix
-    (for words with a capitalized head, length >= 4, not in garbage openers).
-    """
-    stripped = word.strip(".,;:!?'\"")
-    if not stripped:
-        return False
-    if stripped in _PAST_VERB_OPENERS:
-        return True
-    return (
-        len(stripped) >= 4
-        and stripped.endswith("ed")
-        and stripped[0].isupper()
-        and stripped not in _SENT_GARBAGE_OPENERS
-    )
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -1065,28 +910,10 @@ def _extract_from_sentence(
             return results
 
     # --- EVENT (fallback: sentence has a date and a subject-like token) --
-    # Try explicit date first; fall back to relative-date anchor so narrative
-    # turns like "Took a short trip last week to Rome" anchor to session_date.
     date_m = _DATE_RE.search(sent)
-    rel_date_m = None if date_m else _RELATIVE_DATE_RE.search(sent)
-    if date_m or rel_date_m:
-        if date_m:
-            event_date = _parse_date_str(date_m.group(0)) or session_date
-            date_token = date_m.group(0)
-        else:
-            assert rel_date_m is not None
-            date_token = rel_date_m.group(0)
-            event_date = _resolve_relative_date(date_token, session_date) or session_date
+    if date_m:
+        event_date = _parse_date_str(date_m.group(0)) or session_date
         subject = _extract_simple_subject(sent) or "unknown"
-        # Speaker-as-subject fallback: if the extracted subject is a
-        # sentence-initial past-tense verb (e.g. "Took", "Went", "Painted") and
-        # the speaker is known, substitute the speaker. Catches implicit-I
-        # narrative past-tense where the grammatical subject is dropped.
-        if speaker and speaker not in _PRONOUN_SUBJECTS:
-            parts = sent.split()
-            first_word = parts[0].strip(".,;:!?'\"") if parts else ""
-            if subject == first_word and _is_past_verb_opener(first_word):
-                subject = speaker
         # Discourse guard: skip deictic + evaluative noise.
         if is_deictic_subject(subject) and is_evaluative_predicate(sent[:80]):
             return results
@@ -1099,7 +926,7 @@ def _extract_from_sentence(
                 subject=subject,
                 relation="occurred",
                 value_text=sent[:200],
-                qualifiers={"date_token": date_token},
+                qualifiers={"date_token": date_m.group(0)},
                 event_time=event_date,
                 session_date=session_date,
                 now=now,
