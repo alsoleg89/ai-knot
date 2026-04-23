@@ -446,11 +446,7 @@ def test_leading_adverbial_last_weekend_joined():
     ep = _make_raw_fp("Last weekend I joined a hiking club.", "Melanie")
     claims = materialize_episode(ep)
     # "joined" matches _FP_WORK_RE first → emits works_at relation.
-    fp = [
-        c
-        for c in claims
-        if c.subject == "Melanie" and "hiking club" in c.value_text.lower()
-    ]
+    fp = [c for c in claims if c.subject == "Melanie" and "hiking club" in c.value_text.lower()]
     assert fp, (
         f"Expected FP claim for Melanie after adverbial strip, got: "
         f"{[(c.subject, c.relation, c.value_text) for c in claims]}"

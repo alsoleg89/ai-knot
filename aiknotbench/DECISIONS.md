@@ -318,6 +318,42 @@ bench settings must have a paired entry here before it lands on the branch.
 
 ---
 
+## 2026-04-23 — Phase 1E: relative-time + speaker-as-subject EVENT fallback (REVERTED)
+
+**Commit:** `887a318` (reverted by `e380f4a`) on `feature/configurable-mcp-env-v0.9.4`
+**Baseline:** `p1-1b-2conv` — cat1 30.23 %, cat2 50.79 %, cat3 69.23 %, cat4 80.70 %, cat5 26.76 %, cat1-4 62.66 %.
+**Run:** `data/runs/p1e-2conv/report.json` — canonical (gpt-4o-mini × gpt-4o-mini, 2-conv)
+**Config deviations:** none
+**Decision:** REVERT — zero signal, six negative Q-flips; formal stop-rule thresholds did not trigger, but the move has no redeeming outcome on the target.
+**Reason:** Addresses bottleneck B from `memory/project_locomo_cat1_rank_dilution_is_materializer.md`: 19/30 cat1 WRONG on `p1-1b-2conv` are materializer under-emission (Jon-Rome, Melanie-painting-yesterday, etc. — first-person past-tense narratives that don't match FP `^I\s+verb` because the speaker prefix was already stripped, and don't match `_DATE_RE` because the time anchor is relative). Change: (1) `_RELATIVE_DATE_RE` covering `yesterday|today|last X|recently|N days ago|this morning|over the weekend`; (2) `_resolve_relative_date(token, session_date)` → fixed offsets (yesterday=−1d, last week=−7d, last month=−30d, last year=−365d, recently=−3d, few days ago=−5d, etc.); (3) `_PAST_VERB_OPENERS` frozenset (~40 irregular English past tenses: Took, Went, Saw, Met, Bought, Made, …) + `-ed` suffix heuristic for regulars; (4) EVENT fallback path widened to accept `_RELATIVE_DATE_RE` alongside `_DATE_RE` and replace first-word past-verb subjects with `speaker`. 398 LOC (src + 31 new unit tests in `test_materialization_relative_time.py`). `MATERIALIZATION_VERSION` bumped 6 → 7. Full suite: 1237 passed + 2 skipped, no regressions.
+**p1e-2conv numbers:**
+  - cat1: 23.26 % (10/43; **−6.97 pp**)
+  - cat2: 50.79 % (32/63; = baseline)
+  - cat3: 61.54 % (8/13; **−7.69 pp** — within n=13 noise)
+  - cat4: 80.70 % (92/114; = baseline)
+  - cat5: 23.94 % (17/71; −2.82 pp — above 20 % floor)
+  - cat1-4 agg: 60.94 % (142/233; −1.72 pp — inside 2 pp threshold)
+**Q-level diff vs p1-1b-2conv:** 0 WRONG → CORRECT, 6 CORRECT → WRONG. The six regressions:
+  1. `[0:14 cat3]` "Would Caroline still want to pursue counseling…" — reasoning Q; new answer hedges around gold "Likely no".
+  2. `[0:55 cat1]` "What subject have Caroline and Melanie both painted?" gold "Sunsets" — new answer bloats to "nature, including sunsets and animals" → judged wrong.
+  3. `[0:76 cat1]` "When did Melanie go on a hike after the roadtrip?" gold "19 October 2023" — new answer "October 18, 2023" → **off-by-1 day caused by the fixed-offset relative-date resolver** ("yesterday" → session_date − 1d, not the actual utterance time). This is the direct cost of anchoring on session-date rather than utterance-date.
+  4. `[0:170 cat5]` "What does Caroline say running has been great for?" gold "Her mental health" — new answer "boost your mood" → judged wrong.
+  5. `[1:5 cat1]` "What Jon thinks the ideal dance studio should look like?" gold "By the water, with natural light and Marley flooring" — new answer omits "By the water" → rank dilution by new EVENT claims.
+  6. `[1:97 cat5]` "Where is Gina's HR internship?" gold "fashion department…" — new answer denies the internship exists → strong regression.
+**Target-Q status:** Jon-Rome turn (*"Took a short trip last week to Rome"*) and Melanie-painting-yesterday turn — the two hand-selected regression targets the fix was built for — did **not** flip to CORRECT. The materializer now emits EVENT claims for these turns, but the event_time is wrong (session_date − offset ≠ real utterance date) and the claims are never retrieved in time for the answering step because BM25+embedding ranking still cannot match Q-tokens "cities" / "visited" to raw tokens "took" / "trip" / "Rome".
+**Root-cause of the negative outcome:**
+  - **Session-date anchor is not utterance-date anchor.** Fixing `event_time = session_date − relative_offset` creates off-by-N-day errors ([0:76] is the direct manifestation) and corrupts `narrative_cluster_render` time-buckets.
+  - **More EVENT claims = more rank noise.** Non-target first-person sentences with `-ed` endings or ambiguous relative-time phrases ("earlier", "recently") now emit EVENT claims that compete with fact-bearing evidence in `render_top_k=12`.
+  - **Speaker-fallback is correct in isolation, wrong in aggregate.** Replacing a first-word past-verb subject with `speaker` when the sentence has a relative-time anchor is semantically right, but adds claims that the ranking layer then pushes ahead of the real fact-turns.
+**Architectural consequence:** The cheap ~50-LOC patch predicted in `memory/project_locomo_cat1_rank_dilution_is_materializer.md` was too optimistic. Relative-time anchoring needs *utterance-date* resolution (per-turn timestamp, not session-level), and that requires either (a) a real temporal parser (dateparser/Duckling dependency) or (b) skipping time-resolution entirely and emitting EVENT with `event_time=None` — but `_collect_evidence_episode_ids` uses `event_time` for narrative ordering, so (b) would break cat2 temporal Q. Neither fits within the spaCy-free Phase-1 envelope.
+**Implication for Phase plan:** Seven consecutive REVERTs on this branch (Moves 4, 5, 1A, 1C-plays, 2S1, 6A, 1E). The 2-conv gate is exhausted as a discriminator. The `memory/project_locomo_phase1_retrieval_exhausted.md` conclusion is now confirmed twice: ranking-level moves are done, and the first materializer-level move collapsed because the 2-conv gate can't tell signal from noise at n=43 cat1 (±3 Q = ±7 pp noise floor). Remaining options:
+  1. **Accept 30.2 % as terminal** on the regex-only materializer and close Phase 1.
+  2. **spaCy POS/lemma rewrite** (800 LOC + new dep) to fix bottleneck B structurally — this is the path from `memory/project_locomo_cat1_rank_dilution_is_materializer.md` Option A. Requires user sign-off for dependency cost.
+  3. **3-run averaging or full-10 gate** for any next move, to clear the ±7 pp cat1 noise floor. Requires user sign-off for bench cost (~33 min for 3×2-conv, ~55 min for 1×10-conv).
+**Next baseline update:** no — `p1-1b-2conv` remains baseline.
+
+---
+
 ## Known bad artifacts
 
 ### `data/runs/ddsa-off/`
