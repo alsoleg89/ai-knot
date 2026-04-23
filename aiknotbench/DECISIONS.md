@@ -237,6 +237,26 @@ bench settings must have a paired entry here before it lands on the branch.
 
 ---
 
+## 2026-04-23 — Move 4 implicit-SET aux widening (REVERTED)
+
+**Commit:** `5c99ac6` (reverted by `e453aef`) on `feature/configurable-mcp-env-v0.9.4`
+**Baseline:** `p1-1b-2conv` — canonical (gpt-4o-mini × gpt-4o-mini), cat1 30.2 %, cat1-4 62.7 %, cat4 76.3 %, cat5 28.2 %
+**Run:** `data/runs/m4-2conv/report.json`, canonical (deviations=[]), same models
+**Config deviations:** none
+**Decision:** REVERT — cat1-4 aggregate drop exceeds stop-rule; target category (cat1) regressed by full 1B gain
+**Reason:** Hypothesis (formed after re-analysis of the 25 cat1 retrieval-miss Q diagnosed on `p1-1b`: 15/25 are classified `AnswerSpace.DESCRIPTION` by `_detect_geometry` because the implicit-SET gate at `query_contract.py:385` fires only for `what/which + {has, have} + NOUN_HEAD`). Change: widen the aux set to the full closed English auxiliary class `{has, have, does, do, did, is, are, was, were}`, keeping `_SET_NOUN_HEADS` filter intact. 10 LOC + 2 regression-test classes (positive: 6 Q with non-`has/have` aux correctly route as SET; negative: 6 singular/bool Q unchanged). All suite tests pass except pre-existing flaky `test_auto_tags_change_ranking` and `test_scoped_recall_finds_all_entity_mentions` (both fail on HEAD).
+**m4 numbers (canonical gpt-4o-mini × gpt-4o-mini, 2-conv):**
+  - cat1: 25.6 % (−4.7 pp ⚠ erases 1B gain; back to pre-1B level)
+  - cat2: 49.2 % (−1.6 pp)
+  - cat3: 69.2 % (±0)
+  - cat4: 78.9 % (+2.6 pp, above floor 68.1 %)
+  - cat5: 25.4 % (−2.8 pp, above floor 20 %)
+  - cat1-4 aggregate: 60.5 % (−2.2 pp, trips >2 pp stop-rule)
+**Rationale for REVERT:** `feedback_regression_stop_rule` fires on cat1-4 aggregate (−2.2 pp > 2 pp threshold) and on target-category collapse (cat1 −4.7 pp = full 1B gain erased). cat4 +2.6 pp is the only directional positive; cat5 regression (−2.8 pp) plus cat2 regression (−1.6 pp) plus target-cat collapse make the move net-negative. Mechanistic read: widening the SET gate routes single-answer cat1/cat5 Q ("What is Alice's focus?" is safe only because "focus" singular; but many cat1/cat5 target Q have `_SET_NOUN_HEADS`-qualifying nouns paired with broader aux verbs) into the SET pipeline — which applies MMR diversity and per-session floor. For genuinely single-answer Q, diversity re-ranking demotes the top-correct episode and the floor forces cross-session spread that admits off-topic context. The classifier bottleneck diagnosis remains valid but the fix is wrong: SET-widening must be coupled with a mechanism that retains single-answer precision when the Q is list-shaped but the evidence concentrates in one session.
+**Next baseline update:** no — `p1-1b-2conv` remains baseline.
+
+---
+
 ## Known bad artifacts
 
 ### `data/runs/ddsa-off/`
