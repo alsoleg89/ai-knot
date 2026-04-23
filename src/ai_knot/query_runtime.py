@@ -203,6 +203,21 @@ def execute_query(
             if episode_search_ids:
                 profile = replace(profile, episode_fallback_used=True)
 
+    # 7c. Claims-first promotion.
+    #
+    # Bench audit on p1-1b-2conv (2026-04-23) showed that 19 / 30 cat1 WRONG
+    # are retrieval-bucket: an atomic claim with subject==focus-entity exists
+    # in the DB, but raw-search BM25 + embedding RRF does not lift the
+    # claim-source raw into the render_top_k slice. Promote those raws to
+    # the front of episode_search_ids so the claim-source turn is rendered
+    # before counterparty / non-fact turns.
+    promoted_ids = _claim_source_promotions(claims, frame, profile.question_tokens)
+    existing_before_merge = set(episode_search_ids)
+    n_new_promoted = 0
+    if promoted_ids:
+        n_new_promoted = sum(1 for p in promoted_ids if p and p not in existing_before_merge)
+        episode_search_ids = _merge_promoted_first(promoted_ids, episode_search_ids)
+
     # 8. Render text.
     text = _render_text(answer_items, contract)
 
@@ -210,14 +225,22 @@ def execute_query(
     # Priority order preserves topical relevance; joint RRF across
     # claim-source episodes was tried three times on this branch and each time
     # regressed cat1 single-hop precision by 5+ percentage points.
+    #
+    # When claim-source promotion added N NEW raws, bump collect_cap and
+    # render_top_k by N so promoted raws are appended WITHOUT displacing the
+    # original top-K. Otherwise the merge is a zero-sum trade (confirmed by
+    # retrieval replay on p1-1b-2conv: PROTECT_K=6 additive still lost
+    # gold-bearing raws at existing positions 12-17 for SET answers).
+    collect_cap = caps.collect_cap + n_new_promoted
+    render_top_k = caps.render_top_k + n_new_promoted
     ep_ids = _collect_evidence_episode_ids(
-        answer_items, claims, episode_search_ids=episode_search_ids, cap=caps.collect_cap
+        answer_items, claims, episode_search_ids=episode_search_ids, cap=collect_cap
     )
     evidence_text = _render_evidence_context(
         storage,
         agent_id,
         ep_ids,
-        top_k=caps.render_top_k,
+        top_k=render_top_k,
         char_budget=caps.char_budget,
         per_turn_max=caps.per_turn_max,
     )
@@ -350,6 +373,101 @@ def _render_text(items: list[AnswerItem], contract: AnswerContract) -> str:
 # ---------------------------------------------------------------------------
 # Evidence context helpers
 # ---------------------------------------------------------------------------
+
+
+def _claim_source_promotions(
+    claims: list[AtomicClaim],
+    frame: QueryFrame,
+    q_tokens: tuple[str, ...],
+    *,
+    cap: int = 6,
+) -> list[str]:
+    """Return claim-source episode ids to promote ahead of raw-search results.
+
+    A claim qualifies when its subject contains one of the focus entities.
+    For SET / DESCRIPTION answer spaces the subject-match alone is enough
+    — these questions enumerate attributes of the focus entity and lexical
+    overlap with the question ("what activities" vs claim value "pottery")
+    is typically empty, so requiring it would kill most SET promotions.
+    For ENTITY / SCALAR / BOOL the claim also needs Q-token overlap with
+    value_text, otherwise any entity-anchored claim would be promoted.
+
+    Ranking: overlap count × confidence × salience, ties broken by the
+    input claim ordering (already relevance-sorted via bundle expansion).
+    Returns at most ``cap`` episode ids.
+
+    Gated by env var ``AIKNOT_CLAIMS_FIRST_PROMOTION`` (default on).
+    """
+    if os.environ.get("AIKNOT_CLAIMS_FIRST_PROMOTION", "1") == "0":
+        return []
+    if not claims or not frame.focus_entities:
+        return []
+
+    from ai_knot.tokenizer import tokenize as _tokenize
+
+    entity_lc = [e.lower() for e in frame.focus_entities if e]
+    if not entity_lc:
+        return []
+    q_set = {t.lower() for t in q_tokens if len(t) >= 3}
+    broad = frame.answer_space in (AnswerSpace.SET, AnswerSpace.DESCRIPTION)
+
+    scored: list[tuple[float, int, str]] = []
+    for i, c in enumerate(claims):
+        subj = (c.subject or "").lower()
+        if not any(ent in subj for ent in entity_lc):
+            continue
+        if c.source_episode_id is None:
+            continue
+        val_toks = {t.lower() for t in _tokenize(c.value_text) if len(t) >= 3}
+        overlap = len(val_toks & q_set) if q_set else 0
+        if not broad and overlap == 0:
+            continue
+        weight = float(max(overlap, 1)) * float(c.confidence) * float(c.salience)
+        scored.append((-weight, i, c.source_episode_id))
+
+    scored.sort()
+    seen: set[str] = set()
+    out: list[str] = []
+    for _, _, eid in scored:
+        if eid and eid not in seen:
+            seen.add(eid)
+            out.append(eid)
+            if len(out) >= cap:
+                break
+    return out
+
+
+def _merge_promoted_first(promoted: list[str], existing: list[str]) -> list[str]:
+    """Additive merge: protect top-K of existing, insert NEW promoted ids after.
+
+    Naive prepend of all promoted ids displaced BM25-found gold raws past the
+    render cutoff (e.g. gold raw at existing[5] → merged[11] after 6 promotions
+    + char_budget truncation). This variant keeps the first ``PROTECT_K``
+    existing ids in place and only inserts promoted ids that are NOT already
+    present in existing, so no reorder of already-retrieved raws ever happens.
+
+    Rationale: claim-source promotion is meant to *add* candidates that BM25
+    missed, not to rerank ones it already found. Top-K protection keeps
+    single-answer queries (ENTITY / SCALAR) safe; the additive tail still
+    grants claim-source raws entry into render_top_k when render_top_k > K.
+    """
+    PROTECT_K = 6
+    existing_set = {eid for eid in existing if eid}
+    seen: set[str] = set()
+    out: list[str] = []
+    for eid in existing[:PROTECT_K]:
+        if eid and eid not in seen:
+            seen.add(eid)
+            out.append(eid)
+    for eid in promoted:
+        if eid and eid not in seen and eid not in existing_set:
+            seen.add(eid)
+            out.append(eid)
+    for eid in existing[PROTECT_K:]:
+        if eid and eid not in seen:
+            seen.add(eid)
+            out.append(eid)
+    return out
 
 
 def _expand_centers_first(eps: list[Any], cap: int) -> list[str]:
