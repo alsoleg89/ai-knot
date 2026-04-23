@@ -377,12 +377,14 @@ def _detect_geometry(question: str, tokens: list[str]) -> AnswerSpace:
     ):
         return AnswerSpace.SET
 
-    # Implicit SET: conservative — only fire when a known aggregation noun head
-    # appears in "what/which + has/have + noun_head" structure.
-    # e.g. "What books has X read?" / "What places has X visited?"
+    # Implicit SET: fire when a known aggregation noun head appears in
+    # "what/which + AUX + noun_head" structure, where AUX is any common English
+    # auxiliary. Gates on _SET_NOUN_HEADS so non-list nouns stay DESCRIPTION.
+    # e.g. "What books has X read?" / "What activities does X enjoy?" /
+    # "What hobbies are on X's list?"
     if tokens and tokens[0] in {"what", "which"}:
         early = set(tokens[1:5])
-        if early & {"has", "have"}:
+        if early & {"has", "have", "does", "do", "did", "is", "are", "was", "were"}:
             rest_tokens = tokens[1:]
             if any(noun in rest_tokens for noun in _SET_NOUN_HEADS):
                 return AnswerSpace.SET

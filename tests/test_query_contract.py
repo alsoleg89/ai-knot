@@ -328,3 +328,51 @@ def test_what_is_description_not_set():
     assert contract.answer_space is not AnswerSpace.SET, (
         f"'What is X's Y?' should not be SET, got {contract.answer_space}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Move 4 — implicit SET covers full English aux class, not only has/have
+# ---------------------------------------------------------------------------
+
+
+class TestImplicitSetAuxBroadened:
+    """'what/which + AUX + NOUN_HEAD' fires SET for any common English aux."""
+
+    @pytest.mark.parametrize(
+        "q",
+        [
+            "What activities does Melanie enjoy?",
+            "What hobbies are on Alice's list?",
+            "What places did Bob visit last year?",
+            "What books is Carol reading?",
+            "Which movies were on the shortlist?",
+            "What sports do the kids play?",
+        ],
+    )
+    def test_implicit_set_covers_all_auxiliaries(self, q: str) -> None:
+        from ai_knot.query_contract import build_answer_contract
+
+        contract, _ = build_answer_contract(q)
+        assert contract.answer_space is AnswerSpace.SET, (
+            f"'{q}' must be SET (aux + SET_NOUN_HEAD), got {contract.answer_space}"
+        )
+
+    @pytest.mark.parametrize(
+        "q",
+        [
+            "What is the status of Project Alpha?",
+            "What is the focus of this meeting?",
+            "What is Alice's address?",
+            "What is the outcome?",
+            "Does Alice like coffee?",
+            "Is Bob a vegetarian?",
+        ],
+    )
+    def test_singular_and_bool_unchanged(self, q: str) -> None:
+        """Widening aux must not turn singular or bool Q into SET."""
+        from ai_knot.query_contract import build_answer_contract
+
+        contract, _ = build_answer_contract(q)
+        assert contract.answer_space is not AnswerSpace.SET, (
+            f"'{q}' must NOT become SET after aux widening, got {contract.answer_space}"
+        )
