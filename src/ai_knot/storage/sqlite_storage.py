@@ -34,27 +34,6 @@ def _get_per_session_floor() -> int:
     return int(os.environ.get("AI_KNOT_PER_SESSION_FLOOR", "1"))
 
 
-def _get_speaker_prefix_boost() -> float:
-    return float(os.environ.get("AI_KNOT_SPEAKER_PREFIX_BOOST", "1.5"))
-
-
-def _speaker_prefix_boost(raw_text: str, entities: tuple[str, ...] | list[str]) -> float:
-    """Multiplicative BM25 boost when raw_text starts with ``{entity}:`` prefix.
-
-    LOCOMO-style corpora prefix every turn with ``<Name>: ...`` — single source
-    of truth for who is speaking, independent of the role-level ``speaker``
-    column (user/assistant).  Speaker-anchored turns are systematically more
-    fact-bearing for entity-focused Q ("What does Jon do?") than counterparty
-    turns that merely mention the name ("Gina: Hey Jon").
-    """
-    if not raw_text:
-        return 1.0
-    for ent in entities:
-        if ent and raw_text.startswith(ent + ":"):
-            return _get_speaker_prefix_boost()
-    return 1.0
-
-
 def _per_session_floor(ranked_ids: list[str], eps_by_id: dict[str, Any]) -> list[str]:
     """Guarantee ≥ n_floor episodes per session_id appear early in the ranking."""
     n_floor = _get_per_session_floor()
@@ -985,14 +964,10 @@ class SQLiteStorage:
 
         # Sub-step A: score = max(bm25(center), bm25(window))
         # Centre benefits from short-doc length-norm; window provides cross-turn IDF.
-        # Speaker-prefix multiplicative boost: turns where raw_text starts with
-        # ``{focus_entity}:`` are systematically more fact-bearing for entity-
-        # focused Q.  Controlled by AI_KNOT_SPEAKER_PREFIX_BOOST (default 1.5).
         ranked = sorted(
             zip(episodes, tokenized_windows, tokenized_centers, strict=False),
             key=lambda trip: (
-                max(_bm25_score(trip[1]), _bm25_score(trip[2]))
-                * _speaker_prefix_boost(trip[0].raw_text, entities),
+                max(_bm25_score(trip[1]), _bm25_score(trip[2])),
                 _recency(trip[0]),
             ),
             reverse=True,
