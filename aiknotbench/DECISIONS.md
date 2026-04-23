@@ -257,6 +257,26 @@ bench settings must have a paired entry here before it lands on the branch.
 
 ---
 
+## 2026-04-23 — Move 5 universal balanced-profile cap widening (REVERTED)
+
+**Commit:** `fedb3d7` (reverted by `2749df4`) on `feature/configurable-mcp-env-v0.9.4`
+**Baseline:** `p1-1b-2conv` — canonical, cat1 30.2 %, cat2 50.8 %, cat3 69.2 %, cat4 76.3 %, cat5 28.2 %, cat1-4 62.7 %
+**Run:** `data/runs/m5-2conv/report.json`, canonical (deviations=[]), same models
+**Config deviations:** none
+**Decision:** REVERT — cat3 dropped −15.4 pp (7.2 pp below 8.2 pp floor); cat1-4 aggregate dropped −3.9 pp (exceeds 2 pp stop-rule)
+**Reason:** Hypothesis (formed from read-only retrieval trace on `p1-1b-2conv` knot.db, documented in `memory/project_locomo_cat1_retrieval_diagnostic.md`): cat1 retrieval-miss Q have gold evidence ranking at raw ranks 13–21, just outside the balanced profile's `render_top_k=12` / `raw_search_top_k=20`. The SET-only widening in `_caps_for_contract` (render 18, raw 28) wasn't load-bearing as a gate — the asymmetry between DESCRIPTION (12/20) and SET (18/28) was causing non-SET cat1 Q to lose gold at ranks 16–18. Change: widen balanced to `(raw=28, window=32, collect=22, render=18, budget=30 000)` unconditionally. `_caps_for_contract` becomes a no-op on balanced, still widens narrow for SET. 2 files, 24 insertions. Tests updated (`test_set_caps_widened_vs_scalar` now asserts monotone widening rather than strict widening on balanced base).
+**m5 numbers (canonical gpt-4o-mini × gpt-4o-mini, 2-conv):**
+  - cat1: 27.9 % (−2.3 pp)
+  - cat2: 47.6 % (−3.2 pp)
+  - cat3: 53.8 % (−15.4 pp ⚠⚠⚠ catastrophic)
+  - cat4: 77.2 % (+0.9 pp)
+  - cat5: 32.4 % (+4.2 pp, the only winner)
+  - cat1-4 aggregate: 58.8 % (−3.9 pp, trips 2 pp stop-rule)
+**Rationale for REVERT:** cat3 collapse (9/13 → 7/13, lost 2 of 13 Q, 7.4 pp below the absolute floor) forces immediate revert under `feedback_regression_stop_rule` per-cat guard. cat1-4 aggregate regression reinforces. Only cat5 (open-ended description) benefited — consistent with the thesis that widening context helps description-style Q and hurts scalar/hop Q. Mechanistic read: cat3 (hop/aggregate) depends on precise evidence alignment; more context at render_top_k=18 dilutes the signal with near-neighbor turns that confuse the LLM's multi-step reasoning. Cat2 (multi-hop) regressed for the same reason. cat1 target regression means the diagnostic insight (gold at ranks 13–21) didn't actually convert to CORRECTs — the widened render window brought more noise than gold. The diagnostic remains valid, but universal widening is the wrong lever. Future direction: **rank-time precision** (e.g. narrowing the entity filter at source via speaker-prefix signal or Q-token pre-filter) rather than **truncation-width widening**, since the latter adds noise at the same rate as signal.
+**Next baseline update:** no — `p1-1b-2conv` remains baseline.
+
+---
+
 ## Known bad artifacts
 
 ### `data/runs/ddsa-off/`
