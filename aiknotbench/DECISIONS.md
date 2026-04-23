@@ -354,6 +354,46 @@ bench settings must have a paired entry here before it lands on the branch.
 
 ---
 
+## 2026-04-23 — Claims-first additive promotion + render_top_k bump (REVERTED, stop-rule tripped)
+
+**Commit:** `3203620` (reverted by `9dc7a8e`) on `feature/configurable-mcp-env-v0.9.4`. Replay harness restored separately as `461ca71`.
+**Baseline:** `p1-1b-2conv` — cat1 30.23 %, cat2 50.79 %, cat3 69.23 %, cat4 80.70 %, cat5 26.76 %, cat1-4 62.66 %.
+**Run:** `data/runs/p1-promo-2conv/report.json` — canonical (gpt-4o-mini × gpt-4o-mini, 2-conv)
+**Config deviations:** none (env default `AIKNOT_CLAIMS_FIRST_PROMOTION=1` active)
+**Decision:** REVERT — aggregate drop **−3.86 pp** exceeds the 2 pp stop-rule threshold by itself; cat4 **−4.39 pp** hurts the 8.2 pp per-category floor margin (80.7 → 76.3 %, 5 Q lost).
+**Reason:** Addresses the 19/30 retrieval-bucket finding in `memory/project_locomo_cat1_bottleneck_audit_20260423.md`. Change in `src/ai_knot/query_runtime.py` (step 7c): (1) `_claim_source_promotions` picks up to 6 episode IDs whose atomic claims have subject matching a focus entity, ranked by `overlap(value_tokens, q_tokens) × confidence × salience` with SET / DESCRIPTION exempting the overlap requirement; (2) `_merge_promoted_first` additive merge — `PROTECT_K=6` existing leaders preserved, only NEW IDs inserted; (3) `execute_query` bumps `collect_cap` and `render_top_k` by `n_new_promoted` so promoted raws don't displace existing top-K past the render cutoff. 122 LOC src + 4 regression tests + replay harness `scripts/cat1_retrieval_replay.py` (192 LOC). Gated by env var `AIKNOT_CLAIMS_FIRST_PROMOTION` (default on).
+**Pre-bench signal (offline replay on 30 cat1 WRONG):**
+  - flag=0: 7/30 gold-in-context
+  - flag=1: 9/30 gold-in-context (+2 Q: [0:24] destress, [0:60] instruments; 0 losses)
+  - CORRECT cat1 (13): 9/13 unchanged — no regressions seen in the replay check
+  Replay predicted net +2 Q cat1 CORRECT. **Bench delivered −2 Q cat1 CORRECT.** Divergence is 4 Q on cat1 alone and +9 Q aggregate degradation across cat2/cat4/cat5 that the replay never measured.
+**p1-promo-2conv bench numbers:**
+  - cat1: 25.58 % (11/43; **−4.65 pp**, lost 2 Q)
+  - cat2: 47.62 % (30/63; **−3.17 pp**, lost 2 Q)
+  - cat3: 69.23 % (9/13; = baseline)
+  - cat4: 76.32 % (87/114; **−4.39 pp**, lost 5 Q)
+  - cat5: 25.35 % (18/71; −1.41 pp)
+  - cat1-4 agg: 58.80 % (137/233; **−3.86 pp**, trips 2 pp stop-rule)
+**Q-level diff vs p1-1b-2conv:** 16 CORRECT → WRONG, 6 WRONG → CORRECT (net −10 across all categories).
+  - CORRECT → WRONG: [0:35 cat2 camping date], [0:45 cat2 pride parade date], [0:49 cat2 pride festival date], [0:55 cat1 both painted], [0:70 cat1 trans events], [0:72 cat2 friend adoption date], [0:76 cat1 hike-after-roadtrip date], [0:90 cat4 marriage duration], [0:95 cat4 camping activities], [1:53 cat4 Gina customer experience], [1:59 cat4 Gina clothing+dance], [1:62 cat4 Gina confidence], [1:75 cat4 Gina grand opening], [1:79 cat5 Jon temp job], [1:89 cat5 Jon store feeling], [1:97 cat5 Gina HR internship].
+  - WRONG → CORRECT: [0:0 cat2 LGBTQ support date], [0:9 cat2 friends meetup date], [0:32 cat1 LGBTQ+ events], [0:135 cat4 Melanie October setback], [0:152 cat5 charity race realization], [0:165 cat5 counseling motivation].
+  - Replay-predicted gains [0:24] and [0:60] BOTH still WRONG on bench — the gold tokens entered context but the LLM answered differently (likely rank-position or extra-context interference). Replay's "gold-in-context" metric has a large false-positive rate as a bench predictor.
+**Root-cause of the negative outcome:**
+  1. **`render_top_k` + `collect_cap` bump enlarges the context itself.** Every Q where promotion fired got ~1 extra raw rendered (avg `n_new_promoted`≈1-3 per Q). For Q where the gold raw was already in context, the extra raws add *competing* evidence that the LLM has to disambiguate. cat4 adversarial Q (Gina-dance, Gina-customer-experience) are the worst affected: more evidence increases the chance the LLM extracts a confident-but-wrong answer instead of saying "not in context".
+  2. **`_claim_source_promotions` ranking fires on too many cat2 temporal Q.** cat2 date-asking Q have `Melanie`/`Caroline` as focus entity; any Melanie-subject claim gets promoted. The date-bearing raw is often a different raw from the promoted ones, so promoted raws push the date-bearing raw out of the collect window even with the bump (char_budget is NOT bumped — we only bumped render_top_k). 4 cat2 date-Q flipped to WRONG this way.
+  3. **`char_budget` not bumped = silent truncation under expanded render_top_k.** We added up to 6 raws per Q but kept `char_budget=22_000` for balanced profile. At ~1200 char/turn, 15-18 turns already saturates. Bumping render_top_k past 12 without a matching char_budget bump forces mid-raw truncation, cutting off whichever turn happens to cross the byte limit — which is non-deterministic with respect to gold content.
+  4. **Offline replay gold-in-context is a poor predictor of bench CORRECT.** Replay only measured token-presence; it did not measure LLM-extraction fidelity under enlarged context, and it did not sample cat2 / cat4 / cat5 at all. Predicted +2 Q cat1; bench delivered −2 Q cat1, net −10 across cat1-4. A retrieval change that moves the context envelope must be validated either against CORRECT Q of all cat types (not just the target WRONG bucket) or with the actual answering LLM in the loop.
+**Architectural consequence:**
+  - Adding retrieval signal ≠ adding answer quality. The replay harness is still useful to confirm a change CAN surface gold tokens, but a bench prediction requires running a second lane that also simulates LLM extraction under the new context — not just gold-containment. Without that, replay wins are phantom wins.
+  - The move was designed additively (`PROTECT_K=6`, merge-new-only) specifically to avoid displacement, and it succeeded at that. The damage was **expansion, not displacement** — growing the context hurts answering precision. The cat4 cluster of losses (5 Q, all on Gina-related adversarial Q from conv1) confirms this: those Q were CORRECT on baseline because context was tight and the LLM could say "not in context"; after promotion the extra Gina-subject claims gave the LLM false confidence to extract a plausible-sounding wrong answer.
+  - **Stop-rule was the right gate.** Aggregate −3.86 pp is well past the 2 pp threshold and cat4 −4.39 pp crosses into the 8.2 pp floor margin territory. No partial-accept path.
+**Implication for next moves:** Eight consecutive REVERTs on this branch (Moves 4, 5, 1A, 1C-plays, 2S1, 6A, 1E, promo). Two new lessons:
+  1. **Context-expanding retrieval changes need cat1-4 replay or answer-stage simulation before bench.** Gold-in-context on WRONG Q is not enough.
+  2. **`_caps_for_contract` widening must be done on ALL answer-spaces jointly.** Increasing render_top_k for one answer-space (SET via `_caps_for_contract`) while leaving balanced at 12 creates a discontinuity — promoted raws going to a balanced Q break while the same code path works for a SET Q.
+**Next baseline update:** no — `p1-1b-2conv` remains baseline. Replay harness stays in tree as `scripts/cat1_retrieval_replay.py` for future use, with the known limitation now documented.
+
+---
+
 ## Known bad artifacts
 
 ### `data/runs/ddsa-off/`
