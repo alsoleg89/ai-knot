@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install build tools and package
+COPY pyproject.toml ./
+COPY src/ai_knot_v2 ./src/ai_knot_v2/
+COPY src/ai_knot/__init__.py ./src/ai_knot/__init__.py
+
+RUN pip install --no-cache-dir ".[mcp,v2]"
+
+# Default config — override with env vars at runtime
+ENV AIKNOT_V2_DB_PATH=/data/memory.db \
+    AIKNOT_V2_AGENT_ID=agent-1 \
+    AIKNOT_V2_MAX_ATOMS=100
+
+VOLUME ["/data"]
+
+CMD ["python", "-m", "ai_knot_v2.api.mcp_server"]
