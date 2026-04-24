@@ -1,6 +1,7 @@
 """ai_knot_v2.core — public API surface."""
 
 from ai_knot_v2.core._ulid import new_ulid
+from ai_knot_v2.core.provenance import AuditEvent, AuditTrail
 from ai_knot_v2.core.atom import MemoryAtom
 from ai_knot_v2.core.dependency import DependencyMap, build_dependency_map, transitive_closure
 from ai_knot_v2.core.episode import RawEpisode
@@ -37,4 +38,6 @@ __all__ = [
     "DependencyMap",
     "build_dependency_map",
     "transitive_closure",
+    "AuditEvent",
+    "AuditTrail",
 ]
