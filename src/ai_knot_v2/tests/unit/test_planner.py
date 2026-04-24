@@ -1,13 +1,14 @@
-"""Sprint 5 — Evidence Planner unit tests.
+"""Sprint 5 / Sprint 11 — Evidence Planner unit tests.
 
 Tests: reader_cost, reduction_score, utility, contradiction detection,
-plan_evidence_pack, and handle_contradictions.
+plan_evidence_pack, handle_contradictions, and tri-temporal Allen-relation scoring.
 No LOCOMO data. All synthetic.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import time
 
 from ai_knot_v2.core._ulid import new_ulid
 from ai_knot_v2.core.atom import MemoryAtom
@@ -19,6 +20,7 @@ from ai_knot_v2.ops.planner import (
     plan_evidence_pack,
     reader_cost,
     reduction_score,
+    temporal_allen_bonus,
     utility,
 )
 
@@ -244,3 +246,80 @@ class TestPlanEvidencePack:
         pack = plan_evidence_pack([main], "query", _BUDGET, library=lib)
         # Both main and dep should be in pack after closure
         assert dep.atom_id in pack.atoms
+
+
+class TestTemporalAllenBonus:
+    """Tests for tri-temporal Allen-relation bonus (Sprint 11)."""
+
+    def _timed_atom(self, vf: int, vu: int, obs_time: int | None = None) -> MemoryAtom:
+        """Create atom with explicit valid interval."""
+        a = _atom()
+        obs = obs_time if obs_time is not None else int(time.time())
+        return dataclasses.replace(
+            a, atom_id=new_ulid(), valid_from=vf, valid_until=vu, observation_time=obs
+        )
+
+    def test_overlapping_interval_gives_bonus(self) -> None:
+        """Atom interval overlapping query window → Allen bonus > 0."""
+        now = int(time.time())
+        # Query window: [now, now+86400] (today)
+        # Atom interval: [now-1000, now+1000] → overlaps
+        atom = self._timed_atom(now - 1000, now + 1000, obs_time=now)
+        bonus = temporal_allen_bonus(atom, now, now + 86400)
+        assert bonus > 0.0
+
+    def test_disjoint_interval_no_allen_bonus(self) -> None:
+        """Atom interval entirely before query window → no Allen bonus, only recency."""
+        now = int(time.time())
+        # Atom: 10 years ago interval; query: today
+        old = now - 10 * 365 * 86400
+        atom = self._timed_atom(old, old + 86400, obs_time=old)
+        bonus_with_allen = temporal_allen_bonus(atom, now, now + 86400)
+        bonus_no_interval = temporal_allen_bonus(
+            dataclasses.replace(atom, atom_id=new_ulid(), valid_from=None, valid_until=None),
+            now,
+            now + 86400,
+        )
+        # Allen adds 0.0 for PRECEDES; the difference is purely Allen
+        assert bonus_with_allen <= bonus_no_interval + 0.01  # no Allen bonus added
+
+    def test_no_query_window_no_allen_bonus(self) -> None:
+        """When query has no temporal window, Allen axis is skipped."""
+        now = int(time.time())
+        atom = self._timed_atom(now, now + 86400, obs_time=now)
+        bonus = temporal_allen_bonus(atom, None, None)
+        # Only recency bonus applies; should be > 0 (recent atom) but < 0.3 max
+        assert 0.0 <= bonus <= 0.3 + 0.01
+
+    def test_recent_atom_higher_recency(self) -> None:
+        """Recently observed atom gets higher recency bonus than old atom."""
+        now = int(time.time())
+        recent = _atom()
+        recent = dataclasses.replace(recent, atom_id=new_ulid(), observation_time=now)
+        old = _atom()
+        old = dataclasses.replace(old, atom_id=new_ulid(), observation_time=now - 5 * 365 * 86400)
+        bonus_recent = temporal_allen_bonus(recent, None, None)
+        bonus_old = temporal_allen_bonus(old, None, None)
+        assert bonus_recent > bonus_old
+
+    def test_reduction_score_uses_temporal_bonus(self) -> None:
+        """reduction_score with temporal args gives higher score for timed atoms matching query."""
+        now = int(time.time())
+        # Two atoms: one timed to match query window, one with no interval
+        timed = _atom()
+        timed = dataclasses.replace(
+            timed,
+            atom_id=new_ulid(),
+            valid_from=now,
+            valid_until=now + 86400,
+            observation_time=now,
+        )
+        untimed = _atom()
+        untimed = dataclasses.replace(untimed, atom_id=new_ulid(), observation_time=now)
+
+        score_timed = reduction_score(timed, "query today", [], query_vf=now, query_vu=now + 86400)
+        score_untimed = reduction_score(
+            untimed, "query today", [], query_vf=now, query_vu=now + 86400
+        )
+        # Timed atom gets Allen bonus; untimed doesn't
+        assert score_timed > score_untimed

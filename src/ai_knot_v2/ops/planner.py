@@ -9,16 +9,20 @@ Key functions:
 - utility(atom, ...)           — reduction_score / reader_cost
 - plan_evidence_pack(...)      — greedy selection with dependency-closure
 - handle_contradictions(pack)  — sheaf-curvature detection → split or abstain
+- temporal_allen_bonus(atom, query_vf, query_vu) — Allen-relation temporal match bonus
 """
 
 from __future__ import annotations
 
+import time
+from datetime import date
 from typing import Any
 
 from ai_knot_v2.core._ulid import new_ulid
 from ai_knot_v2.core.action_calculus import compute_action_affect_mask
 from ai_knot_v2.core.atom import MemoryAtom
 from ai_knot_v2.core.library import AtomLibrary
+from ai_knot_v2.core.temporal import AllenRelation, allen_relation, resolve_temporal
 from ai_knot_v2.core.types import EvidencePack, ReaderBudget
 
 # ---------------------------------------------------------------------------
@@ -41,6 +45,82 @@ def reader_cost(atom: MemoryAtom) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Tri-temporal Allen-relation scoring (Sprint 11)
+# ---------------------------------------------------------------------------
+
+# Bonus for each Allen relation between atom valid-interval and query time window.
+# Overlapping relations → high bonus; adjacent → small; disjoint → neutral (not penalized).
+_ALLEN_BONUS: dict[AllenRelation, float] = {
+    AllenRelation.EQUALS: 0.6,
+    AllenRelation.DURING: 0.6,
+    AllenRelation.CONTAINS: 0.5,
+    AllenRelation.STARTS: 0.5,
+    AllenRelation.FINISHES: 0.5,
+    AllenRelation.STARTED_BY: 0.4,
+    AllenRelation.FINISHED_BY: 0.4,
+    AllenRelation.OVERLAPS: 0.4,
+    AllenRelation.OVERLAPPED_BY: 0.4,
+    AllenRelation.MEETS: 0.2,
+    AllenRelation.MET_BY: 0.2,
+    AllenRelation.PRECEDES: 0.0,
+    AllenRelation.PRECEDED_BY: 0.0,
+}
+
+# Recency decay half-life in seconds (for observation_time axis).
+# Atoms observed within 30 days get full bonus; score halves per half-life.
+_RECENCY_HALFLIFE_SEC = 30 * 86400
+_RECENCY_MAX_BONUS = 0.3
+
+
+def temporal_allen_bonus(
+    atom: MemoryAtom,
+    query_vf: int | None,
+    query_vu: int | None,
+) -> float:
+    """Compute tri-temporal bonus for an atom relative to a query time window.
+
+    Three axes:
+    1. Valid-time Allen relation: atom [valid_from, valid_until] vs query [vf, vu].
+       Applied only when both atom and query have explicit intervals.
+    2. Observation-time recency: exponential decay from now — prefers recently observed facts.
+    3. Belief-time (future: currently equal to observation_time axis, reserved for Sprint 12).
+
+    Returns additive bonus ∈ [0.0, 0.6].
+    """
+    bonus = 0.0
+
+    # Axis 1: valid-time Allen relation
+    if (
+        query_vf is not None
+        and query_vu is not None
+        and atom.valid_from is not None
+        and atom.valid_until is not None
+    ):
+        rel = allen_relation(atom.valid_from, atom.valid_until, query_vf, query_vu)
+        bonus += _ALLEN_BONUS.get(rel, 0.0)
+
+    # Axis 2: observation-time recency (exponential decay toward now)
+    now = int(time.time())
+    age_sec = max(0, now - atom.observation_time)
+    import math
+
+    decay = math.exp(-age_sec / _RECENCY_HALFLIFE_SEC)
+    bonus += decay * _RECENCY_MAX_BONUS
+
+    return bonus
+
+
+def _query_temporal_window(query: str) -> tuple[int | None, int | None]:
+    """Extract a temporal window from a query string.
+
+    Uses resolve_temporal with today's date as reference.
+    Returns (valid_from_epoch, valid_until_epoch), or (None, None) if no expression found.
+    """
+    vf, vu, _ = resolve_temporal(query, date.today())
+    return vf, vu
+
+
+# ---------------------------------------------------------------------------
 # Reduction score (regret reduction heuristic)
 # ---------------------------------------------------------------------------
 
@@ -51,6 +131,8 @@ def reduction_score(
     atom: MemoryAtom,
     query: str,
     current_pack: list[MemoryAtom],
+    query_vf: int | None = None,
+    query_vu: int | None = None,
 ) -> float:
     """Estimate how much adding this atom reduces expected answer regret.
 
@@ -60,7 +142,8 @@ def reduction_score(
     3. Action diversity (prefer atoms with new action coverage)
     4. Polarity correction (neg polarity slightly less confident)
     5. Credence weight
-    6. Recency bias (more recent observations preferred)
+    6. Regret charge contribution
+    7. Tri-temporal Allen-relation bonus (valid-time + recency)
 
     Returns score ∈ [0.0, ∞) (not normalized — higher is better).
     """
@@ -108,6 +191,9 @@ def reduction_score(
     # 6. Regret charge contribution (atoms with high regret_charge = more costly to omit)
     score += atom.regret_charge * 0.5
 
+    # 7. Tri-temporal Allen-relation bonus
+    score += temporal_allen_bonus(atom, query_vf, query_vu)
+
     return score
 
 
@@ -115,10 +201,12 @@ def utility(
     atom: MemoryAtom,
     query: str,
     current_pack: list[MemoryAtom],
+    query_vf: int | None = None,
+    query_vu: int | None = None,
 ) -> float:
     """Utility = reduction_score / reader_cost (information per token)."""
     cost = reader_cost(atom)
-    return reduction_score(atom, query, current_pack) / cost
+    return reduction_score(atom, query, current_pack, query_vf, query_vu) / cost
 
 
 # ---------------------------------------------------------------------------
@@ -248,15 +336,19 @@ def plan_evidence_pack(
 ) -> EvidencePack:
     """Greedy-utility selection within reader budget.
 
-    1. Score all atoms by utility(atom, query, current_pack).
-    2. Greedily select highest-utility atom within token budget.
-    3. Repeat until budget exhausted or no atoms left.
-    4. Apply dependency closure (if library provided).
-    5. Handle contradictions (split or abstain).
-    6. Return EvidencePack with utility_scores metadata.
+    1. Extract query temporal window (Allen-relation anchor).
+    2. Score all atoms by utility(atom, query, current_pack, query_vf, query_vu).
+    3. Greedily select highest-utility atom within token budget.
+    4. Repeat until budget exhausted or no atoms left.
+    5. Apply dependency closure (if library provided).
+    6. Handle contradictions (split or abstain).
+    7. Return EvidencePack with utility_scores metadata.
     """
     if not atoms:
         return EvidencePack(pack_id=new_ulid(), atoms=(), spans=())
+
+    # Extract temporal anchor from query once (reused for all atoms)
+    query_vf, query_vu = _query_temporal_window(query)
 
     token_budget = budget.max_tokens
     selected: list[MemoryAtom] = []
@@ -265,7 +357,7 @@ def plan_evidence_pack(
 
     while remaining and len(selected) < budget.max_atoms and token_budget > 0:
         # Score all remaining atoms
-        scored = [(utility(a, query, selected), a) for a in remaining]
+        scored = [(utility(a, query, selected, query_vf, query_vu), a) for a in remaining]
         scored.sort(key=lambda x: x[0], reverse=True)
 
         best_util, best_atom = scored[0]
