@@ -64,6 +64,7 @@ _EVENT_VERBS = (
     r"|celebrated|organized|planned|booked|reserved|cancelled|scheduled|rescheduled"
     r"|signed|agreed|promised|confirmed|announced|discovered|invented|designed"
     r"|developed|deployed|shipped|sold|purchased|rented|leased|donated|volunteered"
+    r"|take|takes|use|uses|wear|wears|drive|drives|run|runs|eat|eats|drink|drinks"
 )
 
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
