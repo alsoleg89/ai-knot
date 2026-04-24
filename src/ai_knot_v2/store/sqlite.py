@@ -173,6 +173,10 @@ class SqliteStore:
         ).fetchall()
         return [_row_to_atom(r) for r in rows]
 
+    def delete_atom(self, atom_id: str) -> None:
+        with self._conn:
+            self._conn.execute("DELETE FROM atoms WHERE atom_id = ?", (atom_id,))
+
     def get_atoms_by_agent(self, agent_id: str) -> list[MemoryAtom]:
         rows = self._conn.execute("SELECT * FROM atoms WHERE agent_id = ?", (agent_id,)).fetchall()
         return [_row_to_atom(r) for r in rows]
