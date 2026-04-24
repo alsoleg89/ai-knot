@@ -1,0 +1,43 @@
+domain: identity
+description: Action class bindings for identity domain atoms
+action_classes:
+  UPDATE_PROFILE:
+    predicates: [is, was, are, has]
+    object_keywords:
+      - name
+      - age
+      - born
+      - gender
+      - nationality
+      - occupation
+      - job
+      - profession
+      - married
+      - divorced
+      - parent
+      - child
+    risk_class: identity
+  VERIFY_IDENTITY:
+    predicates: [is, called, named]
+    object_keywords:
+      - name
+      - called
+      - known as
+      - alias
+      - real name
+    risk_class: identity
+  LINK_ENTITY:
+    predicates: [lives_in, moved_to, works_at]
+    object_keywords:
+      - address
+      - city
+      - country
+      - location
+      - company
+      - employer
+      - university
+    risk_class: [identity, finance]
+severity_weights:
+  UPDATE_PROFILE: 0.4
+  VERIFY_IDENTITY: 0.5
+  LINK_ENTITY: 0.4

@@ -1,0 +1,71 @@
+domain: medical
+description: Action class bindings for medical domain atoms
+action_classes:
+  DIAGNOSE:
+    predicates: [is, has, was]
+    object_keywords:
+      - condition
+      - disease
+      - illness
+      - symptom
+      - diagnosis
+      - diagnos
+      - sick
+      - injured
+      - pain
+      - cancer
+      - infection
+      - disorder
+    risk_class: medical
+  PRESCRIBE:
+    predicates: [has, takes, prescribed]
+    object_keywords:
+      - medication
+      - prescription
+      - drug
+      - treatment
+      - therapy
+      - medicine
+      - pill
+      - dose
+      - antibiotic
+    risk_class: medical
+  SCHEDULE_APPT:
+    predicates: [has, booked, scheduled]
+    object_keywords:
+      - appointment
+      - doctor
+      - hospital
+      - nurse
+      - clinic
+      - specialist
+      - checkup
+      - consultation
+    risk_class: [medical, scheduling]
+  REFER:
+    predicates: [is, has, was]
+    object_keywords:
+      - specialist
+      - referral
+      - consult
+      - cardiologist
+      - neurologist
+      - oncologist
+    risk_class: medical
+  MONITOR:
+    predicates: [has, is, monitors]
+    object_keywords:
+      - allergy
+      - health
+      - condition
+      - symptom
+      - monitoring
+      - chronic
+      - ongoing
+    risk_class: medical
+severity_weights:
+  DIAGNOSE: 0.9
+  PRESCRIBE: 0.8
+  SCHEDULE_APPT: 0.6
+  REFER: 0.7
+  MONITOR: 0.5

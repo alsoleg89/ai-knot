@@ -1,0 +1,59 @@
+domain: scheduling
+description: Action class bindings for scheduling domain atoms
+action_classes:
+  CREATE_EVENT:
+    predicates: [has, scheduled, booked, created]
+    object_keywords:
+      - meeting
+      - appointment
+      - event
+      - session
+      - call
+      - interview
+      - conference
+      - workshop
+    risk_class: scheduling
+  CANCEL_EVENT:
+    predicates: [cancelled, canceled, removed]
+    object_keywords:
+      - cancel
+      - cancelled
+      - canceled
+      - withdrawn
+      - aborted
+    risk_class: scheduling
+  RESCHEDULE:
+    predicates: [moved, rescheduled, changed]
+    object_keywords:
+      - reschedule
+      - rescheduled
+      - postpone
+      - postponed
+      - moved
+      - delayed
+    risk_class: scheduling
+  REMIND:
+    predicates: [has, scheduled, upcoming]
+    object_keywords:
+      - reminder
+      - due
+      - deadline
+      - upcoming
+      - soon
+      - tomorrow
+      - next week
+    risk_class: scheduling
+  SCHEDULE_APPT:
+    predicates: [has, booked, scheduled]
+    object_keywords:
+      - appointment
+      - doctor
+      - dentist
+      - meeting
+    risk_class: scheduling
+severity_weights:
+  CREATE_EVENT: 0.5
+  CANCEL_EVENT: 0.6
+  RESCHEDULE: 0.5
+  REMIND: 0.4
+  SCHEDULE_APPT: 0.5

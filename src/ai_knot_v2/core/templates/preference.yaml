@@ -1,0 +1,41 @@
+domain: preference
+description: Action class bindings for preference domain atoms
+action_classes:
+  RECOMMEND:
+    predicates: [prefers, likes, loves, enjoys, wants]
+    object_keywords:
+      - like
+      - love
+      - prefer
+      - enjoy
+      - adore
+      - favorite
+      - favourite
+      - interested
+    risk_class: preference
+    polarity: pos
+  AVOID:
+    predicates: [dislikes, hates, avoids]
+    object_keywords:
+      - hate
+      - dislike
+      - avoid
+      - not like
+      - despise
+    risk_class: preference
+    polarity: neg
+  PERSONALIZE:
+    predicates: [prefers, wants, likes]
+    object_keywords:
+      - prefer
+      - want
+      - wish
+      - style
+      - choice
+      - option
+      - setting
+    risk_class: preference
+severity_weights:
+  RECOMMEND: 0.2
+  AVOID: 0.2
+  PERSONALIZE: 0.2
