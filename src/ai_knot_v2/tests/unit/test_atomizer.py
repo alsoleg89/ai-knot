@@ -112,6 +112,76 @@ class TestAtomizerRiskClassification:
         assert sev <= 0.2
 
 
+class TestAtomizerSprint7:
+    """Sprint 7 regression tests: event pattern, contractions, gerund, subject quality."""
+
+    def test_event_pattern_went(self) -> None:
+        atoms = Atomizer().atomize(_ep("I went to a doctor appointment yesterday."), SESSION_DATE)
+        event_atoms = [a for a in atoms if "went" in a.predicate or a.predicate == "went"]
+        assert event_atoms, "event pattern should extract 'went' atom"
+
+    def test_event_pattern_visited(self) -> None:
+        atoms = Atomizer().atomize(_ep("Alice visited the hospital last week."), SESSION_DATE)
+        assert any(a.predicate in ("visited", "visit") for a in atoms)
+
+    def test_contraction_expansion_am(self) -> None:
+        atoms = Atomizer().atomize(_ep("I'm a software engineer."), SESSION_DATE)
+        assert len(atoms) >= 1, "I'm should expand to I am for copula match"
+        assert any(a.subject == "user-1" for a in atoms)
+
+    def test_contraction_expansion_have(self) -> None:
+        atoms = Atomizer().atomize(_ep("I've had diabetes for years."), SESSION_DATE)
+        assert len(atoms) >= 1
+
+    def test_gerund_start_extracts_with_speaker(self) -> None:
+        atoms = Atomizer().atomize(
+            _ep("Researching adoption agencies.", user_id="Caroline"), SESSION_DATE
+        )
+        gerund_atoms = [a for a in atoms if a.subject == "Caroline"]
+        assert gerund_atoms, "gerund-start should use speaker as subject"
+
+    def test_first_person_uses_speaker_name(self) -> None:
+        atoms = Atomizer().atomize(_ep("I love painting.", user_id="Melanie"), SESSION_DATE)
+        assert any(a.subject == "Melanie" for a in atoms)
+
+    def test_question_word_subject_filtered(self) -> None:
+        atoms = Atomizer().atomize(_ep("How have you been?"), SESSION_DATE)
+        question_subj = [
+            a for a in atoms if a.subject and a.subject.lower() in ("how", "what", "when", "where")
+        ]
+        assert not question_subj, "question-word subjects should be filtered"
+
+    def test_conjunction_start_subject_filtered(self) -> None:
+        atoms = Atomizer().atomize(_ep("And it was amazing."), SESSION_DATE)
+        bad_subj = [a for a in atoms if a.subject and a.subject.lower().startswith("and")]
+        assert not bad_subj
+
+    def test_speaker_prefix_stripped(self) -> None:
+        atoms = Atomizer().atomize(_ep("Caroline: I love hiking."), SESSION_DATE)
+        # Should still extract atoms despite "Caroline: " prefix
+        assert len(atoms) >= 1
+
+    def test_per_episode_user_id_in_product_api(self) -> None:
+        """MemoryAPI must use per-EpisodeIn user_id for first-person resolution."""
+        from ai_knot_v2.api.product import MemoryAPI
+        from ai_knot_v2.api.sdk import EpisodeIn, LearnRequest
+
+        api = MemoryAPI(db_path=":memory:")
+        api.learn(
+            LearnRequest(
+                episodes=[
+                    EpisodeIn(text="I love hiking.", user_id="Alice"),
+                    EpisodeIn(text="I hate spicy food.", user_id="Bob"),
+                ]
+            )
+        )
+        all_atoms = api._library.all_atoms()  # noqa: SLF001
+        alice_atoms = [a for a in all_atoms if a.user_id == "Alice"]
+        bob_atoms = [a for a in all_atoms if a.user_id == "Bob"]
+        assert alice_atoms, "Alice's episode atoms should have user_id=Alice"
+        assert bob_atoms, "Bob's episode atoms should have user_id=Bob"
+
+
 class TestTemporalResolution:
     def test_yesterday(self) -> None:
         from ai_knot_v2.core.temporal import resolve_temporal

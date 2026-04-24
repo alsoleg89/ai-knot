@@ -126,13 +126,15 @@ def select_candidates(
         base_score = 0.0
         if atom.risk_class in relevant_risk:
             base_score += 1.0
-        # Text overlap bonus
+        # Text overlap bonus: subject, object, AND predicate
         obj = (atom.object_value or "").lower()
         subj = (atom.subject or "").lower()
+        pred = atom.predicate.replace("_", " ")
         words = {w for w in q_lower.split() if len(w) > 3}
         obj_words = {w for w in obj.split() if len(w) > 3}
         subj_words = {w for w in subj.split() if len(w) > 3}
-        overlap = len(words & (obj_words | subj_words))
+        pred_words = {w for w in pred.split() if len(w) > 3}
+        overlap = len(words & (obj_words | subj_words | pred_words))
         base_score += overlap * 0.3
         # High-risk atoms get priority
         base_score += atom.risk_severity * 0.5

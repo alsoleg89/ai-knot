@@ -2,6 +2,13 @@
 
 No LOCOMO-specific patterns. No LLM calls.
 All extraction is rule-based and reproducible.
+
+Sprint 7 changes:
+- Speaker name used as subject for first-person resolution (not agent_id)
+- Event/action verb pattern (went, visited, attended, received, ...)
+- Subject length guard: reject subjects > 40 chars or < 2 chars
+- Skip question-word subjects (how, what, who, when, why)
+- Strip speaker-prefix format "Name: text" before extraction
 """
 
 from __future__ import annotations
@@ -37,12 +44,28 @@ _NEGATION = re.compile(
     r"\b(not|never|no|don't|doesn't|didn't|won't|isn't|aren't|wasn't|weren't|can't)\b", re.I
 )
 
+# Question-word subjects are noise
+_QUESTION_SUBJ = re.compile(r"^(how|what|when|where|who|why|which)$", re.I)
+
+# Generic/trivial subjects
+_TRIVIAL_SUBJ = re.compile(r"^(that|this|it|there|here|and|but|so)$", re.I)
+
+# Past-tense and present action verbs (event/action pattern)
+_EVENT_VERBS = (
+    r"went|visited|attended|saw|met|received|got|found|made|created|started|joined|left"
+    r"|moved|tried|began|finished|completed|took|gave|brought|sent|used|bought|learned"
+    r"|studied|built|wrote|read|played|ran|ran|walked|cooked|painted|drew|sang|won"
+    r"|lost|helped|told|asked|showed|decided|realized|mentioned|said|talked|spoke"
+    r"|called|texted|reached|heard|felt|thought|knew|remembered|forgot|wanted"
+    r"|needed|liked|loved|hated|preferred|chose|picked|found|noticed|saw|watched"
+)
+
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Alice's salary is 120k  /  My job is engineering
     (
         "possession",
         re.compile(
-            r"([\w\s]+?)'s\s+([\w\s]+?)\s+(is|are|was|were)\s+(not\s+)?([\w\s,.$€£\d]+)",
+            r"([\w]+(?:\s+[\w]+)?)'s\s+([\w\s]+?)\s+(is|are|was|were)\s+(not\s+)?([\w\s,.$€£\d]+)",
             re.I,
         ),
     ),
@@ -50,7 +73,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "work_at",
         re.compile(
-            r"([\w\s]+?)\s+(work(?:s|ed|ing)?)\s+(?:at|for|in)\s+([\w\s&,.-]+)",
+            r"([\w]+(?:\s+[\w]+)?)\s+(work(?:s|ed|ing)?)\s+(?:at|for|in)\s+([\w\s&,.-]+)",
             re.I,
         ),
     ),
@@ -58,7 +81,8 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "location",
         re.compile(
-            r"([\w\s]+?)\s+(live[sd]?s?|lives?|moved?|stay(?:s|ed)?|reside[sd]?)\s+(?:in|to|at|near|from)?\s*([\w\s,.-]+)",
+            r"([\w]+(?:\s+[\w]+)?)\s+(live[sd]?s?|lives?|moved?|stay(?:s|ed)?|reside[sd]?)\s+"
+            r"(?:in|to|at|near|from)?\s*([\w\s,.-]+)",
             re.I,
         ),
     ),
@@ -66,7 +90,9 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "preference",
         re.compile(
-            r"([\w\s]+?)\s+(like[sd]?|love[sd]?|prefer[sd]?|enjoy[sd]?|hate[sd]?|dislike[sd]?|adore[sd]?)\s+([\w\s,.!'-]+)",
+            r"([\w]+(?:\s+[\w]+)?)\s+"
+            r"(like[sd]?|love[sd]?|prefer[sd]?|enjoy[sd]?|hate[sd]?|dislike[sd]?|adore[sd]?)\s+"
+            r"([\w\s,.!'-]+)",
             re.I,
         ),
     ),
@@ -74,15 +100,16 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "has_obj",
         re.compile(
-            r"([\w\s]+?)\s+(have|has|had)\s+(?:a\s+|an\s+|the\s+)?([\w\s]+)",
+            r"([\w]+(?:\s+[\w]+)?)\s+(have|has|had)\s+(?:a\s+|an\s+|the\s+)?([\w\s]+)",
             re.I,
         ),
     ),
-    # Alice is/was a doctor / I am tired
+    # Alice is/was a doctor / I am a nurse
     (
         "copula",
         re.compile(
-            r"([\w\s]+?)\s+(is|am|are|was|were)\s+(not\s+)?(?:a\s+|an\s+|the\s+)?([\w\s,.-]+)",
+            r"([\w]+(?:\s+[\w]+)?)\s+(is|am|are|was|were)\s+(not\s+)?"
+            r"(?:a\s+|an\s+|the\s+)?([\w\s,.-]+)",
             re.I,
         ),
     ),
@@ -90,7 +117,17 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "income",
         re.compile(
-            r"([\w\s]+?)\s+(?:earn|make|get|make|receive[sd]?)\s+([\w\s$€£,.\d]+(?:per|a|each)\s+(?:year|month|week|day))",
+            r"([\w]+(?:\s+[\w]+)?)\s+(?:earn|make|get|receive[sd]?)\s+"
+            r"([\w\s$€£,.\d]+(?:per|a|each)\s+(?:year|month|week|day))",
+            re.I,
+        ),
+    ),
+    # I went to X / Caroline attended X / She visited X
+    (
+        "event",
+        re.compile(
+            rf"([\w]+(?:\s+[\w]+)?)\s+(?:just\s+|recently\s+|also\s+)?({_EVENT_VERBS})\s+"
+            r"(?:to\s+|from\s+|at\s+|for\s+|a\s+|an\s+|the\s+)?([^\.\!\?]{3,60})",
             re.I,
         ),
     ),
@@ -98,9 +135,72 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 _STRIP_RE = re.compile(r"[.!?,;:]+$")
 
+# Detect "Speaker: text" prefix format
+_SPEAKER_PREFIX_RE = re.compile(r"^([\w][\w\s]{0,30}):\s+(.+)$", re.S)
+
+# Contraction expansion table
+_CONTRACTIONS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bI'm\b", re.I), "I am"),
+    (re.compile(r"\bI've\b", re.I), "I have"),
+    (re.compile(r"\bI'd\b", re.I), "I had"),
+    (re.compile(r"\bI'll\b", re.I), "I will"),
+    (re.compile(r"\bI'm\b", re.I), "I am"),
+    (re.compile(r"\bshe's\b", re.I), "she is"),
+    (re.compile(r"\bhe's\b", re.I), "he is"),
+    (re.compile(r"\bit's\b", re.I), "it is"),
+    (re.compile(r"\bthey've\b", re.I), "they have"),
+    (re.compile(r"\bwe've\b", re.I), "we have"),
+    (re.compile(r"\bwon't\b", re.I), "will not"),
+    (re.compile(r"\bcan't\b", re.I), "cannot"),
+    (re.compile(r"\bdon't\b", re.I), "do not"),
+    (re.compile(r"\bisn't\b", re.I), "is not"),
+    (re.compile(r"\baren't\b", re.I), "are not"),
+    (re.compile(r"\bwasn't\b", re.I), "was not"),
+    (re.compile(r"\bweren't\b", re.I), "were not"),
+]
+
+# Subjects that are clause fragments (subordinating conjunctions + pronoun)
+_SUBORD_SUBJ = re.compile(
+    r"^(since|when|after|before|if|although|because|while|as|though|once|until|and|but|or|so)\b",
+    re.I,
+)
+
+# Subjects ending with particle words indicate clause capture
+_PARTICLE_END = re.compile(
+    r"\b(to|of|or|and|but|so|just|only|also|then|yet|for|nor|as)\s*$",
+    re.I,
+)
+
+# Gerund-start pattern: "Researching X", "Attending Y", "Working on Z"
+_GERUND_START = re.compile(
+    r"^(\w+ing)\s+(?:a\s+|an\s+|the\s+|about\s+|for\s+|on\s+|at\s+|with\s+)?([\w\s,'-]{2,50}?)"
+    r"(?:\s*[-—–,\.!?]|$)",
+    re.I,
+)
+
+
+def _expand_contractions(text: str) -> str:
+    """Expand English contractions so pattern verbs can match."""
+    for pat, replacement in _CONTRACTIONS:
+        text = pat.sub(replacement, text)
+    return text
+
 
 def _clean(s: str) -> str:
     return _STRIP_RE.sub("", s).strip()
+
+
+def _strip_speaker_prefix(text: str) -> tuple[str, str | None]:
+    """Strip 'Speaker: text' prefix. Returns (clean_text, speaker_from_prefix|None)."""
+    m = _SPEAKER_PREFIX_RE.match(text)
+    if m:
+        prefix = m.group(1).strip()
+        # Only treat as speaker prefix if it looks like a name (≤ 3 words, no verb)
+        if len(prefix.split()) <= 3 and not re.search(
+            r"\b(is|are|was|have|had|do|did)\b", prefix, re.I
+        ):
+            return m.group(2), prefix
+    return text, None
 
 
 def _detect_polarity(group: str | None, surrounding: str) -> Literal["pos", "neg"]:
@@ -115,6 +215,51 @@ def _sentence_split(text: str) -> list[str]:
     """Rough sentence splitter (no NLTK dependency)."""
     sentences = re.split(r"(?<=[.!?])\s+", text)
     return [s.strip() for s in sentences if s.strip()]
+
+
+def _subject_ok(subj: str) -> bool:
+    """Return True if subject is plausible (not trivial, not too long)."""
+    s = subj.strip()
+    if not s or len(s) > 40:
+        return False
+    if _TRIVIAL_SUBJ.match(s):
+        return False
+    if _QUESTION_SUBJ.match(s):
+        return False
+    # Reject subjects starting with subordinating conjunctions
+    if _SUBORD_SUBJ.match(s):
+        return False
+    # Reject subjects ending with particle/conjunction words (clause capture)
+    if _PARTICLE_END.search(s):
+        return False
+    # Skip pure punctuation or digits (but allow single chars like "I")
+    return not (len(s) > 1 and re.match(r"^[\d\W]+$", s))
+
+
+def _gerund_clauses(text: str, implied_subject: str) -> list[ClauseCandidate]:
+    """Extract S-V-O from gerund-start sentences using implied_subject as agent."""
+    candidates: list[ClauseCandidate] = []
+    for sent in _sentence_split(text):
+        m = _GERUND_START.match(sent)
+        if not m:
+            continue
+        verb_ing = m.group(1)  # e.g. "Researching"
+        obj = _clean(m.group(2)) if m.group(2) else None
+        if not obj or len(obj) < 3:
+            continue
+        # Canonicalize gerund → base form heuristic
+        verb_base = re.sub(r"ing$", "", verb_ing).rstrip("e") or verb_ing
+        candidates.append(
+            ClauseCandidate(
+                subject_raw=implied_subject,
+                predicate_raw=verb_base,
+                object_raw=obj,
+                polarity="pos",
+                temporal_expr=sent,
+                source_span=(0, len(sent)),
+            )
+        )
+    return candidates
 
 
 def _extract_clauses(text: str) -> list[ClauseCandidate]:
@@ -146,14 +291,18 @@ def _extract_clauses(text: str) -> list[ClauseCandidate]:
                     neg_grp = m.group(3)
                     obj = _clean(m.group(4)) if (m.lastindex or 0) >= 4 else None
                     polarity = _detect_polarity(neg_grp, sent)
+                elif pattern_name == "event":
+                    subj = _clean(m.group(1))
+                    pred = _clean(m.group(2)).lower()
+                    obj = _clean(m.group(3)) if (m.lastindex or 0) >= 3 else None
+                    polarity = _detect_polarity(None, sent)
                 else:
                     continue
 
                 if not subj or not pred or not obj:
                     continue
 
-                # Skip overly generic/trivial subjects
-                if re.match(r"^(that|this|it|there|here)$", subj, re.I):
+                if not _subject_ok(subj):
                     continue
 
                 # Deduplicate within sentence
@@ -212,6 +361,9 @@ def _canonical_predicate(predicate_raw: str, pattern_name: str | None = None) ->
     return mapping.get(p, re.sub(r"[^a-z0-9_]", "_", p))
 
 
+_FIRST_PERSON = re.compile(r"^(i|me|my|mine|myself)$", re.I)
+
+
 class Atomizer:
     """Converts RawEpisode objects into MemoryAtom lists."""
 
@@ -225,15 +377,26 @@ class Atomizer:
     ) -> list[MemoryAtom]:
         """Extract MemoryAtom list from a single episode."""
         speaker_orbit = resolve_speaker_entity(episode.speaker, episode.user_id, episode.agent_id)
-        clauses = _extract_clauses(episode.text)
+
+        # Resolve speaker display name: user_id carries real name when provided
+        speaker_name: str = episode.user_id or episode.agent_id
+
+        # Strip "Speaker: text" prefix, then expand contractions for better coverage
+        clean_text, _prefix_speaker = _strip_speaker_prefix(episode.text)
+        expanded = _expand_contractions(clean_text)
+
+        clauses = _extract_clauses(expanded)
+        # Gerund-start sentences have no explicit subject → use speaker as agent
+        clauses = clauses + _gerund_clauses(expanded, speaker_name)
         atoms: list[MemoryAtom] = []
 
         for clause in clauses:
-            # Entity resolution: first-person → speaker orbit
             subj_raw = clause.subject_raw
-            if re.match(r"^(i|me|my|mine|myself)$", subj_raw, re.I):
+
+            # Entity resolution: first-person → speaker name
+            if _FIRST_PERSON.match(subj_raw):
                 entity_orbit_id = speaker_orbit
-                subject = episode.user_id or episode.agent_id
+                subject: str = speaker_name
             else:
                 subject = subj_raw
                 entity_orbit_id = self._groupoid.resolve(subj_raw)

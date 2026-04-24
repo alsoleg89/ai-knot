@@ -76,8 +76,8 @@ class MemoryAPI:
             episodes.append(
                 RawEpisode(
                     episode_id=new_ulid(),
-                    agent_id=request.agent_id or self._agent_id,
-                    user_id=request.user_id,
+                    agent_id=ep.agent_id or request.agent_id or self._agent_id,
+                    user_id=ep.user_id if ep.user_id is not None else request.user_id,
                     session_id=ep.session_id,
                     turn_index=0,
                     speaker=ep.speaker,  # type: ignore[arg-type]
