@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "language": "en",
+    "version": 1,
+    "description": "English lexicon for v2 LOCOMO bridge: intent routing + entity filtering + render hints. Add ru.json (or any-lang.json) with same schema for new languages."
+  },
+
+  "aggregation_tokens": [
+    "list", "all", "every", "various", "different",
+    "describe", "enumerate", "overview", "summary", "summariz", "summar"
+  ],
+  "aggregation_phrases": [
+    "how many", "tell me about", "what are", "what does", "what did",
+    "what has", "what have", "what do", "what were", "know about"
+  ],
+
+  "temporal_tokens": [
+    "when", "before", "after", "during", "while", "since", "until",
+    "ago", "yesterday", "today", "tomorrow", "earlier", "later", "recent"
+  ],
+
+  "single_fact_phrases": [
+    "what is", "where is", "who is", "where does", "where did"
+  ],
+
+  "stopwords_cap": [
+    "What", "When", "Where", "Why", "Who", "How", "Which",
+    "Did", "Does", "Do", "Was", "Were", "Is", "Are",
+    "Will", "Would", "Could", "Should", "Has", "Have", "Had",
+    "The", "And", "But", "Or", "Not", "Yes", "No",
+    "Can", "May", "Might", "Must", "Shall",
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "January", "February", "March", "April", "June", "July", "August",
+    "September", "October", "November", "December"
+  ],
+
+  "factual_predicates": [
+    "is", "has", "works_at", "lives_in", "prefers", "dislikes", "moved_to"
+  ],
+
+  "common_words_path": "/usr/share/dict/words"
+}

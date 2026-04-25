@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from collections import defaultdict
@@ -64,13 +65,57 @@ class LocomoConvData:
     qa_pairs: list[QAPair]
 
 
+_LOCOMO_DATE_RE = re.compile(
+    r"(?:(\d{1,2}):(\d{2})\s*(am|pm)\s+on\s+)?"
+    r"(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})",
+    re.I,
+)
+
+
+def _parse_locomo_session_date(s: str, fallback: int) -> int:
+    """Parse '8:56 pm on 20 July, 2023' or '20 July, 2023' → epoch seconds (UTC)."""
+    m = _LOCOMO_DATE_RE.search(s or "")
+    if not m:
+        return fallback
+    hour_str, minute_str, ampm, day, month_name, year = m.groups()
+    months = {
+        "january": 1,
+        "february": 2,
+        "march": 3,
+        "april": 4,
+        "may": 5,
+        "june": 6,
+        "july": 7,
+        "august": 8,
+        "september": 9,
+        "october": 10,
+        "november": 11,
+        "december": 12,
+    }
+    mon = months.get(month_name.lower(), 1)
+    hour = 12
+    minute = 0
+    if hour_str is not None:
+        hour = int(hour_str) % 12
+        if (ampm or "").lower() == "pm":
+            hour += 12
+        minute = int(minute_str)
+    try:
+        from datetime import UTC
+        from datetime import datetime as _dt
+
+        return int(_dt(int(year), mon, int(day), hour, minute, tzinfo=UTC).timestamp())
+    except ValueError:
+        return fallback
+
+
 def parse_locomo_json(data_path: Path, limit: int = 2) -> list[LocomoConvData]:
     """Parse locomo10.json into structured conversations."""
     with open(data_path) as f:
         raw: list[dict[str, Any]] = json.load(f)
 
     convs: list[LocomoConvData] = []
-    base_ts = int(time.time()) - 365 * 24 * 3600  # ~1 year ago
+    fallback_base = int(time.time()) - 365 * 24 * 3600  # used only if date parse fails
 
     for idx, item in enumerate(raw[:limit]):
         conv = item["conversation"]
@@ -83,7 +128,11 @@ def parse_locomo_json(data_path: Path, limit: int = 2) -> list[LocomoConvData]:
             key = f"session_{snum}"
             if key not in conv:
                 continue
-            session_ts = base_ts + (idx * 30 + snum) * 86400
+            date_key = f"session_{snum}_date_time"
+            session_ts = _parse_locomo_session_date(
+                conv.get(date_key, ""),
+                fallback=fallback_base + (idx * 30 + snum) * 86400,
+            )
             for tidx, t in enumerate(conv[key]):
                 turns.append(
                     Turn(
