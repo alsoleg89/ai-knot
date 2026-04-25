@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pathlib
 
-
 _REPO_ROOT = pathlib.Path(__file__).parents[4]
 _V2_ROOT = pathlib.Path(__file__).parents[2]
 

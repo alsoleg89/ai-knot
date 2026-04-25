@@ -34,9 +34,7 @@ class TestMCPServerModule:
         mod._api = fresh_api
 
         try:
-            resp = mod.learn(
-                [{"text": "Alice is allergic to penicillin.", "speaker": "user"}]
-            )
+            resp = mod.learn([{"text": "Alice is allergic to penicillin.", "speaker": "user"}])
             assert len(resp["atom_ids"]) >= 1
 
             recall_resp = mod.recall("Does Alice have any drug allergies?", max_atoms=50)

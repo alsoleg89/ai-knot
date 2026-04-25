@@ -40,10 +40,10 @@ class TestPostgresStoreImport:
             assert f"CREATE TABLE IF NOT EXISTS {table}" in _PG_DDL
 
     def test_atom_to_row_round_trip(self) -> None:
+        import time
+
         from ai_knot_v2.core.atom import MemoryAtom
         from ai_knot_v2.store.postgres import _atom_to_row, _row_to_atom
-
-        import time
 
         now = int(time.time())
         atom = MemoryAtom(

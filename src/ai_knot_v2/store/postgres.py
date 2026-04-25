@@ -154,22 +154,26 @@ def _row_to_atom(row: dict[str, Any]) -> MemoryAtom:
         user_id=row.get("user_id"),
         variables=tuple(_l("variables")),
         causal_graph=tuple(tuple(e) for e in _l("causal_graph")),
-        kernel_kind=row["kernel_kind"],        kernel_payload=json.loads(row["kernel_payload"])
+        kernel_kind=row["kernel_kind"],
+        kernel_payload=json.loads(row["kernel_payload"])
         if isinstance(row["kernel_payload"], str)
         else row["kernel_payload"],
         intervention_domain=tuple(_l("intervention_domain")),
         predicate=row["predicate"],
         subject=row["subject"],
         object_value=row.get("object_value"),
-        polarity=row["polarity"],        valid_from=row.get("valid_from"),
+        polarity=row["polarity"],
+        valid_from=row.get("valid_from"),
         valid_until=row.get("valid_until"),
         observation_time=row["observation_time"],
         belief_time=row["belief_time"],
-        granularity=row["granularity"],        entity_orbit_id=row["entity_orbit_id"],
+        granularity=row["granularity"],
+        entity_orbit_id=row["entity_orbit_id"],
         transport_provenance=tuple(_l("transport_provenance")),
         depends_on=tuple(_l("depends_on")),
         depended_by=tuple(_l("depended_by")),
-        risk_class=row["risk_class"],        risk_severity=float(row["risk_severity"]),
+        risk_class=row["risk_class"],
+        risk_severity=float(row["risk_severity"]),
         regret_charge=float(row["regret_charge"]),
         irreducibility_score=float(row["irreducibility_score"]),
         protection_energy=float(row["protection_energy"]),
@@ -353,7 +357,8 @@ class PostgresStore:
             events = tuple(
                 AuditEvent(
                     event_id=r["event_id"],
-                    operation=r["operation"],                    atom_id=r["atom_id"],
+                    operation=r["operation"],
+                    atom_id=r["atom_id"],
                     agent_id=r["agent_id"],
                     timestamp=r["timestamp"],
                     details=json.loads(r["details"])

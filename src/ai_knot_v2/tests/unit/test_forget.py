@@ -10,6 +10,7 @@ from ai_knot_v2.core.library import AtomLibrary
 from ai_knot_v2.ops.forget import (
     BASE_DECAY_RATE,
     FORGET_THRESHOLD,
+    LANDAUER_FLOOR_SCALE,
     decay_protection_energy,
     run_forget_pass,
     should_forget,
@@ -97,6 +98,29 @@ class TestDecayProtectionEnergy:
         assert decayed.atom_id == atom.atom_id
         assert decayed.predicate == atom.predicate
         assert decayed.subject == atom.subject
+
+    def test_landauer_floor_holds_for_high_risk(self) -> None:
+        atom = _atom(risk_severity=1.0, protection_energy=0.001)
+        decayed = decay_protection_energy(atom, elapsed_days=10000)
+        floor = LANDAUER_FLOOR_SCALE * atom.risk_severity
+        assert decayed.protection_energy >= floor
+
+    def test_access_boost_slows_decay(self) -> None:
+        atom = _atom(risk_severity=0.5, protection_energy=0.5)
+        no_access = decay_protection_energy(atom, elapsed_days=10, access_count_recent=0)
+        with_access = decay_protection_energy(atom, elapsed_days=10, access_count_recent=3)
+        assert with_access.protection_energy > no_access.protection_energy
+
+    def test_contradiction_boost_slows_decay(self) -> None:
+        atom = _atom(risk_severity=0.5, protection_energy=0.5)
+        no_contradiction = decay_protection_energy(atom, elapsed_days=10, contradiction_count=0)
+        with_contradiction = decay_protection_energy(atom, elapsed_days=10, contradiction_count=2)
+        assert with_contradiction.protection_energy > no_contradiction.protection_energy
+
+    def test_energy_capped_at_one(self) -> None:
+        atom = _atom(risk_severity=0.5, protection_energy=0.99)
+        decayed = decay_protection_energy(atom, elapsed_days=0, access_count_recent=100)
+        assert decayed.protection_energy <= 1.0
 
 
 class TestShouldForget:

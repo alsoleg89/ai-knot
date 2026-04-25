@@ -15,6 +15,7 @@ Key functions:
 from __future__ import annotations
 
 import time
+from collections import defaultdict as _defaultdict
 from datetime import date
 from typing import Any
 
@@ -110,6 +111,35 @@ def temporal_allen_bonus(
     return bonus
 
 
+def bitemporal_allen_bonus(
+    atom: MemoryAtom,
+    query_vf: int | None,
+    query_vu: int | None,
+) -> float:
+    """Extend temporal_allen_bonus with staleness penalty and belief-time freshness bonus.
+
+    Staleness penalty: open-ended atom not updated for 6+ months loses up to 0.3 bonus.
+    Belief-time freshness: atom reconfirmed after first observation gains 0.1 bonus.
+    """
+
+    bonus = temporal_allen_bonus(atom, query_vf, query_vu)
+
+    now = int(time.time())
+
+    # Staleness penalty for open-ended atoms not recently confirmed
+    if atom.valid_until is None:
+        age_days = max(0, (now - atom.observation_time) / 86400)
+        if age_days > 180:
+            penalty = min(0.3, (age_days - 180) / 365 * 0.3)
+            bonus -= penalty
+
+    # Belief-time freshness: atom reconfirmed after first observation
+    if atom.belief_time > atom.observation_time:
+        bonus += 0.1
+
+    return max(0.0, bonus)
+
+
 def _query_temporal_window(query: str) -> tuple[int | None, int | None]:
     """Extract a temporal window from a query string.
 
@@ -191,8 +221,8 @@ def reduction_score(
     # 6. Regret charge contribution (atoms with high regret_charge = more costly to omit)
     score += atom.regret_charge * 0.5
 
-    # 7. Tri-temporal Allen-relation bonus
-    score += temporal_allen_bonus(atom, query_vf, query_vu)
+    # 7. Bitemporal Allen-relation bonus (staleness + belief-time)
+    score += bitemporal_allen_bonus(atom, query_vf, query_vu)
 
     return score
 
@@ -328,26 +358,16 @@ def _close_dependencies(
 # ---------------------------------------------------------------------------
 
 
-def plan_evidence_pack(
+def _greedy_plan_evidence_pack(
     atoms: list[MemoryAtom],
     query: str,
     budget: ReaderBudget,
     library: AtomLibrary | None = None,
 ) -> EvidencePack:
-    """Greedy-utility selection within reader budget.
-
-    1. Extract query temporal window (Allen-relation anchor).
-    2. Score all atoms by utility(atom, query, current_pack, query_vf, query_vu).
-    3. Greedily select highest-utility atom within token budget.
-    4. Repeat until budget exhausted or no atoms left.
-    5. Apply dependency closure (if library provided).
-    6. Handle contradictions (split or abstain).
-    7. Return EvidencePack with utility_scores metadata.
-    """
+    """Level-2 greedy-utility selection (ablation baseline for sheaf)."""
     if not atoms:
         return EvidencePack(pack_id=new_ulid(), atoms=(), spans=())
 
-    # Extract temporal anchor from query once (reused for all atoms)
     query_vf, query_vu = _query_temporal_window(query)
 
     token_budget = budget.max_tokens
@@ -356,7 +376,6 @@ def plan_evidence_pack(
     utility_scores: dict[str, Any] = {}
 
     while remaining and len(selected) < budget.max_atoms and token_budget > 0:
-        # Score all remaining atoms
         scored = [(utility(a, query, selected, query_vf, query_vu), a) for a in remaining]
         scored.sort(key=lambda x: x[0], reverse=True)
 
@@ -364,7 +383,6 @@ def plan_evidence_pack(
         cost = reader_cost(best_atom)
 
         if cost > token_budget:
-            # Skip if too expensive — try next
             skip_idx = next(
                 (i for i, (_, a) in enumerate(scored) if reader_cost(a) <= token_budget),
                 None,
@@ -379,11 +397,9 @@ def plan_evidence_pack(
         token_budget -= cost
         remaining.remove(best_atom)
 
-    # Dependency closure
     if library is not None and budget.require_dependency_closure:
         selected, _ = _close_dependencies(selected, library, budget, token_budget)
 
-    # Contradiction resolution
     resolved, abstain_ids = handle_contradictions(selected)
 
     return EvidencePack(
@@ -397,3 +413,92 @@ def plan_evidence_pack(
             "contradiction_count": len(abstain_ids) // 2,
         },
     )
+
+
+def sheaf_section_gluing(
+    atoms: list[MemoryAtom],
+    query: str,
+    budget: ReaderBudget,
+    library: AtomLibrary | None = None,
+) -> EvidencePack:
+    """Partition-first evidence selection (Level-3 ESWP).
+
+    1. Partition atoms by (entity_orbit_id, coarse action class = top 8 bits of mask).
+    2. Pick the highest regret_charge × credence representative per partition.
+    3. Fill remaining budget greedily from leftover atoms.
+    4. Apply dependency closure + contradiction resolution.
+    """
+    if not atoms:
+        return EvidencePack(pack_id=new_ulid(), atoms=(), spans=())
+
+    query_vf, query_vu = _query_temporal_window(query)
+
+    sections: dict[tuple[str, int], list[MemoryAtom]] = _defaultdict(list)
+    for atom in atoms:
+        coarse = atom.action_affect_mask & 0xFF00
+        sections[(atom.entity_orbit_id, coarse)].append(atom)
+
+    representatives: list[MemoryAtom] = []
+    for sec_atoms in sections.values():
+        best = max(sec_atoms, key=lambda a: a.regret_charge * a.credence)
+        representatives.append(best)
+
+    token_budget = budget.max_tokens
+    selected: list[MemoryAtom] = []
+    utility_scores: dict[str, float] = {}
+
+    representatives.sort(key=lambda a: utility(a, query, [], query_vf, query_vu), reverse=True)
+    for atom in representatives:
+        cost = reader_cost(atom)
+        if len(selected) >= budget.max_atoms or token_budget - cost < 0:
+            continue
+        selected.append(atom)
+        utility_scores[atom.atom_id] = round(
+            utility(atom, query, selected[:-1], query_vf, query_vu), 4
+        )
+        token_budget -= cost
+
+    covered = {a.atom_id for a in selected}
+    remaining = [a for a in atoms if a.atom_id not in covered]
+    remaining.sort(key=lambda a: utility(a, query, selected, query_vf, query_vu), reverse=True)
+
+    for atom in remaining:
+        cost = reader_cost(atom)
+        if len(selected) >= budget.max_atoms or token_budget - cost < 0:
+            break
+        selected.append(atom)
+        utility_scores[atom.atom_id] = round(
+            utility(atom, query, selected[:-1], query_vf, query_vu), 4
+        )
+        token_budget -= cost
+
+    if library is not None and budget.require_dependency_closure:
+        selected, _ = _close_dependencies(selected, library, budget, token_budget)
+
+    resolved, abstain_ids = handle_contradictions(selected)
+
+    return EvidencePack(
+        pack_id=new_ulid(),
+        atoms=tuple(a.atom_id for a in resolved),
+        spans=(),
+        utility_scores={
+            "atom_utilities": utility_scores,
+            "abstain_atom_ids": abstain_ids,
+            "tokens_used": budget.max_tokens - token_budget,
+            "contradiction_count": len(abstain_ids) // 2,
+        },
+    )
+
+
+def plan_evidence_pack(
+    atoms: list[MemoryAtom],
+    query: str,
+    budget: ReaderBudget,
+    library: AtomLibrary | None = None,
+) -> EvidencePack:
+    """Sheaf-section evidence selection (Level-3 ESWP default).
+
+    Delegates to sheaf_section_gluing(). Use _greedy_plan_evidence_pack()
+    directly for Level-2 ablation.
+    """
+    return sheaf_section_gluing(atoms, query, budget, library)

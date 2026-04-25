@@ -25,7 +25,10 @@ from ai_knot_v2.core.library import AtomLibrary
 from ai_knot_v2.core.provenance import AuditEvent
 from ai_knot_v2.store.sqlite import SqliteStore
 
-ADJACENT_SECONDS: int = 86400  # 1-day gap counts as adjacent
+ADJACENT_SECONDS: int = 86400  # 1-day gap counts as adjacent (high-risk default)
+_LOW_RISK_ADJACENT_SECONDS: int = 7 * 86400  # 7-day adjacency for low-risk atoms
+
+_HIGH_RISK_CLASSES: frozenset[str] = frozenset({"safety", "medical", "legal", "identity"})
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -35,14 +38,16 @@ class ConsolidateResult:
     atoms_added: int
 
 
-def _overlaps_or_adjacent(a: MemoryAtom, b: MemoryAtom) -> bool:
+def _overlaps_or_adjacent(
+    a: MemoryAtom, b: MemoryAtom, adjacent_seconds: int = ADJACENT_SECONDS
+) -> bool:
     if a.valid_from is None or a.valid_until is None:
         return False
     if b.valid_from is None or b.valid_until is None:
         return False
     return (
-        a.valid_from <= b.valid_until + ADJACENT_SECONDS
-        and b.valid_from <= a.valid_until + ADJACENT_SECONDS
+        a.valid_from <= b.valid_until + adjacent_seconds
+        and b.valid_from <= a.valid_until + adjacent_seconds
     )
 
 
@@ -65,7 +70,10 @@ def _merge_two(a: MemoryAtom, b: MemoryAtom) -> MemoryAtom:
     )
 
 
-def _merge_group(atoms: list[MemoryAtom]) -> list[MemoryAtom]:
+def _merge_group(
+    atoms: list[MemoryAtom],
+    adjacent_seconds: int = ADJACENT_SECONDS,
+) -> list[MemoryAtom]:
     """Greedy interval merging within atoms sharing the same triple."""
     timed = [a for a in atoms if a.valid_from is not None and a.valid_until is not None]
     untimed = [a for a in atoms if a.valid_from is None or a.valid_until is None]
@@ -77,7 +85,7 @@ def _merge_group(atoms: list[MemoryAtom]) -> list[MemoryAtom]:
 
     merged: list[MemoryAtom] = [timed[0]]
     for atom in timed[1:]:
-        if _overlaps_or_adjacent(merged[-1], atom):
+        if _overlaps_or_adjacent(merged[-1], atom, adjacent_seconds=adjacent_seconds):
             merged[-1] = _merge_two(merged[-1], atom)
         else:
             merged.append(atom)
@@ -87,6 +95,7 @@ def _merge_group(atoms: list[MemoryAtom]) -> list[MemoryAtom]:
 
 def merge_intervals(
     atoms: list[MemoryAtom],
+    adjacent_seconds: int = ADJACENT_SECONDS,
 ) -> tuple[list[MemoryAtom], list[MemoryAtom]]:
     """Merge temporally overlapping atoms sharing the same constraint triple.
 
@@ -110,7 +119,7 @@ def merge_intervals(
     removed_originals: list[MemoryAtom] = []
 
     for group_atoms in groups.values():
-        merged = _merge_group(group_atoms)
+        merged = _merge_group(group_atoms, adjacent_seconds=adjacent_seconds)
         merged_ids = {a.atom_id for a in merged}
         truly_removed = [a for a in group_atoms if a.atom_id not in merged_ids]
         if truly_removed:
@@ -120,6 +129,23 @@ def merge_intervals(
     return result_atoms, removed_originals
 
 
+def merge_intervals_rg(
+    atoms: list[MemoryAtom],
+) -> tuple[list[MemoryAtom], list[MemoryAtom]]:
+    """RG-flow consolidation: risk-stratified interval merge.
+
+    High-risk atoms (safety/medical/legal/identity): 1-day adjacency — conservative.
+    Low-risk atoms: 7-day adjacency — more aggressive temporal fusion.
+    """
+    high_risk = [a for a in atoms if a.risk_class in _HIGH_RISK_CLASSES]
+    low_risk = [a for a in atoms if a.risk_class not in _HIGH_RISK_CLASSES]
+
+    high_result, high_removed = merge_intervals(high_risk, adjacent_seconds=ADJACENT_SECONDS)
+    low_result, low_removed = merge_intervals(low_risk, adjacent_seconds=_LOW_RISK_ADJACENT_SECONDS)
+
+    return high_result + low_result, high_removed + low_removed
+
+
 def consolidate_library(
     library: AtomLibrary,
     store: SqliteStore,
@@ -127,7 +153,7 @@ def consolidate_library(
     """Run a full interval-merge consolidation pass on the library."""
     atoms = library.all_atoms()
     original_ids = {a.atom_id for a in atoms}
-    result_atoms, removed_originals = merge_intervals(atoms)
+    result_atoms, removed_originals = merge_intervals_rg(atoms)
 
     if not removed_originals:
         return ConsolidateResult(merged_count=0, atoms_removed=0, atoms_added=0)

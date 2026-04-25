@@ -35,7 +35,6 @@ class TestOSSReadiness:
         assert result.returncode == 0
 
     def test_no_llm_in_core_gate(self) -> None:
-        import importlib.util
         import pathlib
 
         v2_core = pathlib.Path(__file__).parents[3]

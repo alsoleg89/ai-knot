@@ -13,12 +13,14 @@ Sprint 7 changes:
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
 from ai_knot_v2.core._ulid import new_ulid
+from ai_knot_v2.core.action_calculus import compute_action_affect_mask
 from ai_knot_v2.core.atom import MemoryAtom
 from ai_knot_v2.core.episode import RawEpisode
 from ai_knot_v2.core.groupoid import EntityGroupoid, resolve_speaker_entity
@@ -377,6 +379,19 @@ _THIRD_SG = re.compile(r"^(she|he|her|him|his|hers)$", re.I)
 _THIRD_PL = re.compile(r"^(they|them|their|theirs)$", re.I)
 
 
+def _compute_regret_charge_for_fields(
+    risk_severity: float,
+    action_affect_mask: int,
+    curvature: float = 0.0,
+) -> float:
+    """ΔF-write proxy: action-diversity-weighted regret charge."""
+    action_bits = bin(action_affect_mask).count("1")
+    delta_q = risk_severity * (1.0 + 0.3 * action_bits)
+    curvature_term = 1.0 + 0.5 * curvature
+    danger_term = 1.0 + 0.2 * risk_severity
+    return min(1.0, delta_q * curvature_term * danger_term)
+
+
 class Atomizer:
     """Converts RawEpisode objects into MemoryAtom lists.
 
@@ -455,43 +470,45 @@ class Atomizer:
             # Protection energy heuristic: high-risk facts get higher initial energy
             protection_energy = min(1.0, risk_severity * 2.0)
 
-            # Regret charge: risk × irreducibility (Sprint 1 placeholder: 1.0)
-            regret_charge = risk_severity * 1.0
-
+            atom = MemoryAtom(
+                atom_id=new_ulid(),
+                agent_id=episode.agent_id,
+                user_id=episode.user_id,
+                variables=(subject.lower().replace(" ", "_"),),
+                causal_graph=(),
+                kernel_kind="point",
+                kernel_payload={},
+                intervention_domain=(subject.lower().replace(" ", "_"),),
+                predicate=canon_pred,
+                subject=subject,
+                object_value=clause.object_raw,
+                polarity=clause.polarity,
+                valid_from=valid_from,
+                valid_until=valid_until,
+                observation_time=episode.timestamp,
+                belief_time=episode.timestamp,
+                granularity=granularity,  # type: ignore[arg-type]
+                entity_orbit_id=entity_orbit_id,
+                transport_provenance=(episode.session_id,),
+                depends_on=(),
+                depended_by=(),
+                risk_class=risk_class,
+                risk_severity=risk_severity,
+                regret_charge=0.0,  # computed below
+                irreducibility_score=1.0,
+                protection_energy=protection_energy,
+                action_affect_mask=0,  # computed below
+                credence=0.9,
+                evidence_episodes=(episode.episode_id,),
+                synthesis_method="regex",
+                validation_tests=(),
+                contradiction_events=(),
+            )
+            action_mask = compute_action_affect_mask(atom)
+            regret_charge = _compute_regret_charge_for_fields(risk_severity, action_mask)
             atoms.append(
-                MemoryAtom(
-                    atom_id=new_ulid(),
-                    agent_id=episode.agent_id,
-                    user_id=episode.user_id,
-                    variables=(subject.lower().replace(" ", "_"),),
-                    causal_graph=(),
-                    kernel_kind="point",
-                    kernel_payload={},
-                    intervention_domain=(subject.lower().replace(" ", "_"),),
-                    predicate=canon_pred,
-                    subject=subject,
-                    object_value=clause.object_raw,
-                    polarity=clause.polarity,
-                    valid_from=valid_from,
-                    valid_until=valid_until,
-                    observation_time=episode.timestamp,
-                    belief_time=episode.timestamp,
-                    granularity=granularity,  # type: ignore[arg-type]
-                    entity_orbit_id=entity_orbit_id,
-                    transport_provenance=(episode.session_id,),
-                    depends_on=(),
-                    depended_by=(),
-                    risk_class=risk_class,
-                    risk_severity=risk_severity,
-                    regret_charge=regret_charge,
-                    irreducibility_score=1.0,
-                    protection_energy=protection_energy,
-                    action_affect_mask=0,
-                    credence=0.9,
-                    evidence_episodes=(episode.episode_id,),
-                    synthesis_method="regex",
-                    validation_tests=(),
-                    contradiction_events=(),
+                dataclasses.replace(
+                    atom, action_affect_mask=action_mask, regret_charge=regret_charge
                 )
             )
 

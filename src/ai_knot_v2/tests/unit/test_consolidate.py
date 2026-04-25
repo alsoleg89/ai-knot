@@ -10,6 +10,7 @@ from ai_knot_v2.ops.consolidate import (
     ConsolidateResult,
     consolidate_library,
     merge_intervals,
+    merge_intervals_rg,
 )
 from ai_knot_v2.store.sqlite import SqliteStore
 
@@ -26,6 +27,7 @@ def _atom(
     valid_until: int | None = None,
     credence: float = 0.8,
     evidence: tuple[str, ...] = (),
+    risk_class: str = "medical",
 ) -> MemoryAtom:
     return MemoryAtom(
         atom_id=new_ulid(),
@@ -49,7 +51,7 @@ def _atom(
         transport_provenance=(),
         depends_on=(),
         depended_by=(),
-        risk_class="medical",
+        risk_class=risk_class,  # type: ignore[arg-type]
         risk_severity=0.5,
         regret_charge=0.0,
         irreducibility_score=0.0,
@@ -220,3 +222,50 @@ class TestConsolidateLibrary:
         result = consolidate_library(library, store)
         assert result == ConsolidateResult(merged_count=0, atoms_removed=0, atoms_added=0)
         assert library.size() == 2
+
+
+class TestMergeIntervalsRg:
+    def test_high_risk_not_merged_at_7day_gap(self) -> None:
+        """High-risk atoms (medical) with a 4-day gap should NOT be merged."""
+        # Gap of 4 days — within low-risk threshold, outside high-risk threshold
+        gap_seconds = 4 * _DAY
+        a = _atom(valid_from=0, valid_until=_DAY, risk_class="medical")
+        b = _atom(valid_from=_DAY + gap_seconds, valid_until=_DAY * 6, risk_class="medical")
+        result, removed = merge_intervals_rg([a, b])
+        assert len(removed) == 0, "high-risk atoms should NOT be merged at 4-day gap"
+
+    def test_low_risk_merged_at_7day_gap(self) -> None:
+        """Low-risk atoms (preference) with a 4-day gap SHOULD be merged."""
+        gap_seconds = 4 * _DAY
+        a = _atom(valid_from=0, valid_until=_DAY, risk_class="preference")
+        b = _atom(valid_from=_DAY + gap_seconds, valid_until=_DAY * 6, risk_class="preference")
+        result, removed = merge_intervals_rg([a, b])
+        assert len(removed) > 0, "low-risk atoms should be merged at 4-day gap"
+
+    def test_high_risk_still_merged_at_adjacent(self) -> None:
+        """High-risk atoms with gap < ADJACENT_SECONDS should still be merged."""
+        a = _atom(valid_from=0, valid_until=_DAY, risk_class="medical")
+        b = _atom(valid_from=_DAY + 3600, valid_until=_DAY * 3, risk_class="medical")
+        result, removed = merge_intervals_rg([a, b])
+        assert len(removed) > 0, "high-risk atoms with 1h gap should still merge"
+
+    def test_mixed_risk_independent(self) -> None:
+        """High-risk and low-risk atoms are consolidated independently."""
+        gap = 4 * _DAY
+        hi = _atom(valid_from=0, valid_until=_DAY, risk_class="medical", entity_orbit_id="hi")
+        hi2 = _atom(
+            valid_from=_DAY + gap, valid_until=_DAY * 6, risk_class="medical", entity_orbit_id="hi"
+        )
+        lo = _atom(valid_from=0, valid_until=_DAY, risk_class="preference", entity_orbit_id="lo")
+        lo2 = _atom(
+            valid_from=_DAY + gap,
+            valid_until=_DAY * 6,
+            risk_class="preference",
+            entity_orbit_id="lo",
+        )
+        result, removed = merge_intervals_rg([hi, hi2, lo, lo2])
+        # Low-risk pair merged (removed 2, added 1); high-risk pair not merged
+        removed_ids = {a.atom_id for a in removed}
+        assert hi.atom_id not in removed_ids
+        assert hi2.atom_id not in removed_ids
+        assert lo.atom_id in removed_ids or lo2.atom_id in removed_ids

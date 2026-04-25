@@ -15,11 +15,13 @@ from ai_knot_v2.core.atom import MemoryAtom
 from ai_knot_v2.core.library import AtomLibrary
 from ai_knot_v2.core.types import ReaderBudget
 from ai_knot_v2.ops.planner import (
+    bitemporal_allen_bonus,
     detect_contradictions,
     handle_contradictions,
     plan_evidence_pack,
     reader_cost,
     reduction_score,
+    sheaf_section_gluing,
     temporal_allen_bonus,
     utility,
 )
@@ -215,8 +217,17 @@ class TestPlanEvidencePack:
         assert "atom_utilities" in pack.utility_scores
 
     def test_high_utility_atom_selected_first(self) -> None:
-        low_risk = _atom(risk_severity=0.1, object_value="general stuff")
-        high_risk = _atom(risk_severity=0.9, risk_class="medical", object_value="heart disease")
+        # Give distinct orbit IDs so sheaf places them in separate sections;
+        # utility ordering then determines which one wins the single-atom budget.
+        low_risk = _atom(
+            risk_severity=0.1, object_value="general stuff", entity_orbit_id="entity:user_low"
+        )
+        high_risk = _atom(
+            risk_severity=0.9,
+            risk_class="medical",
+            object_value="heart disease",
+            entity_orbit_id="entity:user_high",
+        )
         budget = ReaderBudget(max_atoms=1, max_tokens=1000, require_dependency_closure=False)
         pack = plan_evidence_pack([low_risk, high_risk], "health conditions", budget)
         assert high_risk.atom_id in pack.atoms
@@ -323,3 +334,82 @@ class TestTemporalAllenBonus:
         )
         # Timed atom gets Allen bonus; untimed doesn't
         assert score_timed > score_untimed
+
+
+class TestSheafSectionGluing:
+    def test_selects_from_different_orbits(self) -> None:
+        """With tight budget, sheaf picks one representative per orbit, not two from one."""
+        orbit1_a = dataclasses.replace(
+            _atom(entity_orbit_id="o1"), atom_id=new_ulid(), regret_charge=0.9
+        )
+        orbit1_b = dataclasses.replace(
+            _atom(entity_orbit_id="o1"), atom_id=new_ulid(), regret_charge=0.8
+        )
+        orbit2_a = dataclasses.replace(
+            _atom(entity_orbit_id="o2"), atom_id=new_ulid(), regret_charge=0.7
+        )
+        budget = ReaderBudget(max_atoms=2, max_tokens=1000, require_dependency_closure=False)
+        pack = sheaf_section_gluing([orbit1_a, orbit1_b, orbit2_a], "query", budget)
+        selected_ids = set(pack.atoms)
+        assert orbit1_b.atom_id not in selected_ids, "lower-charge orbit1 atom should be excluded"
+        assert orbit2_a.atom_id in selected_ids, "orbit2 representative should be included"
+
+    def test_representative_is_highest_charge(self) -> None:
+        """Within a section, the atom with highest regret_charge×credence is selected."""
+        high = dataclasses.replace(
+            _atom(entity_orbit_id="orb"), atom_id=new_ulid(), regret_charge=0.9, credence=1.0
+        )
+        low = dataclasses.replace(
+            _atom(entity_orbit_id="orb"), atom_id=new_ulid(), regret_charge=0.1, credence=1.0
+        )
+        budget = ReaderBudget(max_atoms=1, max_tokens=1000, require_dependency_closure=False)
+        pack = sheaf_section_gluing([low, high], "query", budget)
+        assert high.atom_id in pack.atoms
+        assert low.atom_id not in pack.atoms
+
+    def test_empty_atoms_returns_empty_pack(self) -> None:
+        budget = ReaderBudget(max_atoms=10, max_tokens=1000, require_dependency_closure=False)
+        pack = sheaf_section_gluing([], "query", budget)
+        assert pack.atoms == ()
+
+
+class TestBitemporalAllenBonus:
+    def test_belief_time_freshness_bonus(self) -> None:
+        now = int(time.time())
+        # atom reconfirmed: belief_time > observation_time
+        atom = _atom()
+        atom = dataclasses.replace(
+            atom,
+            atom_id=new_ulid(),
+            observation_time=now - 1000,
+            belief_time=now - 100,
+        )
+        base = temporal_allen_bonus(atom, None, None)
+        bitemp = bitemporal_allen_bonus(atom, None, None)
+        assert bitemp >= base + 0.09  # belief freshness adds 0.1
+
+    def test_staleness_penalty_for_old_open_ended(self) -> None:
+        now = int(time.time())
+        # atom is > 6 months old, no valid_until
+        old_obs = now - int(400 * 86400)
+        atom = _atom()
+        atom = dataclasses.replace(
+            atom,
+            atom_id=new_ulid(),
+            observation_time=old_obs,
+            belief_time=old_obs,
+            valid_from=None,
+            valid_until=None,
+        )
+        base = temporal_allen_bonus(atom, None, None)
+        bitemp = bitemporal_allen_bonus(atom, None, None)
+        assert bitemp <= base  # penalty applied
+
+    def test_result_non_negative(self) -> None:
+        now = int(time.time())
+        very_old_obs = now - int(3000 * 86400)
+        atom = _atom()
+        atom = dataclasses.replace(
+            atom, atom_id=new_ulid(), observation_time=very_old_obs, belief_time=very_old_obs
+        )
+        assert bitemporal_allen_bonus(atom, None, None) >= 0.0
