@@ -6,6 +6,17 @@ decision: rewind feat/v2-product-kernel to validated baseline; archive all in-fl
 
 # Branch archive + feat-rewind plan (2026-04-26)
 
+## Status: EXECUTED 2026-04-26
+
+All 4 steps completed successfully:
+
+- ✓ 10 archive tags created locally and pushed to `origin`
+- ✓ `feat/v2-product-kernel` reset locally from `6d0a7b9` → `6735ea0` (= `repro/dated-1167e70` HEAD)
+- ✓ `feat/v2-product-kernel` force-pushed to origin (`a71a195` → `6735ea0`, `--force-with-lease` succeeded)
+- ✓ `repro/dated-1167e70` also pushed to origin as alias for traceability
+
+Final state: `feat/v2-product-kernel` (local + origin) = `6735ea0`. All preserved work is reachable via `git tag -l 'archive/*-20260426'`.
+
 ## Why
 
 Memory record of last 2 weeks (see `project_pf3_regression_chain_20260419`, `project_locomo_phase1_retrieval_exhausted`, `project_locomo_phase1e_revert`, `project_locomo_claims_first_promotion_20260423`, `project_locomo_cat1_shift_ab_negative_20260423`):
