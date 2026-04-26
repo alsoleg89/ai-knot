@@ -54,19 +54,35 @@ class TestUnicode:
 
 
 class TestDuplicates:
-    """Adding similar or identical facts."""
+    """Adding identical or near-identical facts.
 
-    def test_exact_duplicate_allowed(self, kb: KnowledgeBase) -> None:
+    `add()` runs fuzzy near-duplicate detection (Jaccard ≥ 0.7 against the last
+    `_DEDUP_WINDOW` stored facts) and returns the existing fact instead of
+    writing a duplicate. This suppresses 84%-overlap near-duplicates produced
+    by 3-turn sliding windows in dated ingest mode while preserving legitimate
+    re-mentions (typically Jaccard < 0.5).
+    """
+
+    def test_exact_duplicate_dedupes(self, kb: KnowledgeBase) -> None:
         kb.add("User prefers Python")
         kb.add("User prefers Python")
         facts = kb._storage.load(kb._agent_id)
-        # Both stored — dedup is extractor's job, not add's
-        assert len(facts) == 2
+        # Exact duplicate skipped — only the first store remains.
+        assert len(facts) == 1
 
-    def test_different_ids_for_same_content(self, kb: KnowledgeBase) -> None:
+    def test_same_content_returns_same_id(self, kb: KnowledgeBase) -> None:
         f1 = kb.add("Same content")
         f2 = kb.add("Same content")
+        # Second add returns the existing fact unchanged.
+        assert f1.id == f2.id
+
+    def test_dissimilar_content_creates_new_fact(self, kb: KnowledgeBase) -> None:
+        f1 = kb.add("User prefers Python for backend")
+        f2 = kb.add("Weather in Tokyo is mild")
+        facts = kb._storage.load(kb._agent_id)
+        # Below the dedup Jaccard threshold — both stored, distinct ids.
         assert f1.id != f2.id
+        assert len(facts) == 2
 
 
 class TestScale:

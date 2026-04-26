@@ -20,6 +20,16 @@ SKIP_DIR_NAMES = {
     ".ruff_cache",
     ".venv",
     "__pycache__",
+    # Untracked third-party data / build artefacts that commonly live alongside
+    # the repo locally (CI checks them out clean and these directories are
+    # absent there). Scanning them produces noisy false positives because they
+    # contain generic English/Russian word frequency dictionaries.
+    "node_modules",
+    "memvid",
+    ".ai_knot",
+    ".ai_knot_v2",
+    ".claude",
+    "data",
 }
 SKIP_FILE_NAMES = {"compliance_allowlist.txt", "test_legal_compliance_content.py"}
 TEXT_EXTENSIONS = {".py", ".md", ".txt", ".json", ".yaml", ".yml"}

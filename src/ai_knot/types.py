@@ -225,10 +225,13 @@ class ConversationTurn:
     Attributes:
         role: "user" or "assistant".
         content: The message text.
+        timestamp: Optional UTC datetime; when present, the extractor injects a
+            ``[date]`` prefix so the LLM can resolve relative temporal references.
     """
 
     role: str
     content: str
+    timestamp: datetime | None = None
 
 
 # ---------------------------------------------------------------------------

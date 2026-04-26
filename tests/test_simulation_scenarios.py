@@ -208,14 +208,23 @@ class TestMemoryScenarios:
             facts.append(fact)
             kb.replace_facts(facts)
 
-        # Add 5 fresh, high-importance facts
-        for i in range(5):
-            kb.add(f"Fresh important fact {i} about deployment", importance=0.95)
+        # Add 5 fresh, high-importance, content-diverse facts so MMR keeps
+        # multiple of them in the result set (identical-stem facts collapse
+        # under MMR diversification).
+        kb.add("Fresh important note about Kubernetes deployment", importance=0.95)
+        kb.add("Fresh important note about AWS production deployment", importance=0.95)
+        kb.add("Fresh important note about staging deployment for QA", importance=0.95)
+        kb.add("Fresh important note about canary rollout strategy", importance=0.95)
+        kb.add("Fresh important note about blue-green release process", importance=0.95)
 
         result = kb.recall("deployment", top_k=5)
         lines = result.strip().split("\n")
         fresh_count = sum(1 for line in lines if "Fresh important" in line)
-        assert fresh_count >= 3  # Most results should be fresh
+        # The deployment-relevant fresh facts must crowd out stale facts that
+        # have zero token overlap with the query.
+        assert fresh_count >= 3, (
+            f"Expected ≥3 fresh deployment facts in top-5, got {fresh_count}.\nResult:\n{result}"
+        )
 
     def test_13_importance_boundaries(self) -> None:
         """importance=0.0 → instantly forgotten; importance=1.0 → persists months."""

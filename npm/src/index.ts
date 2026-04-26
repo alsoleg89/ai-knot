@@ -28,7 +28,7 @@ export class KnowledgeBase {
   private readonly client: McpClient;
 
   constructor(options: KnowledgeBaseOptions = {}) {
-    const env: Record<string, string> = {};
+    const env: Record<string, string> = { ...options.env };
     if (options.agentId !== undefined) env["AI_KNOT_AGENT_ID"] = options.agentId;
     if (options.storage !== undefined) env["AI_KNOT_STORAGE"] = options.storage;
     if (options.dataDir !== undefined) env["AI_KNOT_DATA_DIR"] = options.dataDir;

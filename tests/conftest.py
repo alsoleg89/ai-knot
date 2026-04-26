@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import pathlib
+from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
@@ -10,6 +12,57 @@ import pytest
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import ConversationTurn, Fact, MemoryType
+
+# ---------------------------------------------------------------------------
+# Deterministic offline embedder
+# ---------------------------------------------------------------------------
+#
+# Production code talks to an OpenAI-compatible /v1/embeddings endpoint
+# (Ollama by default, OpenAI when configured). CI does not run an embed
+# server, and we deliberately do not ship the OpenAI key as a CI secret.
+# Without a stub, recall falls back to BM25-only and any test relying on
+# semantic recall (e.g. "what language?" → "Python") fails.
+#
+# This autouse fixture monkey-patches `embed_texts` to return reproducible
+# pseudo-vectors derived from MD5 of the input. The hashing is content-
+# stable across runs, so dense similarity is well-defined; identical texts
+# get identical vectors, and unrelated texts get near-orthogonal vectors.
+# Tests that need real embeddings can opt-out via the `real_embedder`
+# marker (none currently do — production behaviour is exercised by the
+# benchmark harness, not by unit tests).
+
+
+def _fake_embed_texts(
+    texts: list[str],
+    *,
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+    timeout: float | None = None,
+) -> list[list[float]]:
+    """Return a deterministic 16-dim vector per input text (MD5-derived)."""
+
+    async def _impl() -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for text in texts:
+            h = hashlib.md5(text.encode("utf-8"), usedforsecurity=False).digest()
+            # 16 bytes → 16 floats in [0, 1).
+            vectors.append([b / 255.0 for b in h])
+        return vectors
+
+    return _impl()  # type: ignore[return-value]  # awaited by caller
+
+
+@pytest.fixture(autouse=True)
+def _stub_embedder(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Replace the network embedder with the deterministic stub for the suite."""
+    if "real_embedder" in request.keywords:
+        yield
+        return
+    monkeypatch.setattr("ai_knot.embedder.embed_texts", _fake_embed_texts)
+    yield
 
 
 @pytest.fixture

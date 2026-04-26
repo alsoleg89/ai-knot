@@ -243,9 +243,11 @@ def test_mcp_recall_json_and_learn(tmp_path: Any) -> None:
         assert learn_data["stored"] >= 1
         assert len(learn_data["ids"]) >= 1
 
-        # verify learned fact is recalled
-        recall = session.tool_call("recall", {"query": "database"})
-        assert "PostgreSQL" in recall or "database" in recall.lower()
+        # verify learned fact is recalled.
+        # Use a word-overlap query so this passes in degraded mode (no embedder
+        # in the MCP subprocess) — "database" wouldn't BM25-match "PostgreSQL ... DB".
+        recall = session.tool_call("recall", {"query": "PostgreSQL"})
+        assert "PostgreSQL" in recall
     finally:
         session.close()
 
