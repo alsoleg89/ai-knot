@@ -37,7 +37,8 @@ def create_storage(
     if backend == "yaml":
         return YAMLStorage(base_dir=base_dir)
     if backend == "sqlite":
-        return SQLiteStorage(db_path=os.path.join(base_dir, "ai_knot.db"))
+        db_path = dsn if dsn else os.path.join(base_dir, "ai_knot.db")
+        return SQLiteStorage(db_path=db_path)
     if backend == "postgres":
         resolved_dsn = dsn or os.environ.get("AI_KNOT_DSN")
         if not resolved_dsn:

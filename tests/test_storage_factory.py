@@ -22,6 +22,13 @@ class TestCreateStorage:
         storage = create_storage("sqlite", base_dir=str(tmp_path))
         assert isinstance(storage, SQLiteStorage)
 
+    def test_sqlite_dsn_overrides_base_dir(self, tmp_path: Path) -> None:
+        """dsn= for sqlite should override base_dir and use that path directly."""
+        custom_db = str(tmp_path / "custom.db")
+        storage = create_storage("sqlite", dsn=custom_db)
+        assert isinstance(storage, SQLiteStorage)
+        assert storage._db_path == custom_db
+
     def test_unknown_backend_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown storage backend"):
             create_storage("redis")
