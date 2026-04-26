@@ -123,6 +123,29 @@ export class KnowledgeBase {
   }
 
   /**
+   * Diagnostic variant of recall — returns context string plus per-stage trace.
+   * Calls the `recall_with_trace` MCP tool. For benchmark diagnostics only.
+   */
+  async recallWithTrace(
+    query: string,
+    options: RecallOptions = {},
+  ): Promise<{ context: string; packFactIds: string[]; trace: Record<string, unknown> }> {
+    const args: Record<string, unknown> = { query };
+    if (options.topK !== undefined) args["top_k"] = options.topK;
+    const text = await this.client.call("recall_with_trace", args);
+    const parsed = JSON.parse(text) as {
+      context: string;
+      pack_fact_ids: string[];
+      trace: Record<string, unknown>;
+    };
+    return {
+      context: parsed.context,
+      packFactIds: parsed.pack_fact_ids,
+      trace: parsed.trace,
+    };
+  }
+
+  /**
    * Gracefully shut down the ai-knot-mcp subprocess.
    * Call this when you are done using the KnowledgeBase.
    */

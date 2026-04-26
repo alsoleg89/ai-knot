@@ -1,0 +1,82 @@
+[
+  {
+    "question": "Where does Sarah work?",
+    "result": {
+      "context": "Sarah works at Meridian Design Studio as a senior product designer. She mentioned starting the role in February 2024 after leaving her previous agency job. The studio is located downtown near the central park.",
+      "pack_fact_ids": ["a1b2c3d4", "e5f6a7b8"],
+      "trace": {
+        "intent": "factual",
+        "stage1_candidates": {
+          "from_bm25": ["a1b2c3d4", "e5f6a7b8", "c9d0e1f2"],
+          "from_rare_tokens": ["a1b2c3d4"],
+          "from_entity_hop": ["f3a4b5c6"],
+          "total": 4
+        },
+        "stage3_rrf": {
+          "a1b2c3d4": 0.91,
+          "e5f6a7b8": 0.76,
+          "c9d0e1f2": 0.44,
+          "f3a4b5c6": 0.31
+        },
+        "stage3b_dense_guarantee": ["a1b2c3d4", "e5f6a7b8"],
+        "stage4a_ddsa": ["a1b2c3d4", "e5f6a7b8"],
+        "stage4b_mmr": ["a1b2c3d4", "e5f6a7b8"]
+      }
+    }
+  },
+  {
+    "question": "What sports and hobbies does Sarah do?",
+    "result": {
+      "context": "Sarah plays tennis every weekend at the Riverside Courts and has been doing so for about three years. She also recently picked up indoor climbing at the Boulderhaus gym, mentioning it in a session from March 2024. Additionally she goes on hiking trips — the Camping Trip in May 2024 was her idea.",
+      "pack_fact_ids": ["b2c3d4e5", "d4e5f6a7", "g8h9i0j1", "k2l3m4n5"],
+      "trace": {
+        "intent": "aggregational",
+        "stage1_candidates": {
+          "from_bm25": ["b2c3d4e5", "d4e5f6a7", "g8h9i0j1", "k2l3m4n5", "p6q7r8s9"],
+          "from_rare_tokens": ["b2c3d4e5", "g8h9i0j1"],
+          "from_entity_hop": ["d4e5f6a7", "t0u1v2w3"],
+          "total": 6
+        },
+        "stage3_rrf": {
+          "b2c3d4e5": 0.88,
+          "d4e5f6a7": 0.84,
+          "g8h9i0j1": 0.79,
+          "k2l3m4n5": 0.65,
+          "p6q7r8s9": 0.38,
+          "t0u1v2w3": 0.22
+        },
+        "stage3b_dense_guarantee": ["b2c3d4e5", "d4e5f6a7", "g8h9i0j1"],
+        "stage4a_ddsa": ["b2c3d4e5", "d4e5f6a7", "g8h9i0j1", "k2l3m4n5"],
+        "stage4b_mmr": ["b2c3d4e5", "d4e5f6a7", "g8h9i0j1", "k2l3m4n5"]
+      }
+    }
+  },
+  {
+    "question": "Tell me about the Camping Trip",
+    "result": {
+      "context": "The Camping Trip took place in late May 2024 in the Blue Ridge foothills. Sarah organised it; Tom handled logistics and borrowed a van. Apollo the dog came along and apparently loved the river. They stayed for a long weekend — Friday to Monday. Tom said it was the best trip they had taken in years. Sarah planned to post photos but never got around to it.",
+      "pack_fact_ids": ["x1y2z3a4", "b5c6d7e8", "f9g0h1i2", "j3k4l5m6", "n7o8p9q0"],
+      "trace": {
+        "intent": "exploratory",
+        "stage1_candidates": {
+          "from_bm25": ["x1y2z3a4", "b5c6d7e8", "f9g0h1i2", "j3k4l5m6", "n7o8p9q0", "r1s2t3u4"],
+          "from_rare_tokens": ["x1y2z3a4", "f9g0h1i2"],
+          "from_entity_hop": ["b5c6d7e8", "j3k4l5m6", "v5w6x7y8"],
+          "total": 7
+        },
+        "stage3_rrf": {
+          "x1y2z3a4": 0.93,
+          "b5c6d7e8": 0.87,
+          "f9g0h1i2": 0.82,
+          "j3k4l5m6": 0.74,
+          "n7o8p9q0": 0.61,
+          "r1s2t3u4": 0.29,
+          "v5w6x7y8": 0.18
+        },
+        "stage3b_dense_guarantee": ["x1y2z3a4", "b5c6d7e8", "f9g0h1i2"],
+        "stage4a_ddsa": ["x1y2z3a4", "b5c6d7e8", "f9g0h1i2", "j3k4l5m6", "n7o8p9q0"],
+        "stage4b_mmr": ["x1y2z3a4", "b5c6d7e8", "f9g0h1i2", "j3k4l5m6", "n7o8p9q0"]
+      }
+    }
+  }
+]

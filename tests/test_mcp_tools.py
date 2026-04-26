@@ -17,6 +17,7 @@ from ai_knot._mcp_tools import (
     tool_list_snapshots,
     tool_recall,
     tool_recall_json,
+    tool_recall_with_trace,
     tool_restore,
     tool_snapshot,
     tool_stats,
@@ -223,3 +224,38 @@ class TestSnapshotLifecycle:
 
     def test_list_snapshots_empty_returns_empty_array(self, kb: KnowledgeBase) -> None:
         assert tool_list_snapshots(kb) == "[]"
+
+
+# ---- tool_recall_with_trace -------------------------------------------------
+
+
+class TestToolRecallWithTrace:
+    def test_empty_kb_returns_empty_context_with_trace_keys(self, kb: KnowledgeBase) -> None:
+        result = json.loads(tool_recall_with_trace(kb, "anything"))
+        assert "context" in result
+        assert "pack_fact_ids" in result
+        assert "trace" in result
+        assert isinstance(result["pack_fact_ids"], list)
+        assert isinstance(result["trace"], dict)
+
+    def test_returns_context_and_pack_ids_after_add(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "The Eiffel Tower is in Paris")
+        result = json.loads(tool_recall_with_trace(kb, "Eiffel Tower"))
+        assert isinstance(result["context"], str)
+        assert isinstance(result["pack_fact_ids"], list)
+        # trace should contain stage1_candidates key
+        trace = result["trace"]
+        assert "stage1_candidates" in trace
+
+    def test_trace_has_all_required_stage_keys(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "Rome has the Colosseum")
+        tool_add(kb, "Paris has the Eiffel Tower")
+        result = json.loads(tool_recall_with_trace(kb, "famous landmarks"))
+        trace = result["trace"]
+        # stage1_candidates is always present (may be empty if only dense path fires)
+        assert "stage1_candidates" in trace
+        stage1 = trace["stage1_candidates"]
+        assert {"from_bm25", "from_rare_tokens", "from_entity_hop"} <= set(stage1.keys())
+        # pack_fact_ids are valid hex strings
+        for fid in result["pack_fact_ids"]:
+            assert len(fid) == 8

@@ -1,0 +1,239 @@
+{
+  "conversationId": "conv-synthetic-001",
+  "strands": [
+    {
+      "entityId": "entity-sarah",
+      "label": "Sarah",
+      "beads": [
+        {
+          "id": "bead-s01",
+          "content": "Sarah works at Meridian Design Studio as a senior product designer.",
+          "type": "semantic",
+          "importance": 0.9,
+          "entityId": "entity-sarah",
+          "sessionDate": "2024-01-15",
+          "eventDate": "2024-02-01",
+          "tags": ["work", "job", "design"]
+        },
+        {
+          "id": "bead-s02",
+          "content": "Sarah plays tennis every weekend at the Riverside Courts.",
+          "type": "semantic",
+          "importance": 0.75,
+          "entityId": "entity-sarah",
+          "sessionDate": "2024-01-20",
+          "tags": ["sport", "hobby", "tennis"]
+        },
+        {
+          "id": "bead-s03",
+          "content": "Sarah started indoor climbing at Boulderhaus gym in early 2024.",
+          "type": "episodic",
+          "importance": 0.65,
+          "entityId": "entity-sarah",
+          "sessionDate": "2024-03-10",
+          "eventDate": "2024-03-01",
+          "tags": ["sport", "hobby", "climbing"]
+        },
+        {
+          "id": "bead-s04",
+          "content": "Sarah organised the Camping Trip in May 2024.",
+          "type": "episodic",
+          "importance": 0.8,
+          "entityId": "entity-sarah",
+          "sessionDate": "2024-05-05",
+          "eventDate": "2024-05-24",
+          "tags": ["event", "camping", "planning"]
+        },
+        {
+          "id": "bead-s05",
+          "content": "Sarah promised to post Camping Trip photos online but has not yet done so.",
+          "type": "procedural",
+          "importance": 0.6,
+          "entityId": "entity-sarah",
+          "sessionDate": "2024-06-03",
+          "tags": ["promise", "photos", "camping"]
+        }
+      ]
+    },
+    {
+      "entityId": "entity-tom",
+      "label": "Tom",
+      "beads": [
+        {
+          "id": "bead-t01",
+          "content": "Tom is Sarah's partner. He works as a freelance sound engineer.",
+          "type": "semantic",
+          "importance": 0.85,
+          "entityId": "entity-tom",
+          "sessionDate": "2024-01-15",
+          "tags": ["relationship", "job", "audio"]
+        },
+        {
+          "id": "bead-t02",
+          "content": "Tom handled logistics for the Camping Trip and borrowed a van from a friend.",
+          "type": "episodic",
+          "importance": 0.72,
+          "entityId": "entity-tom",
+          "sessionDate": "2024-05-05",
+          "eventDate": "2024-05-24",
+          "tags": ["event", "camping", "logistics"]
+        },
+        {
+          "id": "bead-t03",
+          "content": "Tom said the Camping Trip was the best trip they had taken in years.",
+          "type": "semantic",
+          "importance": 0.68,
+          "entityId": "entity-tom",
+          "sessionDate": "2024-06-01",
+          "tags": ["opinion", "camping"]
+        },
+        {
+          "id": "bead-t04",
+          "content": "Tom is allergic to cats but not to dogs.",
+          "type": "semantic",
+          "importance": 0.55,
+          "entityId": "entity-tom",
+          "sessionDate": "2024-02-12",
+          "tags": ["health", "allergy"]
+        },
+        {
+          "id": "bead-t05",
+          "content": "Tom is learning Spanish and takes a weekly online lesson.",
+          "type": "semantic",
+          "importance": 0.58,
+          "entityId": "entity-tom",
+          "sessionDate": "2024-04-08",
+          "tags": ["hobby", "language", "learning"]
+        }
+      ]
+    },
+    {
+      "entityId": "entity-apollo",
+      "label": "Apollo (dog)",
+      "beads": [
+        {
+          "id": "bead-a01",
+          "content": "Apollo is Sarah and Tom's golden retriever, approximately three years old.",
+          "type": "semantic",
+          "importance": 0.8,
+          "entityId": "entity-apollo",
+          "sessionDate": "2024-01-18",
+          "tags": ["pet", "dog", "golden-retriever"]
+        },
+        {
+          "id": "bead-a02",
+          "content": "Apollo joined the Camping Trip and loved swimming in the river.",
+          "type": "episodic",
+          "importance": 0.7,
+          "entityId": "entity-apollo",
+          "sessionDate": "2024-05-28",
+          "eventDate": "2024-05-25",
+          "tags": ["event", "camping", "swimming"]
+        },
+        {
+          "id": "bead-a03",
+          "content": "Apollo has a vet appointment scheduled for a routine check-up in June 2024.",
+          "type": "procedural",
+          "importance": 0.62,
+          "entityId": "entity-apollo",
+          "sessionDate": "2024-06-02",
+          "eventDate": "2024-06-20",
+          "tags": ["vet", "health", "appointment"]
+        },
+        {
+          "id": "bead-a04",
+          "content": "Apollo is afraid of thunderstorms and hides under the bed.",
+          "type": "semantic",
+          "importance": 0.5,
+          "entityId": "entity-apollo",
+          "sessionDate": "2024-03-22",
+          "tags": ["behaviour", "fear", "storms"]
+        }
+      ]
+    },
+    {
+      "entityId": "entity-camping-trip",
+      "label": "Camping Trip",
+      "beads": [
+        {
+          "id": "bead-c01",
+          "content": "The Camping Trip took place in the Blue Ridge foothills from Friday 24 May to Monday 27 May 2024.",
+          "type": "episodic",
+          "importance": 0.92,
+          "entityId": "entity-camping-trip",
+          "sessionDate": "2024-05-05",
+          "eventDate": "2024-05-24",
+          "tags": ["event", "camping", "location", "date"]
+        },
+        {
+          "id": "bead-c02",
+          "content": "The group stayed at a campsite near Clearwater Creek with no phone signal.",
+          "type": "episodic",
+          "importance": 0.65,
+          "entityId": "entity-camping-trip",
+          "sessionDate": "2024-05-28",
+          "eventDate": "2024-05-24",
+          "tags": ["location", "camping", "detail"]
+        },
+        {
+          "id": "bead-c03",
+          "content": "It rained on Saturday evening but everyone stayed in good spirits.",
+          "type": "episodic",
+          "importance": 0.52,
+          "entityId": "entity-camping-trip",
+          "sessionDate": "2024-06-01",
+          "eventDate": "2024-05-25",
+          "tags": ["weather", "camping", "mood"]
+        },
+        {
+          "id": "bead-c04",
+          "content": "Tom cooked a campfire stew that everyone agreed was surprisingly good.",
+          "type": "episodic",
+          "importance": 0.48,
+          "entityId": "entity-camping-trip",
+          "sessionDate": "2024-06-01",
+          "eventDate": "2024-05-26",
+          "tags": ["food", "camping", "tom"]
+        }
+      ]
+    }
+  ],
+  "crossings": [
+    {
+      "sourceBeadId": "bead-s04",
+      "targetBeadId": "bead-c01",
+      "edgeType": "coreference",
+      "label": "Sarah's camping trip = The Camping Trip"
+    },
+    {
+      "sourceBeadId": "bead-t02",
+      "targetBeadId": "bead-c01",
+      "edgeType": "coreference",
+      "label": "Tom's trip logistics = The Camping Trip"
+    },
+    {
+      "sourceBeadId": "bead-a02",
+      "targetBeadId": "bead-c01",
+      "edgeType": "coreference",
+      "label": "Apollo's river swim happened at The Camping Trip"
+    },
+    {
+      "sourceBeadId": "bead-t02",
+      "targetBeadId": "bead-c04",
+      "edgeType": "coreference",
+      "label": "Tom handled logistics and also cooked the stew"
+    },
+    {
+      "sourceBeadId": "bead-a01",
+      "targetBeadId": "bead-t04",
+      "edgeType": "group-alias",
+      "label": "Apollo is a dog (Tom is not allergic)"
+    },
+    {
+      "sourceBeadId": "bead-s05",
+      "targetBeadId": "bead-c01",
+      "edgeType": "pronoun-resolves-to",
+      "label": "\"it\" in bead-s05 refers to The Camping Trip"
+    }
+  ]
+}

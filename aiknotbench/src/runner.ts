@@ -1,4 +1,5 @@
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -43,6 +44,14 @@ function dbPath(runId: string): string {
   return resolve(runDir(runId), "knot.db");
 }
 
+function diagnosticsRawPath(runId: string): string {
+  return resolve(runDir(runId), "diagnostics_raw.jsonl");
+}
+
+function appendDiagnosticsRaw(runId: string, record: Record<string, unknown>): void {
+  appendFileSync(diagnosticsRawPath(runId), JSON.stringify(record) + "\n");
+}
+
 // ---- Checkpoint schema ------------------------------------------------------
 
 interface CheckpointResult {
@@ -50,6 +59,15 @@ interface CheckpointResult {
   qaIdx: number;
   category: number;
   verdict: Verdict;
+  // Diagnostics fields — populated only when AI_KNOT_DIAG=1
+  stage1CandidateIds?: {
+    from_bm25: string[];
+    from_rare_tokens: string[];
+    from_entity_hop: string[];
+  };
+  stage4PackIds?: string[];
+  stage0LexicalTrace?: Record<string, unknown>;
+  factContentMap?: Record<string, string>;
 }
 
 interface Checkpoint {
@@ -162,6 +180,11 @@ export interface EvaluatorFns {
 export interface AiknotAdapterLike {
   ingest(turns: string[], sessions?: Session[]): Promise<void>;
   recall(question: string): Promise<string>;
+  recallWithTrace(question: string): Promise<{
+    context: string;
+    packFactIds: string[];
+    trace: Record<string, unknown>;
+  }>;
   close(): Promise<void>;
 }
 
@@ -294,8 +317,42 @@ export async function runBenchmark(opts: RunOptions): Promise<Report> {
         process.stdout.write("done\n");
       }
 
+      const diagEnabled = process.env["AI_KNOT_DIAG"] === "1";
+
       for (const qa of pending) {
-        const context = await adapter.recall(qa.question);
+        let context: string;
+        let diagFields: Partial<CheckpointResult> = {};
+
+        if (diagEnabled) {
+          const traced = await adapter.recallWithTrace(qa.question);
+          context = traced.context || "No relevant facts found.";
+          const stage1 = traced.trace["stage1_candidates"] as {
+            from_bm25: string[];
+            from_rare_tokens: string[];
+            from_entity_hop: string[];
+          } | undefined;
+          diagFields = {
+            stage1CandidateIds: stage1,
+            stage4PackIds: traced.packFactIds,
+            stage0LexicalTrace: traced.trace["stage0_lexical_bridge"] as
+              | Record<string, unknown>
+              | undefined,
+          };
+          appendDiagnosticsRaw(runId, {
+            run_id: runId,
+            conv_idx: conv.idx,
+            qa_idx: qa.idx,
+            category: qa.category,
+            query: qa.question,
+            stage1_candidates: stage1,
+            pack_fact_ids: traced.packFactIds,
+            stage0_lexical_bridge: traced.trace["stage0_lexical_bridge"],
+            full_trace: traced.trace,
+          });
+        } else {
+          context = await adapter.recall(qa.question);
+        }
+
         const answer = await fns.answerFn(answerModel, context, qa.question);
         const verdict = await fns.judgeFn(
           judgeModel,
@@ -309,6 +366,7 @@ export async function runBenchmark(opts: RunOptions): Promise<Report> {
           qaIdx: qa.idx,
           category: qa.category,
           verdict,
+          ...diagFields,
         });
         saveCheckpoint(cp!);
 
