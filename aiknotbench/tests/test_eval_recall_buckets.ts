@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   buildBucketTable,
   computeBucketMigrations,
+  computeLexicalBridgeMigrations,
   renderBucketTable,
   renderMigrationTable,
+  renderLexicalBridgeMigrations,
   type BucketMigration,
 } from "../scripts/eval_recall_buckets.js";
 import type { DiagnosticsRecord } from "../scripts/diagnose_recall.js";
@@ -147,5 +149,103 @@ describe("renderMigrationTable", () => {
     expect(md).toContain("Total questions moved: 1");
     expect(md).toContain("hard-miss");
     expect(md).toContain("LLM-fail");
+  });
+});
+
+describe("computeLexicalBridgeMigrations", () => {
+  it("returns empty list when no candidate has uplift > 0", () => {
+    const base: DiagnosticsRecord[] = [
+      makeRecord({ conv_id: "conv0", qa_idx: 0, bucket: "hard-miss", answer_verdict: "WRONG" }),
+    ];
+    const cand: DiagnosticsRecord[] = [
+      makeRecord({
+        conv_id: "conv0",
+        qa_idx: 0,
+        bucket: "LLM-fail",
+        answer_verdict: "WRONG",
+        lexical_expansion_uplift: null,
+      }),
+    ];
+    const migrations = computeLexicalBridgeMigrations(base, cand);
+    expect(migrations).toHaveLength(0);
+  });
+
+  it("returns migration when bridge fired (uplift > 0) AND bucket changed", () => {
+    const base: DiagnosticsRecord[] = [
+      makeRecord({ conv_id: "conv0", qa_idx: 0, bucket: "hard-miss", answer_verdict: "WRONG" }),
+    ];
+    const cand: DiagnosticsRecord[] = [
+      makeRecord({
+        conv_id: "conv0",
+        qa_idx: 0,
+        bucket: "LLM-fail",
+        answer_verdict: "WRONG",
+        lexical_expansion_uplift: 0.5,
+      }),
+    ];
+    const migrations = computeLexicalBridgeMigrations(base, cand);
+    expect(migrations).toHaveLength(1);
+    expect(migrations[0]!.fromBucket).toBe("hard-miss");
+    expect(migrations[0]!.toBucket).toBe("LLM-fail");
+  });
+
+  it("excludes question when uplift > 0 but bucket did not change", () => {
+    const base: DiagnosticsRecord[] = [
+      makeRecord({ conv_id: "conv0", qa_idx: 0, bucket: "hard-miss", answer_verdict: "WRONG" }),
+    ];
+    const cand: DiagnosticsRecord[] = [
+      makeRecord({
+        conv_id: "conv0",
+        qa_idx: 0,
+        bucket: "hard-miss",
+        answer_verdict: "WRONG",
+        lexical_expansion_uplift: 0.3,
+      }),
+    ];
+    const migrations = computeLexicalBridgeMigrations(base, cand);
+    expect(migrations).toHaveLength(0);
+  });
+
+  it("excludes question when bucket changed but uplift = 0", () => {
+    const base: DiagnosticsRecord[] = [
+      makeRecord({ conv_id: "conv0", qa_idx: 0, bucket: "hard-miss", answer_verdict: "WRONG" }),
+    ];
+    const cand: DiagnosticsRecord[] = [
+      makeRecord({
+        conv_id: "conv0",
+        qa_idx: 0,
+        bucket: "LLM-fail",
+        answer_verdict: "WRONG",
+        lexical_expansion_uplift: 0,
+      }),
+    ];
+    const migrations = computeLexicalBridgeMigrations(base, cand);
+    expect(migrations).toHaveLength(0);
+  });
+});
+
+describe("renderLexicalBridgeMigrations", () => {
+  it("shows count in header", () => {
+    const migrations: BucketMigration[] = [
+      {
+        convId: "conv0",
+        qaIdx: 0,
+        category: 1,
+        fromBucket: "hard-miss",
+        toBucket: "partial-recall",
+        verdictChange: "WRONG → WRONG",
+      },
+    ];
+    const md = renderLexicalBridgeMigrations("base", "cand", migrations);
+    expect(md).toContain("Lexical Bridge Migrations");
+    expect(md).toContain("1");
+    expect(md).toContain("hard-miss");
+    expect(md).toContain("partial-recall");
+  });
+
+  it("shows zero when no migrations", () => {
+    const md = renderLexicalBridgeMigrations("base", "cand", []);
+    expect(md).toContain("Lexical Bridge Migrations");
+    expect(md).toContain("0");
   });
 });

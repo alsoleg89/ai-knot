@@ -91,6 +91,8 @@ export interface DiagnosticsSummary {
   }>;
   avg_distractor_density: number;
   reader_fail_despite_gold_count: number;
+  avg_lexical_expansion_uplift: number | null;
+  lexical_bridge_active_count: number;
 }
 
 // ---- LOCOMO schema (minimal) -------------------------------------------------
@@ -228,8 +230,36 @@ export function computeDiagnosticsRecord(
         ? false
         : null;
 
-  // LexicalExpansionUplift — computed separately in A0.lexical; null here
-  const lexicalExpansionUplift: number | null = null;
+  // LexicalExpansionUplift: delta PoolGoldRecall with lexical expansion vs without.
+  // Requires stage0_lexical_bridge present AND terms_added > 0.
+  // from_bm25 = baseline without expansion; full stage1 = with expansion.
+  // Uplift = poolGoldRecall(with) - poolGoldRecall(from_bm25_only).
+  let lexicalExpansionUplift: number | null = null;
+  const bridge = entry.stage0_lexical_bridge as {
+    frames_applied?: string[];
+    terms_added?: number;
+    expansion_weights?: Record<string, number>;
+  } | null | undefined;
+
+  if (
+    bridge &&
+    typeof bridge.terms_added === "number" &&
+    bridge.terms_added > 0 &&
+    goldFactIds.length > 0
+  ) {
+    // PoolGoldRecall WITHOUT expansion (from_bm25 only)
+    const bm25Only = new Set(entry.stage1_candidates?.from_bm25 ?? []);
+    const inPoolWithout = goldFactIds.filter((id) => bm25Only.has(id)).length;
+    const recallWithout = goldFactIds.length > 0
+      ? inPoolWithout / goldFactIds.length
+      : 0;
+
+    // PoolGoldRecall WITH expansion (full stage1: bm25 + rare_tokens + entity_hop,
+    // bm25 channel now includes expansion terms)
+    const recallWith = poolGoldRecall ?? 0;
+
+    lexicalExpansionUplift = recallWith - recallWithout;
+  }
 
   const bucket = classifyBucket(packGoldRecall, verdict);
 
@@ -304,6 +334,15 @@ export function computeSummary(
     }
   }
 
+  // LexicalExpansionUplift aggregation
+  const upliftValues = records
+    .map((r) => r.lexical_expansion_uplift)
+    .filter((v): v is number => v !== null);
+  const avgLexicalExpansionUplift =
+    upliftValues.length > 0
+      ? upliftValues.reduce((a, b) => a + b, 0) / upliftValues.length
+      : null;
+
   return {
     run_id: runId,
     total_questions: records.length,
@@ -312,6 +351,8 @@ export function computeSummary(
     avg_distractor_density:
       distractorCount > 0 ? totalDistractor / distractorCount : 0,
     reader_fail_despite_gold_count: readerFailCount,
+    avg_lexical_expansion_uplift: avgLexicalExpansionUplift,
+    lexical_bridge_active_count: upliftValues.length,
   };
 }
 
@@ -354,9 +395,14 @@ function renderSummaryMd(summary: DiagnosticsSummary): string {
     );
   }
 
+  const upliftStr =
+    summary.avg_lexical_expansion_uplift !== null
+      ? `+${summary.avg_lexical_expansion_uplift.toFixed(3)}`
+      : "n/a";
   lines.push(
     `Avg DistractorDensity: ${summary.avg_distractor_density.toFixed(3)}`,
     `ReaderFailDespiteGold: ${summary.reader_fail_despite_gold_count}`,
+    `- LexicalExpansionUplift (avg): ${upliftStr} (${summary.lexical_bridge_active_count} questions had bridge active)`,
   );
 
   return lines.join("\n");

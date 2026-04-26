@@ -222,6 +222,59 @@ describe("computeDiagnosticsRecord — LexicalExpansionUplift", () => {
   });
 });
 
+describe("LexicalExpansionUplift", () => {
+  it("null when no bridge in entry", () => {
+    const entry = makeEntry({ lexical_bridge: undefined });
+    const record = computeDiagnosticsRecord(entry, ["fact1"], {}, ["D1:1"], "WRONG");
+    expect(record.lexical_expansion_uplift).toBeNull();
+  });
+
+  it("null when terms_added=0", () => {
+    const entry = makeEntry({
+      lexical_bridge: { terms_added: 0, frames_applied: [], expansion_weights: {} },
+    });
+    const record = computeDiagnosticsRecord(entry, ["fact1"], {}, ["D1:1"], "WRONG");
+    expect(record.lexical_expansion_uplift).toBeNull();
+  });
+
+  it("positive when bridge adds gold to pool", () => {
+    // Without bridge: from_bm25=[] (gold not in bm25)
+    // With bridge: stage1=["gold1"] (gold reachable via expansion)
+    const entry = makeEntry({
+      stage1_bm25: [],
+      stage1_rare: ["gold1"],
+      stage1_hop: [],
+      pack: ["gold1"],
+      lexical_bridge: {
+        terms_added: 3,
+        frames_applied: ["activity_sport"],
+        expansion_weights: { practice: 0.7 },
+      },
+    });
+    const record = computeDiagnosticsRecord(entry, ["gold1"], {}, ["D1:1"], "WRONG");
+    // from_bm25 doesn't have gold1, stage1 has gold1 → uplift > 0
+    expect(record.lexical_expansion_uplift).not.toBeNull();
+    expect(record.lexical_expansion_uplift!).toBeGreaterThan(0);
+  });
+
+  it("zero when bridge fires but gold already in bm25", () => {
+    const entry = makeEntry({
+      stage1_bm25: ["gold1"],
+      stage1_rare: [],
+      stage1_hop: [],
+      pack: ["gold1"],
+      lexical_bridge: {
+        terms_added: 2,
+        frames_applied: ["work_career"],
+        expansion_weights: { work: 0.7 },
+      },
+    });
+    const record = computeDiagnosticsRecord(entry, ["gold1"], {}, ["D1:1"], "WRONG");
+    // gold already in bm25 → no uplift
+    expect(record.lexical_expansion_uplift).toBe(0);
+  });
+});
+
 describe("computeSummary", () => {
   it("correctly counts LLM-fail bucket for cat1", () => {
     const records: DiagnosticsRecord[] = [

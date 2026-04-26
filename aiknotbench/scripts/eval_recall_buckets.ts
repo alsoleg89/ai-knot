@@ -205,6 +205,63 @@ export function renderMigrationTable(
   return lines.join("\n");
 }
 
+export function computeLexicalBridgeMigrations(
+  baseRecords: DiagnosticsRecord[],
+  candRecords: DiagnosticsRecord[],
+): BucketMigration[] {
+  const baseMap = new Map(
+    baseRecords.map((r) => [`${r.conv_id}:${r.qa_idx}`, r]),
+  );
+
+  // Lexical uplift migrations: questions where bridge fired AND bucket improved
+  const lexicalMigrations: BucketMigration[] = [];
+  for (const cand of candRecords) {
+    const key = `${cand.conv_id}:${cand.qa_idx}`;
+    const base = baseMap.get(key);
+    if (
+      base &&
+      base.bucket !== cand.bucket &&
+      cand.lexical_expansion_uplift !== null &&
+      cand.lexical_expansion_uplift > 0
+    ) {
+      lexicalMigrations.push({
+        convId: cand.conv_id,
+        qaIdx: cand.qa_idx,
+        category: cand.category,
+        fromBucket: base.bucket,
+        toBucket: cand.bucket,
+        verdictChange: `${base.answer_verdict} → ${cand.answer_verdict}`,
+      });
+    }
+  }
+  return lexicalMigrations;
+}
+
+export function renderLexicalBridgeMigrations(
+  baselineId: string,
+  candidateId: string,
+  migrations: BucketMigration[],
+): string {
+  const lines: string[] = [
+    `## Lexical Bridge Migrations`,
+    "",
+    `Questions where bridge fired (uplift > 0) AND bucket improved: ${migrations.length}`,
+  ];
+  if (migrations.length > 0) {
+    lines.push(
+      "",
+      "| conv | qa | cat | from | to | verdict |",
+      "| --- | --- | --- | --- | --- | --- |",
+    );
+    for (const m of migrations) {
+      lines.push(
+        `| ${m.convId} | ${m.qaIdx} | ${m.category} | ${m.fromBucket} | ${m.toBucket} | ${m.verdictChange} |`,
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
 // ---- CLI entry point --------------------------------------------------------
 
 async function main(): Promise<void> {
@@ -260,9 +317,14 @@ async function main(): Promise<void> {
     }
 
     const migrations = computeBucketMigrations(baseRecords, candRecords);
-    const md = renderMigrationTable(baselineId, candidateId, migrations);
+    const lexicalMigrations = computeLexicalBridgeMigrations(baseRecords, candRecords);
+    const md =
+      renderMigrationTable(baselineId, candidateId, migrations) +
+      "\n\n" +
+      renderLexicalBridgeMigrations(baselineId, candidateId, lexicalMigrations);
     writeFileSync(outPath, md);
     console.log(`Migration table written to ${outPath} (${migrations.length} moved)`);
+    console.log(`Lexical bridge migrations: ${lexicalMigrations.length} questions`);
   } else {
     console.error(
       "Usage:\n" +
