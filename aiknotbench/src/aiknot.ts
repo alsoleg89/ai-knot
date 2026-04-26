@@ -93,6 +93,18 @@ export class AiknotAdapter {
     return this.kb.recall(question, { topK: this.topK });
   }
 
+  /**
+   * Diagnostic variant of recall — returns context string plus per-stage trace.
+   * Only available when AI_KNOT_DIAG=1 is set; throws otherwise.
+   */
+  async recallWithTrace(question: string): Promise<{
+    context: string;
+    packFactIds: string[];
+    trace: Record<string, unknown>;
+  }> {
+    return this.kb.recallWithTrace(question, { topK: this.topK });
+  }
+
   /** Gracefully shut down the underlying MCP subprocess. */
   async close(): Promise<void> {
     await this.kb.close();

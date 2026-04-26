@@ -34,6 +34,7 @@ from ai_knot._mcp_tools import (
     tool_list_snapshots,
     tool_recall,
     tool_recall_json,
+    tool_recall_with_trace,
     tool_restore,
     tool_snapshot,
     tool_stats,
@@ -237,6 +238,20 @@ def _make_server(kb: KnowledgeBase) -> Any:
             messages: Conversation as [{"role": "user"|"assistant", "content": "..."}].
         """
         return tool_learn(kb, messages)
+
+    @app.tool()
+    def recall_with_trace(query: str, top_k: int = 5) -> str:
+        """Diagnostic: recall with per-stage pipeline trace (JSON).
+
+        Returns context string plus stage1_candidates, pack_fact_ids, and
+        full trace dict. Intended for benchmark diagnostics — not for
+        production agent use.
+
+        Args:
+            query: What the agent needs to know right now.
+            top_k: Maximum number of facts to return.
+        """
+        return tool_recall_with_trace(kb, query, top_k=top_k)
 
     @app.tool()
     def list_snapshots() -> str:

@@ -108,6 +108,29 @@ def tool_capabilities() -> str:
     return json.dumps(tools, ensure_ascii=False)
 
 
+def tool_recall_with_trace(kb: KnowledgeBase, query: str, *, top_k: int = 5) -> str:
+    """Diagnostic variant of recall — returns context string plus per-stage trace.
+
+    Args:
+        kb: The knowledge base instance.
+        query: What the agent needs to know.
+        top_k: Maximum number of facts to return.
+
+    Returns:
+        JSON object with ``{"context", "pack_fact_ids", "trace"}``; trace keys:
+        stage1_candidates (from_bm25/from_rare_tokens/from_entity_hop), stage3_rrf,
+        stage3b_dense_guarantee, stage4a_ddsa, stage4b_mmr.
+        Intended for diagnostics only — not for production use.
+    """
+    pairs, trace = kb.recall_facts_with_trace(query, top_k=top_k)
+    context = kb.recall(query, top_k=top_k)
+    pack_fact_ids = [f.id for f, _ in pairs]
+    return json.dumps(
+        {"context": context, "pack_fact_ids": pack_fact_ids, "trace": trace},
+        ensure_ascii=False,
+    )
+
+
 def tool_list_facts(kb: KnowledgeBase) -> str:
     """List all stored facts.
 
