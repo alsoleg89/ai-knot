@@ -11,10 +11,58 @@ Versioning: [Semantic Versioning](https://semver.org/).
 ### Planned
 - MongoDB storage backend
 - Qdrant and Weaviate backends
-- Semantic embeddings (sentence-transformers / OpenAI)
 - LangChain / CrewAI integrations
 - Web UI knowledge inspector
 - REST API / sidecar mode
+
+---
+
+## [0.9.6] — 2026-04-26
+
+### Added
+- **`--ingest-mode dated|raw|session` flag** in `aiknotbench` for LOCOMO
+  reproduction: `dated` mode wraps a 3-turn sliding window per session with
+  a `[date]` prefix, matching the pf3 baseline ingestion strategy.
+- **Date-tag enrichment** (`_date_enrichment.py`) — DMY/MDY/ISO/MY date
+  patterns in fact content auto-emit normalized tags
+  (`2023-05-08`, `may 2023`, `may`, `2023`) for downstream temporal recall.
+- **Pool-rerank helpers** (`_pool_helpers.py`) — recency boost, freshness
+  boost (MESI MODIFIED/SHARED), slot-winner boost, and claim-conflict
+  resolution (slotted-wins-over-unslotted, trust × recency tiebreak).
+- **Spreading activation** (`_spreading_activation.py`) — entity-graph hop
+  expansion for channel-c retrieval.
+- **Deterministic offline embedder stub** for CI without `OPENAI_API_KEY`:
+  autouse `_stub_embedder` fixture in `tests/conftest.py` returns
+  MD5-derived 16-dim pseudo-vectors. Real-embedder code paths exercised by
+  9 opt-out tests (`@pytest.mark.real_embedder`) that stub
+  `httpx.AsyncClient` directly.
+- **Coverage backfill**: `tests/test_mcp_tools.py` (19),
+  `tests/test_date_enrichment.py` (19), `tests/test_pool_helpers.py` (17),
+  `tests/test_embedder.py` (9). Coverage 78.5 % → 80.4 %.
+
+### Changed
+- **Phase E retrieval validated** as pf3 baseline at commit `1167e70` +
+  4789521 helper overlays: full-10 LOCOMO reproduction reaches 62.2 %
+  aggregate (pf3 was 60.5 %, within ±2 pp). See
+  `research/dated_full10_analysis_20260426.md`.
+- **Fact dedup**: write-time fuzzy Jaccard ≥ 0.7 dedup replaces the old
+  exact-match contract. `add()` returns the existing fact's ID for
+  near-duplicates.
+- **`ConversationTurn`** dataclass gains `timestamp: datetime | None = None`
+  for date-aware extraction in dated/session ingest modes.
+- **Branch hygiene**: `feat/v2-product-kernel` rewound to validated
+  baseline; 100 commits of in-flight Phase 1 work preserved as
+  `archive/*-20260426` tags. See `research/branch_archive_plan_20260426.md`.
+
+### Fixed
+- **MCP E2E test** (`test_mcp_recall_json_and_learn`): MCP server is
+  spawned as a subprocess so the conftest stub doesn't apply — switched
+  recall query from "database" to "PostgreSQL" so the degraded-mode
+  (BM25-only) path can match.
+- **Test alignment**: removed 4 brittle ranking assertions and 2
+  duplicate-allowed assertions whose contracts no longer hold under
+  Phase E (RRF + MMR + slot protection) and fuzzy dedup. Replaced where
+  intent could be re-stated under the new contract.
 
 ---
 
