@@ -578,6 +578,17 @@ class KnowledgeBase(_LearningMixin):
         intent = classify_recall_intent(query)
         config = get_pipeline_config(intent)
 
+        # Stage 0 — Lexical Bridge (opt-in via AI_KNOT_LEXICAL_BRIDGE=1)
+        _lexical_expansion: Any = None
+        if os.environ.get("AI_KNOT_LEXICAL_BRIDGE") == "1":
+            from ai_knot.query_lexicon import expand_query_lexically
+
+            _lexical_expansion = expand_query_lexically(
+                query,
+                intent.value,
+                max_terms_per_intent=config.lexical_expansion_max,
+            )
+
         all_facts = self._storage.load(self._agent_id)
         if not all_facts:
             return []
@@ -616,7 +627,15 @@ class KnowledgeBase(_LearningMixin):
 
         # Channel A: all facts with positive raw BM25F score.
         # E2.2: field_weights_override lets NAVIGATIONAL intent boost tags/canonical.
-        bm25_raw = index.score(query, field_weights_override=config.field_weights_override)
+        # Stage 0: lexical expansion terms (if bridge active) passed as expansion_weights.
+        _lex_expansion_weights: dict[str, float] = (
+            _lexical_expansion.expansion_weights if _lexical_expansion is not None else {}
+        )
+        bm25_raw = index.score(
+            query,
+            field_weights_override=config.field_weights_override,
+            expansion_weights=_lex_expansion_weights if _lex_expansion_weights else None,
+        )
         candidate_ids: set[str] = {fid for fid, s in bm25_raw.items() if s > 0}
         _trace_ch_a = set(candidate_ids) if trace is not None else None
 
@@ -669,6 +688,15 @@ class KnowledgeBase(_LearningMixin):
                 candidate_ids.add(f.id)
 
         if trace is not None:
+            trace["stage0_lexical_bridge"] = (
+                {
+                    "frames_applied": _lexical_expansion.frames_applied,
+                    "terms_added": _lexical_expansion.terms_added,
+                    "expansion_weights": _lexical_expansion.expansion_weights,
+                }
+                if os.environ.get("AI_KNOT_LEXICAL_BRIDGE") == "1"
+                else None
+            )
             _prev = (_trace_ch_a or set()) | (_trace_ch_b or set()) | (_trace_ch_c or set())
             trace["stage1_candidates"] = {
                 "from_bm25": sorted(_trace_ch_a or set()),

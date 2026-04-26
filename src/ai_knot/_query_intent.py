@@ -358,6 +358,7 @@ class PipelineConfig:
     sort_strategy: str  # 'relevance' | 'chronological' | 'sandwich'
     memory_type_filter: MemoryType | None = None
     field_weights_override: dict[str, float] | None = None
+    lexical_expansion_max: int = 8  # max expansion terms for Lexical Bridge (0 = disabled)
 
 
 # Registry mapping RecallIntent → PipelineConfig.
@@ -369,6 +370,7 @@ _PIPELINE_CONFIGS: dict[RecallIntent, PipelineConfig] = {
         mmr_lambda=0.85,
         use_ddsa=False,
         sort_strategy="relevance",
+        lexical_expansion_max=8,
     ),
     RecallIntent.AGGREGATIONAL: PipelineConfig(
         skip_prf=False,
@@ -376,6 +378,7 @@ _PIPELINE_CONFIGS: dict[RecallIntent, PipelineConfig] = {
         mmr_lambda=0.3,
         use_ddsa=False,
         sort_strategy="sandwich",
+        lexical_expansion_max=12,
     ),
     RecallIntent.EXPLORATORY: PipelineConfig(
         skip_prf=False,
@@ -383,6 +386,7 @@ _PIPELINE_CONFIGS: dict[RecallIntent, PipelineConfig] = {
         mmr_lambda=0.65,
         use_ddsa=True,
         sort_strategy="chronological",
+        lexical_expansion_max=10,
     ),
     RecallIntent.NAVIGATIONAL: PipelineConfig(
         skip_prf=True,
@@ -391,6 +395,7 @@ _PIPELINE_CONFIGS: dict[RecallIntent, PipelineConfig] = {
         use_ddsa=False,
         sort_strategy="relevance",
         field_weights_override={"tags": 5.0, "canonical": 3.0},
+        lexical_expansion_max=0,  # NAVIGATIONAL never gets expansion
     ),
     RecallIntent.PROCEDURAL: PipelineConfig(
         skip_prf=False,
@@ -402,6 +407,7 @@ _PIPELINE_CONFIGS: dict[RecallIntent, PipelineConfig] = {
         # from query intent alone is too aggressive and silently drops SEMANTIC facts
         # about deployments, policies etc. stored via kb.add().
         # Enterprise-only isolation should be enforced at the KnowledgeBase level, not here.
+        lexical_expansion_max=6,
     ),
     RecallIntent.BROAD_CONTEXT: PipelineConfig(
         skip_prf=True,
@@ -409,6 +415,7 @@ _PIPELINE_CONFIGS: dict[RecallIntent, PipelineConfig] = {
         mmr_lambda=0.5,
         use_ddsa=True,
         sort_strategy="relevance",
+        lexical_expansion_max=10,
     ),
 }
 
