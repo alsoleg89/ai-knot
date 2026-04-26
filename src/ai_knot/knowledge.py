@@ -17,6 +17,7 @@ from ai_knot._date_enrichment import enrich_date_tags
 from ai_knot._inverted_index import InvertedIndex, _char_trigrams, _slot_exact_score
 from ai_knot._query_intent import classify_recall_intent, get_pipeline_config
 from ai_knot._spreading_activation import spreading_activation
+from ai_knot.extractor import Extractor as Extractor  # noqa: F401  re-exported for tests
 from ai_knot.extractor import split_enumerations
 from ai_knot.forgetting import apply_decay
 from ai_knot.learning import _LearningMixin
