@@ -75,14 +75,9 @@ class ExperimenterRole(BaseRole):
                 "Survey, critique, and propose a better benchmark."
             )
         else:
-            recalled = ctx.recall(ctx.focus, k=3, stream="experiments")
-            recall_block = ""
-            if recalled:
-                snippets = [
-                    str(r.get("entry", {}).get("content", r.get("text_preview", "")))[:150]
-                    for r in recalled
-                ]
-                recall_block = "Related past experiments:\n" + "\n---\n".join(snippets) + "\n\n"
+            recall_block = ctx.recall_block(
+                ctx.focus, k=3, stream="experiments", header="Related past experiments:"
+            )
             system = _SYSTEM_GENERATE
             user = (
                 f"Research focus: {ctx.focus!r}. "

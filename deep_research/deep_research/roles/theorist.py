@@ -35,16 +35,9 @@ class TheoristRole(BaseRole):
                     f"[{c['candidate_id']}]: {c.get('content', '')[:300]}" for c in top_candidates
                 ]
                 candidates_block = "Recent candidates:\n" + "\n---\n".join(snippets) + "\n"
-            recalled_critiques = ctx.recall(theory_so_far[:300], k=3, stream="critique")
-            critique_recall_block = ""
-            if recalled_critiques:
-                snippets = [
-                    str(r.get("entry", {}).get("content", r.get("text_preview", "")))[:150]
-                    for r in recalled_critiques
-                ]
-                critique_recall_block = (
-                    "Relevant past critiques:\n" + "\n---\n".join(snippets) + "\n\n"
-                )
+            critique_recall_block = ctx.recall_block(
+                theory_so_far[:300], k=3, stream="critique", header="Relevant past critiques:"
+            )
             action = (
                 "Refine the existing theory based on critique and proof results. "
                 "Cross-pollinate the strongest elements from competing candidates. "
@@ -56,14 +49,7 @@ class TheoristRole(BaseRole):
                 f"Current leading theory:\n{theory_so_far[:800]}\n\n{action}"
             )
         else:
-            recalled = ctx.recall(ctx.focus, k=3)
-            recall_block = ""
-            if recalled:
-                snippets = [
-                    str(r.get("entry", {}).get("content", r.get("text_preview", "")))[:150]
-                    for r in recalled
-                ]
-                recall_block = "Related past corpus entries:\n" + "\n---\n".join(snippets) + "\n\n"
+            recall_block = ctx.recall_block(ctx.focus, k=3, header="Related past corpus entries:")
             action = "Propose a novel theory candidate for multi-agent memory."
             user = (
                 f"Research focus: {ctx.focus!r}. Phase: {ctx.phase}. "

@@ -34,16 +34,12 @@ class CriticRole(BaseRole):
             snippets = [p.get("content", "")[:150] for p in recent_proofs]
             proofs_block = "Recent proof results:\n" + "\n---\n".join(snippets) + "\n\n"
 
-        recalled = ctx.recall(theory_so_far[:200], k=3, stream="critique")
-        recall_block = ""
-        if recalled:
-            snippets = [
-                str(r.get("entry", {}).get("content", r.get("text_preview", "")))[:150]
-                for r in recalled
-            ]
-            recall_block = (
-                "Prior critiques on related theories:\n" + "\n---\n".join(snippets) + "\n\n"
-            )
+        recall_block = ctx.recall_block(
+            theory_so_far[:200],
+            k=3,
+            stream="critique",
+            header="Prior critiques on related theories:",
+        )
         system = (
             "You are Critic, an adversarial reviewer of multi-agent memory theories. "
             "Attack theory drafts and proofs: find hidden assumptions, counterexamples, "

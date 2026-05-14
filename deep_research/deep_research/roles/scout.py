@@ -18,8 +18,7 @@ class ScoutRole(BaseRole):
 
         # Enrich top-N hits with full PDF text
         enriched: list[dict[str, str]] = []
-        for hit in arxiv_hits:
-            idx = arxiv_hits.index(hit)
+        for idx, hit in enumerate(arxiv_hits):
             full_text = fetch_arxiv_text(hit["arxiv_id"]) if idx < _FULL_TEXT_TOP_N else ""
             enriched.append({**hit, "full_text": full_text})
 

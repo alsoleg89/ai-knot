@@ -28,16 +28,9 @@ class ProverRole(BaseRole):
             snippets = [p.get("content", "")[:200] for p in recent_proofs]
             proofs_block = "Recent proof attempts:\n" + "\n---\n".join(snippets) + "\n\n"
 
-        recalled = ctx.recall(ctx.focus, k=3, stream="sources")
-        recall_block = ""
-        if recalled:
-            snippets = [
-                str(r.get("entry", {}).get("content", r.get("text_preview", "")))[:150]
-                for r in recalled
-            ]
-            recall_block = (
-                "Relevant sources (proof techniques):\n" + "\n---\n".join(snippets) + "\n\n"
-            )
+        recall_block = ctx.recall_block(
+            ctx.focus, k=3, stream="sources", header="Relevant sources (proof techniques):"
+        )
         system = (
             "You are Prover, a mathematical proof verifier for multi-agent memory theories. "
             "Pick the most critical unresolved proposition from the current theory and attempt "

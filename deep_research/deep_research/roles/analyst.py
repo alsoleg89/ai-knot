@@ -16,16 +16,9 @@ class AnalystRole(BaseRole):
             "Format: CLAIM | EVIDENCE | IMPLICATION_FOR_MULTI_AGENT_MEMORY"
         )
         theory_so_far = ctx.corpus.read_theory()
-        recalled = ctx.recall(ctx.focus, k=3, stream="sources")
-        recall_block = ""
-        if recalled:
-            snippets = [
-                str(r.get("entry", {}).get("content", r.get("text_preview", "")))[:150]
-                for r in recalled
-            ]
-            recall_block = (
-                "Semantically relevant past sources:\n" + "\n---\n".join(snippets) + "\n\n"
-            )
+        recall_block = ctx.recall_block(
+            ctx.focus, k=3, stream="sources", header="Semantically relevant past sources:"
+        )
         user = (
             f"Research focus: {ctx.focus!r}. "
             f"Current theory (excerpt):\n{theory_so_far[:800]}\n\n"
