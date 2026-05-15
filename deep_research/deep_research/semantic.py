@@ -60,7 +60,7 @@ class SentenceTransformerEmbedder(EmbeddingBackend):
             device = "cpu"
         self._model_name = model
         self._st_model = SentenceTransformer(model, device=device)
-        self._dim = int(self._st_model.get_sentence_embedding_dimension() or 1024)
+        self._dim = int(self._st_model.get_embedding_dimension() or 1024)
 
     @property
     def dim(self) -> int:
