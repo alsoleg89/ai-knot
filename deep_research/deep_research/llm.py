@@ -92,6 +92,7 @@ class ClaudeCliLLMClient(LLMClient):
                         "--no-session-persistence",
                         "--tools",
                         "",
+                        "--",
                         user,
                     ],
                     capture_output=True,
