@@ -12,10 +12,12 @@ from deep_research.roles.base import BaseRole, RoleContext, RoleOutput
 _CODE_RE = re.compile(r"```python\s*\n(.*?)```", re.DOTALL)
 
 _SYSTEM_GENERATE = (
-    "You are Experimenter, an applied scientist for multi-agent memory systems. "
+    "You are Experimenter, an applied scientist for long-dialogue retrieval systems. "
     "Implement the core of the current leading theory as a self-contained Python prototype. "
-    "The prototype must: (1) define the key data structures, (2) implement the core algorithm, "
-    "(3) run a small demo that prints results. "
+    "The prototype must: (1) define synthetic dialogue data with one-off facts and lexical "
+    "mismatch, (2) implement a baseline retrieval surrogate and the proposed inference-time "
+    "indexing/retrieval layer, (3) print a quantitative comparison that can falsify the key "
+    "prediction. "
     "Write the complete runnable code inside a ```python block. "
     "After the code, write one line: "
     "TYPE: free | HYPOTHESIS: <one sentence> | EXPECTED_OUTCOME: <one sentence>. "
@@ -24,11 +26,11 @@ _SYSTEM_GENERATE = (
 )
 
 _SYSTEM_BENCH = (
-    "You are Experimenter, an applied scientist for multi-agent memory systems. "
-    "Survey the landscape of existing multi-agent and long-term memory benchmarks "
-    "(e.g. LoCoMo, MemGPT eval, HippoRAG bench, MIRIX). "
+    "You are Experimenter, an applied scientist for long-dialogue retrieval systems. "
+    "Survey the landscape of existing long-term memory and retrieval benchmarks "
+    "(e.g. LoCoMo, MemGPT eval, HippoRAG bench, MIRIX, personal-dialogue QA). "
     "Identify the 2 most critical deficiencies in these benchmarks for evaluating "
-    "multi-agent memory theories. Then propose a concrete better benchmark design: "
+    "single-fact recall under lexical mismatch. Then propose a concrete better benchmark design: "
     "NAME | TASK_TYPE | METRIC | WHY_BETTER. "
     "If a live benchmark run is needed to validate the proposal, end with REQUIRES_APPROVAL."
 )
@@ -69,6 +71,7 @@ class ExperimenterRole(BaseRole):
         if ctx.phase == "critique":
             system = _SYSTEM_BENCH
             user = (
+                f"{ctx.brief_block(max_chars=1600)}"
                 f"Research focus: {ctx.focus!r}. "
                 f"Leading theory fitness={top_fitness:.2f}.\n"
                 f"Current theory excerpt:\n{theory_so_far[:600]}\n\n"
@@ -80,6 +83,7 @@ class ExperimenterRole(BaseRole):
             )
             system = _SYSTEM_GENERATE
             user = (
+                f"{ctx.brief_block(max_chars=1600)}"
                 f"Research focus: {ctx.focus!r}. "
                 f"Leading theory fitness={top_fitness:.2f}.\n"
                 f"{recall_block}"

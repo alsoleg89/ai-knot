@@ -86,9 +86,13 @@ def start(
             )
             sys.exit(1)
         click.echo(f"Resuming campaign {state.campaign_id[:8]} from tick {state.tick}.")
+        brief_text = Path(brief_file).read_text() if brief_file else (state.brief or state.focus)
+        if not state.brief:
+            state.brief = brief_text
+        if state.focus == "initial exploration" and brief_text:
+            state.focus = brief_text
         state.status = "running"
         corpus.save_state(state)
-        brief_text = brief_file and Path(brief_file).read_text() or state.focus
         config = CampaignConfig(
             brief_text=brief_text,
             model=effective_model,
@@ -114,7 +118,11 @@ def start(
             embedding_model=embedding_model,
             reranker_model=reranker_model,
         )
-        state = corpus.initialize(campaign_id=str(uuid.uuid4()), config_hash=config.hash())
+        state = corpus.initialize(
+            campaign_id=str(uuid.uuid4()),
+            config_hash=config.hash(),
+            brief=brief_text,
+        )
         click.echo(f"Campaign {state.campaign_id[:8]} started. Config hash: {config.hash()}")
 
     backend = "mock" if mock else ("claude-cli" if use_cli else "anthropic-sdk")

@@ -12,10 +12,12 @@ class TheoristRole(BaseRole):
 
     def run(self, ctx: RoleContext) -> RoleOutput:
         system = (
-            "You are Theorist, a mathematical theory builder for multi-agent memory systems. "
-            "Propose and refine candidate theories. Each theory must include: "
-            "TITLE | DEFINITIONS | CORE_PROPOSITION | APPLICABILITY | FITNESS_SCORE (0.0-1.0). "
-            "Maintain a population of competing theories; evolve the fittest."
+            "You are Theorist, a mathematical theory builder for long-dialogue memory and "
+            "retrieval systems. Propose and refine candidate mechanisms that can be layered "
+            "over an existing retrieval pipeline. Each theory must include: TITLE | "
+            "DEFINITIONS | CORE_PROPOSITION | MECHANISM | NON_REGRESSION_ARGUMENT | "
+            "FALSIFIABLE_PREDICTION | APPLICABILITY | FITNESS_SCORE (0.0-1.0). Maintain "
+            "a population of competing theories; evolve the fittest."
         )
         theory_so_far = ctx.corpus.read_theory()
         if ctx.phase == "evolve":
@@ -44,14 +46,16 @@ class TheoristRole(BaseRole):
                 "Produce a new evolved candidate with improved FITNESS_SCORE."
             )
             user = (
+                f"{ctx.brief_block(max_chars=1600)}"
                 f"Research focus: {ctx.focus!r}. Phase: evolve.\n"
                 f"{fitness_block}{candidates_block}{critique_recall_block}"
                 f"Current leading theory:\n{theory_so_far[:800]}\n\n{action}"
             )
         else:
             recall_block = ctx.recall_block(ctx.focus, k=3, header="Related past corpus entries:")
-            action = "Propose a novel theory candidate for multi-agent memory."
+            action = "Propose a novel theory candidate for long-dialogue fact retrieval."
             user = (
+                f"{ctx.brief_block(max_chars=1600)}"
                 f"Research focus: {ctx.focus!r}. Phase: {ctx.phase}. "
                 f"Current theory:\n{theory_so_far[:1000]}\n\n{recall_block}{action}"
             )

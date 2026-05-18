@@ -87,6 +87,7 @@ class Orchestrator:
     def _tick(self) -> None:
         state = self.corpus.load_state()
         tick = state.tick
+        campaign_brief = state.brief or self.config.brief_text
 
         cycle_pos = tick % len(ROLE_CYCLE)
         phase = _PHASE_MAP[cycle_pos]
@@ -100,6 +101,7 @@ class Orchestrator:
                 tick=tick,
                 focus=state.focus,
                 corpus=self.corpus,
+                brief=campaign_brief,
                 phase=phase,
                 semantic=self._semantic,
             )
@@ -112,6 +114,7 @@ class Orchestrator:
                 tick=tick,
                 focus=new_focus,
                 corpus=self.corpus,
+                brief=campaign_brief,
                 phase=phase,
                 semantic=self._semantic,
             )
