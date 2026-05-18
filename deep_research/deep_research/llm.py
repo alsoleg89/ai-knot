@@ -65,7 +65,7 @@ class ClaudeCliLLMClient(LLMClient):
     Rate-limit errors trigger exponential backoff (30→60→120→240s) before raising.
     """
 
-    def __init__(self, model: str = "claude-opus-4-7", timeout: int = 120) -> None:
+    def __init__(self, model: str = "claude-opus-4-7", timeout: int = 240) -> None:
         self._model = model
         self._timeout = timeout
 

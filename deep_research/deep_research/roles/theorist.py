@@ -17,7 +17,8 @@ class TheoristRole(BaseRole):
             "over an existing retrieval pipeline. Each theory must include: TITLE | "
             "DEFINITIONS | CORE_PROPOSITION | MECHANISM | NON_REGRESSION_ARGUMENT | "
             "FALSIFIABLE_PREDICTION | APPLICABILITY | FITNESS_SCORE (0.0-1.0). Maintain "
-            "a population of competing theories; evolve the fittest."
+            "a population of competing theories; evolve the fittest. "
+            "Propose exactly 2-3 hypotheses per response (not more) so each is fully specified."
         )
         theory_so_far = ctx.corpus.read_theory()
         if ctx.phase == "evolve":
@@ -53,7 +54,7 @@ class TheoristRole(BaseRole):
             )
         else:
             recall_block = ctx.recall_block(ctx.focus, k=3, header="Related past corpus entries:")
-            action = "Propose a novel theory candidate for long-dialogue fact retrieval."
+            action = "Propose 2-3 novel theory candidates for long-dialogue fact retrieval."
             user = (
                 f"{ctx.brief_block(max_chars=1600)}"
                 f"Research focus: {ctx.focus!r}. Phase: {ctx.phase}. "
