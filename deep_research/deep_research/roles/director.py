@@ -29,6 +29,27 @@ class DirectorRole(BaseRole):
             if top_fitness >= 0.7:
                 maturity_line += "MATURITY THRESHOLD APPROACHING — consider finalizing theory. "
 
+        # Build dead-ends block from disproved proofs
+        disproved = ctx.corpus.read_disproved_hypotheses(last_n=15)
+        dead_block = ""
+        if disproved:
+            snippets = [d[:120] for d in disproved]
+            dead_block = (
+                "DEAD ENDS — already formally disproved, do NOT revisit:\n"
+                + "\n".join(f"  - {s}" for s in snippets)
+                + "\n"
+            )
+
+        # Convergence nudge after many ticks
+        convergence_hint = ""
+        if ctx.tick >= 36:
+            convergence_hint = (
+                "CONVERGENCE MODE: enough exploration done. "
+                "Push the surviving open hypothesis toward a concrete combined architecture, "
+                "a precision-adjusted bound, and a runnable prototype on hard data "
+                "(≥5000 utterances, baseline recall@60 < 70%). "
+            )
+
         recalled = ctx.recall(ctx.focus, k=3)
         recall_line = ""
         if recalled:
@@ -38,12 +59,16 @@ class DirectorRole(BaseRole):
             ]
             recall_line = "Recent relevant work: " + " | ".join(snippets) + ". "
         system = (
-            "You are the Director of a deep research campaign on multi-agent memory. "
+            "You are the Director of a deep research campaign on long-dialogue memory, "
+            "inference-time indexing, and retrieval. Keep the original campaign brief as "
+            "the invariant objective; use the current focus only as the next local step. "
             "Synthesize the current state and set the research focus for the next tick. "
-            f"{phase_hint} Be specific and actionable."
+            f"{phase_hint} {convergence_hint}Be specific, actionable, and benchmarkable."
         )
         user = (
+            f"{ctx.brief_block(max_chars=1400)}"
             f"Tick {ctx.tick} | Phase: {ctx.phase}. {maturity_line}{recall_line}"
+            f"{dead_block}"
             f"Current focus: {ctx.focus!r}. "
             "What should the research focus be for the next tick? "
             "Reply with one concise sentence."

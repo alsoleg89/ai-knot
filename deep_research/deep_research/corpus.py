@@ -160,6 +160,17 @@ class Corpus:
         lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
         return [json.loads(ln) for ln in lines[-last_n:]]
 
+    def read_disproved_hypotheses(self, last_n: int = 20) -> list[str]:
+        """Return short content excerpts of all disproved proof entries (last_n max)."""
+        path = self.root / "proofs" / "proofs.jsonl"
+        if not path.exists():
+            return []
+        lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
+        disproved = [
+            json.loads(ln) for ln in lines if '"disproved"' in ln or "'disproved'" in ln
+        ]
+        return [p.get("content", "")[:200] for p in disproved[-last_n:]]
+
     # ── Approval queue ────────────────────────────────────────────────────────
 
     def add_to_approval_queue(self, exp_id: str, description: str) -> None:

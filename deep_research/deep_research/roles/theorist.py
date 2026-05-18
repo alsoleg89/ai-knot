@@ -20,6 +20,17 @@ class TheoristRole(BaseRole):
             "a population of competing theories; evolve the fittest. "
             "Propose exactly 2-3 hypotheses per response (not more) so each is fully specified."
         )
+        # Dead-ends block — show disproved hypotheses so Theorist doesn't repeat them
+        disproved = ctx.corpus.read_disproved_hypotheses(last_n=12)
+        dead_block = ""
+        if disproved:
+            snippets = [d[:150] for d in disproved]
+            dead_block = (
+                "ALREADY DISPROVED — do not re-propose these directions:\n"
+                + "\n".join(f"  - {s}" for s in snippets)
+                + "\n\n"
+            )
+
         theory_so_far = ctx.corpus.read_theory()
         if ctx.phase == "evolve":
             fitness_index = ctx.corpus.read_fitness_index()
@@ -47,18 +58,18 @@ class TheoristRole(BaseRole):
                 "Produce a new evolved candidate with improved FITNESS_SCORE."
             )
             user = (
-                f"{ctx.brief_block(max_chars=1600)}"
+                f"{ctx.brief_block(max_chars=1400)}"
                 f"Research focus: {ctx.focus!r}. Phase: evolve.\n"
-                f"{fitness_block}{candidates_block}{critique_recall_block}"
+                f"{dead_block}{fitness_block}{candidates_block}{critique_recall_block}"
                 f"Current leading theory:\n{theory_so_far[:800]}\n\n{action}"
             )
         else:
             recall_block = ctx.recall_block(ctx.focus, k=3, header="Related past corpus entries:")
             action = "Propose 2-3 novel theory candidates for long-dialogue fact retrieval."
             user = (
-                f"{ctx.brief_block(max_chars=1600)}"
+                f"{ctx.brief_block(max_chars=1400)}"
                 f"Research focus: {ctx.focus!r}. Phase: {ctx.phase}. "
-                f"Current theory:\n{theory_so_far[:1000]}\n\n{recall_block}{action}"
+                f"{dead_block}Current theory:\n{theory_so_far[:1000]}\n\n{recall_block}{action}"
             )
         resp = self.llm.chat(system, user)
         candidate_id = str(uuid.uuid4())[:8]

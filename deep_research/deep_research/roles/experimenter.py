@@ -14,14 +14,17 @@ _CODE_RE = re.compile(r"```python\s*\n(.*?)```", re.DOTALL)
 _SYSTEM_GENERATE = (
     "You are Experimenter, an applied scientist for long-dialogue retrieval systems. "
     "Implement the core of the current leading theory as a self-contained Python prototype. "
-    "The prototype must: (1) define synthetic dialogue data with one-off facts and lexical "
-    "mismatch, (2) implement a baseline retrieval surrogate and the proposed inference-time "
-    "indexing/retrieval layer, (3) print a quantitative comparison that can falsify the key "
-    "prediction. "
+    "The prototype MUST use hard synthetic data: (1) ≥5000 distractor utterances, "
+    "(2) one-off facts with Jaccard overlap < 0.15 between question and gold utterance, "
+    "(3) if baseline BM25-surrogate recall@60 ≥ 0.70 on the generated corpus, print "
+    "'CORPUS TOO EASY — invalid' and exit — do not report results on easy corpora. "
+    "(4) implement the proposed inference-time memory layer, "
+    "(5) print: baseline recall@60, memory-layer recall@60, union recall@60, "
+    "delta pp, and 3 examples where memory finds what baseline misses. "
     "Write the complete runnable code inside a ```python block. "
     "After the code, write one line: "
     "TYPE: free | HYPOTHESIS: <one sentence> | EXPECTED_OUTCOME: <one sentence>. "
-    "If this experiment instead requires expensive benchmark infrastructure (external APIs, "
+    "If this experiment requires expensive benchmark infrastructure (external APIs, "
     "large GPU compute), skip the code block and write REQUIRES_APPROVAL at the end."
 )
 
