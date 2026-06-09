@@ -118,6 +118,16 @@ def test_scorecard_renders_pass_and_fail() -> None:
     assert "✅ PASS" in md_pass
 
 
+def test_scorecard_scopes_verdict_to_ai_knot() -> None:
+    # A cross-system backend (mem0) belongs in the summary table, not the ai-knot gate.
+    ai = _metrics("ai_knot_multi_agent", _PASSING)
+    mem0 = _metrics("mem0_multi_agent", _BASELINE)  # would "fail" if wrongly judged
+    md = "\n".join(_ma_scorecard([ai, mem0]))
+    assert "ai_knot_multi_agent" in md
+    assert "mem0_multi_agent" not in md  # not given a verdict row
+    assert "✅ PASS" in md  # ai-knot's verdict still rendered
+
+
 def test_gate_covers_documented_failures() -> None:
     pairs = {(t.scenario_id, t.metric) for t in GATE}
     assert ("s9_ma_pool_publish", "conflict_resolution") in pairs

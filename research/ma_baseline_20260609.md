@@ -96,3 +96,43 @@ PYTHONPATH=src /Users/alsoleg/Documents/github/ai-knot/.venv/bin/python \
 | Protocol correctness (S10/11/13/17/20/25) | 1.00 | = 1.00 (no regression) |
 
 Raw JSON for this run: `/tmp/ma_raw.json` (regenerate with the command above).
+
+## Cross-system comparison (A3) — scope and interpretation
+
+A Mem0 multi-agent backend already exists in the harness
+(`tests/eval/benchmark/backends/mem0_ma_backend.py`), and it is now selectable
+from the runner:
+
+```bash
+# ai_knot is always the gated system; mem0 is added as a cross-system column
+... runner --multi-agent --mock-judge --ma-backends ai_knot,mem0 ...
+```
+
+`--ma-backends mem0` requires **Ollama** (LLM extraction + embeddings) and
+**mem0ai** + **chromadb**. In this snapshot's environment mem0ai 1.0.10 and
+chromadb are installed but **Ollama was down**, so the live Mem0 column is
+deferred to an Ollama-equipped run — this is a runtime dependency, not a code
+gap (the backend and the CLI path both exist and are exercised by the gate's
+scoping test).
+
+**Interpretation contract (why most MA scenarios are not a fair cross-system
+comparison):**
+
+- **Protocol / pool / trust scenarios are N/A by design** — S9, S10, S11, S13,
+  S14, S17, S18, S20, S22, S23, S25. They measure slot-addressed CAS, MESI
+  invalidation, delta sync and behavioural trust. Mem0's "pool" is a synthetic
+  `__pool__` namespace with `infer=False` and no supersession/trust, so these
+  metrics cannot be satisfied by Mem0 — comparing them would be apples-to-oranges.
+  This is itself the differentiation result: no external system implements this
+  protocol, which is exactly why an MA *memory-quality* benchmark vacancy exists.
+- **Retrieval-shaped scenarios are the legitimate cross-system axis** — S8
+  isolation, S12 gating, S16 relay, S19 evidence recall, S21 coverage, S24
+  onboarding, S26 sparse assembly. Both systems "store facts, search top-k", so
+  these are comparable when Ollama is available.
+
+The **acceptance gate is ai-knot's own** criteria. The scorecard and `--ma-gate`
+exit-code are scoped to `ai_knot*` backends; cross-system backends appear in the
+summary table only and are never failed against ai-knot's protocol gate. We do
+**not** fabricate a degenerate flat-store "multi-agent" number for memvid (it has
+no shared-pool adapter); cross-system *retrieval* comparison belongs to the
+single-agent LOCOMO / LongMemEval tracks, where memvid is run via `--backends`.

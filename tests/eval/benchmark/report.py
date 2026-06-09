@@ -344,18 +344,24 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
     """
     from tests.eval.benchmark.ma_gate import evaluate_gate, gate_passed
 
+    # The gate is ai-knot's own acceptance criteria. Cross-system backends (e.g. mem0)
+    # appear in the summary table above; they are NOT judged by ai-knot's protocol gate
+    # (they do not implement slot-CAS/MESI/trust), so the verdict is scoped to ai-knot.
+    gated = [m for m in ma_results if m.backend_name.startswith("ai_knot")] or ma_results
+
     lines: list[str] = ["#### Acceptance Scorecard\n"]
+    lines.append("_ai-knot acceptance gate; cross-system backends are in the summary above._\n")
     lines.append("| Backend | Applicable thresholds passed | Verdict |")
     lines.append("|---------|------------------------------|---------|")
-    for m in ma_results:
+    for m in gated:
         results = evaluate_gate(m)
         applicable = [r for r in results if r.applicable]
         n_pass = sum(1 for r in applicable if r.passed)
         verdict = "✅ PASS" if gate_passed(results) else "❌ FAIL"
         lines.append(f"| {_display(m.backend_name)} | {n_pass}/{len(applicable)} | {verdict} |")
 
-    if ma_results:
-        primary = ma_results[0]
+    if gated:
+        primary = gated[0]
         lines.append("")
         lines.append(f"##### Thresholds — {_display(primary.backend_name)}\n")
         lines.append("| Group | Scenario | Metric | Value | Target | Status |")
