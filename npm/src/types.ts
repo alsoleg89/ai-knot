@@ -38,6 +38,12 @@ export interface AddOptions {
   type?: MemoryType;
   importance?: number;
   tags?: string[];
+  /**
+   * ISO-8601 timestamp of when this memory was formed (the real-world anchor
+   * used to resolve relative-time expressions like "yesterday" in content).
+   * Defaults to server-side now() when omitted.
+   */
+  eventTime?: string;
 }
 
 export interface RecallOptions {

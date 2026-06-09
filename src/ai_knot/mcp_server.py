@@ -156,6 +156,7 @@ def _make_server(kb: KnowledgeBase) -> Any:
         type: str = "semantic",
         importance: float = 0.8,
         tags: list[str] | None = None,
+        event_time: str | None = None,
     ) -> str:
         """Add a fact to agent memory.
 
@@ -164,8 +165,18 @@ def _make_server(kb: KnowledgeBase) -> Any:
             type: Classification — semantic, procedural, or episodic.
             importance: How important (0.0–1.0). Higher = remembered longer.
             tags: Optional labels for later retrieval via recall_by_tag.
+            event_time: ISO-8601 timestamp of when the memory was formed. Used to
+                resolve relative-time expressions ("yesterday", "last week") in
+                ``content`` into absolute dates. Defaults to now() when omitted.
         """
-        return tool_add(kb, content, type=type, importance=importance, tags=tags)
+        return tool_add(
+            kb,
+            content,
+            type=type,
+            importance=importance,
+            tags=tags,
+            event_time=event_time,
+        )
 
     @app.tool()
     def recall(query: str, top_k: int = 5) -> str:

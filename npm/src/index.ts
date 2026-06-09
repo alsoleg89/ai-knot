@@ -44,6 +44,7 @@ export class KnowledgeBase {
     const args: Record<string, unknown> = { content };
     if (options.type !== undefined) args["type"] = options.type;
     if (options.importance !== undefined) args["importance"] = options.importance;
+    if (options.eventTime !== undefined) args["event_time"] = options.eventTime;
     // tags not yet exposed by mcp_server.py tool signature — pass through if present
     const text = await this.client.call("add", args);
     // Response: "Added fact [<id>]: <content>"

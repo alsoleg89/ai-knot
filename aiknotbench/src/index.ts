@@ -78,10 +78,10 @@ function parseRunArgs(args: string[]): RunArgs {
       convs = next.split(",").map((s) => parseInt(s.trim(), 10));
       i++;
     } else if (a === "--ingest-mode" && next) {
-      if (next === "raw" || next === "dated" || next === "session") {
+      if (next === "raw" || next === "dated" || next === "session" || next === "temporal") {
         ingestMode = next;
       } else {
-        console.error(`Error: --ingest-mode must be raw|dated|session (got "${next}")`);
+        console.error(`Error: --ingest-mode must be raw|dated|session|temporal (got "${next}")`);
         process.exit(1);
       }
       i++;

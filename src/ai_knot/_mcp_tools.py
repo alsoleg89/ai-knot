@@ -8,9 +8,25 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.types import ConversationTurn, MemoryType
+
+
+def _parse_event_time(event_time: str | None) -> datetime | None:
+    """Parse an ISO-8601 event_time string into a datetime (or None).
+
+    Accepts a trailing 'Z' (UTC) for convenience. Returns None on empty/invalid
+    input so a malformed timestamp degrades to "no temporal anchor" rather than
+    failing the whole add().
+    """
+    if not event_time:
+        return None
+    try:
+        return datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def tool_add(
@@ -20,6 +36,7 @@ def tool_add(
     type: str = "semantic",
     importance: float = 0.8,
     tags: list[str] | None = None,
+    event_time: str | None = None,
 ) -> str:
     """Add a fact to the knowledge base.
 
@@ -29,6 +46,10 @@ def tool_add(
         type: Memory type — "semantic", "procedural", or "episodic".
         importance: Importance score (0.0–1.0).
         tags: Optional labels.
+        event_time: ISO-8601 timestamp of when the memory was formed (the
+            real-world anchor for resolving relative-time in ``content``). In
+            production this is now(); on historical import it is the original
+            message timestamp.
 
     Returns:
         Confirmation string with the new fact's ID.
@@ -41,7 +62,13 @@ def tool_add(
         raise ValueError(
             f"Unknown memory type {type!r}. Use: semantic, procedural, episodic"
         ) from None
-    fact = kb.add(content, type=memory_type, importance=importance, tags=tags or [])
+    fact = kb.add(
+        content,
+        type=memory_type,
+        importance=importance,
+        tags=tags or [],
+        event_time=_parse_event_time(event_time),
+    )
     return f"Added fact [{fact.id}]: {fact.content}"
 
 

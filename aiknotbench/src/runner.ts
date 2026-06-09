@@ -233,7 +233,12 @@ export async function runBenchmark(opts: RunOptions): Promise<Report> {
     topK = 5,
     types,
     sample,
-    ingestMode = "raw",
+    // Default ingest = temporal: 3-turn windows with the session timestamp passed
+    // as a STRUCTURED eventTime anchor (no date text-prefix). The core resolves
+    // relative-time ("yesterday", "last week") server-side — the legitimate,
+    // general form used by production memory systems (Mem0 timestamp/reference_date,
+    // memvid ExplicitHeader). Replaces both per-turn `raw` and the `dated` text-prefix.
+    ingestMode = "temporal",
     force,
     _evaluatorOverride,
   } = opts;
