@@ -8,7 +8,7 @@ import os
 import re
 from collections import Counter, defaultdict
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import ai_knot._spreading_activation as _ddsa
@@ -17,6 +17,7 @@ from ai_knot._date_enrichment import enrich_date_tags
 from ai_knot._inverted_index import InvertedIndex, _char_trigrams, _slot_exact_score
 from ai_knot._query_intent import classify_recall_intent, get_pipeline_config
 from ai_knot._spreading_activation import spreading_activation
+from ai_knot._temporal import format_event_date, resolve_event_dates
 from ai_knot.extractor import Extractor as Extractor  # noqa: F401  re-exported for tests
 from ai_knot.extractor import split_enumerations
 from ai_knot.forgetting import apply_decay
@@ -48,6 +49,99 @@ logger = logging.getLogger(__name__)
 import ai_knot.learning as _learning_mod  # noqa: E402
 
 _learning_mod._LEARN_DEBUG = _LEARN_DEBUG
+
+# Defensive cap on total tags after temporal enrichment (mirrors _date_enrichment).
+_MAX_TEMPORAL_TAGS = 10
+
+
+def _resolved_date_tags(value: date, granularity: str) -> list[str]:
+    """Canonical BM25F date tags for a resolved event date."""
+    month_name = value.strftime("%B").lower()
+    tags = [f"{month_name} {value.year}", month_name, str(value.year)]
+    if granularity == "day":
+        tags.insert(0, value.isoformat())
+    return tags
+
+
+def _apply_temporal(fact: Fact, event_time: datetime | None) -> None:
+    """Resolve relative-time expressions in ``fact.content`` against *event_time*.
+
+    Sets ``fact.event_time``; when a relative expression resolves, records the
+    computed absolute date in ``qualifiers["event_date"]`` (surfaced verbatim at
+    recall) and injects canonical date tags for temporal retrieval.
+
+    This is a *general* capability: the anchor is ``now()`` in production or the
+    original message timestamp on historical import — never a benchmark answer
+    key. The resolution (not the raw anchor) is what reaches the reader.
+    """
+    if event_time is None:
+        return
+    fact.event_time = event_time
+    resolved = resolve_event_dates(fact.content, event_time)
+    if not resolved:
+        return
+    fact.qualifiers = {**fact.qualifiers, "event_date": format_event_date(resolved[0])}
+    existing = set(fact.tags)
+    for r in resolved[:2]:  # primary + secondary resolution only
+        for t in _resolved_date_tags(r.value, r.granularity):
+            if t not in existing and len(fact.tags) < _MAX_TEMPORAL_TAGS:
+                fact.tags.append(t)
+                existing.add(t)
+
+
+# ---------------------------------------------------------------------------
+# Cross-encoder reranking (opt-in via AI_KNOT_RERANK; default OFF).
+# Retrieve a wide pool (e.g. top_k=60) then rerank to a compact pack so the
+# reader sees concentrated gold instead of a diluted 60-fact dump. The wide
+# pool maximises recall; the rerank restores precision/compactness.
+# ---------------------------------------------------------------------------
+_RERANK_ENABLED = os.environ.get("AI_KNOT_RERANK", "") in ("1", "true", "yes")
+_RERANK_N = int(os.environ.get("AI_KNOT_RERANK_N", "8"))
+_RERANK_MODEL = os.environ.get("AI_KNOT_RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+_reranker_model: Any = None
+
+
+# ---------------------------------------------------------------------------
+# Dense-signal weight multiplier (opt-in via AI_KNOT_DENSE_WEIGHT_MULT; default 1.0).
+# Full-10 recall@60 measurement (2026-06): the dense (semantic) signal is
+# under-weighted in every intent's RRF fusion (lexical weights sum 12-19 vs
+# dense 2-5). Pure-dense ranking lifts multi-hop (cat1 +14.2pp) and open-domain
+# (cat3 +13.5pp) recall with cat4 neutral (-0.6pp), but hurts temporal
+# (cat2 -3.4pp, which needs the lexical/recency date signals). A multiplier
+# raises dense influence in the fusion without zeroing the lexical signals
+# temporal queries depend on. 1.0 = no change (safe default).
+# ---------------------------------------------------------------------------
+_DENSE_WEIGHT_MULT = float(os.environ.get("AI_KNOT_DENSE_WEIGHT_MULT", "1.0"))
+
+
+def _get_reranker() -> Any:
+    """Lazily load (and cache) the cross-encoder. Imported only when enabled so
+    sentence-transformers stays an optional dependency."""
+    global _reranker_model
+    if _reranker_model is None:
+        from sentence_transformers import CrossEncoder
+
+        _reranker_model = CrossEncoder(_RERANK_MODEL, max_length=512)
+    return _reranker_model
+
+
+def _rerank_pairs(query: str, pairs: list[tuple[Fact, float]], n: int) -> list[tuple[Fact, float]]:
+    """Reorder *pairs* by cross-encoder relevance to *query*, keep top *n*.
+
+    Degrades gracefully to the original RRF order (truncated) if the reranker
+    cannot be loaded, so a missing optional dependency never breaks recall.
+    """
+    if len(pairs) <= 1:
+        return pairs
+    try:
+        model = _get_reranker()
+    except Exception as exc:  # pragma: no cover - depends on optional dep
+        logger.warning("reranker unavailable (%s); using RRF order", exc)
+        return pairs[:n]
+    inputs = [(query, f.prompt_surface or f.source_verbatim or f.content) for f, _ in pairs]
+    scores = model.predict(inputs, show_progress_bar=False)
+    ranked = sorted(zip(pairs, scores, strict=True), key=lambda x: float(x[1]), reverse=True)
+    return [p for p, _ in ranked[:n]]
 
 
 class KnowledgeBase(_LearningMixin):
@@ -132,6 +226,7 @@ class KnowledgeBase(_LearningMixin):
         type: MemoryType = MemoryType.SEMANTIC,
         importance: float = 0.8,
         tags: list[str] | tuple[str, ...] = (),
+        event_time: datetime | None = None,
     ) -> Fact:
         """Add a fact manually to the knowledge base.
 
@@ -182,6 +277,8 @@ class KnowledgeBase(_LearningMixin):
         )
         # C6c: inject canonical date tags for temporal recall (mode-agnostic).
         enrich_date_tags(fact)
+        # v1.6: resolve relative-time against the structured event_time anchor.
+        _apply_temporal(fact, event_time)
 
         # C6b v2: split enumeration/aggregation lists into atomic child facts
         # so raw/dated windows get the same treatment as learn/dated-learn.
@@ -211,6 +308,7 @@ class KnowledgeBase(_LearningMixin):
                     break
             if not is_dup:
                 enrich_date_tags(child)  # inherit date from [date] prefix in content
+                _apply_temporal(child, event_time)  # resolve relative-time per child
                 accepted_children.append(child)
 
         facts.append(fact)
@@ -658,13 +756,14 @@ class KnowledgeBase(_LearningMixin):
         )
 
         # Channel D: dense retrieval (no-op when embeddings unavailable).
-        # Track dense scores so the top-1 semantic match can be guaranteed
-        # even when it has zero BM25 (vocabulary gap / terminology mismatch).
+        # Overfetch so dense candidates beyond BM25 top_k still enter the
+        # candidate set and compete in Stage-3 RRF fusion.
+        _dense_overfetch = max(top_k * 4, 20)
         dense_scores: dict[str, float] = {}
         embed_text = self._expand_query_for_embed(query)
         query_vector = self._embed_for_recall(candidate_facts, embed_text)
         if query_vector is not None and self._dense.has_embeddings():
-            for f, sim in self._dense.search(query_vector, candidate_facts, top_k=top_k):
+            for f, sim in self._dense.search(query_vector, candidate_facts, top_k=_dense_overfetch):
                 dense_scores[f.id] = sim
                 candidate_ids.add(f.id)
 
@@ -737,17 +836,27 @@ class KnowledgeBase(_LearningMixin):
             reverse=True,
         )
 
-        fused_scores = _rrf_fuse(
-            [
-                bm25_ranked,
-                slot_ranked,
-                trigram_ranked,
-                importance_ranked,
-                retention_ranked,
-                recency_ranked,
-            ],
-            weights=list(config.rrf_weights),
-        )
+        # Build ranker list and weights; add dense as 8th signal when available.
+        # Per-intent dense_rrf_weight controls how much the dense signal contributes:
+        # FACTUAL=8.0 (replay-validated +0.12 cat1 PGR), BROAD_CONTEXT=2.0 (keeps
+        # BM25+importance dominant for short/vague queries), others=4.0.
+        _rrf_rankers = [
+            bm25_ranked,
+            slot_ranked,
+            trigram_ranked,
+            importance_ranked,
+            retention_ranked,
+            recency_ranked,
+        ]
+        _rrf_weights = list(config.rrf_weights)
+        if dense_scores and config.dense_rrf_weight > 0:
+            dense_ranked = sorted(
+                candidate_id_list, key=lambda fid: dense_scores.get(fid, 0.0), reverse=True
+            )
+            _rrf_rankers.append(dense_ranked)
+            _rrf_weights.append(config.dense_rrf_weight * _DENSE_WEIGHT_MULT)
+
+        fused_scores = _rrf_fuse(_rrf_rankers, weights=_rrf_weights)
 
         selected_ids: list[str] = sorted(
             (fid for fid in candidate_id_list if fid in fact_map),
@@ -1065,6 +1174,11 @@ class KnowledgeBase(_LearningMixin):
         )
         if not pairs:
             return ""
+        # v1.6: optional cross-encoder rerank of the wide pool down to a compact
+        # pack (opt-in). Concentrates gold for the reader; positional reorder and
+        # rendering below then operate on the reranked top-N.
+        if _RERANK_ENABLED:
+            pairs = _rerank_pairs(query, pairs, _RERANK_N)
         config = get_pipeline_config(classify_recall_intent(query))
         if config.sort_strategy == "sandwich":
             pairs = self._sandwich_reorder(pairs)
@@ -1078,6 +1192,12 @@ class KnowledgeBase(_LearningMixin):
             text = f.prompt_surface or f.source_verbatim or f.content
             if f.entity and f.attribute:
                 text = f"[{f.entity}: {f.attribute}={f.value_text}] {text}"
+            # v1.6: surface the system-computed event date for temporal facts so
+            # the reader sees resolved time ("yesterday" -> "7 May 2023"), not the
+            # raw anchor. Only present when a relative expression actually resolved.
+            event_date = f.qualifiers.get("event_date")
+            if event_date:
+                text = f"{text} (event date: {event_date})"
             if text not in seen:
                 seen.add(text)
                 lines.append(f"[{len(lines) + 1}] {text}")

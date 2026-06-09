@@ -64,6 +64,9 @@ const FAKE_FACT: Fact = {
   last_accessed: "2026-01-01T00:00:00.000Z",
 };
 
+// Captures the arguments of the most recent "add" tool call for assertions.
+let lastAddArguments: Record<string, unknown> | undefined;
+
 function kbHandler(req: JsonRpcRequest): object | null {
   if (req.method === "initialize") {
     return {
@@ -79,10 +82,14 @@ function kbHandler(req: JsonRpcRequest): object | null {
   if (req.method === "notifications/initialized") return null;
 
   if (req.method === "tools/call") {
-    const { name } = req.params as { name: string; arguments: Record<string, unknown> };
+    const { name, arguments: callArgs } = req.params as {
+      name: string;
+      arguments: Record<string, unknown>;
+    };
     let text = "";
 
     if (name === "add") {
+      lastAddArguments = callArgs;
       text = "Added fact [abcd1234]: TypeScript is great";
     } else if (name === "list_facts") {
       text = JSON.stringify([FAKE_FACT]);
@@ -144,6 +151,28 @@ describe("KnowledgeBase", () => {
     const kb = new KnowledgeBase();
     const fact = await kb.add("Do X before Y", { type: "procedural", importance: 0.9 });
     expect(fact.id).toBe("abcd1234");
+    await kb.close();
+  });
+
+  it("add() forwards eventTime as the event_time MCP argument", async () => {
+    setup();
+    lastAddArguments = undefined;
+    const kb = new KnowledgeBase();
+    await kb.add("I joined Acme yesterday", { eventTime: "2023-05-08" });
+    expect(lastAddArguments).toMatchObject({
+      content: "I joined Acme yesterday",
+      event_time: "2023-05-08",
+    });
+    await kb.close();
+  });
+
+  it("add() omits event_time when eventTime is not provided", async () => {
+    setup();
+    lastAddArguments = undefined;
+    const kb = new KnowledgeBase();
+    await kb.add("no timestamp here");
+    expect(lastAddArguments).toBeDefined();
+    expect(lastAddArguments).not.toHaveProperty("event_time");
     await kb.close();
   });
 

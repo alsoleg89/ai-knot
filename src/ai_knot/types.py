@@ -115,6 +115,13 @@ class Fact:
     # valid_until: when this fact was superseded; None = currently valid.
     valid_from: datetime = field(default_factory=lambda: datetime.now(UTC))
     valid_until: datetime | None = None
+    # Event anchor (v1.6): the real-world time the memory was formed/uttered.
+    # In production this is now() at ingestion; for historical import it is the
+    # original message timestamp. Relative-time expressions in ``content``
+    # ("yesterday", "last week") are resolved against this anchor at add() time;
+    # the resolved absolute date is persisted in qualifiers["event_date"].
+    # Transient (not serialized): resolution happens at add-time, results persist.
+    event_time: datetime | None = None
     # Structured addressing (v0.9): entity+attribute for deterministic dedup.
     # Empty strings = general statement (falls back to cosine-based dedup).
     entity: str = ""  # "Alex Chen"

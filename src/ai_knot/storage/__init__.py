@@ -25,8 +25,9 @@ def create_storage(
     Args:
         backend: One of "yaml", "sqlite", "postgres".
         base_dir: Directory for file-based backends (yaml, sqlite).
-        dsn: Connection string for remote backends (postgres).
-            Also read from ``AI_KNOT_DSN`` env var if not provided.
+        dsn: Explicit path/connection string. For sqlite it is the database
+            file path (e.g. from ``AI_KNOT_DB_PATH``); for postgres it is the
+            connection string (also read from ``AI_KNOT_DSN`` if not provided).
 
     Returns:
         A storage backend instance.
@@ -37,7 +38,10 @@ def create_storage(
     if backend == "yaml":
         return YAMLStorage(base_dir=base_dir)
     if backend == "sqlite":
-        return SQLiteStorage(db_path=os.path.join(base_dir, "ai_knot.db"))
+        # Honor an explicit sqlite path (carried via dsn, e.g. from
+        # AI_KNOT_DB_PATH) so callers can isolate each KB to its own file.
+        # Falls back to <base_dir>/ai_knot.db when no path is given.
+        return SQLiteStorage(db_path=dsn or os.path.join(base_dir, "ai_knot.db"))
     if backend == "postgres":
         resolved_dsn = dsn or os.environ.get("AI_KNOT_DSN")
         if not resolved_dsn:

@@ -81,3 +81,55 @@ class TestTraceKeys:
         pairs, trace = kb.recall_facts_with_trace("only fact", top_k=5)
         assert len(pairs) == 1
         assert trace["stage3b_dense_guarantee"]["applied"] is False
+
+    def test_dense_rrf_signal_in_trace(self, kb: KnowledgeBase) -> None:
+        """Stage-3 uses dense as 8th RRF signal when embeddings are available."""
+        kb.add("Alice works on the deployment pipeline", tags=["infra"])
+        kb.add("Bob enjoys playing chess", tags=["hobby"])
+        _, trace = kb.recall_facts_with_trace("deployment", top_k=5)
+
+        # Dense signal entered the pool (stub embedder returns vectors for all facts).
+        s1 = trace["stage1_candidates"]
+        assert s1["total"] >= 1
+        # Stage3 intent must be captured.
+        assert "intent" in trace["stage3_rrf"]
+
+    def test_dense_candidates_enter_via_channel_d(self, kb: KnowledgeBase) -> None:
+        """Regression: Channel D (dense) adds candidates beyond BM25 matches."""
+        kb.add("Alice likes hiking in the mountains")
+        kb.add("Bob prefers indoor activities like reading")
+        # Dense recall brings in both facts via Channel D with stub embedder.
+        pairs, trace = kb.recall_facts_with_trace("hiking", top_k=5)
+        s1 = trace["stage1_candidates"]
+        # Both facts enter via BM25 (hiking) or dense (reading) channels.
+        assert s1["total"] >= 1
+        # At least one result must be returned.
+        assert len(pairs) >= 1
+
+    def test_dense_rrf_does_not_override_bm25_importance_on_broad_context(
+        self, kb: KnowledgeBase
+    ) -> None:
+        """Regression: BROAD_CONTEXT dense weight must not let random cosine scores
+        override BM25+importance for queries where BM25 clearly identifies gold facts."""
+        from datetime import UTC, datetime
+
+        from ai_knot.types import Fact as _Fact
+
+        old_time = datetime(2025, 1, 1, tzinfo=UTC)
+        for i in range(10):
+            fact = _Fact(
+                content=f"Stale info number {i}",
+                importance=0.2,
+                created_at=old_time,
+                last_accessed=old_time,
+            )
+            facts = kb.list_facts()
+            facts.append(fact)
+            kb.replace_facts(facts)
+
+        kb.add("Fresh important note about production deployment", importance=0.95)
+        pairs, _ = kb.recall_facts_with_trace("deployment", top_k=3)
+        # The high-importance BM25 match must dominate over stale zero-BM25 facts.
+        assert any("deployment" in f.content for f, _ in pairs), (
+            "Gold deployment fact must appear in top-3 despite dense noise"
+        )

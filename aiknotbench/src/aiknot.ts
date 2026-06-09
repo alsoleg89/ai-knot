@@ -1,7 +1,30 @@
 import { KnowledgeBase } from "ai-knot";
 import type { Session } from "./locomo.js";
 
-export type IngestMode = "raw" | "dated" | "session";
+export type IngestMode = "raw" | "dated" | "session" | "temporal";
+
+const _MONTHS: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+  jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+/**
+ * Parse a LoCoMo session date ("8 May, 2023" or "1:56 pm on 8 May, 2023") into
+ * an ISO date string ("2023-05-08"). This timestamp is the memory's event_time
+ * anchor — the structured equivalent of recording now() when a message arrives.
+ * Returns undefined if the string can't be parsed.
+ */
+export function parseLocomoDate(s?: string): string | undefined {
+  if (!s) return undefined;
+  const m = /(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})/.exec(s);
+  if (!m) return undefined;
+  const day = parseInt(m[1]!, 10);
+  const month = _MONTHS[m[2]!.toLowerCase()];
+  const year = parseInt(m[3]!, 10);
+  if (!month) return undefined;
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+}
 
 /**
  * Per-conversation adapter around ai-knot KnowledgeBase.
@@ -42,12 +65,35 @@ export class AiknotAdapter {
 
   /** Ingest conversation data into the knowledge base. */
   async ingest(turns: string[], sessions?: Session[]): Promise<void> {
-    if (this.ingestMode === "dated" && sessions && sessions.length > 0) {
+    if (this.ingestMode === "temporal" && sessions && sessions.length > 0) {
+      await this.ingestTemporal(sessions);
+    } else if (this.ingestMode === "dated" && sessions && sessions.length > 0) {
       await this.ingestDated(sessions);
     } else if (this.ingestMode === "session" && sessions && sessions.length > 0) {
       await this.ingestSessions(sessions);
     } else {
       await this.ingestRaw(turns);
+    }
+  }
+
+  /**
+   * Temporal mode: sliding 3-turn window per session, NO date text-prefix.
+   * The session date is passed as the structured ``eventTime`` anchor so the
+   * core resolves relative-time ("yesterday", "last week") into absolute dates
+   * server-side. This is the legitimate, general alternative to ``dated`` mode:
+   * time is data attached to each memory, not metadata stuffed into content.
+   */
+  private async ingestTemporal(sessions: Session[]): Promise<void> {
+    const WINDOW = 3;
+    for (const session of sessions) {
+      const eventTime = parseLocomoDate(session.date);
+      const turns = session.turns;
+      for (let i = 0; i < turns.length; i++) {
+        const start = Math.max(0, i - Math.floor(WINDOW / 2));
+        const end = Math.min(turns.length, start + WINDOW);
+        const window = turns.slice(start, end).join(" / ");
+        await this.kb.add(window, eventTime ? { eventTime } : {});
+      }
     }
   }
 
