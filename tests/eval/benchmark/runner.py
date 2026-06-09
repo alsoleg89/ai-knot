@@ -247,6 +247,16 @@ def _stamp_path(path: str, stamp: str) -> str:
     ),
 )
 @click.option(
+    "--ma-gate",
+    "ma_gate",
+    is_flag=True,
+    default=False,
+    help=(
+        "Evaluate the multi-agent acceptance gate (tests/eval/benchmark/ma_gate.py) "
+        "after the run and exit non-zero if any applicable threshold fails. For CI."
+    ),
+)
+@click.option(
     "--locomo-file",
     "locomo_file",
     default=None,
@@ -284,6 +294,7 @@ def main(
     ma_postgres_dsn: str,
     jsonl_output: str,
     ma_category: str,
+    ma_gate: bool,
     locomo_file: str | None,
     locomo_max_conversations: int | None,
     locomo_max_qa_per_conv: int | None,
@@ -308,6 +319,7 @@ def main(
             ma_postgres_dsn=ma_postgres_dsn,
             jsonl_output=jsonl_output,
             ma_category=ma_category,
+            ma_gate=ma_gate,
             locomo_file=locomo_file,
             locomo_max_conversations=locomo_max_conversations,
             locomo_max_qa_per_conv=locomo_max_qa_per_conv,
@@ -333,6 +345,7 @@ async def _run(
     ma_postgres_dsn: str = "",
     jsonl_output: str = "benchmark_live.jsonl",
     ma_category: str = "all",
+    ma_gate: bool = False,
     locomo_file: str | None = None,
     locomo_max_conversations: int | None = None,
     locomo_max_qa_per_conv: int | None = None,
@@ -399,6 +412,7 @@ async def _run(
             ma_postgres_dsn=ma_postgres_dsn,
             jsonl_output=jsonl_output,
             ma_category=ma_category,
+            ma_gate=ma_gate,
         )
         return
 
@@ -663,6 +677,7 @@ async def _run_multi_agent(
     ma_postgres_dsn: str = "",
     jsonl_output: str = "",
     ma_category: str = "all",
+    ma_gate: bool = False,
 ) -> None:
     """Run multi-agent scenarios standalone (``--multi-agent`` flag)."""
     metrics_list = await _run_multi_agent_inline(
@@ -684,6 +699,36 @@ async def _run_multi_agent(
         sys.exit(1)
 
     _write_reports(metrics_list, output, raw_output)
+
+    if ma_gate:
+        _enforce_ma_gate(metrics_list)
+
+
+def _enforce_ma_gate(metrics_list: list[BenchmarkMetrics]) -> None:
+    """Evaluate the MA acceptance gate and exit non-zero if any threshold fails."""
+    from tests.eval.benchmark.ma_gate import evaluate_gate, gate_passed
+
+    failed_any = False
+    for m in metrics_list:
+        results = evaluate_gate(m)
+        applicable = [r for r in results if r.applicable]
+        if not applicable:
+            continue
+        passed = gate_passed(results)
+        n_pass = sum(1 for r in applicable if r.passed)
+        click.echo(
+            f"MA gate [{m.backend_name}]: {n_pass}/{len(applicable)} thresholds "
+            f"{'PASS' if passed else 'FAIL'}"
+        )
+        for r in applicable:
+            if not r.passed:
+                t = r.threshold
+                click.echo(
+                    f"  ✗ {t.scenario_id}/{t.metric} = {r.value:.3f} (need {t.op} {t.target})"
+                )
+        failed_any = failed_any or not passed
+    if failed_any:
+        sys.exit(1)
 
 
 def _append_jsonl(
