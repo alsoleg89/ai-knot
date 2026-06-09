@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS "ai-knot_facts" (
     state_confidence   DOUBLE PRECISION NOT NULL DEFAULT 1.0,
     claim_key          TEXT NOT NULL DEFAULT '',
     memory_tier        TEXT NOT NULL DEFAULT 'private',
+    event_time         TEXT,
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -121,6 +122,7 @@ class PostgresStorage:
             "state_confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
             "claim_key": "TEXT NOT NULL DEFAULT ''",
             "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
+            "event_time": "TEXT",
         }
         with self._get_conn() as conn:
             cur = conn.execute(
@@ -187,6 +189,7 @@ class PostgresStorage:
                 fact.state_confidence,
                 fact.claim_key,
                 fact.memory_tier,
+                fact.event_time.isoformat() if fact.event_time is not None else None,
             )
             for fact in facts
         ]
@@ -205,10 +208,10 @@ class PostgresStorage:
                     entity, attribute, version, mesi_state,
                     canonical_surface, witness_surface, prompt_surface,
                     slot_key, value_text, qualifiers, state_confidence,
-                    claim_key, memory_tier)
+                    claim_key, memory_tier, event_time)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 rows,
             )
             conn.commit()
@@ -253,7 +256,7 @@ class PostgresStorage:
                           entity, attribute, version, mesi_state,
                           canonical_surface, witness_surface, prompt_surface,
                           slot_key, value_text, qualifiers, state_confidence,
-                          claim_key, memory_tier"""
+                          claim_key, memory_tier, event_time"""
 
     def _fact_from_row(self, row: tuple[Any, ...]) -> Fact:
         return Fact(
@@ -290,6 +293,7 @@ class PostgresStorage:
             state_confidence=float(row[30]) if row[30] is not None else 1.0,
             claim_key=str(row[31]) if len(row) > 31 and row[31] else "",
             memory_tier=str(row[32]) if len(row) > 32 and row[32] else "private",
+            event_time=_parse_datetime(row[33]) if len(row) > 33 and row[33] else None,
         )
 
     def load_active(self, agent_id: str) -> list[Fact]:

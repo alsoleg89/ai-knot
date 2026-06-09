@@ -83,6 +83,8 @@ class YAMLStorage:
         d["valid_from"] = fact.valid_from.isoformat()
         if fact.valid_until is not None:
             d["valid_until"] = fact.valid_until.isoformat()
+        if fact.event_time is not None:
+            d["event_time"] = fact.event_time.isoformat()
         if fact.entity:
             d["entity"] = fact.entity
         if fact.attribute:
@@ -181,6 +183,9 @@ class YAMLStorage:
                     else datetime.now(UTC),
                     valid_until=_parse_datetime(entry["valid_until"])
                     if "valid_until" in entry
+                    else None,
+                    event_time=_parse_datetime(entry["event_time"])
+                    if "event_time" in entry
                     else None,
                     entity=str(entry.get("entity", "")),
                     attribute=str(entry.get("attribute", "")),
@@ -293,6 +298,9 @@ class YAMLStorage:
                     else datetime.now(UTC),
                     valid_until=_parse_datetime(entry["valid_until"])
                     if "valid_until" in entry
+                    else None,
+                    event_time=_parse_datetime(entry["event_time"])
+                    if "event_time" in entry
                     else None,
                     entity=str(entry.get("entity", "")),
                     attribute=str(entry.get("attribute", "")),

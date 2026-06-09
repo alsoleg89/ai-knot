@@ -42,10 +42,10 @@ def test_anchor_not_leaked_into_content(kb: KnowledgeBase) -> None:
     qualifier (the qualifier is what persists and renders); the stored content stays the
     verbatim utterance — no ``[8 May 2023]`` text-prefix.
 
-    Note: ``Fact.event_time`` is set in memory by ``_apply_temporal`` but is not yet
-    persisted by the storage backends (only ``qualifiers["event_date"]`` round-trips).
-    Persisting the structured anchor is a prerequisite for temporal filtering /
-    knowledge-update reasoning (LongMemEval) — tracked separately.
+    Note: ``Fact.event_time`` is set in memory by ``_apply_temporal`` and is now
+    persisted by all storage backends (mirroring ``valid_until``); a dedicated
+    round-trip regression lives in ``test_event_time_persistence.py``. The resolved
+    date is also captured as ``qualifiers["event_date"]`` for rendering.
     """
     fact = kb.add("I went to the support group yesterday", event_time=ANCHOR)
     # Structured anchor set in memory + resolved date captured as a (persisted) qualifier.

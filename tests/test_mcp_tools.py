@@ -53,6 +53,25 @@ class TestToolAdd:
         facts = kb.list_facts()
         assert any("devops" in f.tags for f in facts)
 
+    def test_event_time_anchor_is_persisted(self, kb: KnowledgeBase) -> None:
+        from datetime import UTC, datetime
+
+        tool_add(kb, "User joined Globex", event_time="2023-05-08T00:00:00+00:00")
+        facts = kb.list_facts()
+        assert facts[0].event_time == datetime(2023, 5, 8, tzinfo=UTC)
+        # The anchor must NOT leak into the indexed content (no date text-prefix).
+        assert "2023" not in facts[0].content
+
+    def test_event_time_omitted_when_absent(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "User likes hiking")
+        assert kb.list_facts()[0].event_time is None
+
+    def test_event_time_bad_input_ignored(self, kb: KnowledgeBase) -> None:
+        # An unparseable anchor must not block the add; it is silently dropped.
+        msg = tool_add(kb, "User likes biking", event_time="not-a-date")
+        assert msg.startswith("Added fact [")
+        assert kb.list_facts()[0].event_time is None
+
 
 # ---- tool_recall ------------------------------------------------------------
 
