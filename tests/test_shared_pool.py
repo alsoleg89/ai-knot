@@ -359,6 +359,61 @@ class TestSemanticConflictSeam:
         assert not any("backward compatibility" in t for t in texts)
 
 
+class TestMultiSourceFacetAssembly:
+    """S26 regression: facet-path assembly must select the right shard for each
+    facet (per-facet base_score not collapsed across facets) and must not demote
+    a prolific 'hub' agent's relevant shard on cold-start publish volume.
+    """
+
+    _QUERY = (
+        "How can a system integrate encrypted computation without decryption, "
+        "fault-tolerant qubit state preservation, and real-time task scheduling "
+        "on microcontrollers into a unified pipeline?"
+    )
+
+    def _seed(self, pool: SharedMemoryPool, sqlite_db: SQLiteStorage) -> None:
+        shards = {
+            "agent_a": "Cryptography module Zeph0 does lattice reduction for "
+            "encrypted computation without decryption.",
+            "agent_b": "Quantum module Vynt1 does surface-code cycling for "
+            "fault-tolerant qubit state preservation.",
+            "agent_c": "Firmware module Phex2 does RTOS ceilings for real-time "
+            "task scheduling on microcontrollers.",
+            "agent_d": "Graph module Qorx3 does hypergraph bisection for data "
+            "partitioning across stores.",
+            "agent_e": "Telemetry module Blyn4 does Doppler synchronisation for "
+            "orbital stream alignment.",
+        }
+        for aid, content in shards.items():
+            pool.register(aid)
+            kb = _kb(aid, sqlite_db)
+            fid = kb.add(content).id
+            pool.publish(aid, [fid], kb=kb)
+        # Make agent_a a hub: an extra fact raises its publish count, lowering its
+        # cold-start trust below peers (more published, none used yet).
+        kb_a = _kb("agent_a", sqlite_db)
+        extra = kb_a.add(
+            "A cryptography overview covers encrypted computation at a conceptual level."
+        )
+        pool.publish("agent_a", [extra.id], kb=kb_a)
+
+    def test_all_facet_shards_retrieved_including_low_trust_hub(
+        self, sqlite_db: SQLiteStorage
+    ) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db)
+        self._seed(pool, sqlite_db)
+        # The hub published more, so its cold-start trust is below peers'.
+        assert pool.get_trust("agent_a") < pool.get_trust("agent_b")
+
+        results = pool.recall(self._QUERY, "querier", top_k=5)
+        agents = {f.origin_agent_id for f, _ in results}
+        # Per-facet coverage selects each facet's own shard...
+        assert "agent_b" in agents
+        assert "agent_c" in agents
+        # ...and the low-trust hub's relevant shard is NOT demoted out of the result.
+        assert "agent_a" in agents
+
+
 # ---------------------------------------------------------------------------
 # sync_dirty() — backward compat
 # ---------------------------------------------------------------------------

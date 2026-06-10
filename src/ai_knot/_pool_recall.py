@@ -195,6 +195,10 @@ class _PoolRecallMixin:
             top_k=top_k,
             topic_channel=topic_channel,
             get_trust=self.get_trust,
+            # Known-malicious = an agent whose verifiable claims peers superseded.
+            # Lets the facet path discount adversaries without penalising honest
+            # cold-start publish volume (matches the WIDE recall policy).
+            is_adversary=lambda aid: self._quick_inv_count.get(aid, 0) > 0,
         )
         if facet_result is not None:
             # Clear single-use query vector (facet path exits before flat path).

@@ -37,6 +37,11 @@ _FACET_OVERFETCH = 3
 # Trust floor for counting credible publishers (same as knowledge.py).
 _TRUST_FLOOR_FOR_DIVERSITY = 0.2
 
+# Below this trust an agent is treated as known-malicious (its verifiable claims
+# were actively superseded by peers).  In breadth-oriented assembly only such
+# agents are score-discounted; honest unproven agents keep full score.
+_ADVERSARY_TRUST_FLOOR = 0.2
+
 # Maximum expert agents to consider per facet when expertise routing is on.
 # Higher = better recall but slower; 10 keeps BM25 fast at N=1000.
 _EXPERTISE_TOP_N = 10
@@ -85,6 +90,7 @@ class SharedPoolRecallService:
         top_k: int = 5,
         topic_channel: str = "",
         get_trust: Callable[[str], float] | None = None,
+        is_adversary: Callable[[str], bool] | None = None,
     ) -> list[tuple[Fact, float]] | None:
         """Run the multi-source retrieval pipeline.
 
@@ -150,6 +156,7 @@ class SharedPoolRecallService:
             top_k=top_k,
             get_trust=get_trust,
             requesting_agent_id=requesting_agent_id,
+            is_adversary=is_adversary,
         )
 
         # Step 5: Coverage-aware assembly.
@@ -178,6 +185,7 @@ class SharedPoolRecallService:
         top_k: int,
         get_trust: Callable[[str], float] | None,
         requesting_agent_id: str,
+        is_adversary: Callable[[str], bool] | None = None,
     ) -> dict[str, list[CandidateFact]]:
         """Run BM25 retrieval for each facet independently.
 
@@ -255,7 +263,20 @@ class SharedPoolRecallService:
                     and fact.origin_agent_id
                     and fact.origin_agent_id != requesting_agent_id
                 ):
-                    score *= get_trust(fact.origin_agent_id)
+                    aid = fact.origin_agent_id
+                    if is_adversary is not None:
+                        # Breadth-oriented assembly mirrors WIDE recall: a prolific
+                        # contributor must not rank below peers on cold-start publish
+                        # volume (more facts published, none used yet → lower trust).
+                        # Discount only known-malicious agents — those whose verifiable
+                        # claims peers actively superseded (trust below the adversary
+                        # floor).  Honest unproven agents keep their full score.
+                        if is_adversary(aid):
+                            trust = get_trust(aid)
+                            if trust < _ADVERSARY_TRUST_FLOOR:
+                                score *= trust
+                    else:
+                        score *= get_trust(aid)
 
                 # Step 4: Score specificity and near-miss.
                 spec = self._specificity.score(fact)
@@ -274,28 +295,24 @@ class SharedPoolRecallService:
             candidates.sort(key=lambda c: c.final_score, reverse=True)
             candidates_by_facet[facet.facet_id] = candidates
 
-        # Cross-populate facet_scores: for each candidate, compute its
-        # relevance to ALL facets (not just the one it was retrieved for).
-        # This helps the assembler understand multi-facet coverage.
-        all_candidates: dict[str, CandidateFact] = {}
+        # Cross-populate facet_scores so the assembler can see each candidate's
+        # relevance to ALL facets (multi-facet coverage), WITHOUT collapsing the
+        # per-facet base_score.  Each facet keeps its OWN CandidateFact — and thus
+        # its own final_score — so greedy coverage selects the right shard for each
+        # facet.  The previous merge shared a single object per fact, giving every
+        # facet the first-retrieved facet's base_score; every facet then resolved to
+        # the same global-best fact and all but one target shard was lost.
+        global_facet_scores: dict[str, dict[str, float]] = {}
         for facet_id, candidates in candidates_by_facet.items():
             for cand in candidates:
-                fid = cand.fact.id
-                if fid in all_candidates:
-                    # Merge facet scores into existing candidate.
-                    all_candidates[fid].facet_scores[facet_id] = cand.facet_scores.get(
-                        facet_id, 0.0
-                    )
-                else:
-                    all_candidates[fid] = cand
+                global_facet_scores.setdefault(cand.fact.id, {})[facet_id] = cand.facet_scores.get(
+                    facet_id, 0.0
+                )
+        for candidates in candidates_by_facet.values():
+            for cand in candidates:
+                cand.facet_scores = dict(global_facet_scores[cand.fact.id])
 
-        # Rebuild per-facet lists using the merged candidates.
-        merged_by_facet: dict[str, list[CandidateFact]] = {}
-        for facet_id, candidates in candidates_by_facet.items():
-            merged = [all_candidates[c.fact.id] for c in candidates]
-            merged_by_facet[facet_id] = merged
-
-        return merged_by_facet
+        return candidates_by_facet
 
     # ------------------------------------------------------------------
     # V3 pipeline
