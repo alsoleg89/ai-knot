@@ -296,6 +296,8 @@ class SharedMemoryPool(_PoolRecallMixin):
                 new_fact.memory_tier = "pool"
                 new_fact.valid_from = now
                 new_fact.valid_until = None
+                # Provenance lineage (persisted via qualifiers): who published this fact.
+                new_fact.qualifiers["published_by"] = agent_id
                 # Optional publish-time scope override; otherwise the fact keeps the
                 # visibility_scope assigned at add() time.
                 if visibility_scope is not None:
@@ -323,6 +325,8 @@ class SharedMemoryPool(_PoolRecallMixin):
                     new_fact.mesi_state = MESIState.MODIFIED
                     new_fact.version = next_version
                     next_version += 1
+                    # Provenance lineage: record the fact this one superseded via CAS.
+                    new_fact.qualifiers["supersedes_id"] = old.id
                     # Quick invalidation: a different agent superseded this slot within the window.
                     if old.origin_agent_id and old.origin_agent_id != agent_id:
                         age_s = (now - old.valid_from).total_seconds()
@@ -396,6 +400,7 @@ class SharedMemoryPool(_PoolRecallMixin):
         for fact in shared:
             if fact.id in fact_ids and fact.is_active() and fact.origin_agent_id == agent_id:
                 fact.memory_tier = tier
+                fact.qualifiers["promoted_by"] = agent_id  # provenance lineage
                 promoted += 1
         if promoted:
             self._storage.save(_SHARED_NAMESPACE, shared)

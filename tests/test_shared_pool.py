@@ -791,3 +791,67 @@ class TestAbstention:
         pool_sqlite.publish("agent_a", [fact.id], kb=kb)
         pool_sqlite.recall("FluxCD deployment", "agent_b", top_k=5)
         assert pool_sqlite.last_recall_abstains is False
+
+
+class TestProvenance:
+    """Provenance lineage (published_by / promoted_by / supersedes_id) persisted via qualifiers."""
+
+    def test_published_by_set_and_persists(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        # Reload from storage to prove the lineage persisted (not just in-memory).
+        shared = pool_sqlite.list_shared_facts()
+        pub = next(f for f in shared if f.content == "Alex earns 95k")
+        assert pub.provenance.published_by == "agent_a"
+        assert pub.provenance.origin_agent == "agent_a"
+
+    def test_supersedes_id_records_cas_predecessor(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb_a = _kb("agent_a", sqlite_db)
+        kb_b = _kb("agent_b", sqlite_db)
+        f1 = kb_a.add_resolved(
+            [
+                Fact(
+                    content="Alex at Globex",
+                    entity="Alex",
+                    attribute="employer",
+                    value_text="Globex",
+                )
+            ]
+        )[0]
+        pool_sqlite.publish("agent_a", [f1.id], kb=kb_a)
+        f2 = kb_b.add_resolved(
+            [
+                Fact(
+                    content="Alex at Initech",
+                    entity="Alex",
+                    attribute="employer",
+                    value_text="Initech",
+                )
+            ]
+        )[0]
+        pool_sqlite.publish("agent_b", [f2.id], kb=kb_b)
+        shared = pool_sqlite.list_shared_facts()
+        active = [f for f in shared if f.is_active() and f.slot_key == "Alex::employer"]
+        assert len(active) == 1
+        assert active[0].provenance.supersedes_id == f1.id
+
+    def test_promoted_by_set(self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        pub = pool_sqlite.publish("agent_a", [fact.id], kb=kb)[0]
+        pool_sqlite.promote("agent_a", [pub.id], tier="org")
+        promoted = next(f for f in pool_sqlite.list_shared_facts() if f.id == pub.id)
+        assert promoted.provenance.promoted_by == "agent_a"
+        assert promoted.memory_tier == "org"
+
+    def test_private_fact_has_empty_lineage(self) -> None:
+        # A freshly created fact has no publish/promote lineage yet.
+        fact = Fact(content="x", origin_agent_id="agent_a")
+        assert fact.provenance.published_by == ""
+        assert fact.provenance.promoted_by == ""
+        assert fact.provenance.supersedes_id == ""
