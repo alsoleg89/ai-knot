@@ -17,7 +17,7 @@ from ai_knot._query_intent import (
     _PoolQueryIntent,
     _RecallMeta,
 )
-from ai_knot.multi_agent.canonical import ClaimFamilyResolver
+from ai_knot.multi_agent.canonical import ClaimFamilyResolver, SemanticConflictResolver
 from ai_knot.multi_agent.models import ExplorationMode
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
@@ -31,6 +31,12 @@ _SHARED_NAMESPACE = "__shared__"
 _POOL_DEBUG = bool(os.environ.get("AI_KNOT_POOL_DEBUG", ""))
 _POOL_RECALL_OVERFETCH = 3
 _COVERAGE_SCORE_FLOOR: float = 0.01
+# Adaptive truncation: a tail result is dropped when its score falls below this
+# fraction of the top result's score — an order of magnitude below the best match
+# is noise, not evidence.  Returns a confident set instead of padding to top_k
+# with quota-fillers (better signal for an agent reader; higher precision).  The
+# top result is always kept, so a thin-but-present answer still surfaces.
+_RELEVANCE_FLOOR_FRAC: float = 0.15
 # Trust below this is "known-malicious": an agent whose verifiable claims were
 # actively superseded by peers (adversary floor ≈ 0.1), distinct from a merely
 # unseen agent (Bayesian prior ≈ 0.3+).  Facts from such agents are discounted even
@@ -101,6 +107,7 @@ class _PoolRecallMixin:
     _quick_inv_count: dict[str, int]
     _recall_service: SharedPoolRecallService
     _claim_resolver: ClaimFamilyResolver
+    _semantic_resolver: SemanticConflictResolver | None
     _query_router: QueryShapeRouter
     _known_version: dict[str, int]
     _read_scopes: dict[str, set[str]]
@@ -188,6 +195,10 @@ class _PoolRecallMixin:
             top_k=top_k,
             topic_channel=topic_channel,
             get_trust=self.get_trust,
+            # Known-malicious = an agent whose verifiable claims peers superseded.
+            # Lets the facet path discount adversaries without penalising honest
+            # cold-start publish volume (matches the WIDE recall policy).
+            is_adversary=lambda aid: self._quick_inv_count.get(aid, 0) > 0,
         )
         if facet_result is not None:
             # Clear single-use query vector (facet path exits before flat path).
@@ -266,6 +277,14 @@ class _PoolRecallMixin:
                 canonical_mode=True,
                 get_trust=self.get_trust,
             )
+            # Optional semantic pass (opt-in, e.g. LLM-backed): resolve value
+            # conflicts the deterministic resolver missed — rival claims that
+            # share a subject but diverge lexically.  Default is None, so the
+            # common path stays deterministic and dependency-free.
+            if self._semantic_resolver is not None and len(pairs) > 1:
+                superseded_ids = self._semantic_resolver([f for f, _ in pairs])
+                if superseded_ids:
+                    pairs = [(f, s) for f, s in pairs if f.id not in superseded_ids]
 
         # Apply per-agent trust discount + tier boost before final cutoff.
         # For WIDE (empty-KB) queries, skip the trust discount for ordinary agents:
@@ -358,7 +377,20 @@ class _PoolRecallMixin:
             discounted = capped
 
         discounted.sort(key=lambda x: x[1], reverse=True)
-        top_results = discounted[:top_k]
+        # Adaptive truncation: drop the clearly-irrelevant tail rather than padding
+        # to top_k.  Keep the top result unconditionally, then keep each subsequent
+        # result only while it clears a relevance floor derived from the top score.
+        # This returns a confident evidence set (better agent-reader signal, higher
+        # precision) instead of quota-filling neighbours.  MULTI_SOURCE queries exit
+        # via the facet path above and never reach here, so breadth-oriented
+        # assembly is unaffected.
+        if discounted:
+            rel_floor = max(_COVERAGE_SCORE_FLOOR, _RELEVANCE_FLOOR_FRAC * discounted[0][1])
+            confident = [discounted[0]]
+            confident.extend((f, s) for f, s in discounted[1:] if s >= rel_floor)
+            top_results = confident[:top_k]
+        else:
+            top_results = []
 
         # Track recall hits only for facts actually returned — not over-fetched
         # candidates that were discarded after trust discount.

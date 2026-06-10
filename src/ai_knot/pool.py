@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from ai_knot._pool_helpers import _extract_claim_key
 from ai_knot._pool_recall import _SHARED_NAMESPACE, _PoolRecallMixin
 from ai_knot._query_intent import _RecallMeta
-from ai_knot.multi_agent.canonical import ClaimFamilyResolver
+from ai_knot.multi_agent.canonical import ClaimFamilyResolver, SemanticConflictResolver
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
 from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
@@ -100,7 +100,11 @@ class SharedMemoryPool(_PoolRecallMixin):
     _TIER_BOOST: dict[str, float] = {"private": 1.0, "pool": 1.0, "org": 1.05}
 
     def __init__(
-        self, storage: StorageBackend | None = None, *, persist_stats: bool = False
+        self,
+        storage: StorageBackend | None = None,
+        *,
+        persist_stats: bool = False,
+        semantic_resolver: SemanticConflictResolver | None = None,
     ) -> None:
         self._storage: StorageBackend = storage or YAMLStorage()
         self._bm25 = BM25Retriever(skip_prf=True)
@@ -139,6 +143,10 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._query_vector: list[float] | None = None
         self._recall_service = SharedPoolRecallService()
         self._claim_resolver = ClaimFamilyResolver()
+        # Opt-in semantic conflict resolver (e.g. LLM-backed) for value-conflicts
+        # the deterministic resolver cannot detect.  Default None → deterministic,
+        # dependency-free path; core never imports an LLM.
+        self._semantic_resolver = semantic_resolver
         self._query_router = QueryShapeRouter()
         # Per-agent read-access grants for named visibility scopes (Collaborative Memory
         # access-control projection). agent_id -> set of scopes it may read. In-memory.

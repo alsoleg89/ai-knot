@@ -82,11 +82,17 @@ _V3_INTENT_MAP: dict[RetrievalIntent, _PoolQueryIntent] = {
 # WIDE (empty-KB) queries also run the resolver — conflict-signal gating inside
 # ClaimFamilyResolver ensures only clusters with an explicit update marker are
 # collapsed, so complementary facts are never accidentally eliminated.
+# INCIDENT is included for the same reason: a canonical value-question that merely
+# mentions an incident-domain noun ("What is our Sev1 *alert* SLA?", "When is
+# *incident* commander coverage required?") is classified INCIDENT, yet still needs
+# stale competing claims resolved.  The conflict-stem gate keeps genuine
+# incident-timeline facts (no update markers, complementary events) intact.
 _CANONICAL_RESOLVER_INTENTS = frozenset(
     {
         _PoolQueryIntent.ENTITY_LOOKUP,
         _PoolQueryIntent.AGGREGATION,
         _PoolQueryIntent.GENERAL,
+        _PoolQueryIntent.INCIDENT,
     }
 )
 

@@ -225,6 +225,194 @@ class TestPoolRecall:
         _, score = results[0]
         assert score < 1.0  # discounted from full score
 
+    def test_adaptive_truncation_drops_weak_tail(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """A query with one dominant match returns a confident set, not top_k
+        padded with near-irrelevant neighbours (adaptive truncation)."""
+        kb = _kb("agent_a", sqlite_db)
+        ids = [
+            kb.add("Quarterly revenue forecast for the platform team is 2 million dollars").id,
+            kb.add("The platform on-call rotation covers weekends").id,
+            kb.add("Team lunch is scheduled for Friday afternoon").id,
+            kb.add("The office printer on floor 3 needs a toner refill").id,
+            kb.add("Parking permits renew at the start of each calendar year").id,
+        ]
+        pool_sqlite.publish("agent_a", ids, kb=kb)
+
+        results = pool_sqlite.recall("quarterly revenue forecast platform team", "agent_b", top_k=5)
+        # The dominant match is present and ranked first.
+        assert "revenue forecast" in results[0][0].content.lower()
+        # The weak tail is truncated — fewer than top_k, not padded with the
+        # unrelated printer/parking facts.
+        assert len(results) < 5
+        assert not any("printer" in f.content.lower() for f, _ in results)
+        # Truncation never empties a non-empty result set.
+        assert len(results) >= 1
+
+
+class TestIncidentCanonicalResolution:
+    """Regression: canonical value-questions that merely mention an incident-domain
+    noun ("alert", "incident") must still resolve stale competing claims, and
+    current corrections (carrying an update marker) survive as duplicates rather
+    than collapsing the whole family to one winner.
+    """
+
+    def test_incident_value_question_resolves_stale_claim(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb_a = _kb("agent_a", sqlite_db)
+        stale = kb_a.add(
+            "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page."
+        )
+        pool_sqlite.publish("agent_a", [stale.id], kb=kb_a)
+
+        kb_b = _kb("agent_b", sqlite_db)
+        correction = kb_b.add(
+            "Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025."
+        )
+        pool_sqlite.publish("agent_b", [correction.id], kb=kb_b)
+
+        # "alert" routes this to the INCIDENT intent.  Before the fix INCIDENT
+        # skipped the canonical resolver, leaving the stale 10-minute claim in the
+        # top-k; now the resolver runs and the conflict-stem ("tightened") cluster
+        # eliminates the superseded marker-less claim.
+        results = pool_sqlite.recall(
+            "What is our Sev1 alert acknowledgement SLA?", "querier", top_k=3
+        )
+        texts = [f.content.lower() for f, _ in results]
+        assert any("4 minutes" in t for t in texts), "correction must surface"
+        assert not any("10 minutes" in t for t in texts), "stale claim must be resolved out"
+
+    def test_current_corrections_survive_as_duplicates(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        pool_sqlite.register("agent_c")
+        kb_a = _kb("agent_a", sqlite_db)
+        stale = kb_a.add(
+            "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page."
+        )
+        pool_sqlite.publish("agent_a", [stale.id], kb=kb_a)
+
+        kb_b = _kb("agent_b", sqlite_db)
+        corr_b = kb_b.add("Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025.")
+        pool_sqlite.publish("agent_b", [corr_b.id], kb=kb_b)
+
+        kb_c = _kb("agent_c", sqlite_db)
+        corr_c = kb_c.add(
+            "Sev1 alert acknowledgement SLA was updated to 4 minutes in the revised policy."
+        )
+        pool_sqlite.publish("agent_c", [corr_c.id], kb=kb_c)
+
+        results = pool_sqlite.recall(
+            "What is our Sev1 alert acknowledgement SLA?", "querier", top_k=5
+        )
+        marker_facts = [f for f, _ in results if "4 minutes" in f.content.lower()]
+        # Both current corrections (each carrying an update marker) are kept.
+        assert len(marker_facts) >= 2, "current corrections survive as duplicates"
+        assert not any("10 minutes" in f.content.lower() for f, _ in results)
+
+
+class TestSemanticConflictSeam:
+    """The optional semantic-resolver seam resolves value-conflicts the
+    deterministic resolver cannot detect (rival claims sharing a subject but
+    diverging lexically), while the default path stays deterministic and never
+    imports an LLM.
+    """
+
+    _STALE = "The REST collector endpoint supports both protocols for backward compatibility."
+    _CURRENT = "The REST collector endpoint has been deprecated since the April 2025 release."
+    _QUERY = "Is the REST collector endpoint still supported?"
+
+    @staticmethod
+    def _stub_resolver(candidates: list[Fact]) -> set[str]:
+        # Stand-in for an LLM judgement: a "deprecated" claim supersedes the
+        # competing "backward compatibility" claim about the same endpoint.
+        if any("deprecated" in f.content.lower() for f in candidates):
+            return {f.id for f in candidates if "backward compatibility" in f.content.lower()}
+        return set()
+
+    def _seed(self, pool: SharedMemoryPool, sqlite_db: SQLiteStorage) -> None:
+        pool.register("agent_a")
+        pool.register("agent_b")
+        kb_a = _kb("agent_a", sqlite_db)
+        stale = kb_a.add(self._STALE)
+        pool.publish("agent_a", [stale.id], kb=kb_a)
+        kb_b = _kb("agent_b", sqlite_db)
+        current = kb_b.add(self._CURRENT)
+        pool.publish("agent_b", [current.id], kb=kb_b)
+
+    def test_default_keeps_both_lexically_divergent_claims(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db)
+        self._seed(pool, sqlite_db)
+        texts = [f.content.lower() for f, _ in pool.recall(self._QUERY, "querier", top_k=5)]
+        # The deterministic resolver cannot group these — both survive.
+        assert any("backward compatibility" in t for t in texts)
+        assert any("deprecated" in t for t in texts)
+
+    def test_injected_resolver_drops_superseded_claim(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db, semantic_resolver=self._stub_resolver)
+        self._seed(pool, sqlite_db)
+        texts = [f.content.lower() for f, _ in pool.recall(self._QUERY, "querier", top_k=5)]
+        # The semantic pass removes the stale claim; the current one remains.
+        assert any("deprecated" in t for t in texts)
+        assert not any("backward compatibility" in t for t in texts)
+
+
+class TestMultiSourceFacetAssembly:
+    """S26 regression: facet-path assembly must select the right shard for each
+    facet (per-facet base_score not collapsed across facets) and must not demote
+    a prolific 'hub' agent's relevant shard on cold-start publish volume.
+    """
+
+    _QUERY = (
+        "How can a system integrate encrypted computation without decryption, "
+        "fault-tolerant qubit state preservation, and real-time task scheduling "
+        "on microcontrollers into a unified pipeline?"
+    )
+
+    def _seed(self, pool: SharedMemoryPool, sqlite_db: SQLiteStorage) -> None:
+        shards = {
+            "agent_a": "Cryptography module Zeph0 does lattice reduction for "
+            "encrypted computation without decryption.",
+            "agent_b": "Quantum module Vynt1 does surface-code cycling for "
+            "fault-tolerant qubit state preservation.",
+            "agent_c": "Firmware module Phex2 does RTOS ceilings for real-time "
+            "task scheduling on microcontrollers.",
+            "agent_d": "Graph module Qorx3 does hypergraph bisection for data "
+            "partitioning across stores.",
+            "agent_e": "Telemetry module Blyn4 does Doppler synchronisation for "
+            "orbital stream alignment.",
+        }
+        for aid, content in shards.items():
+            pool.register(aid)
+            kb = _kb(aid, sqlite_db)
+            fid = kb.add(content).id
+            pool.publish(aid, [fid], kb=kb)
+        # Make agent_a a hub: an extra fact raises its publish count, lowering its
+        # cold-start trust below peers (more published, none used yet).
+        kb_a = _kb("agent_a", sqlite_db)
+        extra = kb_a.add(
+            "A cryptography overview covers encrypted computation at a conceptual level."
+        )
+        pool.publish("agent_a", [extra.id], kb=kb_a)
+
+    def test_all_facet_shards_retrieved_including_low_trust_hub(
+        self, sqlite_db: SQLiteStorage
+    ) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db)
+        self._seed(pool, sqlite_db)
+        # The hub published more, so its cold-start trust is below peers'.
+        assert pool.get_trust("agent_a") < pool.get_trust("agent_b")
+
+        results = pool.recall(self._QUERY, "querier", top_k=5)
+        agents = {f.origin_agent_id for f, _ in results}
+        # Per-facet coverage selects each facet's own shard...
+        assert "agent_b" in agents
+        assert "agent_c" in agents
+        # ...and the low-trust hub's relevant shard is NOT demoted out of the result.
+        assert "agent_a" in agents
+
 
 # ---------------------------------------------------------------------------
 # sync_dirty() — backward compat
