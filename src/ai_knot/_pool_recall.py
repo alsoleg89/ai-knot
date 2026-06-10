@@ -31,6 +31,12 @@ _SHARED_NAMESPACE = "__shared__"
 _POOL_DEBUG = bool(os.environ.get("AI_KNOT_POOL_DEBUG", ""))
 _POOL_RECALL_OVERFETCH = 3
 _COVERAGE_SCORE_FLOOR: float = 0.01
+# Trust below this is "known-malicious": an agent whose verifiable claims were
+# actively superseded by peers (adversary floor ≈ 0.1), distinct from a merely
+# unseen agent (Bayesian prior ≈ 0.3+).  Facts from such agents are discounted even
+# for WIDE/onboarding queries — a newcomer must not be served actively-invalidated
+# data.  Matches the diversity publisher floor used downstream.
+_ADVERSARY_TRUST_FLOOR: float = 0.2
 
 
 def _scope_visible(fact: Fact, requesting_agent_id: str, read_scopes: set[str]) -> bool:
@@ -92,6 +98,7 @@ class _PoolRecallMixin:
     _last_recall_meta: _RecallMeta | None
     _fact_consumers: dict[str, set[str]]
     _used_count: dict[str, int]
+    _quick_inv_count: dict[str, int]
     _recall_service: SharedPoolRecallService
     _claim_resolver: ClaimFamilyResolver
     _query_router: QueryShapeRouter
@@ -261,16 +268,27 @@ class _PoolRecallMixin:
             )
 
         # Apply per-agent trust discount + tier boost before final cutoff.
-        # For WIDE (empty-KB) queries, skip trust discount: the querier has no
-        # interaction history with the pool and cannot know which agents are
-        # trustworthy.  Applying trust would unfairly penalise agents that
-        # happened not to appear in earlier (unrelated) queries.
+        # For WIDE (empty-KB) queries, skip the trust discount for ordinary agents:
+        # the querier has no interaction history and cannot know which agents are
+        # trustworthy, so penalising agents that merely did not appear in earlier
+        # queries would be unfair.  Known-malicious agents are the exception — a
+        # newcomer must still not be served facts from an agent whose verifiable
+        # claims peers actively superseded (trust below the adversary floor).
         apply_trust = not _v3_is_wide
         discounted: list[tuple[Fact, float]] = []
         for fact, score in pairs:
-            if apply_trust and fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
-                trust = self.get_trust(fact.origin_agent_id)
-                score *= trust
+            aid = fact.origin_agent_id
+            if aid and aid != requesting_agent_id:
+                if apply_trust:
+                    score *= self.get_trust(aid)
+                elif self._quick_inv_count.get(aid, 0) > 0:
+                    # WIDE mode: only suppress known-malicious agents.  An agent can
+                    # sit below the adversary floor only if peers superseded its
+                    # verifiable claims, so this cheap pre-check skips the trust math
+                    # for the common no-invalidation case (keeps WIDE recall fast).
+                    trust = self.get_trust(aid)
+                    if trust < _ADVERSARY_TRUST_FLOOR:
+                        score *= trust
             # Tier-aware scoring: org-tier facts get a small boost.
             score *= self._TIER_BOOST.get(fact.memory_tier, 1.0)
             discounted.append((fact, score))

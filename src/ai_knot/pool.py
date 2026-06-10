@@ -69,9 +69,12 @@ class SharedMemoryPool(_PoolRecallMixin):
 
     where *published* is the number of facts an agent has contributed,
     *used* is the total number of recall hits across all queries, and
-    *quick_invalidation_rate* is the fraction of the agent's facts that were
-    superseded by a different agent within ``_QUICK_INV_WINDOW_S`` seconds —
-    a signal that the original data was stale or low-quality.
+    *quick_invalidation_rate* is the fraction of the agent's *verifiable*
+    (slot-addressed) publish events that a different agent superseded within
+    ``_QUICK_INV_WINDOW_S`` seconds — a signal that the original data was stale or
+    low-quality.  Taking the rate over slot events (not total publish volume) means
+    free-standing facts cannot launder a poor track record, while re-asserting a
+    slot with a corrected value lets a penalised agent recover.
 
     Usage::
 
@@ -112,6 +115,16 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._publish_count: dict[str, int] = {}
         self._used_count: dict[str, int] = {}
         self._quick_inv_count: dict[str, int] = {}
+        # Count of verifiable (slot-addressed) publish events per agent — the
+        # denominator of the quick-invalidation penalty.  Counting slot *events*
+        # (not total publishes, and not distinct slot keys) does two things:
+        #   * free-standing publishes do not count → an agent cannot launder a poor
+        #     track record by flooding the pool with unverifiable facts;
+        #   * re-asserting a slot with a corrected value DOES count → an invalidated
+        #     agent rehabilitates by making good verifiable claims that survive.
+        # Stale replays rejected by the monotonic-CAS guard are never published, so
+        # they never count here either.
+        self._slot_publish_count: dict[str, int] = {}
         # MESI: per-agent high-water mark of versions pulled from shared pool.
         self._known_version: dict[str, int] = {}
         # Serialise concurrent publish() calls on the same pool instance.
@@ -184,6 +197,7 @@ class SharedMemoryPool(_PoolRecallMixin):
             "used_count": dict(self._used_count),
             "quick_inv_count": dict(self._quick_inv_count),
             "fact_consumers": {k: sorted(v) for k, v in self._fact_consumers.items()},
+            "slot_publish_count": dict(self._slot_publish_count),
         }
 
     def _restore_stats(self, data: dict[str, object]) -> None:
@@ -200,6 +214,9 @@ class SharedMemoryPool(_PoolRecallMixin):
         fc = data.get("fact_consumers")
         if isinstance(fc, dict):
             self._fact_consumers = {str(k): set(v) for k, v in fc.items()}
+        sk = data.get("slot_publish_count")
+        if isinstance(sk, dict):
+            self._slot_publish_count = {str(k): int(v) for k, v in sk.items()}
 
     def flush_stats(self) -> None:
         """Persist the pool's trust/usage telemetry if persistence is enabled.
@@ -217,6 +234,10 @@ class SharedMemoryPool(_PoolRecallMixin):
 
         Formula:
             ``trust = min(1, used / published) × (1 − quick_inv_rate)``
+        where ``quick_inv_rate = quick_inv / verifiable_slot_publishes``.  Taking the
+        rate over verifiable (slot-addressed) publish events — not total publish
+        volume — means free-standing facts cannot dilute the penalty, while
+        re-asserting a slot with a corrected value lets a penalised agent recover.
 
         Falls back to ``_PROVENANCE_DISCOUNT`` when the agent has not yet
         published any facts (no track record).
@@ -240,7 +261,13 @@ class SharedMemoryPool(_PoolRecallMixin):
         quality = min(
             1.0, (used + _PRIOR_WEIGHT * _PROVENANCE_DISCOUNT) / (published + _PRIOR_WEIGHT)
         )
-        inv_penalty = quick_inv / published
+        # The quick-invalidation penalty is the rate of peer overturns over the
+        # agent's VERIFIABLE (slot-addressed) publish events — not over total publish
+        # volume.  This makes trust resistant to reputation-laundering (free-standing
+        # spam does not lower the rate) while still allowing recovery: re-asserting a
+        # slot with a corrected value adds a verifiable event and dilutes the penalty.
+        verifiable = self._slot_publish_count.get(agent_id, 0)
+        inv_penalty = min(1.0, quick_inv / verifiable) if verifiable else 0.0
         return max(0.1, quality * (1.0 - inv_penalty))
 
     def publish(
@@ -316,6 +343,10 @@ class SharedMemoryPool(_PoolRecallMixin):
         now = datetime.now(UTC)
         published: list[Fact] = []
         quick_inv_updates: dict[str, int] = {}
+        # Verifiable (slot-addressed) publish events the agent makes in this call —
+        # applied to the slot-publish ledger after the storage transaction (mirrors the
+        # quick_inv_updates pattern so atomic_update retries stay side-effect-free).
+        slot_events: list[str] = []
 
         def _merge(shared: list[Fact]) -> list[Fact]:
             # Index active shared facts by slot_key for O(1) CAS lookup.
@@ -367,6 +398,16 @@ class SharedMemoryPool(_PoolRecallMixin):
                     if old.id == fact.id:
                         # Same fact already published as the active version — no-op.
                         continue
+                    # Monotonic CAS: reject a stale replay.  If this incoming fact was
+                    # already published and then superseded (its id is in the pool as an
+                    # inactive copy), it must not re-claim a slot a *different* agent now
+                    # holds.  Otherwise an agent could undo a peer's legitimate update —
+                    # or re-poison a corrected slot — simply by re-sending its old fact.
+                    # Re-asserting a value requires a fresh fact, not a replay.
+                    if old.origin_agent_id != agent_id and new_fact.id in existing_ids:
+                        prior = next((f for f in shared if f.id == new_fact.id), None)
+                        if prior is not None and not prior.is_active(now):
+                            continue
                     # Slot-addressed CAS: close old version, insert new.
                     old.valid_until = now
                     old.mesi_state = MESIState.INVALID
@@ -396,6 +437,10 @@ class SharedMemoryPool(_PoolRecallMixin):
 
                 shared.append(new_fact)
                 published.append(new_fact)
+                # Record the verifiable (slot-addressed) publish event for trust
+                # accounting.  Stale replays rejected above never reach this point.
+                if cas_key:
+                    slot_events.append(cas_key)
 
             return shared
 
@@ -416,6 +461,10 @@ class SharedMemoryPool(_PoolRecallMixin):
         # Apply trust-tracking side effects outside the storage transaction.
         for agt, count in quick_inv_updates.items():
             self._quick_inv_count[agt] = self._quick_inv_count.get(agt, 0) + count
+        if slot_events:
+            self._slot_publish_count[agent_id] = self._slot_publish_count.get(agent_id, 0) + len(
+                slot_events
+            )
 
         if published:
             self._publish_count[agent_id] = self._publish_count.get(agent_id, 0) + len(published)
