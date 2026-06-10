@@ -26,6 +26,7 @@ from typing import Any
 
 from ai_knot._mcp_tools import (
     tool_add,
+    tool_add_resolved,
     tool_capabilities,
     tool_forget,
     tool_health,
@@ -177,6 +178,18 @@ def _make_server(kb: KnowledgeBase) -> Any:
             tags=tags,
             event_time=event_time,
         )
+
+    @app.tool()
+    def add_resolved(facts: list[dict[str, Any]]) -> str:
+        """Insert pre-structured facts through supersession (no LLM extraction).
+
+        Each fact is a dict with a required ``content`` and optional ``entity``,
+        ``attribute``, ``value_text``, ``slot_key`` and ``event_time`` (ISO-8601).
+        A fact addressing an existing slot with a different value supersedes it,
+        exactly as inside ``learn()``. Use this to ingest already-resolved facts
+        (e.g. structured knowledge shared by another agent) without an LLM call.
+        """
+        return tool_add_resolved(kb, facts)
 
     @app.tool()
     def recall(query: str, top_k: int = 5) -> str:

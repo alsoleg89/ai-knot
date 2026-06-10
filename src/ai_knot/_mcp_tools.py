@@ -9,9 +9,10 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime
+from typing import Any
 
 from ai_knot.knowledge import KnowledgeBase
-from ai_knot.types import ConversationTurn, MemoryType
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 
 def _parse_event_time(event_time: str | None) -> datetime | None:
@@ -72,6 +73,55 @@ def tool_add(
     return f"Added fact [{fact.id}]: {fact.content}"
 
 
+def tool_add_resolved(kb: KnowledgeBase, facts: list[dict[str, Any]]) -> str:
+    """Insert pre-structured facts through the supersession pipeline (no LLM).
+
+    Each entry in *facts* is a dict with a required ``content`` and optional
+    ``entity``, ``attribute``, ``value_text``, ``slot_key`` and ``event_time``
+    (ISO-8601). A fact addressing an existing active slot with a *different* value
+    supersedes it (knowledge-update), exactly as inside ``learn()``; a fact with no
+    slot and no ``entity`` + ``attribute`` is inserted as-is. This is the clean,
+    dependency-free structured-knowledge seam — the multi-agent path for ingesting
+    already-resolved facts (e.g. from another agent) without an LLM extraction call.
+
+    Args:
+        kb: The knowledge base instance.
+        facts: List of structured fact specs (see above).
+
+    Returns:
+        JSON array of the inserted/updated facts: ``id``, ``content``,
+        ``slot_key``, ``version``.
+    """
+    built: list[Fact] = []
+    for spec in facts:
+        content = str(spec.get("content", "")).strip()
+        if not content:
+            raise ValueError("each fact requires a non-empty 'content'")
+        fact = Fact(
+            content=content,
+            entity=str(spec.get("entity", "")),
+            attribute=str(spec.get("attribute", "")),
+            value_text=str(spec.get("value_text", "")),
+            slot_key=str(spec.get("slot_key", "")),
+        )
+        event_time = _parse_event_time(spec.get("event_time"))
+        if event_time is not None:
+            fact.event_time = event_time
+        built.append(fact)
+    inserted = kb.add_resolved(built)
+    return json.dumps(
+        [
+            {
+                "id": f.id,
+                "content": f.content,
+                "slot_key": f.slot_key,
+                "version": f.version,
+            }
+            for f in inserted
+        ]
+    )
+
+
 def tool_recall(kb: KnowledgeBase, query: str, *, top_k: int = 5) -> str:
     """Recall relevant facts for a query.
 
@@ -120,6 +170,10 @@ def tool_capabilities() -> str:
     """
     tools = [
         {"name": "add", "description": "Store a single fact"},
+        {
+            "name": "add_resolved",
+            "description": "Insert pre-structured facts through supersession (no LLM)",
+        },
         {"name": "learn", "description": "Extract and store facts from a conversation"},
         {"name": "recall", "description": "Retrieve relevant facts as text"},
         {"name": "recall_json", "description": "Retrieve relevant facts as JSON array"},

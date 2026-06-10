@@ -9,6 +9,7 @@ import pytest
 
 from ai_knot._mcp_tools import (
     tool_add,
+    tool_add_resolved,
     tool_capabilities,
     tool_forget,
     tool_health,
@@ -121,6 +122,7 @@ class TestToolCapabilities:
         names = {item["name"] for item in data}
         expected = {
             "add",
+            "add_resolved",
             "learn",
             "recall",
             "recall_json",
@@ -278,3 +280,67 @@ class TestToolRecallWithTrace:
         # pack_fact_ids are valid hex strings
         for fid in result["pack_fact_ids"]:
             assert len(fid) == 8
+
+
+class TestToolAddResolved:
+    def test_inserts_and_returns_json(self, kb: KnowledgeBase) -> None:
+        out = tool_add_resolved(
+            kb,
+            [{"content": "User works at Globex", "entity": "user", "attribute": "employer"}],
+        )
+        rows = json.loads(out)
+        assert len(rows) == 1
+        assert rows[0]["content"] == "User works at Globex"
+        assert rows[0]["slot_key"] == "user::employer"
+
+    def test_same_slot_new_value_supersedes(self, kb: KnowledgeBase) -> None:
+        tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User works at Acme",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "value_text": "Acme",
+                }
+            ],
+        )
+        tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User works at Globex",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "value_text": "Globex",
+                }
+            ],
+        )
+        active = [f for f in kb.list_facts() if f.is_active() and f.attribute == "employer"]
+        assert len(active) == 1
+        assert active[0].value_text == "Globex"
+
+    def test_empty_content_rejected(self, kb: KnowledgeBase) -> None:
+        with pytest.raises(ValueError, match="non-empty 'content'"):
+            tool_add_resolved(kb, [{"entity": "user", "attribute": "employer"}])
+
+    def test_event_time_preserved(self, kb: KnowledgeBase) -> None:
+        out = tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User joined the company",
+                    "entity": "user",
+                    "attribute": "join",
+                    "value_text": "joined",
+                    "event_time": "2023-05-08T00:00:00+00:00",
+                }
+            ],
+        )
+        rows = json.loads(out)
+        fact = next(f for f in kb.list_facts() if f.id == rows[0]["id"])
+        assert fact.event_time is not None
+
+    def test_capabilities_lists_add_resolved(self) -> None:
+        caps = json.loads(tool_capabilities())
+        assert any(c["name"] == "add_resolved" for c in caps)
