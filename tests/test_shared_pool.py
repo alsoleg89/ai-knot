@@ -313,6 +313,52 @@ class TestIncidentCanonicalResolution:
         assert not any("10 minutes" in f.content.lower() for f, _ in results)
 
 
+class TestSemanticConflictSeam:
+    """The optional semantic-resolver seam resolves value-conflicts the
+    deterministic resolver cannot detect (rival claims sharing a subject but
+    diverging lexically), while the default path stays deterministic and never
+    imports an LLM.
+    """
+
+    _STALE = "The REST collector endpoint supports both protocols for backward compatibility."
+    _CURRENT = "The REST collector endpoint has been deprecated since the April 2025 release."
+    _QUERY = "Is the REST collector endpoint still supported?"
+
+    @staticmethod
+    def _stub_resolver(candidates: list[Fact]) -> set[str]:
+        # Stand-in for an LLM judgement: a "deprecated" claim supersedes the
+        # competing "backward compatibility" claim about the same endpoint.
+        if any("deprecated" in f.content.lower() for f in candidates):
+            return {f.id for f in candidates if "backward compatibility" in f.content.lower()}
+        return set()
+
+    def _seed(self, pool: SharedMemoryPool, sqlite_db: SQLiteStorage) -> None:
+        pool.register("agent_a")
+        pool.register("agent_b")
+        kb_a = _kb("agent_a", sqlite_db)
+        stale = kb_a.add(self._STALE)
+        pool.publish("agent_a", [stale.id], kb=kb_a)
+        kb_b = _kb("agent_b", sqlite_db)
+        current = kb_b.add(self._CURRENT)
+        pool.publish("agent_b", [current.id], kb=kb_b)
+
+    def test_default_keeps_both_lexically_divergent_claims(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db)
+        self._seed(pool, sqlite_db)
+        texts = [f.content.lower() for f, _ in pool.recall(self._QUERY, "querier", top_k=5)]
+        # The deterministic resolver cannot group these — both survive.
+        assert any("backward compatibility" in t for t in texts)
+        assert any("deprecated" in t for t in texts)
+
+    def test_injected_resolver_drops_superseded_claim(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db, semantic_resolver=self._stub_resolver)
+        self._seed(pool, sqlite_db)
+        texts = [f.content.lower() for f, _ in pool.recall(self._QUERY, "querier", top_k=5)]
+        # The semantic pass removes the stale claim; the current one remains.
+        assert any("deprecated" in t for t in texts)
+        assert not any("backward compatibility" in t for t in texts)
+
+
 # ---------------------------------------------------------------------------
 # sync_dirty() — backward compat
 # ---------------------------------------------------------------------------

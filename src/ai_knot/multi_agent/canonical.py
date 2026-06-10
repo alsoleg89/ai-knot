@@ -15,9 +15,36 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from typing import Protocol
 
 from ai_knot.tokenizer import tokenize as _tokenize
 from ai_knot.types import Fact
+
+
+class SemanticConflictResolver(Protocol):
+    """Optional, caller-injected hook for value-conflicts the deterministic
+    resolver cannot detect.
+
+    The deterministic :class:`ClaimFamilyResolver` groups competing claims by
+    IDF-weighted token overlap, so it resolves conflicts only when the rival
+    facts share enough surface vocabulary.  Free-standing claims that share a
+    *subject* but diverge lexically — "the REST endpoint supports both protocols"
+    vs "the REST endpoint has been deprecated" — fall below the overlap floor and
+    both survive.  Resolving those needs semantic judgement.
+
+    An implementation MAY use an LLM.  ai-knot core ships none and never imports
+    one: the seam is opt-in and injected at :class:`SharedMemoryPool`
+    construction, so the default retrieval path stays deterministic and
+    dependency-free.  When provided, the hook runs *after* the deterministic
+    resolver, on the candidates that survived it, and returns the ids of the
+    facts it judges superseded (stale); the pool drops them before the trust
+    discount and final cut.
+    """
+
+    def __call__(self, candidates: list[Fact]) -> set[str]:
+        """Return the ids of superseded (stale) facts among *candidates*."""
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Conflict-signal stems — words that indicate one fact explicitly supersedes

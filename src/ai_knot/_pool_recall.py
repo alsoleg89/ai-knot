@@ -17,7 +17,7 @@ from ai_knot._query_intent import (
     _PoolQueryIntent,
     _RecallMeta,
 )
-from ai_knot.multi_agent.canonical import ClaimFamilyResolver
+from ai_knot.multi_agent.canonical import ClaimFamilyResolver, SemanticConflictResolver
 from ai_knot.multi_agent.models import ExplorationMode
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
@@ -107,6 +107,7 @@ class _PoolRecallMixin:
     _quick_inv_count: dict[str, int]
     _recall_service: SharedPoolRecallService
     _claim_resolver: ClaimFamilyResolver
+    _semantic_resolver: SemanticConflictResolver | None
     _query_router: QueryShapeRouter
     _known_version: dict[str, int]
     _read_scopes: dict[str, set[str]]
@@ -272,6 +273,14 @@ class _PoolRecallMixin:
                 canonical_mode=True,
                 get_trust=self.get_trust,
             )
+            # Optional semantic pass (opt-in, e.g. LLM-backed): resolve value
+            # conflicts the deterministic resolver missed — rival claims that
+            # share a subject but diverge lexically.  Default is None, so the
+            # common path stays deterministic and dependency-free.
+            if self._semantic_resolver is not None and len(pairs) > 1:
+                superseded_ids = self._semantic_resolver([f for f, _ in pairs])
+                if superseded_ids:
+                    pairs = [(f, s) for f, s in pairs if f.id not in superseded_ids]
 
         # Apply per-agent trust discount + tier boost before final cutoff.
         # For WIDE (empty-KB) queries, skip the trust discount for ordinary agents:
