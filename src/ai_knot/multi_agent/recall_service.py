@@ -51,6 +51,28 @@ _EXPERTISE_TOP_N = 10
 # narrowing risks cutting relevant agents from small pools.
 _EXPERTISE_MIN_POOL_AGENTS = 30
 
+# Minimum length for a query token to be treated as an exact identifier
+# (module/agent marker, version code) eligible for literal rescue.
+_IDENTIFIER_MIN_LEN = 4
+
+
+def _identifier_tokens(tokens: tuple[str, ...]) -> list[str]:
+    """Return query tokens that look like exact identifiers.
+
+    An identifier is a mixed alphanumeric token (carries both a letter and a
+    digit) of at least ``_IDENTIFIER_MIN_LEN`` characters — e.g. ``zeph0666`` or
+    ``central1``.  Plain words (no digit) and plain numbers (no letter) are
+    excluded, so ordinary conceptual queries yield no identifiers and the
+    literal-rescue path is a no-op for them.
+    """
+    return [
+        t
+        for t in tokens
+        if len(t) >= _IDENTIFIER_MIN_LEN
+        and any(c.isdigit() for c in t)
+        and any(c.isalpha() for c in t)
+    ]
+
 
 class SharedPoolRecallService:
     """Orchestrate facet-aware pool retrieval for MULTI_SOURCE queries.
@@ -291,6 +313,18 @@ class SharedPoolRecallService:
                 )
                 candidates.append(cand)
 
+            # Literal rescue: lift facts holding an exact query identifier above
+            # lexically-similar same-domain peers that lack it (and inject any the
+            # expertise narrowing or BM25 dropped).  No-op for conceptual facets.
+            self._rescue_literal_identifiers(
+                facet,
+                candidates,
+                active_facts,
+                get_trust=get_trust,
+                requesting_agent_id=requesting_agent_id,
+                is_adversary=is_adversary,
+            )
+
             # Sort by final_score (includes specificity and near-miss adjustments).
             candidates.sort(key=lambda c: c.final_score, reverse=True)
             candidates_by_facet[facet.facet_id] = candidates
@@ -313,6 +347,70 @@ class SharedPoolRecallService:
                 cand.facet_scores = dict(global_facet_scores[cand.fact.id])
 
         return candidates_by_facet
+
+    def _rescue_literal_identifiers(
+        self,
+        facet: QueryFacet,
+        candidates: list[CandidateFact],
+        active_facts: list[Fact],
+        *,
+        get_trust: Callable[[str], float] | None,
+        requesting_agent_id: str,
+        is_adversary: Callable[[str], bool] | None,
+    ) -> None:
+        """Boost or inject facts whose content contains an exact facet identifier.
+
+        When a facet names a rare identifier (a module marker, agent id, version
+        code), the agent that actually holds it can rank below same-domain peers
+        whose facts are lexically similar but lack the identifier — or be dropped
+        entirely by expertise narrowing.  An exact identifier match is the
+        strongest available signal, so such facts are lifted to the top of the
+        facet and injected if retrieval missed them.  Mutates *candidates* in
+        place.  No-op when the facet carries no identifier token.
+        """
+        idents = _identifier_tokens(facet.tokens)
+        if not idents:
+            return
+
+        by_id = {c.fact.id: c for c in candidates}
+        boost = max((c.base_score for c in candidates), default=0.0)
+        boost = max(boost, 1.0) + 1.0
+
+        for fact in active_facts:
+            content_lower = fact.content.lower()
+            if not any(ident in content_lower for ident in idents):
+                continue
+
+            existing = by_id.get(fact.id)
+            if existing is not None:
+                if existing.base_score < boost:
+                    existing.base_score = boost
+                    existing.facet_scores[facet.facet_id] = boost
+                continue
+
+            # Trust-discount the injected exact match exactly as the main path
+            # does: only known-malicious agents are discounted in breadth-oriented
+            # assembly; honest unproven agents keep full score.
+            score = boost
+            aid = fact.origin_agent_id
+            if get_trust and aid and aid != requesting_agent_id:
+                if is_adversary is not None:
+                    if is_adversary(aid):
+                        trust = get_trust(aid)
+                        if trust < _ADVERSARY_TRUST_FLOOR:
+                            score *= trust
+                else:
+                    score *= get_trust(aid)
+
+            cand = CandidateFact(
+                fact=fact,
+                base_score=score,
+                facet_scores={facet.facet_id: score},
+                specificity_score=self._specificity.score(fact),
+                near_miss_penalty=self._near_miss.penalty(fact),
+            )
+            candidates.append(cand)
+            by_id[fact.id] = cand
 
     # ------------------------------------------------------------------
     # V3 pipeline

@@ -414,6 +414,91 @@ class TestMultiSourceFacetAssembly:
         assert "agent_a" in agents
 
 
+class TestLiteralIdentifierRescue:
+    """S26 rare-token handling: when a query names an exact identifier (a module
+    marker / version code), the agent that holds it must surface even when
+    lexically-richer same-domain peers lack it.  Conceptual queries with no
+    identifier are unaffected (the rescue is a no-op).
+    """
+
+    def test_identifier_tokens_detects_markers_rejects_words_and_numbers(self) -> None:
+        from ai_knot.multi_agent.recall_service import _identifier_tokens
+
+        toks = ("zeph0666", "central1", "encrypted", "computation", "5000", "v1", "ab1")
+        idents = set(_identifier_tokens(toks))
+        # Mixed alphanumeric, length >= 4 → identifiers.
+        assert idents == {"zeph0666", "central1"}
+        # Plain words (no digit), plain numbers (no letter), short tokens → excluded.
+        assert "encrypted" not in idents
+        assert "5000" not in idents
+        assert "v1" not in idents
+        assert "ab1" not in idents
+
+    @staticmethod
+    def _svc_facet_candidates() -> tuple:
+        from ai_knot.multi_agent.models import CandidateFact, QueryFacet
+        from ai_knot.multi_agent.recall_service import SharedPoolRecallService
+
+        svc = SharedPoolRecallService()
+        facet = QueryFacet(
+            facet_id="f0",
+            text="module zeph0 for encrypted computation",
+            tokens=("module", "zeph0", "encrypted", "computation"),
+        )
+        holder = Fact(
+            content="Module Zeph0 handles encrypted computation.",
+            origin_agent_id="target",
+        )
+        peer = Fact(
+            content="Comprehensive encrypted computation analysis covering methods at length.",
+            origin_agent_id="peer",
+        )
+        # Simulate expertise narrowing having dropped the terse marker holder:
+        # only the lexically-richer peer survived into the facet candidates.
+        candidates = [CandidateFact(fact=peer, base_score=5.0, facet_scores={"f0": 5.0})]
+        active_facts = [holder, peer]
+        return svc, facet, candidates, active_facts
+
+    def test_rescue_injects_and_ranks_exact_marker_holder(self) -> None:
+        svc, facet, candidates, active_facts = self._svc_facet_candidates()
+        svc._rescue_literal_identifiers(  # type: ignore[attr-defined]
+            facet,
+            candidates,
+            active_facts,
+            get_trust=None,
+            requesting_agent_id="querier",
+            is_adversary=None,
+        )
+        by_agent = {c.fact.origin_agent_id: c for c in candidates}
+        # The marker holder, missed by narrowing, is injected...
+        assert "target" in by_agent
+        # ...and ranks above the lexically-richer peer that lacks the marker.
+        assert by_agent["target"].base_score > by_agent["peer"].base_score
+
+    def test_rescue_is_noop_without_identifier_in_facet(self) -> None:
+        from ai_knot.multi_agent.models import QueryFacet
+
+        svc, _facet, candidates, active_facts = self._svc_facet_candidates()
+        # A purely conceptual facet — no identifier token → rescue must do nothing.
+        plain = QueryFacet(
+            facet_id="f0", text="encrypted computation", tokens=("encrypted", "computation")
+        )
+        before = list(candidates)
+        svc._rescue_literal_identifiers(  # type: ignore[attr-defined]
+            plain,
+            candidates,
+            active_facts,
+            get_trust=None,
+            requesting_agent_id="querier",
+            is_adversary=None,
+        )
+        assert candidates == before
+        assert all(c.fact.origin_agent_id != "target" for c in candidates)
+
+    # The end-to-end @1000 gain (marker-in-facet exact_recall 0.87 -> 1.0) is
+    # demonstrated by the S26 marker-in-facet variant added in the scenario PR.
+
+
 # ---------------------------------------------------------------------------
 # sync_dirty() — backward compat
 # ---------------------------------------------------------------------------
