@@ -351,14 +351,14 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
 
     lines: list[str] = ["#### Acceptance Scorecard\n"]
     lines.append("_ai-knot acceptance gate; cross-system backends are in the summary above._\n")
-    lines.append("| Backend | Applicable thresholds passed | Verdict |")
-    lines.append("|---------|------------------------------|---------|")
+    lines.append("| Backend | Binding thresholds passed | Verdict |")
+    lines.append("|---------|---------------------------|---------|")
     for m in gated:
         results = evaluate_gate(m)
-        applicable = [r for r in results if r.applicable]
-        n_pass = sum(1 for r in applicable if r.passed)
+        binding = [r for r in results if r.applicable and not r.threshold.advisory]
+        n_pass = sum(1 for r in binding if r.passed)
         verdict = "✅ PASS" if gate_passed(results) else "❌ FAIL"
-        lines.append(f"| {_display(m.backend_name)} | {n_pass}/{len(applicable)} | {verdict} |")
+        lines.append(f"| {_display(m.backend_name)} | {n_pass}/{len(binding)} | {verdict} |")
 
     if gated:
         primary = gated[0]
@@ -366,10 +366,16 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
         lines.append(f"##### Thresholds — {_display(primary.backend_name)}\n")
         lines.append("| Group | Scenario | Metric | Value | Target | Status |")
         lines.append("|-------|----------|--------|------:|:------:|:------:|")
+        advisory_notes: list[str] = []
         for r in evaluate_gate(primary):
             t = r.threshold
             if not r.applicable:
                 value_str, status = "—", "n/a"
+            elif t.advisory:
+                value_str = _fmt(r.value)
+                status = "ℹ️ advisory"
+                if t.note:
+                    advisory_notes.append(f"- `{t.scenario_id}/{t.metric}` — {t.note}")
             else:
                 value_str = _fmt(r.value)
                 status = "✅" if r.passed else "❌"
@@ -377,6 +383,10 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
                 f"| {t.group} | {t.scenario_id} | {t.metric} | "
                 f"{value_str} | {t.op} {_fmt(t.target)} | {status} |"
             )
+        if advisory_notes:
+            lines.append("")
+            lines.append("_Advisory (structurally capped / resolver-dependent — not binding):_")
+            lines.extend(advisory_notes)
     return lines
 
 

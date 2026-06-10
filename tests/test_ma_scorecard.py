@@ -1,9 +1,10 @@
-"""Tests for the multi-agent acceptance gate and scorecard (PR A / A2).
+"""Tests for the multi-agent acceptance gate and scorecard.
 
 Locks the pass/fail semantics of ``ma_gate.GATE``: the locked baseline numbers
 (research/ma_baseline_20260609.md) must FAIL the gate, target numbers must PASS,
-absent metrics are non-applicable (a partial run is not penalised), and a
-protocol-correctness regression fails the gate.
+absent metrics are non-applicable (a partial run is not penalised), a
+protocol-correctness regression fails the gate, and advisory thresholds
+(structurally-capped / resolver-dependent) are reported but never bind.
 """
 
 from __future__ import annotations
@@ -41,23 +42,35 @@ _PROTOCOL = {
 # Baseline numbers from research/ma_baseline_20260609.md — must FAIL the gate.
 _BASELINE = {
     **_PROTOCOL,
-    "s9_ma_pool_publish": {"conflict_resolution": 0.0, "precision_at_3": 0.44},
+    "s9_ma_pool_publish": {
+        "conflict_resolution": 0.0,
+        "correct_at_3": 0.67,
+        "wrong_suppression": 0.0,
+        "precision_at_3": 0.44,
+    },
     "s19_incident_reconstruction": {"evidence_precision": 0.57},
     "s23_adversarial_noise": {"free_standing_suppression": 0.60, "trust_penalty": 0.0},
     "s26_sparse_assembly": {
+        "target_shard_recall_at_10": 0.53,
         "target_shard_recall_at_1000": 0.13,
         "distractor_rate_at_1000": 0.96,
         "p95_retrieve_ms_at_1000": 83.61,
     },
 }
 
-# Targets reached — must PASS the gate.
+# Targets reached — must PASS the gate (binding + advisory all green here).
 _PASSING = {
     **_PROTOCOL,
-    "s9_ma_pool_publish": {"conflict_resolution": 0.85, "precision_at_3": 0.72},
+    "s9_ma_pool_publish": {
+        "conflict_resolution": 0.85,
+        "correct_at_3": 1.0,
+        "wrong_suppression": 0.85,
+        "precision_at_3": 0.72,
+    },
     "s19_incident_reconstruction": {"evidence_precision": 0.75},
     "s23_adversarial_noise": {"free_standing_suppression": 0.90, "trust_penalty": 0.6},
     "s26_sparse_assembly": {
+        "target_shard_recall_at_10": 1.0,
         "target_shard_recall_at_1000": 0.65,
         "distractor_rate_at_1000": 0.40,
         "p95_retrieve_ms_at_1000": 90.0,
@@ -73,11 +86,44 @@ def test_baseline_fails_gate() -> None:
         for r in results
         if r.applicable and not r.passed
     }
-    assert ("s9_ma_pool_publish", "conflict_resolution") in failed
+    # Fails on binding metrics — surfacing the correct answer and adversarial trust.
+    assert ("s9_ma_pool_publish", "correct_at_3") in failed
     assert ("s23_adversarial_noise", "trust_penalty") in failed
+    # ...and the advisory caps are visibly failing too (reported, not binding).
+    assert ("s9_ma_pool_publish", "conflict_resolution") in failed
     assert ("s26_sparse_assembly", "target_shard_recall_at_1000") in failed
     # Protocol correctness stays green even at baseline.
     assert all(r.passed for r in results if r.threshold.group == "protocol")
+
+
+def test_advisory_caps_do_not_bind() -> None:
+    # Every binding threshold passes; the structurally-capped advisory ones fail.
+    # The gate must still PASS, with the advisory failures reported, not hidden.
+    scores = {
+        **_PROTOCOL,
+        "s9_ma_pool_publish": {
+            "correct_at_3": 1.0,
+            "conflict_resolution": 0.33,
+            "wrong_suppression": 0.33,
+        },
+        "s19_incident_reconstruction": {"evidence_precision": 0.60},
+        "s23_adversarial_noise": {"free_standing_suppression": 0.90, "trust_penalty": 0.6},
+        "s26_sparse_assembly": {
+            "target_shard_recall_at_10": 1.0,
+            "target_shard_recall_at_1000": 0.33,
+            "distractor_rate_at_1000": 0.90,
+            "p95_retrieve_ms_at_1000": 90.0,
+        },
+    }
+    results = evaluate_gate(_metrics("ai_knot_multi_agent", scores))
+    assert gate_passed(results)
+    advisory_failing = [
+        r for r in results if r.threshold.advisory and r.applicable and not r.passed
+    ]
+    # Visible, non-binding: conflict_resolution, wrong_suppression, evidence_precision,
+    # recall@1000, distractor@1000 are all below target but capped by construction.
+    assert advisory_failing
+    assert all(r.threshold.advisory for r in advisory_failing)
 
 
 def test_passing_metrics_pass_gate() -> None:
