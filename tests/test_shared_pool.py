@@ -810,6 +810,41 @@ class TestMonotonicCASAndTrustIntegrity:
         # Slot events 2 → 4 while quick_inv stays 2 → penalty 1.0 → 0.5 → recovery.
         assert pool_sqlite.get_trust("agent_a") > trust_floor
 
+    def test_wide_query_suppresses_known_malicious_agent(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Even a WIDE (empty-KB) query must not surface a known-malicious agent first.
+
+        WIDE/onboarding queries skip the trust discount for ordinary agents (the
+        querier has no basis to judge an unseen agent), but an agent whose verifiable
+        claims peers actively superseded stays suppressed.
+        """
+        pool_sqlite.register("agent_x")
+
+        # Make agent_a known-malicious: its only verifiable claim is superseded.
+        kb_a = _kb("agent_a", sqlite_db)
+        bad_slot = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [bad_slot.id], kb=kb_a)
+        kb_b = _kb("agent_b", sqlite_db)
+        fix = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [fix.id], kb=kb_b)
+        assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
+
+        # agent_a (malicious) and agent_x (neutral, never invalidated) publish
+        # equally-relevant free-standing facts.
+        bad = kb_a.add("alpha protocol handles message encryption")
+        pool_sqlite.publish("agent_a", [bad.id], kb=kb_a)
+        kb_x = _kb("agent_x", sqlite_db)
+        good = kb_x.add("beta protocol handles message encryption")
+        pool_sqlite.publish("agent_x", [good.id], kb=kb_x)
+
+        # agent_c queries with an EMPTY private KB → WIDE exploration mode.
+        results = pool_sqlite.recall("protocol encryption", "agent_c", top_k=2)
+        ranked = [f.origin_agent_id for f, _ in results]
+        assert ranked, "expected results"
+        # The neutral agent's fact outranks the known-malicious agent's, even in WIDE.
+        assert ranked[0] == "agent_x"
+
 
 class TestVisibilityScope:
     """visibility_scope writer (add/publish) + per-agent read-access projection."""
