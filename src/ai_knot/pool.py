@@ -29,6 +29,25 @@ _PROVENANCE_DISCOUNT = 0.8
 _QUICK_INV_WINDOW_S = 3600.0  # 1 hour
 
 
+def _has_evidence(fact: Fact) -> bool:
+    """Whether *fact* carries a provenance pointer fit for the shared pool.
+
+    Implements the evidence-before-belief invariant (Eywa / MemMachine): a fact
+    promoted to shared state must trace to immutable evidence rather than being a
+    free-floating assertion.  A fact qualifies when it has not been flagged
+    unsupported by the faithfulness filter AND carries at least one source pointer
+    — verbatim source text, a source snippet, or a source span.
+
+    Note: facts created via the manual ``KnowledgeBase.add()`` path carry no source
+    pointer, so the ``require_evidence`` gate on :meth:`SharedMemoryPool.publish`
+    is opt-in (default off) to preserve existing publish behaviour; governed
+    deployments turn it on for shared/org tiers.
+    """
+    if fact.supported is False:
+        return False
+    return bool(fact.source_verbatim or fact.source_snippets or fact.source_spans)
+
+
 class SharedMemoryPool(_PoolRecallMixin):
     """Shared memory pool for multi-agent knowledge exchange.
 
@@ -153,6 +172,7 @@ class SharedMemoryPool(_PoolRecallMixin):
         *,
         kb: KnowledgeBase,
         utility_threshold: float = 0.0,
+        require_evidence: bool = False,
     ) -> list[Fact]:
         """Copy facts from an agent's private KB into the shared pool.
 
@@ -173,6 +193,11 @@ class SharedMemoryPool(_PoolRecallMixin):
             kb: The agent's KnowledgeBase instance.
             utility_threshold: Minimum utility score (0.0–1.0) to publish.
                 Facts below the threshold are silently skipped.
+            require_evidence: When True, apply the evidence-before-belief invariant
+                — only facts carrying a provenance pointer (verbatim/snippet/span)
+                and not flagged unsupported enter the pool (see :func:`_has_evidence`).
+                Default False preserves the legacy behaviour (``add()``-created facts
+                carry no source pointer); governed deployments enable it for shared/org.
 
         Returns:
             List of facts that were published (copies, not mutations of private KB).
@@ -194,7 +219,9 @@ class SharedMemoryPool(_PoolRecallMixin):
         to_publish = [
             f
             for f in private_facts
-            if f.id in id_set and f.state_confidence * f.importance >= utility_threshold
+            if f.id in id_set
+            and f.state_confidence * f.importance >= utility_threshold
+            and (not require_evidence or _has_evidence(f))
         ]
 
         if not to_publish:

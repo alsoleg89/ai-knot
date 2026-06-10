@@ -84,6 +84,50 @@ class TestPublish:
         assert published[0].mesi_state == MESIState.SHARED
         assert published[0].origin_agent_id == "agent_a"
 
+    def test_require_evidence_skips_assertion_without_pointer(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        # add()-created facts carry no source pointer; the opt-in gate skips them.
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, require_evidence=True)
+        assert published == []
+
+    def test_require_evidence_admits_fact_with_verbatim(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        # Attach a provenance pointer, as learn()-extracted facts carry.
+        facts = sqlite_db.load("agent_a")
+        for f in facts:
+            f.source_verbatim = "Alex told me he earns 95k a year"
+        sqlite_db.save("agent_a", facts)
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, require_evidence=True)
+        assert len(published) == 1
+
+    def test_require_evidence_skips_unsupported_fact(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        facts = sqlite_db.load("agent_a")
+        for f in facts:
+            f.source_verbatim = "Alex earns 95k"
+            f.supported = False  # faithfulness filter rejected it
+        sqlite_db.save("agent_a", facts)
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, require_evidence=True)
+        assert published == []
+
+    def test_default_publish_ignores_evidence(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        # Backward-compat: default require_evidence=False publishes pointer-less facts.
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        assert len(published) == 1
+
     def test_publish_unregistered_agent_raises(
         self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
     ) -> None:
