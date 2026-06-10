@@ -855,3 +855,43 @@ class TestProvenance:
         assert fact.provenance.published_by == ""
         assert fact.provenance.promoted_by == ""
         assert fact.provenance.supersedes_id == ""
+
+
+class TestPersistTrust:
+    """Opt-in durable trust/usage telemetry (PoolStatsCapable + persist_stats)."""
+
+    def test_trust_survives_restart_when_enabled(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db, persist_stats=True)
+        pool.register("agent_a")
+        pool.register("agent_b")
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k annually")
+        pool.publish("agent_a", [fact.id], kb=kb)
+        pool.recall("Alex salary", "agent_b", top_k=3)  # accrues used_count
+        pool.flush_stats()
+
+        # A fresh pool on the same DB restores the telemetry.
+        pool2 = SharedMemoryPool(storage=sqlite_db, persist_stats=True)
+        assert pool2._publish_count.get("agent_a", 0) == 1
+        assert pool2.get_trust("agent_a") == pool.get_trust("agent_a")
+
+    def test_trust_not_persisted_by_default(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db)  # persist_stats=False
+        pool.register("agent_a")
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        pool.publish("agent_a", [fact.id], kb=kb)
+        # Default pool writes no telemetry; a fresh instance restores nothing.
+        pool2 = SharedMemoryPool(storage=sqlite_db, persist_stats=True)
+        assert pool2._publish_count.get("agent_a", 0) == 0
+
+    def test_yaml_backend_persists(self, tmp_path: pathlib.Path) -> None:
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        pool = SharedMemoryPool(storage=storage, persist_stats=True)
+        pool.register("agent_a")
+        kb = KnowledgeBase("agent_a", storage=storage)
+        fact = kb.add("Alex earns 95k")
+        pool.publish("agent_a", [fact.id], kb=kb)
+
+        pool2 = SharedMemoryPool(storage=YAMLStorage(base_dir=str(tmp_path)), persist_stats=True)
+        assert pool2._publish_count.get("agent_a", 0) == 1

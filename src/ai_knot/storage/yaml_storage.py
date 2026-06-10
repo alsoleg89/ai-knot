@@ -224,6 +224,29 @@ class YAMLStorage:
         ]
 
     # ------------------------------------------------------------------
+    # PoolStatsCapable implementation
+    # ------------------------------------------------------------------
+
+    def _pool_stats_path(self) -> Path:
+        return self._base_dir / "_pool_stats.yaml"
+
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist shared-pool trust/usage telemetry to a YAML file in base_dir."""
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        path = self._pool_stats_path()
+        with _get_lock(path), open(path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(stats, f, allow_unicode=True, sort_keys=True)
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load persisted trust/usage telemetry, or an empty dict if none exists."""
+        path = self._pool_stats_path()
+        if not path.exists():
+            return {}
+        with _get_lock(path), open(path, encoding="utf-8") as f:
+            data = yaml.load(f, Loader=_YamlLoader)
+        return data if isinstance(data, dict) else {}
+
+    # ------------------------------------------------------------------
     # SnapshotCapable implementation
     # ------------------------------------------------------------------
 

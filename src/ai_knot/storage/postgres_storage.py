@@ -61,6 +61,13 @@ CREATE TABLE IF NOT EXISTS "ai-knot_facts" (
 )
 """
 
+_CREATE_POOL_STATS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_pool_stats" (
+    id   INTEGER PRIMARY KEY CHECK (id = 0),
+    data TEXT NOT NULL
+)
+"""
+
 
 class PostgresStorage:
     """Stores facts in a PostgreSQL database.
@@ -92,8 +99,30 @@ class PostgresStorage:
     def _init_db(self) -> None:
         with self._get_conn() as conn:
             conn.execute(_CREATE_TABLE)
+            conn.execute(_CREATE_POOL_STATS_TABLE)
             conn.commit()
         self._migrate_db()
+
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist shared-pool trust/usage telemetry (single-row upsert)."""
+        payload = json.dumps(stats)
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_pool_stats" (id, data) VALUES (0, %s) '
+                "ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+                (payload,),
+            )
+            conn.commit()
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load persisted trust/usage telemetry, or an empty dict if none exists."""
+        with self._get_conn() as conn:
+            cur = conn.execute('SELECT data FROM "ai-knot_pool_stats" WHERE id = 0')
+            row = cur.fetchone()
+        if not row:
+            return {}
+        loaded: dict[str, Any] = json.loads(row[0])
+        return loaded
 
     def _migrate_db(self) -> None:
         """Add new columns to existing databases (backward compat)."""

@@ -15,7 +15,12 @@ from ai_knot.multi_agent.canonical import ClaimFamilyResolver
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
 from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
-from ai_knot.storage.base import AtomicUpdateCapable, StorageBackend, TemporalStorageCapable
+from ai_knot.storage.base import (
+    AtomicUpdateCapable,
+    PoolStatsCapable,
+    StorageBackend,
+    TemporalStorageCapable,
+)
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import Fact, MESIState, SlotDelta
 
@@ -91,7 +96,9 @@ class SharedMemoryPool(_PoolRecallMixin):
     # Tier score boost: multiplicative bonus for higher-tier facts in recall.
     _TIER_BOOST: dict[str, float] = {"private": 1.0, "pool": 1.0, "org": 1.05}
 
-    def __init__(self, storage: StorageBackend | None = None) -> None:
+    def __init__(
+        self, storage: StorageBackend | None = None, *, persist_stats: bool = False
+    ) -> None:
         self._storage: StorageBackend = storage or YAMLStorage()
         self._bm25 = BM25Retriever(skip_prf=True)
         self._dense = DenseRetriever()
@@ -123,6 +130,12 @@ class SharedMemoryPool(_PoolRecallMixin):
         # Per-agent read-access grants for named visibility scopes (Collaborative Memory
         # access-control projection). agent_id -> set of scopes it may read. In-memory.
         self._read_scopes: dict[str, set[str]] = {}
+        # Opt-in durable trust/usage telemetry. When enabled and the backend supports
+        # it, social memory is restored on init and flushed after publish so it
+        # survives a process restart. Default off → no new I/O for existing callers.
+        self._persist_stats = persist_stats
+        if persist_stats and isinstance(self._storage, PoolStatsCapable):
+            self._restore_stats(self._storage.load_pool_stats())
 
     def register(self, agent_id: str) -> None:
         """Register an agent to participate in the shared pool.
@@ -163,6 +176,41 @@ class SharedMemoryPool(_PoolRecallMixin):
         """Unsupported-answer risk in [0,1] from the most recent recall (0.0 if none)."""
         meta = self._last_recall_meta
         return meta.unsupported_answer_risk if meta else 0.0
+
+    def _stats_snapshot(self) -> dict[str, object]:
+        """Serializable snapshot of the pool's trust/usage telemetry."""
+        return {
+            "publish_count": dict(self._publish_count),
+            "used_count": dict(self._used_count),
+            "quick_inv_count": dict(self._quick_inv_count),
+            "fact_consumers": {k: sorted(v) for k, v in self._fact_consumers.items()},
+        }
+
+    def _restore_stats(self, data: dict[str, object]) -> None:
+        """Restore telemetry from a persisted snapshot (best-effort; ignores junk)."""
+        pc = data.get("publish_count")
+        if isinstance(pc, dict):
+            self._publish_count = {str(k): int(v) for k, v in pc.items()}
+        uc = data.get("used_count")
+        if isinstance(uc, dict):
+            self._used_count = {str(k): int(v) for k, v in uc.items()}
+        qi = data.get("quick_inv_count")
+        if isinstance(qi, dict):
+            self._quick_inv_count = {str(k): int(v) for k, v in qi.items()}
+        fc = data.get("fact_consumers")
+        if isinstance(fc, dict):
+            self._fact_consumers = {str(k): set(v) for k, v in fc.items()}
+
+    def flush_stats(self) -> None:
+        """Persist the pool's trust/usage telemetry if persistence is enabled.
+
+        No-op unless the pool was created with ``persist_stats=True`` and the
+        storage backend implements :class:`PoolStatsCapable`.  ``publish()`` calls
+        this automatically; call it directly to also capture recall-derived
+        ``used_count`` increments between publishes.
+        """
+        if self._persist_stats and isinstance(self._storage, PoolStatsCapable):
+            self._storage.save_pool_stats(self._stats_snapshot())
 
     def get_trust(self, agent_id: str) -> float:
         """Return the current auto-computed trust score for an agent.
@@ -377,6 +425,8 @@ class SharedMemoryPool(_PoolRecallMixin):
                 len(published),
             )
 
+        # Persist trust/usage telemetry (no-op unless persist_stats=True).
+        self.flush_stats()
         return published
 
     def promote(self, agent_id: str, fact_ids: list[str], *, tier: str = "pool") -> int:
