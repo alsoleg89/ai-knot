@@ -33,6 +33,24 @@ _POOL_RECALL_OVERFETCH = 3
 _COVERAGE_SCORE_FLOOR: float = 0.01
 
 
+def _scope_visible(fact: Fact, requesting_agent_id: str, read_scopes: set[str]) -> bool:
+    """Whether *fact*'s ``visibility_scope`` permits *requesting_agent_id* to read it.
+
+    Access-control projection (Collaborative Memory, arXiv 2505.18279): a fact is
+    visible when its scope is public (``"global"`` or empty), OR the requester is
+    its origin agent, OR the requester was granted read access to the fact's named
+    scope via :meth:`SharedMemoryPool.grant_read`.  Any other named scope
+    (``"local"``, ``"private"``, ``"team:x"``, …) stays hidden unless granted —
+    closing the gap where every fact was de-facto global.
+    """
+    scope = fact.visibility_scope or "global"
+    if scope == "global":
+        return True
+    if fact.origin_agent_id == requesting_agent_id:
+        return True
+    return scope in read_scopes
+
+
 class _PoolRecallMixin:
     """Mixin providing recall, arecall, and embed_pool_facts to SharedMemoryPool.
 
@@ -57,6 +75,7 @@ class _PoolRecallMixin:
     _claim_resolver: ClaimFamilyResolver
     _query_router: QueryShapeRouter
     _known_version: dict[str, int]
+    _read_scopes: dict[str, set[str]]
     _AUTO_PROMOTE_THRESHOLD: int
     _TIER_BOOST: dict[str, float]
 
@@ -101,12 +120,9 @@ class _PoolRecallMixin:
         if topic_channel:
             active = [f for f in active if not f.topic_channel or f.topic_channel == topic_channel]
 
-        # visibility_scope filter: hide local-only facts from foreign agents.
-        active = [
-            f
-            for f in active
-            if f.visibility_scope != "local" or f.origin_agent_id == requesting_agent_id
-        ]
+        # visibility_scope projection: public ("global") + own + explicitly-granted scopes.
+        read_scopes = self._read_scopes.get(requesting_agent_id, set())
+        active = [f for f in active if _scope_visible(f, requesting_agent_id, read_scopes)]
 
         if not active:
             self._last_recall_meta = _RecallMeta(

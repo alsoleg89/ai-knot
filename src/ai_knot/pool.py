@@ -120,6 +120,9 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._recall_service = SharedPoolRecallService()
         self._claim_resolver = ClaimFamilyResolver()
         self._query_router = QueryShapeRouter()
+        # Per-agent read-access grants for named visibility scopes (Collaborative Memory
+        # access-control projection). agent_id -> set of scopes it may read. In-memory.
+        self._read_scopes: dict[str, set[str]] = {}
 
     def register(self, agent_id: str) -> None:
         """Register an agent to participate in the shared pool.
@@ -133,6 +136,16 @@ class SharedMemoryPool(_PoolRecallMixin):
     def agents(self) -> set[str]:
         """Return the set of registered agent IDs."""
         return set(self._agents)
+
+    def grant_read(self, agent_id: str, scope: str) -> None:
+        """Grant *agent_id* read access to a named visibility scope.
+
+        Facts published with ``visibility_scope=scope`` then become visible to this
+        agent in :meth:`recall`, in addition to public (``"global"``) facts and the
+        agent's own.  Scopes are matched verbatim; ``"global"`` needs no grant.
+        Grants are in-memory (per pool instance).
+        """
+        self._read_scopes.setdefault(agent_id, set()).add(scope)
 
     def get_trust(self, agent_id: str) -> float:
         """Return the current auto-computed trust score for an agent.
@@ -173,6 +186,7 @@ class SharedMemoryPool(_PoolRecallMixin):
         kb: KnowledgeBase,
         utility_threshold: float = 0.0,
         require_evidence: bool = False,
+        visibility_scope: str | None = None,
     ) -> list[Fact]:
         """Copy facts from an agent's private KB into the shared pool.
 
@@ -228,9 +242,11 @@ class SharedMemoryPool(_PoolRecallMixin):
             return []
 
         with self._publish_lock:
-            return self._publish_locked(agent_id, to_publish)
+            return self._publish_locked(agent_id, to_publish, visibility_scope)
 
-    def _publish_locked(self, agent_id: str, to_publish: list[Fact]) -> list[Fact]:
+    def _publish_locked(
+        self, agent_id: str, to_publish: list[Fact], visibility_scope: str | None = None
+    ) -> list[Fact]:
         """Execute publish while holding ``_publish_lock``.  Called only from :meth:`publish`."""
         now = datetime.now(UTC)
         published: list[Fact] = []
@@ -263,6 +279,10 @@ class SharedMemoryPool(_PoolRecallMixin):
                 new_fact.memory_tier = "pool"
                 new_fact.valid_from = now
                 new_fact.valid_until = None
+                # Optional publish-time scope override; otherwise the fact keeps the
+                # visibility_scope assigned at add() time.
+                if visibility_scope is not None:
+                    new_fact.visibility_scope = visibility_scope
 
                 # For unslotted facts, extract a claim fingerprint for conflict detection.
                 if not new_fact.slot_key and not new_fact.claim_key:

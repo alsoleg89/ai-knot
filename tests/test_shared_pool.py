@@ -684,3 +684,52 @@ class TestAutoTrust:
         trust_a = pool_sqlite.get_trust("agent_a")
         # Published 1, used 0, quick_inv 1 → trust = 0 * (1-1) = 0, clamped to 0.1
         assert trust_a == pytest.approx(0.1)
+
+
+class TestVisibilityScope:
+    """visibility_scope writer (add/publish) + per-agent read-access projection."""
+
+    _CONTENT = "deployment uses FluxCD on cluster prod"
+    _QUERY = "FluxCD deployment"
+
+    def test_named_scope_hidden_without_grant(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT, visibility_scope="team:infra")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        # agent_b has no grant → cannot see the team:infra fact.
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert all("FluxCD" not in f.content for f, _ in results_b)
+        # The origin agent always sees its own fact.
+        results_a = pool_sqlite.recall(self._QUERY, "agent_a", top_k=5)
+        assert any("FluxCD" in f.content for f, _ in results_a)
+
+    def test_named_scope_visible_after_grant(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT, visibility_scope="team:infra")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        pool_sqlite.grant_read("agent_b", "team:infra")
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert any("FluxCD" in f.content for f, _ in results_b)
+
+    def test_global_scope_visible_to_all(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT)  # default "global"
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert any("FluxCD" in f.content for f, _ in results_b)
+
+    def test_publish_scope_override(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        # publish(visibility_scope=...) overrides the add()-time scope.
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT)  # global at add()
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb, visibility_scope="team:infra")
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert all("FluxCD" not in f.content for f, _ in results_b)

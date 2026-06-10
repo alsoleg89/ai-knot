@@ -227,6 +227,7 @@ class KnowledgeBase(_LearningMixin):
         importance: float = 0.8,
         tags: list[str] | tuple[str, ...] = (),
         event_time: datetime | None = None,
+        visibility_scope: str = "global",
     ) -> Fact:
         """Add a fact manually to the knowledge base.
 
@@ -241,6 +242,9 @@ class KnowledgeBase(_LearningMixin):
             type: Classification (semantic/procedural/episodic).
             importance: How critical (0.0-1.0).
             tags: Optional labels.
+            visibility_scope: Access scope for shared-pool projection — ``"global"``
+                (default, public) or a named scope readable only by the origin agent
+                and agents granted it via ``SharedMemoryPool.grant_read``.
 
         Returns:
             The created Fact (or the existing near-duplicate if one was found).
@@ -274,6 +278,7 @@ class KnowledgeBase(_LearningMixin):
             type=type,
             importance=importance,
             tags=list(tags),
+            visibility_scope=visibility_scope,
         )
         # C6c: inject canonical date tags for temporal recall (mode-agnostic).
         enrich_date_tags(fact)
@@ -309,6 +314,7 @@ class KnowledgeBase(_LearningMixin):
             if not is_dup:
                 enrich_date_tags(child)  # inherit date from [date] prefix in content
                 _apply_temporal(child, event_time)  # resolve relative-time per child
+                child.visibility_scope = visibility_scope  # inherit parent scope
                 accepted_children.append(child)
 
         facts.append(fact)
