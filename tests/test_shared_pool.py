@@ -6,6 +6,7 @@ import pathlib
 
 import pytest
 
+from ai_knot._pool_recall import _abstention
 from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 from ai_knot.storage.yaml_storage import YAMLStorage
@@ -733,3 +734,60 @@ class TestVisibilityScope:
         pool_sqlite.publish("agent_a", [fact.id], kb=kb, visibility_scope="team:infra")
         results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
         assert all("FluxCD" not in f.content for f, _ in results_b)
+
+
+class TestAbstention:
+    """Deterministic abstention signal (_abstention helper + pool accessors)."""
+
+    def test_helper_empty_results(self) -> None:
+        risk, abstain = _abstention([], 0.0)
+        assert risk == 1.0
+        assert abstain is True
+
+    def test_helper_no_evidence_abstains(self) -> None:
+        fact = Fact(content="deployment uses FluxCD")  # no source pointer
+        risk, abstain = _abstention([(fact, 1.0)], coverage=1.0)
+        assert abstain is True  # evidence_frac == 0
+        assert risk == 1.0
+
+    def test_helper_evidence_high_coverage_no_abstain(self) -> None:
+        fact = Fact(content="deployment uses FluxCD", source_verbatim="we deploy FluxCD")
+        risk, abstain = _abstention([(fact, 1.0)], coverage=1.0)
+        assert abstain is False
+        assert risk == 0.0
+
+    def test_helper_low_coverage_abstains(self) -> None:
+        fact = Fact(content="deployment uses FluxCD", source_verbatim="we deploy FluxCD")
+        risk, abstain = _abstention([(fact, 1.0)], coverage=0.3)
+        assert abstain is True  # coverage < 0.5
+        assert risk == pytest.approx(0.7)
+
+    def test_recall_no_results_abstains(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        results = pool_sqlite.recall("nothing in the empty pool", "agent_b", top_k=5)
+        assert results == []
+        assert pool_sqlite.last_recall_abstains is True
+        assert pool_sqlite.last_recall_risk == pytest.approx(1.0)
+
+    def test_recall_over_unsupported_facts_abstains(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("deployment uses FluxCD on cluster prod")  # no evidence pointer
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        pool_sqlite.recall("FluxCD deployment", "agent_b", top_k=5)
+        assert pool_sqlite.last_recall_abstains is True
+
+    def test_recall_over_evidence_facts_does_not_abstain(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("deployment uses FluxCD on cluster prod")
+        facts = sqlite_db.load("agent_a")
+        for f in facts:
+            f.source_verbatim = "we deploy with FluxCD on prod"
+        sqlite_db.save("agent_a", facts)
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        pool_sqlite.recall("FluxCD deployment", "agent_b", top_k=5)
+        assert pool_sqlite.last_recall_abstains is False

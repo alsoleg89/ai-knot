@@ -51,6 +51,27 @@ def _scope_visible(fact: Fact, requesting_agent_id: str, read_scopes: set[str]) 
     return scope in read_scopes
 
 
+def _abstention(results: list[tuple[Fact, float]], coverage: float) -> tuple[float, bool]:
+    """Deterministic abstention signal for a pool recall (Synthius-Mem).
+
+    Returns ``(unsupported_answer_risk in [0,1], should_abstain)``.  Risk is the
+    larger of the coverage shortfall (``1 - coverage``) and the evidence shortfall
+    (``1 - evidence_frac``, the fraction of returned facts carrying a verbatim /
+    snippet / span pointer).  The recall recommends abstaining when coverage is low
+    (< 0.5) OR not a single returned fact carries evidence — i.e. an answer would
+    rest on unsupported memory.  No results is maximum risk.
+    """
+    if not results:
+        return 1.0, True
+    with_evidence = sum(
+        1 for f, _ in results if f.source_verbatim or f.source_snippets or f.source_spans
+    )
+    evidence_frac = with_evidence / len(results)
+    risk = max(1.0 - coverage, 1.0 - evidence_frac)
+    should_abstain = coverage < 0.5 or evidence_frac == 0.0
+    return risk, should_abstain
+
+
 class _PoolRecallMixin:
     """Mixin providing recall, arecall, and embed_pool_facts to SharedMemoryPool.
 
@@ -131,6 +152,8 @@ class _PoolRecallMixin:
                 returned=0,
                 coverage=0.0,
                 low_coverage=True,
+                should_abstain=True,
+                unsupported_answer_risk=1.0,
             )
             return []
 
@@ -170,12 +193,16 @@ class _PoolRecallMixin:
                     )
                 consumers = self._fact_consumers.setdefault(fact.id, set())
                 consumers.add(requesting_agent_id)
+            facet_coverage = 1.0 if facet_result else 0.0
+            facet_risk, facet_abstain = _abstention(facet_result, facet_coverage)
             self._last_recall_meta = _RecallMeta(
                 intent=_PoolQueryIntent.MULTI_SOURCE,
                 total_active=len(active),
                 returned=len(facet_result),
-                coverage=1.0 if facet_result else 0.0,
+                coverage=facet_coverage,
                 low_coverage=not facet_result,
+                should_abstain=facet_abstain,
+                unsupported_answer_risk=facet_risk,
             )
             return facet_result
 
@@ -352,12 +379,15 @@ class _PoolRecallMixin:
         # Compute coverage: fraction of returned results with meaningful scores.
         relevant_count = sum(1 for _, s in top_results if s >= _COVERAGE_SCORE_FLOOR)
         coverage = relevant_count / len(top_results) if top_results else 0.0
+        flat_risk, flat_abstain = _abstention(top_results, coverage)
         self._last_recall_meta = _RecallMeta(
             intent=intent,
             total_active=len(active),
             returned=len(top_results),
             coverage=coverage,
             low_coverage=coverage < 0.5,
+            should_abstain=flat_abstain,
+            unsupported_answer_risk=flat_risk,
         )
 
         if _POOL_DEBUG:

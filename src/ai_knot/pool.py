@@ -147,6 +147,23 @@ class SharedMemoryPool(_PoolRecallMixin):
         """
         self._read_scopes.setdefault(agent_id, set()).add(scope)
 
+    @property
+    def last_recall_abstains(self) -> bool:
+        """Whether the most recent recall recommends abstaining (Synthius-Mem).
+
+        True when the recall returned nothing, coverage was low, or no returned fact
+        carried an evidence pointer — i.e. an answer would rest on unsupported memory.
+        Returns False before any recall.  See :attr:`last_recall_risk` for the score.
+        """
+        meta = self._last_recall_meta
+        return bool(meta and meta.should_abstain)
+
+    @property
+    def last_recall_risk(self) -> float:
+        """Unsupported-answer risk in [0,1] from the most recent recall (0.0 if none)."""
+        meta = self._last_recall_meta
+        return meta.unsupported_answer_risk if meta else 0.0
+
     def get_trust(self, agent_id: str) -> float:
         """Return the current auto-computed trust score for an agent.
 

@@ -194,6 +194,10 @@ class _RecallMeta:
     returned: int
     coverage: float  # fraction of returned results above _COVERAGE_SCORE_FLOOR
     low_coverage: bool  # True when coverage < 0.5
+    # Abstention signal (Synthius-Mem): an answer built on this recall risks resting
+    # on unsupported memory. Risk in [0,1]; should_abstain is the deterministic call.
+    should_abstain: bool = False
+    unsupported_answer_risk: float = 0.0
 
 
 def _query_specificity(query: str, index: InvertedIndex) -> float:
