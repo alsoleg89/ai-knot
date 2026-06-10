@@ -225,6 +225,31 @@ class TestPoolRecall:
         _, score = results[0]
         assert score < 1.0  # discounted from full score
 
+    def test_adaptive_truncation_drops_weak_tail(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """A query with one dominant match returns a confident set, not top_k
+        padded with near-irrelevant neighbours (adaptive truncation)."""
+        kb = _kb("agent_a", sqlite_db)
+        ids = [
+            kb.add("Quarterly revenue forecast for the platform team is 2 million dollars").id,
+            kb.add("The platform on-call rotation covers weekends").id,
+            kb.add("Team lunch is scheduled for Friday afternoon").id,
+            kb.add("The office printer on floor 3 needs a toner refill").id,
+            kb.add("Parking permits renew at the start of each calendar year").id,
+        ]
+        pool_sqlite.publish("agent_a", ids, kb=kb)
+
+        results = pool_sqlite.recall("quarterly revenue forecast platform team", "agent_b", top_k=5)
+        # The dominant match is present and ranked first.
+        assert "revenue forecast" in results[0][0].content.lower()
+        # The weak tail is truncated — fewer than top_k, not padded with the
+        # unrelated printer/parking facts.
+        assert len(results) < 5
+        assert not any("printer" in f.content.lower() for f, _ in results)
+        # Truncation never empties a non-empty result set.
+        assert len(results) >= 1
+
 
 class TestIncidentCanonicalResolution:
     """Regression: canonical value-questions that merely mention an incident-domain
