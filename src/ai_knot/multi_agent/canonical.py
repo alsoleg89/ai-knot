@@ -288,6 +288,19 @@ class ClaimFamilyResolver:
                 # from higher-trust agents.
                 max_cluster_score = max(s for _, s in member_pairs)
                 kept.append((winner_fact, max(winner_score, max_cluster_score)))
+                # Eliminate only the *superseded* members — the stale claims that
+                # carry no update marker.  Other members that themselves carry a
+                # conflict-stem are current corrections (e.g. one agent's "tightened
+                # to 4 min" alongside the CAS-slot "updated to 4 min"); keeping them
+                # preserves correct duplicates instead of collapsing the whole
+                # family to a single winner.  The kept set is always a superset of
+                # the winner, so coverage cannot drop below the collapse-to-winner
+                # baseline; the stale stem-less claim is the only thing removed.
+                for f, s in member_pairs:
+                    if f.id == winner_fact.id:
+                        continue
+                    if frozenset(_tokenize(f.content)) & _CONFLICT_SIGNAL_STEMS:
+                        kept.append((f, s))
             else:
                 # Non-canonical: all members pass (only near-duplicates were
                 # grouped at the higher threshold), keep the highest-scored.

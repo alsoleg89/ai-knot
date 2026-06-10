@@ -226,6 +226,68 @@ class TestPoolRecall:
         assert score < 1.0  # discounted from full score
 
 
+class TestIncidentCanonicalResolution:
+    """Regression: canonical value-questions that merely mention an incident-domain
+    noun ("alert", "incident") must still resolve stale competing claims, and
+    current corrections (carrying an update marker) survive as duplicates rather
+    than collapsing the whole family to one winner.
+    """
+
+    def test_incident_value_question_resolves_stale_claim(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb_a = _kb("agent_a", sqlite_db)
+        stale = kb_a.add(
+            "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page."
+        )
+        pool_sqlite.publish("agent_a", [stale.id], kb=kb_a)
+
+        kb_b = _kb("agent_b", sqlite_db)
+        correction = kb_b.add(
+            "Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025."
+        )
+        pool_sqlite.publish("agent_b", [correction.id], kb=kb_b)
+
+        # "alert" routes this to the INCIDENT intent.  Before the fix INCIDENT
+        # skipped the canonical resolver, leaving the stale 10-minute claim in the
+        # top-k; now the resolver runs and the conflict-stem ("tightened") cluster
+        # eliminates the superseded marker-less claim.
+        results = pool_sqlite.recall(
+            "What is our Sev1 alert acknowledgement SLA?", "querier", top_k=3
+        )
+        texts = [f.content.lower() for f, _ in results]
+        assert any("4 minutes" in t for t in texts), "correction must surface"
+        assert not any("10 minutes" in t for t in texts), "stale claim must be resolved out"
+
+    def test_current_corrections_survive_as_duplicates(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        pool_sqlite.register("agent_c")
+        kb_a = _kb("agent_a", sqlite_db)
+        stale = kb_a.add(
+            "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page."
+        )
+        pool_sqlite.publish("agent_a", [stale.id], kb=kb_a)
+
+        kb_b = _kb("agent_b", sqlite_db)
+        corr_b = kb_b.add("Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025.")
+        pool_sqlite.publish("agent_b", [corr_b.id], kb=kb_b)
+
+        kb_c = _kb("agent_c", sqlite_db)
+        corr_c = kb_c.add(
+            "Sev1 alert acknowledgement SLA was updated to 4 minutes in the revised policy."
+        )
+        pool_sqlite.publish("agent_c", [corr_c.id], kb=kb_c)
+
+        results = pool_sqlite.recall(
+            "What is our Sev1 alert acknowledgement SLA?", "querier", top_k=5
+        )
+        marker_facts = [f for f, _ in results if "4 minutes" in f.content.lower()]
+        # Both current corrections (each carrying an update marker) are kept.
+        assert len(marker_facts) >= 2, "current corrections survive as duplicates"
+        assert not any("10 minutes" in f.content.lower() for f, _ in results)
+
+
 # ---------------------------------------------------------------------------
 # sync_dirty() — backward compat
 # ---------------------------------------------------------------------------
