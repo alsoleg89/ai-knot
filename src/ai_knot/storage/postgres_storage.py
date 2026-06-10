@@ -54,10 +54,19 @@ CREATE TABLE IF NOT EXISTS "ai-knot_facts" (
     value_text         TEXT NOT NULL DEFAULT '',
     qualifiers         TEXT NOT NULL DEFAULT '{}',
     state_confidence   DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    topic_channel      TEXT NOT NULL DEFAULT '',
+    visibility_scope   TEXT NOT NULL DEFAULT 'global',
     claim_key          TEXT NOT NULL DEFAULT '',
     memory_tier        TEXT NOT NULL DEFAULT 'private',
     event_time         TEXT,
     PRIMARY KEY (agent_id, id)
+)
+"""
+
+_CREATE_POOL_STATS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_pool_stats" (
+    id   INTEGER PRIMARY KEY CHECK (id = 0),
+    data TEXT NOT NULL
 )
 """
 
@@ -92,8 +101,30 @@ class PostgresStorage:
     def _init_db(self) -> None:
         with self._get_conn() as conn:
             conn.execute(_CREATE_TABLE)
+            conn.execute(_CREATE_POOL_STATS_TABLE)
             conn.commit()
         self._migrate_db()
+
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist shared-pool trust/usage telemetry (single-row upsert)."""
+        payload = json.dumps(stats)
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_pool_stats" (id, data) VALUES (0, %s) '
+                "ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+                (payload,),
+            )
+            conn.commit()
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load persisted trust/usage telemetry, or an empty dict if none exists."""
+        with self._get_conn() as conn:
+            cur = conn.execute('SELECT data FROM "ai-knot_pool_stats" WHERE id = 0')
+            row = cur.fetchone()
+        if not row:
+            return {}
+        loaded: dict[str, Any] = json.loads(row[0])
+        return loaded
 
     def _migrate_db(self) -> None:
         """Add new columns to existing databases (backward compat)."""
@@ -120,6 +151,8 @@ class PostgresStorage:
             "value_text": "TEXT NOT NULL DEFAULT ''",
             "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
             "state_confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
+            "topic_channel": "TEXT NOT NULL DEFAULT ''",
+            "visibility_scope": "TEXT NOT NULL DEFAULT 'global'",
             "claim_key": "TEXT NOT NULL DEFAULT ''",
             "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
             "event_time": "TEXT",
@@ -187,6 +220,8 @@ class PostgresStorage:
                 fact.value_text,
                 json.dumps(fact.qualifiers),
                 fact.state_confidence,
+                fact.topic_channel,
+                fact.visibility_scope,
                 fact.claim_key,
                 fact.memory_tier,
                 fact.event_time.isoformat() if fact.event_time is not None else None,
@@ -208,10 +243,11 @@ class PostgresStorage:
                     entity, attribute, version, mesi_state,
                     canonical_surface, witness_surface, prompt_surface,
                     slot_key, value_text, qualifiers, state_confidence,
+                    topic_channel, visibility_scope,
                     claim_key, memory_tier, event_time)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 rows,
             )
             conn.commit()
@@ -256,6 +292,7 @@ class PostgresStorage:
                           entity, attribute, version, mesi_state,
                           canonical_surface, witness_surface, prompt_surface,
                           slot_key, value_text, qualifiers, state_confidence,
+                          topic_channel, visibility_scope,
                           claim_key, memory_tier, event_time"""
 
     def _fact_from_row(self, row: tuple[Any, ...]) -> Fact:
@@ -291,9 +328,11 @@ class PostgresStorage:
             value_text=str(row[28]) if row[28] else "",
             qualifiers=json.loads(row[29]) if row[29] else {},
             state_confidence=float(row[30]) if row[30] is not None else 1.0,
-            claim_key=str(row[31]) if len(row) > 31 and row[31] else "",
-            memory_tier=str(row[32]) if len(row) > 32 and row[32] else "private",
-            event_time=_parse_datetime(row[33]) if len(row) > 33 and row[33] else None,
+            topic_channel=str(row[31]) if len(row) > 31 and row[31] else "",
+            visibility_scope=str(row[32]) if len(row) > 32 and row[32] else "global",
+            claim_key=str(row[33]) if len(row) > 33 and row[33] else "",
+            memory_tier=str(row[34]) if len(row) > 34 and row[34] else "private",
+            event_time=_parse_datetime(row[35]) if len(row) > 35 and row[35] else None,
         )
 
     def load_active(self, agent_id: str) -> list[Fact]:

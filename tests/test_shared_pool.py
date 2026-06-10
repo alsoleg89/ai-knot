@@ -6,6 +6,7 @@ import pathlib
 
 import pytest
 
+from ai_knot._pool_recall import _abstention
 from ai_knot.knowledge import KnowledgeBase, SharedMemoryPool
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 from ai_knot.storage.yaml_storage import YAMLStorage
@@ -39,6 +40,17 @@ def pool_yaml(tmp_path: pathlib.Path) -> SharedMemoryPool:
 
 def _kb(agent_id: str, storage: SQLiteStorage) -> KnowledgeBase:
     return KnowledgeBase(agent_id, storage=storage)
+
+
+def _add_slot(kb: KnowledgeBase, content: str, slot_key: str) -> Fact:
+    """Add a fact and tag it with *slot_key* (mirrors backend ``add_structured``)."""
+    fact = kb.add(content)
+    facts = kb.list_facts()
+    for f in facts:
+        if f.id == fact.id:
+            f.slot_key = slot_key
+    kb.replace_facts(facts)
+    return fact
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +95,50 @@ class TestPublish:
         assert len(published) == 1
         assert published[0].mesi_state == MESIState.SHARED
         assert published[0].origin_agent_id == "agent_a"
+
+    def test_require_evidence_skips_assertion_without_pointer(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        # add()-created facts carry no source pointer; the opt-in gate skips them.
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, require_evidence=True)
+        assert published == []
+
+    def test_require_evidence_admits_fact_with_verbatim(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        # Attach a provenance pointer, as learn()-extracted facts carry.
+        facts = sqlite_db.load("agent_a")
+        for f in facts:
+            f.source_verbatim = "Alex told me he earns 95k a year"
+        sqlite_db.save("agent_a", facts)
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, require_evidence=True)
+        assert len(published) == 1
+
+    def test_require_evidence_skips_unsupported_fact(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        facts = sqlite_db.load("agent_a")
+        for f in facts:
+            f.source_verbatim = "Alex earns 95k"
+            f.supported = False  # faithfulness filter rejected it
+        sqlite_db.save("agent_a", facts)
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb, require_evidence=True)
+        assert published == []
+
+    def test_default_publish_ignores_evidence(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        # Backward-compat: default require_evidence=False publishes pointer-less facts.
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        published = pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        assert len(published) == 1
 
     def test_publish_unregistered_agent_raises(
         self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
@@ -478,7 +534,10 @@ class TestTrustOrdering:
         solid = kb_b.add("Python is used for ML work")
         pool_sqlite.publish("agent_b", [solid.id], kb=kb_b)
 
-        # Artificially tank agent_a's trust: 1 publish, 0 used, 1 quick invalidation.
+        # Artificially tank agent_a's trust: one verifiable (slot) publish that was
+        # quick-invalidated → quick_inv_rate = 1/1 = 1.0.  (quick_inv only accrues on
+        # slot facts, so the slot-publish ledger must be set alongside it.)
+        pool_sqlite._slot_publish_count["agent_a"] = 1
         pool_sqlite._quick_inv_count["agent_a"] = 1
         assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
 
@@ -640,3 +699,358 @@ class TestAutoTrust:
         trust_a = pool_sqlite.get_trust("agent_a")
         # Published 1, used 0, quick_inv 1 → trust = 0 * (1-1) = 0, clamped to 0.1
         assert trust_a == pytest.approx(0.1)
+
+
+class TestMonotonicCASAndTrustIntegrity:
+    """Monotonic CAS + laundering-resistant, recoverable trust.
+
+    The quick-invalidation penalty is a rate over *verifiable* (slot) publish
+    events, not over total publish volume.  This keeps trust resistant to
+    reputation-laundering (free-standing spam cannot lower the rate) while still
+    allowing recovery (re-asserting a slot with a corrected value adds an event
+    and dilutes the penalty).  The monotonic-CAS guard stops an agent from
+    re-claiming a slot a peer has corrected by replaying its own stale fact.
+    """
+
+    def test_stale_replay_does_not_reclaim_peer_slot(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Re-publishing an already-superseded fact must not re-poison a peer's slot."""
+        kb_a = _kb("agent_a", sqlite_db)
+        x = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [x.id], kb=kb_a)
+
+        # agent_b corrects the slot — its value is now authoritative.
+        kb_b = _kb("agent_b", sqlite_db)
+        y = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [y.id], kb=kb_b)
+
+        # agent_a replays its stale fact (still active in its private KB).
+        pool_sqlite.publish("agent_a", [x.id], kb=kb_a)
+
+        active = [
+            f
+            for f in pool_sqlite.list_shared_facts()
+            if f.slot_key == "Alex::salary" and f.valid_until is None
+        ]
+        assert len(active) == 1
+        assert active[0].origin_agent_id == "agent_b"
+        assert "95k" in active[0].content
+
+    def test_fresh_correction_supersedes_peer_slot(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """A NEW fact (not a stale replay) legitimately supersedes the slot holder."""
+        kb_a = _kb("agent_a", sqlite_db)
+        x = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [x.id], kb=kb_a)
+
+        kb_b = _kb("agent_b", sqlite_db)
+        y = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [y.id], kb=kb_b)
+
+        # agent_a re-asserts with a brand-new fact (corrected value, fresh id).
+        z = _add_slot(kb_a, "Alex earns 110k after raise", "Alex::salary")
+        pool_sqlite.publish("agent_a", [z.id], kb=kb_a)
+
+        active = [
+            f
+            for f in pool_sqlite.list_shared_facts()
+            if f.slot_key == "Alex::salary" and f.valid_until is None
+        ]
+        assert len(active) == 1
+        assert active[0].origin_agent_id == "agent_a"
+        assert "110k" in active[0].content
+
+    def test_freestanding_spam_cannot_launder_trust(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """An agent caught publishing a bad slot cannot wash it out with noise."""
+        kb_a = _kb("agent_a", sqlite_db)
+        bad = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [bad.id], kb=kb_a)
+
+        # Peer supersedes the only verifiable claim → trust hits the floor.
+        kb_b = _kb("agent_b", sqlite_db)
+        fix = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [fix.id], kb=kb_b)
+        assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
+
+        # agent_a floods the pool with unverifiable free-standing facts.
+        for i in range(10):
+            noise = kb_a.add(f"Unverifiable marketing claim number {i}")
+            pool_sqlite.publish("agent_a", [noise.id], kb=kb_a)
+
+        # Free-standing volume must NOT dilute the invalidation rate.
+        assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
+
+    def test_slot_reassertion_recovers_trust(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """A penalised agent recovers by re-asserting slots with surviving values."""
+        kb_a = _kb("agent_a", sqlite_db)
+        s1 = _add_slot(kb_a, "Mia salary 80k", "Mia::salary")
+        s2 = _add_slot(kb_a, "Mia title Junior", "Mia::title")
+        pool_sqlite.publish("agent_a", [s1.id, s2.id], kb=kb_a)
+
+        # Both verifiable claims superseded by a peer → floor.
+        kb_b = _kb("agent_b", sqlite_db)
+        c1 = _add_slot(kb_b, "Mia salary 120k", "Mia::salary")
+        c2 = _add_slot(kb_b, "Mia title Senior", "Mia::title")
+        pool_sqlite.publish("agent_b", [c1.id, c2.id], kb=kb_b)
+        trust_floor = pool_sqlite.get_trust("agent_a")
+        assert trust_floor == pytest.approx(0.1)
+
+        # agent_a re-asserts both slots with fresh corrected facts (which survive).
+        r1 = _add_slot(kb_a, "Mia salary 125k confirmed", "Mia::salary")
+        r2 = _add_slot(kb_a, "Mia title Staff confirmed", "Mia::title")
+        pool_sqlite.publish("agent_a", [r1.id, r2.id], kb=kb_a)
+        pool_sqlite.recall("Mia salary title", "agent_c", top_k=5)
+
+        # Slot events 2 → 4 while quick_inv stays 2 → penalty 1.0 → 0.5 → recovery.
+        assert pool_sqlite.get_trust("agent_a") > trust_floor
+
+    def test_wide_query_suppresses_known_malicious_agent(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Even a WIDE (empty-KB) query must not surface a known-malicious agent first.
+
+        WIDE/onboarding queries skip the trust discount for ordinary agents (the
+        querier has no basis to judge an unseen agent), but an agent whose verifiable
+        claims peers actively superseded stays suppressed.
+        """
+        pool_sqlite.register("agent_x")
+
+        # Make agent_a known-malicious: its only verifiable claim is superseded.
+        kb_a = _kb("agent_a", sqlite_db)
+        bad_slot = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [bad_slot.id], kb=kb_a)
+        kb_b = _kb("agent_b", sqlite_db)
+        fix = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [fix.id], kb=kb_b)
+        assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
+
+        # agent_a (malicious) and agent_x (neutral, never invalidated) publish
+        # equally-relevant free-standing facts.
+        bad = kb_a.add("alpha protocol handles message encryption")
+        pool_sqlite.publish("agent_a", [bad.id], kb=kb_a)
+        kb_x = _kb("agent_x", sqlite_db)
+        good = kb_x.add("beta protocol handles message encryption")
+        pool_sqlite.publish("agent_x", [good.id], kb=kb_x)
+
+        # agent_c queries with an EMPTY private KB → WIDE exploration mode.
+        results = pool_sqlite.recall("protocol encryption", "agent_c", top_k=2)
+        ranked = [f.origin_agent_id for f, _ in results]
+        assert ranked, "expected results"
+        # The neutral agent's fact outranks the known-malicious agent's, even in WIDE.
+        assert ranked[0] == "agent_x"
+
+
+class TestVisibilityScope:
+    """visibility_scope writer (add/publish) + per-agent read-access projection."""
+
+    _CONTENT = "deployment uses FluxCD on cluster prod"
+    _QUERY = "FluxCD deployment"
+
+    def test_named_scope_hidden_without_grant(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT, visibility_scope="team:infra")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        # agent_b has no grant → cannot see the team:infra fact.
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert all("FluxCD" not in f.content for f, _ in results_b)
+        # The origin agent always sees its own fact.
+        results_a = pool_sqlite.recall(self._QUERY, "agent_a", top_k=5)
+        assert any("FluxCD" in f.content for f, _ in results_a)
+
+    def test_named_scope_visible_after_grant(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT, visibility_scope="team:infra")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        pool_sqlite.grant_read("agent_b", "team:infra")
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert any("FluxCD" in f.content for f, _ in results_b)
+
+    def test_global_scope_visible_to_all(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT)  # default "global"
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert any("FluxCD" in f.content for f, _ in results_b)
+
+    def test_publish_scope_override(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        # publish(visibility_scope=...) overrides the add()-time scope.
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add(self._CONTENT)  # global at add()
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb, visibility_scope="team:infra")
+        results_b = pool_sqlite.recall(self._QUERY, "agent_b", top_k=5)
+        assert all("FluxCD" not in f.content for f, _ in results_b)
+
+
+class TestAbstention:
+    """Deterministic abstention signal (_abstention helper + pool accessors)."""
+
+    def test_helper_empty_results(self) -> None:
+        risk, abstain = _abstention([], 0.0)
+        assert risk == 1.0
+        assert abstain is True
+
+    def test_helper_no_evidence_abstains(self) -> None:
+        fact = Fact(content="deployment uses FluxCD")  # no source pointer
+        risk, abstain = _abstention([(fact, 1.0)], coverage=1.0)
+        assert abstain is True  # evidence_frac == 0
+        assert risk == 1.0
+
+    def test_helper_evidence_high_coverage_no_abstain(self) -> None:
+        fact = Fact(content="deployment uses FluxCD", source_verbatim="we deploy FluxCD")
+        risk, abstain = _abstention([(fact, 1.0)], coverage=1.0)
+        assert abstain is False
+        assert risk == 0.0
+
+    def test_helper_low_coverage_abstains(self) -> None:
+        fact = Fact(content="deployment uses FluxCD", source_verbatim="we deploy FluxCD")
+        risk, abstain = _abstention([(fact, 1.0)], coverage=0.3)
+        assert abstain is True  # coverage < 0.5
+        assert risk == pytest.approx(0.7)
+
+    def test_recall_no_results_abstains(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        results = pool_sqlite.recall("nothing in the empty pool", "agent_b", top_k=5)
+        assert results == []
+        assert pool_sqlite.last_recall_abstains is True
+        assert pool_sqlite.last_recall_risk == pytest.approx(1.0)
+
+    def test_recall_over_unsupported_facts_abstains(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("deployment uses FluxCD on cluster prod")  # no evidence pointer
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        pool_sqlite.recall("FluxCD deployment", "agent_b", top_k=5)
+        assert pool_sqlite.last_recall_abstains is True
+
+    def test_recall_over_evidence_facts_does_not_abstain(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("deployment uses FluxCD on cluster prod")
+        facts = sqlite_db.load("agent_a")
+        for f in facts:
+            f.source_verbatim = "we deploy with FluxCD on prod"
+        sqlite_db.save("agent_a", facts)
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        pool_sqlite.recall("FluxCD deployment", "agent_b", top_k=5)
+        assert pool_sqlite.last_recall_abstains is False
+
+
+class TestProvenance:
+    """Provenance lineage (published_by / promoted_by / supersedes_id) persisted via qualifiers."""
+
+    def test_published_by_set_and_persists(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        pool_sqlite.publish("agent_a", [fact.id], kb=kb)
+        # Reload from storage to prove the lineage persisted (not just in-memory).
+        shared = pool_sqlite.list_shared_facts()
+        pub = next(f for f in shared if f.content == "Alex earns 95k")
+        assert pub.provenance.published_by == "agent_a"
+        assert pub.provenance.origin_agent == "agent_a"
+
+    def test_supersedes_id_records_cas_predecessor(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        kb_a = _kb("agent_a", sqlite_db)
+        kb_b = _kb("agent_b", sqlite_db)
+        f1 = kb_a.add_resolved(
+            [
+                Fact(
+                    content="Alex at Globex",
+                    entity="Alex",
+                    attribute="employer",
+                    value_text="Globex",
+                )
+            ]
+        )[0]
+        pool_sqlite.publish("agent_a", [f1.id], kb=kb_a)
+        f2 = kb_b.add_resolved(
+            [
+                Fact(
+                    content="Alex at Initech",
+                    entity="Alex",
+                    attribute="employer",
+                    value_text="Initech",
+                )
+            ]
+        )[0]
+        pool_sqlite.publish("agent_b", [f2.id], kb=kb_b)
+        shared = pool_sqlite.list_shared_facts()
+        active = [f for f in shared if f.is_active() and f.slot_key == "Alex::employer"]
+        assert len(active) == 1
+        assert active[0].provenance.supersedes_id == f1.id
+
+    def test_promoted_by_set(self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool) -> None:
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        pub = pool_sqlite.publish("agent_a", [fact.id], kb=kb)[0]
+        pool_sqlite.promote("agent_a", [pub.id], tier="org")
+        promoted = next(f for f in pool_sqlite.list_shared_facts() if f.id == pub.id)
+        assert promoted.provenance.promoted_by == "agent_a"
+        assert promoted.memory_tier == "org"
+
+    def test_private_fact_has_empty_lineage(self) -> None:
+        # A freshly created fact has no publish/promote lineage yet.
+        fact = Fact(content="x", origin_agent_id="agent_a")
+        assert fact.provenance.published_by == ""
+        assert fact.provenance.promoted_by == ""
+        assert fact.provenance.supersedes_id == ""
+
+
+class TestPersistTrust:
+    """Opt-in durable trust/usage telemetry (PoolStatsCapable + persist_stats)."""
+
+    def test_trust_survives_restart_when_enabled(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db, persist_stats=True)
+        pool.register("agent_a")
+        pool.register("agent_b")
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k annually")
+        pool.publish("agent_a", [fact.id], kb=kb)
+        pool.recall("Alex salary", "agent_b", top_k=3)  # accrues used_count
+        pool.flush_stats()
+
+        # A fresh pool on the same DB restores the telemetry.
+        pool2 = SharedMemoryPool(storage=sqlite_db, persist_stats=True)
+        assert pool2._publish_count.get("agent_a", 0) == 1
+        assert pool2.get_trust("agent_a") == pool.get_trust("agent_a")
+
+    def test_trust_not_persisted_by_default(self, sqlite_db: SQLiteStorage) -> None:
+        pool = SharedMemoryPool(storage=sqlite_db)  # persist_stats=False
+        pool.register("agent_a")
+        kb = _kb("agent_a", sqlite_db)
+        fact = kb.add("Alex earns 95k")
+        pool.publish("agent_a", [fact.id], kb=kb)
+        # Default pool writes no telemetry; a fresh instance restores nothing.
+        pool2 = SharedMemoryPool(storage=sqlite_db, persist_stats=True)
+        assert pool2._publish_count.get("agent_a", 0) == 0
+
+    def test_yaml_backend_persists(self, tmp_path: pathlib.Path) -> None:
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        pool = SharedMemoryPool(storage=storage, persist_stats=True)
+        pool.register("agent_a")
+        kb = KnowledgeBase("agent_a", storage=storage)
+        fact = kb.add("Alex earns 95k")
+        pool.publish("agent_a", [fact.id], kb=kb)
+
+        pool2 = SharedMemoryPool(storage=YAMLStorage(base_dir=str(tmp_path)), persist_stats=True)
+        assert pool2._publish_count.get("agent_a", 0) == 1

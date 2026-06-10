@@ -31,6 +31,51 @@ _SHARED_NAMESPACE = "__shared__"
 _POOL_DEBUG = bool(os.environ.get("AI_KNOT_POOL_DEBUG", ""))
 _POOL_RECALL_OVERFETCH = 3
 _COVERAGE_SCORE_FLOOR: float = 0.01
+# Trust below this is "known-malicious": an agent whose verifiable claims were
+# actively superseded by peers (adversary floor ≈ 0.1), distinct from a merely
+# unseen agent (Bayesian prior ≈ 0.3+).  Facts from such agents are discounted even
+# for WIDE/onboarding queries — a newcomer must not be served actively-invalidated
+# data.  Matches the diversity publisher floor used downstream.
+_ADVERSARY_TRUST_FLOOR: float = 0.2
+
+
+def _scope_visible(fact: Fact, requesting_agent_id: str, read_scopes: set[str]) -> bool:
+    """Whether *fact*'s ``visibility_scope`` permits *requesting_agent_id* to read it.
+
+    Access-control projection (Collaborative Memory, arXiv 2505.18279): a fact is
+    visible when its scope is public (``"global"`` or empty), OR the requester is
+    its origin agent, OR the requester was granted read access to the fact's named
+    scope via :meth:`SharedMemoryPool.grant_read`.  Any other named scope
+    (``"local"``, ``"private"``, ``"team:x"``, …) stays hidden unless granted —
+    closing the gap where every fact was de-facto global.
+    """
+    scope = fact.visibility_scope or "global"
+    if scope == "global":
+        return True
+    if fact.origin_agent_id == requesting_agent_id:
+        return True
+    return scope in read_scopes
+
+
+def _abstention(results: list[tuple[Fact, float]], coverage: float) -> tuple[float, bool]:
+    """Deterministic abstention signal for a pool recall (Synthius-Mem).
+
+    Returns ``(unsupported_answer_risk in [0,1], should_abstain)``.  Risk is the
+    larger of the coverage shortfall (``1 - coverage``) and the evidence shortfall
+    (``1 - evidence_frac``, the fraction of returned facts carrying a verbatim /
+    snippet / span pointer).  The recall recommends abstaining when coverage is low
+    (< 0.5) OR not a single returned fact carries evidence — i.e. an answer would
+    rest on unsupported memory.  No results is maximum risk.
+    """
+    if not results:
+        return 1.0, True
+    with_evidence = sum(
+        1 for f, _ in results if f.source_verbatim or f.source_snippets or f.source_spans
+    )
+    evidence_frac = with_evidence / len(results)
+    risk = max(1.0 - coverage, 1.0 - evidence_frac)
+    should_abstain = coverage < 0.5 or evidence_frac == 0.0
+    return risk, should_abstain
 
 
 class _PoolRecallMixin:
@@ -53,10 +98,12 @@ class _PoolRecallMixin:
     _last_recall_meta: _RecallMeta | None
     _fact_consumers: dict[str, set[str]]
     _used_count: dict[str, int]
+    _quick_inv_count: dict[str, int]
     _recall_service: SharedPoolRecallService
     _claim_resolver: ClaimFamilyResolver
     _query_router: QueryShapeRouter
     _known_version: dict[str, int]
+    _read_scopes: dict[str, set[str]]
     _AUTO_PROMOTE_THRESHOLD: int
     _TIER_BOOST: dict[str, float]
 
@@ -101,12 +148,9 @@ class _PoolRecallMixin:
         if topic_channel:
             active = [f for f in active if not f.topic_channel or f.topic_channel == topic_channel]
 
-        # visibility_scope filter: hide local-only facts from foreign agents.
-        active = [
-            f
-            for f in active
-            if f.visibility_scope != "local" or f.origin_agent_id == requesting_agent_id
-        ]
+        # visibility_scope projection: public ("global") + own + explicitly-granted scopes.
+        read_scopes = self._read_scopes.get(requesting_agent_id, set())
+        active = [f for f in active if _scope_visible(f, requesting_agent_id, read_scopes)]
 
         if not active:
             self._last_recall_meta = _RecallMeta(
@@ -115,6 +159,8 @@ class _PoolRecallMixin:
                 returned=0,
                 coverage=0.0,
                 low_coverage=True,
+                should_abstain=True,
+                unsupported_answer_risk=1.0,
             )
             return []
 
@@ -154,12 +200,16 @@ class _PoolRecallMixin:
                     )
                 consumers = self._fact_consumers.setdefault(fact.id, set())
                 consumers.add(requesting_agent_id)
+            facet_coverage = 1.0 if facet_result else 0.0
+            facet_risk, facet_abstain = _abstention(facet_result, facet_coverage)
             self._last_recall_meta = _RecallMeta(
                 intent=_PoolQueryIntent.MULTI_SOURCE,
                 total_active=len(active),
                 returned=len(facet_result),
-                coverage=1.0 if facet_result else 0.0,
+                coverage=facet_coverage,
                 low_coverage=not facet_result,
+                should_abstain=facet_abstain,
+                unsupported_answer_risk=facet_risk,
             )
             return facet_result
 
@@ -218,16 +268,27 @@ class _PoolRecallMixin:
             )
 
         # Apply per-agent trust discount + tier boost before final cutoff.
-        # For WIDE (empty-KB) queries, skip trust discount: the querier has no
-        # interaction history with the pool and cannot know which agents are
-        # trustworthy.  Applying trust would unfairly penalise agents that
-        # happened not to appear in earlier (unrelated) queries.
+        # For WIDE (empty-KB) queries, skip the trust discount for ordinary agents:
+        # the querier has no interaction history and cannot know which agents are
+        # trustworthy, so penalising agents that merely did not appear in earlier
+        # queries would be unfair.  Known-malicious agents are the exception — a
+        # newcomer must still not be served facts from an agent whose verifiable
+        # claims peers actively superseded (trust below the adversary floor).
         apply_trust = not _v3_is_wide
         discounted: list[tuple[Fact, float]] = []
         for fact, score in pairs:
-            if apply_trust and fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
-                trust = self.get_trust(fact.origin_agent_id)
-                score *= trust
+            aid = fact.origin_agent_id
+            if aid and aid != requesting_agent_id:
+                if apply_trust:
+                    score *= self.get_trust(aid)
+                elif self._quick_inv_count.get(aid, 0) > 0:
+                    # WIDE mode: only suppress known-malicious agents.  An agent can
+                    # sit below the adversary floor only if peers superseded its
+                    # verifiable claims, so this cheap pre-check skips the trust math
+                    # for the common no-invalidation case (keeps WIDE recall fast).
+                    trust = self.get_trust(aid)
+                    if trust < _ADVERSARY_TRUST_FLOOR:
+                        score *= trust
             # Tier-aware scoring: org-tier facts get a small boost.
             score *= self._TIER_BOOST.get(fact.memory_tier, 1.0)
             discounted.append((fact, score))
@@ -336,12 +397,15 @@ class _PoolRecallMixin:
         # Compute coverage: fraction of returned results with meaningful scores.
         relevant_count = sum(1 for _, s in top_results if s >= _COVERAGE_SCORE_FLOOR)
         coverage = relevant_count / len(top_results) if top_results else 0.0
+        flat_risk, flat_abstain = _abstention(top_results, coverage)
         self._last_recall_meta = _RecallMeta(
             intent=intent,
             total_active=len(active),
             returned=len(top_results),
             coverage=coverage,
             low_coverage=coverage < 0.5,
+            should_abstain=flat_abstain,
+            unsupported_answer_risk=flat_risk,
         )
 
         if _POOL_DEBUG:

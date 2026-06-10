@@ -75,6 +75,13 @@ CREATE TABLE IF NOT EXISTS snapshots (
 )
 """
 
+_CREATE_POOL_STATS_TABLE = """
+CREATE TABLE IF NOT EXISTS pool_stats (
+    id   INTEGER PRIMARY KEY CHECK (id = 0),
+    data TEXT NOT NULL
+)
+"""
+
 _INSERT_FACTS_SQL = """INSERT INTO facts
    (id, agent_id, content, type, importance, retention,
     access_count, tags, created_at, last_accessed,
@@ -121,6 +128,7 @@ class SQLiteStorage:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_SNAPSHOTS_TABLE)
+            conn.execute(_CREATE_POOL_STATS_TABLE)
             for stmt in _CREATE_INDEXES:
                 conn.execute(stmt)
         self._migrate_db()
@@ -445,6 +453,25 @@ class SQLiteStorage:
     # ------------------------------------------------------------------
     # SnapshotCapable implementation
     # ------------------------------------------------------------------
+
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist shared-pool trust/usage telemetry (single-row upsert)."""
+        payload = json.dumps(stats)
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO pool_stats (id, data) VALUES (0, ?) "
+                "ON CONFLICT(id) DO UPDATE SET data = excluded.data",
+                (payload,),
+            )
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load persisted trust/usage telemetry, or an empty dict if none exists."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT data FROM pool_stats WHERE id = 0").fetchone()
+        if not row:
+            return {}
+        loaded: dict[str, Any] = json.loads(row[0])
+        return loaded
 
     def save_snapshot(self, agent_id: str, name: str, facts: list[Fact]) -> None:
         """Persist a named snapshot (overwrites if name already exists)."""
