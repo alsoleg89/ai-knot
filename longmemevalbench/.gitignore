@@ -1,0 +1,7 @@
+node_modules/
+data/runs/
+data/longmemeval_s.json
+data/longmemeval_m.json
+data/longmemeval_oracle.json
+*.log
+.DS_Store

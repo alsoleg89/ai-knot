@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS facts (
     visibility_scope  TEXT NOT NULL DEFAULT 'global',
     claim_key         TEXT NOT NULL DEFAULT '',
     memory_tier       TEXT NOT NULL DEFAULT 'private',
+    event_time        TEXT,
     PRIMARY KEY (agent_id, id)
 )
 """
@@ -74,6 +75,13 @@ CREATE TABLE IF NOT EXISTS snapshots (
 )
 """
 
+_CREATE_POOL_STATS_TABLE = """
+CREATE TABLE IF NOT EXISTS pool_stats (
+    id   INTEGER PRIMARY KEY CHECK (id = 0),
+    data TEXT NOT NULL
+)
+"""
+
 _INSERT_FACTS_SQL = """INSERT INTO facts
    (id, agent_id, content, type, importance, retention,
     access_count, tags, created_at, last_accessed,
@@ -84,8 +92,9 @@ _INSERT_FACTS_SQL = """INSERT INTO facts
     entity, attribute, version, mesi_state,
     canonical_surface, witness_surface, prompt_surface,
     slot_key, value_text, qualifiers, state_confidence,
-    topic_channel, visibility_scope, claim_key, memory_tier)
-   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+    topic_channel, visibility_scope, claim_key, memory_tier,
+    event_time)
+   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
 
 
 class SQLiteStorage:
@@ -119,6 +128,7 @@ class SQLiteStorage:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_SNAPSHOTS_TABLE)
+            conn.execute(_CREATE_POOL_STATS_TABLE)
             for stmt in _CREATE_INDEXES:
                 conn.execute(stmt)
         self._migrate_db()
@@ -152,6 +162,7 @@ class SQLiteStorage:
             "visibility_scope": "TEXT NOT NULL DEFAULT 'global'",
             "claim_key": "TEXT NOT NULL DEFAULT ''",
             "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
+            "event_time": "TEXT",
         }
         with self._conn() as conn:
             cur = conn.execute("PRAGMA table_info(facts)")
@@ -251,6 +262,7 @@ class SQLiteStorage:
                 fact.visibility_scope,
                 fact.claim_key,
                 fact.memory_tier,
+                fact.event_time.isoformat() if fact.event_time is not None else None,
             )
             for fact in facts
         ]
@@ -272,7 +284,7 @@ class SQLiteStorage:
 
     @staticmethod
     def _fact_from_row(row: tuple[Any, ...]) -> Fact:
-        """Construct a Fact from a SELECT row (columns 0-32, matching _SELECT_COLS order)."""
+        """Construct a Fact from a SELECT row (columns 0-35, matching _SELECT_COLS order)."""
         return Fact(
             id=row[0],
             content=row[1],
@@ -309,6 +321,7 @@ class SQLiteStorage:
             visibility_scope=str(row[32]) if row[32] else "global",
             claim_key=str(row[33]) if len(row) > 33 and row[33] else "",
             memory_tier=str(row[34]) if len(row) > 34 and row[34] else "private",
+            event_time=_parse_datetime(row[35]) if len(row) > 35 and row[35] else None,
         )
 
     def delete(self, agent_id: str, fact_id: str) -> None:
@@ -339,7 +352,7 @@ class SQLiteStorage:
                           canonical_surface, witness_surface, prompt_surface,
                           slot_key, value_text, qualifiers, state_confidence,
                           topic_channel, visibility_scope, claim_key,
-                          memory_tier"""
+                          memory_tier, event_time"""
 
     def load_active(self, agent_id: str) -> list[Fact]:
         """Load only currently-active facts (index-accelerated).
@@ -441,6 +454,25 @@ class SQLiteStorage:
     # SnapshotCapable implementation
     # ------------------------------------------------------------------
 
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist shared-pool trust/usage telemetry (single-row upsert)."""
+        payload = json.dumps(stats)
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO pool_stats (id, data) VALUES (0, ?) "
+                "ON CONFLICT(id) DO UPDATE SET data = excluded.data",
+                (payload,),
+            )
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load persisted trust/usage telemetry, or an empty dict if none exists."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT data FROM pool_stats WHERE id = 0").fetchone()
+        if not row:
+            return {}
+        loaded: dict[str, Any] = json.loads(row[0])
+        return loaded
+
     def save_snapshot(self, agent_id: str, name: str, facts: list[Fact]) -> None:
         """Persist a named snapshot (overwrites if name already exists)."""
         facts_data = [
@@ -465,6 +497,7 @@ class SQLiteStorage:
                 "source_verbatim": f.source_verbatim,
                 "valid_from": f.valid_from.isoformat(),
                 "valid_until": f.valid_until.isoformat() if f.valid_until is not None else None,
+                "event_time": f.event_time.isoformat() if f.event_time is not None else None,
                 "entity": f.entity,
                 "attribute": f.attribute,
                 "version": f.version,
@@ -530,6 +563,9 @@ class SQLiteStorage:
                 else datetime.now(UTC),
                 valid_until=_parse_datetime(str(entry["valid_until"]))
                 if entry.get("valid_until")
+                else None,
+                event_time=_parse_datetime(str(entry["event_time"]))
+                if entry.get("event_time")
                 else None,
                 entity=str(entry.get("entity", "")),
                 attribute=str(entry.get("attribute", "")),

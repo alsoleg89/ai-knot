@@ -1,0 +1,142 @@
+[
+  {
+    "question_id": "sample_ssu_001",
+    "question_type": "single-session-user",
+    "question": "What programming language did I say I prefer?",
+    "answer": "Python",
+    "question_date": "2023-06-01T10:00:00",
+    "haystack_session_ids": ["s1", "s2"],
+    "haystack_dates": ["2023-05-08T13:56:00", "2023-05-20T09:10:00"],
+    "haystack_sessions": [
+      [
+        { "role": "user", "content": "I mostly write Python, it's my favourite language.", "has_answer": true },
+        { "role": "assistant", "content": "Great, I'll tailor examples to Python." }
+      ],
+      [
+        { "role": "user", "content": "Can you help me set up a CI pipeline?" },
+        { "role": "assistant", "content": "Sure, what platform are you using?" }
+      ]
+    ],
+    "answer_session_ids": ["s1"]
+  },
+  {
+    "question_id": "sample_ssa_002",
+    "question_type": "single-session-assistant",
+    "question": "What database did you recommend for my project?",
+    "answer": "PostgreSQL",
+    "question_date": "2023-06-01T10:00:00",
+    "haystack_session_ids": ["s1", "s2"],
+    "haystack_dates": ["2023-05-09T11:00:00", "2023-05-21T15:30:00"],
+    "haystack_sessions": [
+      [
+        { "role": "user", "content": "I need a database for a transactional web app." },
+        { "role": "assistant", "content": "I'd recommend PostgreSQL for its reliability and ACID guarantees.", "has_answer": true }
+      ],
+      [
+        { "role": "user", "content": "Thanks, I'll look into it." },
+        { "role": "assistant", "content": "Happy to help with schema design later." }
+      ]
+    ],
+    "answer_session_ids": ["s1"]
+  },
+  {
+    "question_id": "sample_pref_003",
+    "question_type": "single-session-preference",
+    "question": "How do I like my code reviews to be done?",
+    "answer": "Concise, focused on correctness, no nitpicking on style.",
+    "question_date": "2023-06-01T10:00:00",
+    "haystack_session_ids": ["s1"],
+    "haystack_dates": ["2023-05-12T08:45:00"],
+    "haystack_sessions": [
+      [
+        { "role": "user", "content": "For code reviews, keep them concise and focus on correctness. Don't nitpick on style.", "has_answer": true },
+        { "role": "assistant", "content": "Understood, I'll keep reviews concise and correctness-focused." }
+      ]
+    ],
+    "answer_session_ids": ["s1"]
+  },
+  {
+    "question_id": "sample_multi_004",
+    "question_type": "multi-session",
+    "question": "Given my job and my city, what is my commute?",
+    "answer": "From Berlin to the Globex office.",
+    "question_date": "2023-06-01T10:00:00",
+    "haystack_session_ids": ["s1", "s2", "s3"],
+    "haystack_dates": ["2023-04-02T09:00:00", "2023-04-18T18:20:00", "2023-05-01T07:30:00"],
+    "haystack_sessions": [
+      [
+        { "role": "user", "content": "I just moved to Berlin last month.", "has_answer": true },
+        { "role": "assistant", "content": "Welcome to Berlin! How are you settling in?" }
+      ],
+      [
+        { "role": "user", "content": "I started a new job at Globex this week.", "has_answer": true },
+        { "role": "assistant", "content": "Congratulations on the new role at Globex!" }
+      ],
+      [
+        { "role": "user", "content": "The weather has been nice lately." },
+        { "role": "assistant", "content": "Glad to hear it." }
+      ]
+    ],
+    "answer_session_ids": ["s1", "s2"]
+  },
+  {
+    "question_id": "sample_temporal_005",
+    "question_type": "temporal-reasoning",
+    "question": "Which did I do first: adopt a dog or buy a car?",
+    "answer": "Adopt a dog (March), then buy a car (April).",
+    "question_date": "2023-06-01T10:00:00",
+    "haystack_session_ids": ["s1", "s2"],
+    "haystack_dates": ["2023-03-15T12:00:00", "2023-04-20T16:00:00"],
+    "haystack_sessions": [
+      [
+        { "role": "user", "content": "I adopted a dog today, a golden retriever.", "has_answer": true },
+        { "role": "assistant", "content": "How wonderful! What did you name them?" }
+      ],
+      [
+        { "role": "user", "content": "I finally bought a car this week.", "has_answer": true },
+        { "role": "assistant", "content": "Nice, what model did you get?" }
+      ]
+    ],
+    "answer_session_ids": ["s1", "s2"]
+  },
+  {
+    "question_id": "sample_ku_006",
+    "question_type": "knowledge-update",
+    "question": "Where do I currently work?",
+    "answer": "Globex",
+    "question_date": "2023-06-01T10:00:00",
+    "haystack_session_ids": ["s1", "s2"],
+    "haystack_dates": ["2023-02-10T10:00:00", "2023-05-25T14:00:00"],
+    "haystack_sessions": [
+      [
+        { "role": "user", "content": "I work at Acme Corporation as a backend engineer." },
+        { "role": "assistant", "content": "Nice, backend engineering at Acme sounds interesting." }
+      ],
+      [
+        { "role": "user", "content": "Update: I left Acme and now work at Globex.", "has_answer": true },
+        { "role": "assistant", "content": "Congratulations on the move to Globex!" }
+      ]
+    ],
+    "answer_session_ids": ["s2"]
+  },
+  {
+    "question_id": "sample_ku_007_abs",
+    "question_type": "knowledge-update",
+    "question": "What did I say about my trip to Japan?",
+    "answer": "N/A",
+    "question_date": "2023-06-01T10:00:00",
+    "haystack_session_ids": ["s1", "s2"],
+    "haystack_dates": ["2023-02-10T10:00:00", "2023-05-25T14:00:00"],
+    "haystack_sessions": [
+      [
+        { "role": "user", "content": "I work at Acme Corporation as a backend engineer." },
+        { "role": "assistant", "content": "Nice, backend engineering at Acme sounds interesting." }
+      ],
+      [
+        { "role": "user", "content": "I enjoy hiking on weekends in the mountains." },
+        { "role": "assistant", "content": "Hiking is a great way to unwind." }
+      ]
+    ],
+    "answer_session_ids": []
+  }
+]

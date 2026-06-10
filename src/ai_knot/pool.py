@@ -15,7 +15,12 @@ from ai_knot.multi_agent.canonical import ClaimFamilyResolver
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
 from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
-from ai_knot.storage.base import AtomicUpdateCapable, StorageBackend, TemporalStorageCapable
+from ai_knot.storage.base import (
+    AtomicUpdateCapable,
+    PoolStatsCapable,
+    StorageBackend,
+    TemporalStorageCapable,
+)
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import Fact, MESIState, SlotDelta
 
@@ -27,6 +32,25 @@ logger = logging.getLogger(__name__)
 _PROVENANCE_DISCOUNT = 0.8
 # Facts superseded by a different agent within this window count as "quick invalidations".
 _QUICK_INV_WINDOW_S = 3600.0  # 1 hour
+
+
+def _has_evidence(fact: Fact) -> bool:
+    """Whether *fact* carries a provenance pointer fit for the shared pool.
+
+    Implements the evidence-before-belief invariant (Eywa / MemMachine): a fact
+    promoted to shared state must trace to immutable evidence rather than being a
+    free-floating assertion.  A fact qualifies when it has not been flagged
+    unsupported by the faithfulness filter AND carries at least one source pointer
+    — verbatim source text, a source snippet, or a source span.
+
+    Note: facts created via the manual ``KnowledgeBase.add()`` path carry no source
+    pointer, so the ``require_evidence`` gate on :meth:`SharedMemoryPool.publish`
+    is opt-in (default off) to preserve existing publish behaviour; governed
+    deployments turn it on for shared/org tiers.
+    """
+    if fact.supported is False:
+        return False
+    return bool(fact.source_verbatim or fact.source_snippets or fact.source_spans)
 
 
 class SharedMemoryPool(_PoolRecallMixin):
@@ -45,9 +69,12 @@ class SharedMemoryPool(_PoolRecallMixin):
 
     where *published* is the number of facts an agent has contributed,
     *used* is the total number of recall hits across all queries, and
-    *quick_invalidation_rate* is the fraction of the agent's facts that were
-    superseded by a different agent within ``_QUICK_INV_WINDOW_S`` seconds —
-    a signal that the original data was stale or low-quality.
+    *quick_invalidation_rate* is the fraction of the agent's *verifiable*
+    (slot-addressed) publish events that a different agent superseded within
+    ``_QUICK_INV_WINDOW_S`` seconds — a signal that the original data was stale or
+    low-quality.  Taking the rate over slot events (not total publish volume) means
+    free-standing facts cannot launder a poor track record, while re-asserting a
+    slot with a corrected value lets a penalised agent recover.
 
     Usage::
 
@@ -72,7 +99,9 @@ class SharedMemoryPool(_PoolRecallMixin):
     # Tier score boost: multiplicative bonus for higher-tier facts in recall.
     _TIER_BOOST: dict[str, float] = {"private": 1.0, "pool": 1.0, "org": 1.05}
 
-    def __init__(self, storage: StorageBackend | None = None) -> None:
+    def __init__(
+        self, storage: StorageBackend | None = None, *, persist_stats: bool = False
+    ) -> None:
         self._storage: StorageBackend = storage or YAMLStorage()
         self._bm25 = BM25Retriever(skip_prf=True)
         self._dense = DenseRetriever()
@@ -86,6 +115,16 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._publish_count: dict[str, int] = {}
         self._used_count: dict[str, int] = {}
         self._quick_inv_count: dict[str, int] = {}
+        # Count of verifiable (slot-addressed) publish events per agent — the
+        # denominator of the quick-invalidation penalty.  Counting slot *events*
+        # (not total publishes, and not distinct slot keys) does two things:
+        #   * free-standing publishes do not count → an agent cannot launder a poor
+        #     track record by flooding the pool with unverifiable facts;
+        #   * re-asserting a slot with a corrected value DOES count → an invalidated
+        #     agent rehabilitates by making good verifiable claims that survive.
+        # Stale replays rejected by the monotonic-CAS guard are never published, so
+        # they never count here either.
+        self._slot_publish_count: dict[str, int] = {}
         # MESI: per-agent high-water mark of versions pulled from shared pool.
         self._known_version: dict[str, int] = {}
         # Serialise concurrent publish() calls on the same pool instance.
@@ -101,6 +140,15 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._recall_service = SharedPoolRecallService()
         self._claim_resolver = ClaimFamilyResolver()
         self._query_router = QueryShapeRouter()
+        # Per-agent read-access grants for named visibility scopes (Collaborative Memory
+        # access-control projection). agent_id -> set of scopes it may read. In-memory.
+        self._read_scopes: dict[str, set[str]] = {}
+        # Opt-in durable trust/usage telemetry. When enabled and the backend supports
+        # it, social memory is restored on init and flushed after publish so it
+        # survives a process restart. Default off → no new I/O for existing callers.
+        self._persist_stats = persist_stats
+        if persist_stats and isinstance(self._storage, PoolStatsCapable):
+            self._restore_stats(self._storage.load_pool_stats())
 
     def register(self, agent_id: str) -> None:
         """Register an agent to participate in the shared pool.
@@ -115,11 +163,81 @@ class SharedMemoryPool(_PoolRecallMixin):
         """Return the set of registered agent IDs."""
         return set(self._agents)
 
+    def grant_read(self, agent_id: str, scope: str) -> None:
+        """Grant *agent_id* read access to a named visibility scope.
+
+        Facts published with ``visibility_scope=scope`` then become visible to this
+        agent in :meth:`recall`, in addition to public (``"global"``) facts and the
+        agent's own.  Scopes are matched verbatim; ``"global"`` needs no grant.
+        Grants are in-memory (per pool instance).
+        """
+        self._read_scopes.setdefault(agent_id, set()).add(scope)
+
+    @property
+    def last_recall_abstains(self) -> bool:
+        """Whether the most recent recall recommends abstaining (Synthius-Mem).
+
+        True when the recall returned nothing, coverage was low, or no returned fact
+        carried an evidence pointer — i.e. an answer would rest on unsupported memory.
+        Returns False before any recall.  See :attr:`last_recall_risk` for the score.
+        """
+        meta = self._last_recall_meta
+        return bool(meta and meta.should_abstain)
+
+    @property
+    def last_recall_risk(self) -> float:
+        """Unsupported-answer risk in [0,1] from the most recent recall (0.0 if none)."""
+        meta = self._last_recall_meta
+        return meta.unsupported_answer_risk if meta else 0.0
+
+    def _stats_snapshot(self) -> dict[str, object]:
+        """Serializable snapshot of the pool's trust/usage telemetry."""
+        return {
+            "publish_count": dict(self._publish_count),
+            "used_count": dict(self._used_count),
+            "quick_inv_count": dict(self._quick_inv_count),
+            "fact_consumers": {k: sorted(v) for k, v in self._fact_consumers.items()},
+            "slot_publish_count": dict(self._slot_publish_count),
+        }
+
+    def _restore_stats(self, data: dict[str, object]) -> None:
+        """Restore telemetry from a persisted snapshot (best-effort; ignores junk)."""
+        pc = data.get("publish_count")
+        if isinstance(pc, dict):
+            self._publish_count = {str(k): int(v) for k, v in pc.items()}
+        uc = data.get("used_count")
+        if isinstance(uc, dict):
+            self._used_count = {str(k): int(v) for k, v in uc.items()}
+        qi = data.get("quick_inv_count")
+        if isinstance(qi, dict):
+            self._quick_inv_count = {str(k): int(v) for k, v in qi.items()}
+        fc = data.get("fact_consumers")
+        if isinstance(fc, dict):
+            self._fact_consumers = {str(k): set(v) for k, v in fc.items()}
+        sk = data.get("slot_publish_count")
+        if isinstance(sk, dict):
+            self._slot_publish_count = {str(k): int(v) for k, v in sk.items()}
+
+    def flush_stats(self) -> None:
+        """Persist the pool's trust/usage telemetry if persistence is enabled.
+
+        No-op unless the pool was created with ``persist_stats=True`` and the
+        storage backend implements :class:`PoolStatsCapable`.  ``publish()`` calls
+        this automatically; call it directly to also capture recall-derived
+        ``used_count`` increments between publishes.
+        """
+        if self._persist_stats and isinstance(self._storage, PoolStatsCapable):
+            self._storage.save_pool_stats(self._stats_snapshot())
+
     def get_trust(self, agent_id: str) -> float:
         """Return the current auto-computed trust score for an agent.
 
         Formula:
             ``trust = min(1, used / published) × (1 − quick_inv_rate)``
+        where ``quick_inv_rate = quick_inv / verifiable_slot_publishes``.  Taking the
+        rate over verifiable (slot-addressed) publish events — not total publish
+        volume — means free-standing facts cannot dilute the penalty, while
+        re-asserting a slot with a corrected value lets a penalised agent recover.
 
         Falls back to ``_PROVENANCE_DISCOUNT`` when the agent has not yet
         published any facts (no track record).
@@ -143,7 +261,13 @@ class SharedMemoryPool(_PoolRecallMixin):
         quality = min(
             1.0, (used + _PRIOR_WEIGHT * _PROVENANCE_DISCOUNT) / (published + _PRIOR_WEIGHT)
         )
-        inv_penalty = quick_inv / published
+        # The quick-invalidation penalty is the rate of peer overturns over the
+        # agent's VERIFIABLE (slot-addressed) publish events — not over total publish
+        # volume.  This makes trust resistant to reputation-laundering (free-standing
+        # spam does not lower the rate) while still allowing recovery: re-asserting a
+        # slot with a corrected value adds a verifiable event and dilutes the penalty.
+        verifiable = self._slot_publish_count.get(agent_id, 0)
+        inv_penalty = min(1.0, quick_inv / verifiable) if verifiable else 0.0
         return max(0.1, quality * (1.0 - inv_penalty))
 
     def publish(
@@ -153,6 +277,8 @@ class SharedMemoryPool(_PoolRecallMixin):
         *,
         kb: KnowledgeBase,
         utility_threshold: float = 0.0,
+        require_evidence: bool = False,
+        visibility_scope: str | None = None,
     ) -> list[Fact]:
         """Copy facts from an agent's private KB into the shared pool.
 
@@ -173,6 +299,11 @@ class SharedMemoryPool(_PoolRecallMixin):
             kb: The agent's KnowledgeBase instance.
             utility_threshold: Minimum utility score (0.0–1.0) to publish.
                 Facts below the threshold are silently skipped.
+            require_evidence: When True, apply the evidence-before-belief invariant
+                — only facts carrying a provenance pointer (verbatim/snippet/span)
+                and not flagged unsupported enter the pool (see :func:`_has_evidence`).
+                Default False preserves the legacy behaviour (``add()``-created facts
+                carry no source pointer); governed deployments enable it for shared/org.
 
         Returns:
             List of facts that were published (copies, not mutations of private KB).
@@ -194,20 +325,28 @@ class SharedMemoryPool(_PoolRecallMixin):
         to_publish = [
             f
             for f in private_facts
-            if f.id in id_set and f.state_confidence * f.importance >= utility_threshold
+            if f.id in id_set
+            and f.state_confidence * f.importance >= utility_threshold
+            and (not require_evidence or _has_evidence(f))
         ]
 
         if not to_publish:
             return []
 
         with self._publish_lock:
-            return self._publish_locked(agent_id, to_publish)
+            return self._publish_locked(agent_id, to_publish, visibility_scope)
 
-    def _publish_locked(self, agent_id: str, to_publish: list[Fact]) -> list[Fact]:
+    def _publish_locked(
+        self, agent_id: str, to_publish: list[Fact], visibility_scope: str | None = None
+    ) -> list[Fact]:
         """Execute publish while holding ``_publish_lock``.  Called only from :meth:`publish`."""
         now = datetime.now(UTC)
         published: list[Fact] = []
         quick_inv_updates: dict[str, int] = {}
+        # Verifiable (slot-addressed) publish events the agent makes in this call —
+        # applied to the slot-publish ledger after the storage transaction (mirrors the
+        # quick_inv_updates pattern so atomic_update retries stay side-effect-free).
+        slot_events: list[str] = []
 
         def _merge(shared: list[Fact]) -> list[Fact]:
             # Index active shared facts by slot_key for O(1) CAS lookup.
@@ -236,6 +375,12 @@ class SharedMemoryPool(_PoolRecallMixin):
                 new_fact.memory_tier = "pool"
                 new_fact.valid_from = now
                 new_fact.valid_until = None
+                # Provenance lineage (persisted via qualifiers): who published this fact.
+                new_fact.qualifiers["published_by"] = agent_id
+                # Optional publish-time scope override; otherwise the fact keeps the
+                # visibility_scope assigned at add() time.
+                if visibility_scope is not None:
+                    new_fact.visibility_scope = visibility_scope
 
                 # For unslotted facts, extract a claim fingerprint for conflict detection.
                 if not new_fact.slot_key and not new_fact.claim_key:
@@ -253,12 +398,24 @@ class SharedMemoryPool(_PoolRecallMixin):
                     if old.id == fact.id:
                         # Same fact already published as the active version — no-op.
                         continue
+                    # Monotonic CAS: reject a stale replay.  If this incoming fact was
+                    # already published and then superseded (its id is in the pool as an
+                    # inactive copy), it must not re-claim a slot a *different* agent now
+                    # holds.  Otherwise an agent could undo a peer's legitimate update —
+                    # or re-poison a corrected slot — simply by re-sending its old fact.
+                    # Re-asserting a value requires a fresh fact, not a replay.
+                    if old.origin_agent_id != agent_id and new_fact.id in existing_ids:
+                        prior = next((f for f in shared if f.id == new_fact.id), None)
+                        if prior is not None and not prior.is_active(now):
+                            continue
                     # Slot-addressed CAS: close old version, insert new.
                     old.valid_until = now
                     old.mesi_state = MESIState.INVALID
                     new_fact.mesi_state = MESIState.MODIFIED
                     new_fact.version = next_version
                     next_version += 1
+                    # Provenance lineage: record the fact this one superseded via CAS.
+                    new_fact.qualifiers["supersedes_id"] = old.id
                     # Quick invalidation: a different agent superseded this slot within the window.
                     if old.origin_agent_id and old.origin_agent_id != agent_id:
                         age_s = (now - old.valid_from).total_seconds()
@@ -280,6 +437,10 @@ class SharedMemoryPool(_PoolRecallMixin):
 
                 shared.append(new_fact)
                 published.append(new_fact)
+                # Record the verifiable (slot-addressed) publish event for trust
+                # accounting.  Stale replays rejected above never reach this point.
+                if cas_key:
+                    slot_events.append(cas_key)
 
             return shared
 
@@ -300,6 +461,10 @@ class SharedMemoryPool(_PoolRecallMixin):
         # Apply trust-tracking side effects outside the storage transaction.
         for agt, count in quick_inv_updates.items():
             self._quick_inv_count[agt] = self._quick_inv_count.get(agt, 0) + count
+        if slot_events:
+            self._slot_publish_count[agent_id] = self._slot_publish_count.get(agent_id, 0) + len(
+                slot_events
+            )
 
         if published:
             self._publish_count[agent_id] = self._publish_count.get(agent_id, 0) + len(published)
@@ -309,6 +474,8 @@ class SharedMemoryPool(_PoolRecallMixin):
                 len(published),
             )
 
+        # Persist trust/usage telemetry (no-op unless persist_stats=True).
+        self.flush_stats()
         return published
 
     def promote(self, agent_id: str, fact_ids: list[str], *, tier: str = "pool") -> int:
@@ -332,6 +499,7 @@ class SharedMemoryPool(_PoolRecallMixin):
         for fact in shared:
             if fact.id in fact_ids and fact.is_active() and fact.origin_agent_id == agent_id:
                 fact.memory_tier = tier
+                fact.qualifiers["promoted_by"] = agent_id  # provenance lineage
                 promoted += 1
         if promoted:
             self._storage.save(_SHARED_NAMESPACE, shared)

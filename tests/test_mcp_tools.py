@@ -9,6 +9,7 @@ import pytest
 
 from ai_knot._mcp_tools import (
     tool_add,
+    tool_add_resolved,
     tool_capabilities,
     tool_forget,
     tool_health,
@@ -52,6 +53,25 @@ class TestToolAdd:
         tool_add(kb, "User uses Docker", tags=["devops", "tools"])
         facts = kb.list_facts()
         assert any("devops" in f.tags for f in facts)
+
+    def test_event_time_anchor_is_persisted(self, kb: KnowledgeBase) -> None:
+        from datetime import UTC, datetime
+
+        tool_add(kb, "User joined Globex", event_time="2023-05-08T00:00:00+00:00")
+        facts = kb.list_facts()
+        assert facts[0].event_time == datetime(2023, 5, 8, tzinfo=UTC)
+        # The anchor must NOT leak into the indexed content (no date text-prefix).
+        assert "2023" not in facts[0].content
+
+    def test_event_time_omitted_when_absent(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "User likes hiking")
+        assert kb.list_facts()[0].event_time is None
+
+    def test_event_time_bad_input_ignored(self, kb: KnowledgeBase) -> None:
+        # An unparseable anchor must not block the add; it is silently dropped.
+        msg = tool_add(kb, "User likes biking", event_time="not-a-date")
+        assert msg.startswith("Added fact [")
+        assert kb.list_facts()[0].event_time is None
 
 
 # ---- tool_recall ------------------------------------------------------------
@@ -102,6 +122,7 @@ class TestToolCapabilities:
         names = {item["name"] for item in data}
         expected = {
             "add",
+            "add_resolved",
             "learn",
             "recall",
             "recall_json",
@@ -259,3 +280,67 @@ class TestToolRecallWithTrace:
         # pack_fact_ids are valid hex strings
         for fid in result["pack_fact_ids"]:
             assert len(fid) == 8
+
+
+class TestToolAddResolved:
+    def test_inserts_and_returns_json(self, kb: KnowledgeBase) -> None:
+        out = tool_add_resolved(
+            kb,
+            [{"content": "User works at Globex", "entity": "user", "attribute": "employer"}],
+        )
+        rows = json.loads(out)
+        assert len(rows) == 1
+        assert rows[0]["content"] == "User works at Globex"
+        assert rows[0]["slot_key"] == "user::employer"
+
+    def test_same_slot_new_value_supersedes(self, kb: KnowledgeBase) -> None:
+        tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User works at Acme",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "value_text": "Acme",
+                }
+            ],
+        )
+        tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User works at Globex",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "value_text": "Globex",
+                }
+            ],
+        )
+        active = [f for f in kb.list_facts() if f.is_active() and f.attribute == "employer"]
+        assert len(active) == 1
+        assert active[0].value_text == "Globex"
+
+    def test_empty_content_rejected(self, kb: KnowledgeBase) -> None:
+        with pytest.raises(ValueError, match="non-empty 'content'"):
+            tool_add_resolved(kb, [{"entity": "user", "attribute": "employer"}])
+
+    def test_event_time_preserved(self, kb: KnowledgeBase) -> None:
+        out = tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User joined the company",
+                    "entity": "user",
+                    "attribute": "join",
+                    "value_text": "joined",
+                    "event_time": "2023-05-08T00:00:00+00:00",
+                }
+            ],
+        )
+        rows = json.loads(out)
+        fact = next(f for f in kb.list_facts() if f.id == rows[0]["id"])
+        assert fact.event_time is not None
+
+    def test_capabilities_lists_add_resolved(self) -> None:
+        caps = json.loads(tool_capabilities())
+        assert any(c["name"] == "add_resolved" for c in caps)

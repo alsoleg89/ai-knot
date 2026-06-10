@@ -137,6 +137,55 @@ class _LearningMixin:
         self._commit_phase(existing, to_insert)
         return to_insert
 
+    def add_resolved(
+        self,
+        facts: list[Fact],
+        *,
+        conflict_threshold: float = 0.7,
+    ) -> list[Fact]:
+        """Insert pre-extracted facts THROUGH the supersession pipeline (no LLM).
+
+        This is the ``learn()`` pipeline with the LLM extraction stage removed: the
+        caller supplies already-structured ``Fact`` objects (with ``slot_key`` or
+        ``entity`` + ``attribute`` set) and they are run through verify →
+        ``_resolve_phase`` → consolidate → commit. When a supplied fact addresses
+        the same slot as an existing active fact with a *different* value, the old
+        fact is temporally closed (``valid_until`` set) and the new one inserted
+        with an incremented ``version`` — i.e. **knowledge-update supersession
+        fires**, exactly as it does inside ``learn()``.
+
+        This is the clean, dependency-free seam for routing benchmark / bulk
+        ingest through supersession when slots are known ahead of time, without
+        paying for a per-window LLM extraction call. Facts WITHOUT a ``slot_key``
+        and without ``entity`` + ``attribute`` fall through to lexical dedup and
+        are inserted as-is (no supersession — there is no slot to compare).
+
+        Args:
+            facts: Pre-built facts to resolve and store. Set ``entity`` +
+                ``attribute`` (and optionally ``slot_key`` / ``value_text``) for
+                supersession to fire. ``event_time`` is preserved.
+            conflict_threshold: Jaccard threshold for the phase-3 lexical dedup
+                pass; does not affect slot-based supersession.
+
+        Returns:
+            Inserted facts (new inserts + versioned replacements). Reinforced
+            facts (same slot, same value) are excluded, matching ``learn()``.
+        """
+        if not facts:
+            return []
+        # Mirror learn(): ensure slot_key is derived from entity+attribute so the
+        # exact-match slot resolver can fire even when the caller set only the pair.
+        for f in facts:
+            if not f.slot_key and f.entity and f.attribute:
+                f.slot_key = f"{f.entity}::{f.attribute}"
+        verified = self._candidate_phase(facts)
+        existing = self._storage.load(self._agent_id)
+        to_insert = self._resolve_phase(verified, existing, conflict_threshold)
+        aggregates = self._consolidate_phase(to_insert, existing)
+        to_insert.extend(aggregates)
+        self._commit_phase(existing, to_insert)
+        return to_insert
+
     # ------------------------------------------------------------------
     # learn() pipeline stages
     # ------------------------------------------------------------------

@@ -180,6 +180,23 @@ class Fact:
             return False
         return self.valid_until is None or self.valid_until > t
 
+    @property
+    def provenance(self) -> Provenance:
+        """Lineage view reconstructed from ``origin_agent_id`` + lineage qualifiers.
+
+        ``published_by`` / ``promoted_by`` / ``supersedes_id`` are written into
+        ``qualifiers`` at publish / promote / CAS-supersession time.  Because
+        ``qualifiers`` round-trips through every storage backend, a fact's full
+        lineage survives a process restart (closing the gap where the declared
+        ``Provenance`` record was never persisted).
+        """
+        return Provenance(
+            origin_agent=self.origin_agent_id,
+            published_by=self.qualifiers.get("published_by", ""),
+            promoted_by=self.qualifiers.get("promoted_by", ""),
+            supersedes_id=self.qualifiers.get("supersedes_id", ""),
+        )
+
 
 @dataclass
 class SnapshotDiff:

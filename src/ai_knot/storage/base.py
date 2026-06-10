@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from ai_knot.types import Fact, SlotDelta
 
@@ -108,6 +108,26 @@ class AtomicUpdateCapable(Protocol):
         updated list.  The entire load→transform→save cycle is protected by an
         exclusive database-level lock.
         """
+        ...
+
+
+@runtime_checkable
+class PoolStatsCapable(Protocol):
+    """Optional extension for persisting shared-pool trust/usage telemetry.
+
+    ``SharedMemoryPool`` keeps publish / use / quick-invalidation counters and
+    per-fact consumer sets in memory; a backend implementing this protocol lets
+    that social memory survive a process restart.  Opt-in via
+    ``SharedMemoryPool(persist_stats=True)`` — pools default to in-memory only,
+    so this adds no I/O to existing callers.
+    """
+
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist the pool's trust/usage telemetry (overwrites any prior copy)."""
+        ...
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load previously persisted telemetry, or an empty dict if none exists."""
         ...
 
 

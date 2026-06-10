@@ -83,6 +83,8 @@ class YAMLStorage:
         d["valid_from"] = fact.valid_from.isoformat()
         if fact.valid_until is not None:
             d["valid_until"] = fact.valid_until.isoformat()
+        if fact.event_time is not None:
+            d["event_time"] = fact.event_time.isoformat()
         if fact.entity:
             d["entity"] = fact.entity
         if fact.attribute:
@@ -182,6 +184,9 @@ class YAMLStorage:
                     valid_until=_parse_datetime(entry["valid_until"])
                     if "valid_until" in entry
                     else None,
+                    event_time=_parse_datetime(entry["event_time"])
+                    if "event_time" in entry
+                    else None,
                     entity=str(entry.get("entity", "")),
                     attribute=str(entry.get("attribute", "")),
                     version=int(entry.get("version", 0)),
@@ -217,6 +222,29 @@ class YAMLStorage:
             for d in self._base_dir.iterdir()
             if d.is_dir() and (d / "knowledge.yaml").exists()
         ]
+
+    # ------------------------------------------------------------------
+    # PoolStatsCapable implementation
+    # ------------------------------------------------------------------
+
+    def _pool_stats_path(self) -> Path:
+        return self._base_dir / "_pool_stats.yaml"
+
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist shared-pool trust/usage telemetry to a YAML file in base_dir."""
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        path = self._pool_stats_path()
+        with _get_lock(path), open(path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(stats, f, allow_unicode=True, sort_keys=True)
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load persisted trust/usage telemetry, or an empty dict if none exists."""
+        path = self._pool_stats_path()
+        if not path.exists():
+            return {}
+        with _get_lock(path), open(path, encoding="utf-8") as f:
+            data = yaml.load(f, Loader=_YamlLoader)
+        return data if isinstance(data, dict) else {}
 
     # ------------------------------------------------------------------
     # SnapshotCapable implementation
@@ -293,6 +321,9 @@ class YAMLStorage:
                     else datetime.now(UTC),
                     valid_until=_parse_datetime(entry["valid_until"])
                     if "valid_until" in entry
+                    else None,
+                    event_time=_parse_datetime(entry["event_time"])
+                    if "event_time" in entry
                     else None,
                     entity=str(entry.get("entity", "")),
                     attribute=str(entry.get("attribute", "")),

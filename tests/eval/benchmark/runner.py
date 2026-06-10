@@ -214,6 +214,17 @@ def _stamp_path(path: str, stamp: str) -> str:
     ),
 )
 @click.option(
+    "--ma-backends",
+    "ma_backends",
+    default="ai_knot",
+    show_default=True,
+    help=(
+        "Comma-separated memory systems for the multi-agent suite (cross-system "
+        "comparison). 'ai_knot' is always the gated system. 'mem0' adds the Mem0 "
+        "multi-agent backend (requires Ollama + mem0ai; skipped if unavailable)."
+    ),
+)
+@click.option(
     "--ma-postgres-dsn",
     "ma_postgres_dsn",
     default="",
@@ -244,6 +255,16 @@ def _stamp_path(path: str, stamp: str) -> str:
         "Filter multi-agent scenarios by category: "
         "'protocol' (CAS, sync, concurrency), "
         "'retrieval' (ranking, trust, assembly), or 'all'."
+    ),
+)
+@click.option(
+    "--ma-gate",
+    "ma_gate",
+    is_flag=True,
+    default=False,
+    help=(
+        "Evaluate the multi-agent acceptance gate (tests/eval/benchmark/ma_gate.py) "
+        "after the run and exit non-zero if any applicable threshold fails. For CI."
     ),
 )
 @click.option(
@@ -281,9 +302,11 @@ def main(
     long_run: bool,
     duration: int,
     ma_storage: str,
+    ma_backends: str,
     ma_postgres_dsn: str,
     jsonl_output: str,
     ma_category: str,
+    ma_gate: bool,
     locomo_file: str | None,
     locomo_max_conversations: int | None,
     locomo_max_qa_per_conv: int | None,
@@ -305,9 +328,11 @@ def main(
             long_run=long_run,
             duration=duration,
             ma_storage=ma_storage,
+            ma_backends=ma_backends,
             ma_postgres_dsn=ma_postgres_dsn,
             jsonl_output=jsonl_output,
             ma_category=ma_category,
+            ma_gate=ma_gate,
             locomo_file=locomo_file,
             locomo_max_conversations=locomo_max_conversations,
             locomo_max_qa_per_conv=locomo_max_qa_per_conv,
@@ -330,9 +355,11 @@ async def _run(
     long_run: bool = False,
     duration: int = 60,
     ma_storage: str = "sqlite",
+    ma_backends: str = "ai_knot",
     ma_postgres_dsn: str = "",
     jsonl_output: str = "benchmark_live.jsonl",
     ma_category: str = "all",
+    ma_gate: bool = False,
     locomo_file: str | None = None,
     locomo_max_conversations: int | None = None,
     locomo_max_qa_per_conv: int | None = None,
@@ -396,9 +423,11 @@ async def _run(
             long_run=long_run,
             duration=duration,
             ma_storage=ma_storage,
+            ma_backends=ma_backends,
             ma_postgres_dsn=ma_postgres_dsn,
             jsonl_output=jsonl_output,
             ma_category=ma_category,
+            ma_gate=ma_gate,
         )
         return
 
@@ -651,6 +680,31 @@ async def _run_multi_agent_inline(
     return all_ma_metrics
 
 
+def _build_extra_ma_backends(ma_backends: str) -> list[MultiAgentMemoryBackend]:
+    """Construct non-ai_knot MA backends requested via --ma-backends (cross-system runs).
+
+    'ai_knot' is the gated system and is built from --ma-storage, so it is skipped
+    here. 'mem0' adds the Mem0 multi-agent backend (requires Ollama + mem0ai; skipped
+    with a warning if unavailable). Unknown names are ignored with a warning.
+    """
+    extra: list[MultiAgentMemoryBackend] = []
+    for name in (n.strip().lower() for n in ma_backends.split(",")):
+        if name in ("", "ai_knot", "ai_knot_multi_agent"):
+            continue
+        if name in ("mem0", "mem0_multi_agent"):
+            try:
+                from tests.eval.benchmark.backends.mem0_ma_backend import (
+                    Mem0MultiAgentBackend,
+                )
+
+                extra.append(Mem0MultiAgentBackend())
+            except Exception as exc:  # optional dependency / offline
+                click.echo(f"  (skipping mem0 MA backend: {exc})", err=True)
+        else:
+            click.echo(f"  (unknown --ma-backends entry {name!r}, ignoring)", err=True)
+    return extra
+
+
 async def _run_multi_agent(
     *,
     scenarios_arg: str,
@@ -660,14 +714,17 @@ async def _run_multi_agent(
     long_run: bool = False,
     duration: int = 60,
     ma_storage: str = "sqlite",
+    ma_backends: str = "ai_knot",
     ma_postgres_dsn: str = "",
     jsonl_output: str = "",
     ma_category: str = "all",
+    ma_gate: bool = False,
 ) -> None:
     """Run multi-agent scenarios standalone (``--multi-agent`` flag)."""
     metrics_list = await _run_multi_agent_inline(
         judge=judge,
         scenarios_arg=scenarios_arg,
+        extra_ma_backends=_build_extra_ma_backends(ma_backends),
         long_run=long_run,
         duration=duration,
         ma_storage=ma_storage,
@@ -684,6 +741,39 @@ async def _run_multi_agent(
         sys.exit(1)
 
     _write_reports(metrics_list, output, raw_output)
+
+    if ma_gate:
+        _enforce_ma_gate(metrics_list)
+
+
+def _enforce_ma_gate(metrics_list: list[BenchmarkMetrics]) -> None:
+    """Evaluate the MA acceptance gate and exit non-zero if any threshold fails."""
+    from tests.eval.benchmark.ma_gate import evaluate_gate, gate_passed
+
+    failed_any = False
+    for m in metrics_list:
+        # Gate ai-knot only; cross-system backends are not judged by ai-knot's protocol gate.
+        if not m.backend_name.startswith("ai_knot"):
+            continue
+        results = evaluate_gate(m)
+        applicable = [r for r in results if r.applicable]
+        if not applicable:
+            continue
+        passed = gate_passed(results)
+        n_pass = sum(1 for r in applicable if r.passed)
+        click.echo(
+            f"MA gate [{m.backend_name}]: {n_pass}/{len(applicable)} thresholds "
+            f"{'PASS' if passed else 'FAIL'}"
+        )
+        for r in applicable:
+            if not r.passed:
+                t = r.threshold
+                click.echo(
+                    f"  ✗ {t.scenario_id}/{t.metric} = {r.value:.3f} (need {t.op} {t.target})"
+                )
+        failed_any = failed_any or not passed
+    if failed_any:
+        sys.exit(1)
 
 
 def _append_jsonl(
