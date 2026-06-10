@@ -42,6 +42,17 @@ def _kb(agent_id: str, storage: SQLiteStorage) -> KnowledgeBase:
     return KnowledgeBase(agent_id, storage=storage)
 
 
+def _add_slot(kb: KnowledgeBase, content: str, slot_key: str) -> Fact:
+    """Add a fact and tag it with *slot_key* (mirrors backend ``add_structured``)."""
+    fact = kb.add(content)
+    facts = kb.list_facts()
+    for f in facts:
+        if f.id == fact.id:
+            f.slot_key = slot_key
+    kb.replace_facts(facts)
+    return fact
+
+
 # ---------------------------------------------------------------------------
 # SlotDelta dataclass
 # ---------------------------------------------------------------------------
@@ -523,7 +534,10 @@ class TestTrustOrdering:
         solid = kb_b.add("Python is used for ML work")
         pool_sqlite.publish("agent_b", [solid.id], kb=kb_b)
 
-        # Artificially tank agent_a's trust: 1 publish, 0 used, 1 quick invalidation.
+        # Artificially tank agent_a's trust: one verifiable (slot) publish that was
+        # quick-invalidated → quick_inv_rate = 1/1 = 1.0.  (quick_inv only accrues on
+        # slot facts, so the slot-publish ledger must be set alongside it.)
+        pool_sqlite._slot_publish_count["agent_a"] = 1
         pool_sqlite._quick_inv_count["agent_a"] = 1
         assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
 
@@ -685,6 +699,116 @@ class TestAutoTrust:
         trust_a = pool_sqlite.get_trust("agent_a")
         # Published 1, used 0, quick_inv 1 → trust = 0 * (1-1) = 0, clamped to 0.1
         assert trust_a == pytest.approx(0.1)
+
+
+class TestMonotonicCASAndTrustIntegrity:
+    """Monotonic CAS + laundering-resistant, recoverable trust.
+
+    The quick-invalidation penalty is a rate over *verifiable* (slot) publish
+    events, not over total publish volume.  This keeps trust resistant to
+    reputation-laundering (free-standing spam cannot lower the rate) while still
+    allowing recovery (re-asserting a slot with a corrected value adds an event
+    and dilutes the penalty).  The monotonic-CAS guard stops an agent from
+    re-claiming a slot a peer has corrected by replaying its own stale fact.
+    """
+
+    def test_stale_replay_does_not_reclaim_peer_slot(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """Re-publishing an already-superseded fact must not re-poison a peer's slot."""
+        kb_a = _kb("agent_a", sqlite_db)
+        x = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [x.id], kb=kb_a)
+
+        # agent_b corrects the slot — its value is now authoritative.
+        kb_b = _kb("agent_b", sqlite_db)
+        y = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [y.id], kb=kb_b)
+
+        # agent_a replays its stale fact (still active in its private KB).
+        pool_sqlite.publish("agent_a", [x.id], kb=kb_a)
+
+        active = [
+            f
+            for f in pool_sqlite.list_shared_facts()
+            if f.slot_key == "Alex::salary" and f.valid_until is None
+        ]
+        assert len(active) == 1
+        assert active[0].origin_agent_id == "agent_b"
+        assert "95k" in active[0].content
+
+    def test_fresh_correction_supersedes_peer_slot(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """A NEW fact (not a stale replay) legitimately supersedes the slot holder."""
+        kb_a = _kb("agent_a", sqlite_db)
+        x = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [x.id], kb=kb_a)
+
+        kb_b = _kb("agent_b", sqlite_db)
+        y = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [y.id], kb=kb_b)
+
+        # agent_a re-asserts with a brand-new fact (corrected value, fresh id).
+        z = _add_slot(kb_a, "Alex earns 110k after raise", "Alex::salary")
+        pool_sqlite.publish("agent_a", [z.id], kb=kb_a)
+
+        active = [
+            f
+            for f in pool_sqlite.list_shared_facts()
+            if f.slot_key == "Alex::salary" and f.valid_until is None
+        ]
+        assert len(active) == 1
+        assert active[0].origin_agent_id == "agent_a"
+        assert "110k" in active[0].content
+
+    def test_freestanding_spam_cannot_launder_trust(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """An agent caught publishing a bad slot cannot wash it out with noise."""
+        kb_a = _kb("agent_a", sqlite_db)
+        bad = _add_slot(kb_a, "Alex earns 50k", "Alex::salary")
+        pool_sqlite.publish("agent_a", [bad.id], kb=kb_a)
+
+        # Peer supersedes the only verifiable claim → trust hits the floor.
+        kb_b = _kb("agent_b", sqlite_db)
+        fix = _add_slot(kb_b, "Alex earns 95k", "Alex::salary")
+        pool_sqlite.publish("agent_b", [fix.id], kb=kb_b)
+        assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
+
+        # agent_a floods the pool with unverifiable free-standing facts.
+        for i in range(10):
+            noise = kb_a.add(f"Unverifiable marketing claim number {i}")
+            pool_sqlite.publish("agent_a", [noise.id], kb=kb_a)
+
+        # Free-standing volume must NOT dilute the invalidation rate.
+        assert pool_sqlite.get_trust("agent_a") == pytest.approx(0.1)
+
+    def test_slot_reassertion_recovers_trust(
+        self, sqlite_db: SQLiteStorage, pool_sqlite: SharedMemoryPool
+    ) -> None:
+        """A penalised agent recovers by re-asserting slots with surviving values."""
+        kb_a = _kb("agent_a", sqlite_db)
+        s1 = _add_slot(kb_a, "Mia salary 80k", "Mia::salary")
+        s2 = _add_slot(kb_a, "Mia title Junior", "Mia::title")
+        pool_sqlite.publish("agent_a", [s1.id, s2.id], kb=kb_a)
+
+        # Both verifiable claims superseded by a peer → floor.
+        kb_b = _kb("agent_b", sqlite_db)
+        c1 = _add_slot(kb_b, "Mia salary 120k", "Mia::salary")
+        c2 = _add_slot(kb_b, "Mia title Senior", "Mia::title")
+        pool_sqlite.publish("agent_b", [c1.id, c2.id], kb=kb_b)
+        trust_floor = pool_sqlite.get_trust("agent_a")
+        assert trust_floor == pytest.approx(0.1)
+
+        # agent_a re-asserts both slots with fresh corrected facts (which survive).
+        r1 = _add_slot(kb_a, "Mia salary 125k confirmed", "Mia::salary")
+        r2 = _add_slot(kb_a, "Mia title Staff confirmed", "Mia::title")
+        pool_sqlite.publish("agent_a", [r1.id, r2.id], kb=kb_a)
+        pool_sqlite.recall("Mia salary title", "agent_c", top_k=5)
+
+        # Slot events 2 → 4 while quick_inv stays 2 → penalty 1.0 → 0.5 → recovery.
+        assert pool_sqlite.get_trust("agent_a") > trust_floor
 
 
 class TestVisibilityScope:
