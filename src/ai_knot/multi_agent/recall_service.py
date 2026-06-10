@@ -34,6 +34,12 @@ logger = logging.getLogger(__name__)
 # so scoring and diversity filtering have enough material.
 _FACET_OVERFETCH = 3
 
+# Confident-cut fraction for assembly backfill: once every facet is covered,
+# only admit further facts scoring at least this fraction of the strongest facet
+# winner.  Mirrors the flat path's adaptive truncation so a fixed-k pad of weak
+# same-domain filler does not inflate the distractor rate.
+_STRICT_BACKFILL_FRAC = 0.25
+
 # Trust floor for counting credible publishers (same as knowledge.py).
 _TRUST_FLOOR_FOR_DIVERSITY = 0.2
 
@@ -164,6 +170,7 @@ class SharedPoolRecallService:
             candidates_by_facet=candidates_by_facet,
             top_k=top_k,
             n_publishers=max(n_publishers, 1),
+            min_backfill_score_frac=_STRICT_BACKFILL_FRAC,
         )
 
         logger.debug(
@@ -315,7 +322,11 @@ class SharedPoolRecallService:
         return candidates_by_facet
 
     # ------------------------------------------------------------------
-    # V3 pipeline
+    # V3 pipeline — EXPERIMENTAL, not wired into the default recall path.
+    # `recall()` (the production MULTI_SOURCE path) uses the facet pipeline +
+    # CoverageAwareAssembler above; nothing in the codebase calls `recall_v3`.
+    # It is retained for bridge/RRF evaluation; removing it (and its exclusive
+    # helpers `_rrf_merge`, BridgeRetriever, `_bm25_flat`) is a maintainer call.
     # ------------------------------------------------------------------
 
     def recall_v3(
@@ -328,7 +339,11 @@ class SharedPoolRecallService:
         top_k: int = 5,
         get_trust: Callable[[str], float] | None = None,
     ) -> list[tuple[Fact, float]]:
-        """V3 retrieval pipeline: flat harvest + optional bridge + RRF merge.
+        """EXPERIMENTAL V3 retrieval pipeline: flat harvest + bridge + RRF merge.
+
+        Not invoked by the default recall path (``recall()`` uses the facet
+        pipeline).  Retained for evaluation of bridge-based assembly; exercised
+        only by its own smoke test.
 
         Used for ASSEMBLY and INTEGRATION intents where the direct answer
         may require a concept bridge across two or more facts.
