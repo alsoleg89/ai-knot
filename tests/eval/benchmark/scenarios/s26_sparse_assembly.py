@@ -10,12 +10,22 @@ from distinct domain clusters.  Evaluation uses both origin_agent_id
 from retrieved Fact objects and rare-marker text matching.
 
 Metrics (per scale point N):
-  target_shard_recall_at_N — fraction of target shards found in top-k
-  all_shards_covered_at_N  — fraction of queries with all 3/3 shards
+  target_shard_recall_at_N — fraction of exact target shards found in top-k
+  all_shards_covered_at_N  — fraction of queries with all 3/3 exact shards
   distractor_rate_at_N     — fraction of non-target facts in top-k
   agent_diversity_at_N     — mean normalised count of distinct target agents
   p95_retrieve_ms_at_N     — 95th-percentile retrieval latency
   last_target_rank_at_N    — mean rank of deepest target shard (lower = better)
+
+Ambiguity-aware metrics (Option C — exact-agent recall is information-theory
+bound when the query is conceptual, so these separate "did we find the right
+domain" from "did we name the exact agent"):
+  equivalence_recall_at_N        — fraction of facets where any same-domain
+                                   shard was retrieved (domain coverage)
+  mean_equivalence_class_size_at_N — same-domain peers per target (ambiguity:
+                                   how many agents the target is indistinct from)
+  marker_in_query_recall_at_N    — exact-agent recall when the rare marker is
+                                   named in the query (the solvable variant)
 
 Only runs against MultiAgentMemoryBackend.
 """
@@ -237,6 +247,46 @@ def _build_query(targets: list[int]) -> str:
     )
 
 
+def _build_query_with_markers(targets: list[int]) -> str:
+    """Identifiable variant: embed each target's rare marker in its facet.
+
+    The conceptual ``_build_query`` cannot distinguish a target from its
+    same-domain peers (information-theoretically — see equivalence-class size).
+    Naming the marker makes the target identifiable, so exact-agent recall
+    becomes achievable.  Used to measure the *solvable* sub-problem alongside
+    the unsolvable conceptual one.
+    """
+    # Keep the conjunctive shape that decomposes into one facet per clause
+    # (so each marker lands in its own facet), appending the marker to its
+    # concept rather than prefixing it (a prefix is stripped as framing).
+    parts = [f"{_domain(t)[2]} {_rare_marker(t)}" for t in targets]
+    return (
+        f"How can a system integrate {parts[0]}, {parts[1]}, and {parts[2]} "
+        "into a unified pipeline?"
+    )
+
+
+def _agent_domain(agent_id: str | None) -> str | None:
+    """Recover an agent's domain from its ``specialist_NNNN`` id."""
+    if not agent_id:
+        return None
+    try:
+        idx = int(agent_id.split("_")[1])
+    except (IndexError, ValueError):
+        return None
+    return _domain(idx)[0]
+
+
+def _domain_class_size(target_idx: int, current_n: int) -> int:
+    """Number of agents sharing the target's domain in a pool of *current_n*.
+
+    Domains repeat every 20, so this is how many same-content peers the target
+    is indistinguishable from under a conceptual (markerless) query.
+    """
+    target_domain = _domain(target_idx)[0]
+    return sum(1 for i in range(current_n) if _domain(i)[0] == target_domain)
+
+
 # ---------------------------------------------------------------------------
 # Measurement helpers
 # ---------------------------------------------------------------------------
@@ -258,11 +308,14 @@ async def _measure_at_checkpoint(
     last_ranks: list[int] = []
     diversities: list[int] = []
     distractor_counts: list[int] = []
+    equiv_hits_per_query: list[int] = []
+    class_sizes: list[float] = []
     total_retrieved = 0
 
     for query, targets in queries_targets:
         target_markers = {_rare_marker(t) for t in targets}
         target_agent_ids = {_agent_id(t) for t in targets}
+        target_domains = {_domain(t)[0] for t in targets}
 
         t0 = time.perf_counter()
         result = await backend.pool_retrieve(_QUERIER, query, top_k=TOP_K)
@@ -270,6 +323,7 @@ async def _measure_at_checkpoint(
         latencies_ms.append(elapsed_ms)
 
         targets_found: set[str] = set()
+        retrieved_domains: set[str] = set()
         last_rank = 0
         n_distractors = 0
 
@@ -278,6 +332,9 @@ async def _measure_at_checkpoint(
             for rank_0, fact in enumerate(result.facts):
                 is_target = fact.origin_agent_id in target_agent_ids
                 has_marker = any(m in fact.content for m in target_markers)
+                dom = _agent_domain(fact.origin_agent_id)
+                if dom is not None:
+                    retrieved_domains.add(dom)
                 if is_target and has_marker:
                     targets_found.add(fact.origin_agent_id)
                     last_rank = rank_0 + 1
@@ -297,6 +354,32 @@ async def _measure_at_checkpoint(
         diversities.append(n_found)
         distractor_counts.append(n_distractors)
         last_ranks.append(last_rank if n_found > 0 else TOP_K + 1)
+        # Equivalence-class recall: did we retrieve the right technical domains
+        # (any same-domain shard), independent of the exact agent identity?
+        equiv_hits_per_query.append(sum(1 for d in target_domains if d in retrieved_domains))
+        class_sizes.append(sum(_domain_class_size(t, current_n) for t in targets) / len(targets))
+
+    # Identifiable variant: re-query with the rare marker named in each facet.
+    # This isolates the *solvable* exact-agent sub-problem from the unsolvable
+    # conceptual one (where the target is indistinguishable from its peers).
+    marker_hits_per_query: list[int] = []
+    for _query, targets in queries_targets:
+        target_markers = {_rare_marker(t) for t in targets}
+        target_agent_ids = {_agent_id(t) for t in targets}
+        mq = _build_query_with_markers(targets)
+        result = await backend.pool_retrieve(_QUERIER, mq, top_k=TOP_K)
+        found: set[str] = set()
+        if result.facts:
+            for fact in result.facts:
+                if fact.origin_agent_id in target_agent_ids and any(
+                    m in fact.content for m in target_markers
+                ):
+                    found.add(fact.origin_agent_id)
+        else:
+            for rank_0, text in enumerate(result.texts):
+                if any(m in text for m in target_markers):
+                    found.add(f"text_hit_{rank_0}")
+        marker_hits_per_query.append(len(found))
 
     nq = num_queries
     return {
@@ -306,6 +389,10 @@ async def _measure_at_checkpoint(
         "agent_diversity": (sum(diversities) / nq) / 3.0,
         "p95_retrieve_ms": percentile(latencies_ms, 95),
         "last_target_rank": sum(last_ranks) / nq,
+        # Option-C ambiguity-aware metrics.
+        "equivalence_recall": sum(equiv_hits_per_query) / (3 * nq),
+        "mean_equivalence_class_size": sum(class_sizes) / nq,
+        "marker_in_query_recall": sum(marker_hits_per_query) / (3 * nq),
     }
 
 
