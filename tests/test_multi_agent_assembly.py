@@ -90,6 +90,44 @@ class TestCoverageAwareAssembler:
         # Should have at least 2 (coverage) + backfill.
         assert len(result.selected) >= 2
 
+    def _strong_plus_weak(self) -> dict[str, list[CandidateFact]]:
+        # Two strong facet winners plus weak filler well below the winners' scores.
+        return {
+            "f0": [
+                _candidate("strong0", facet_id="f0", score=1.0, agent="a1"),
+                _candidate("weak0", facet_id="f0", score=0.1, agent="a3"),
+            ],
+            "f1": [
+                _candidate("strong1", facet_id="f1", score=0.9, agent="a2"),
+                _candidate("weak1", facet_id="f1", score=0.1, agent="a4"),
+            ],
+        }
+
+    def test_strict_backfill_drops_weak_filler(self) -> None:
+        candidates = self._strong_plus_weak()
+        default = self.assembler.assemble(candidates_by_facet=candidates, top_k=5)
+        strict = self.assembler.assemble(
+            candidates_by_facet=self._strong_plus_weak(),
+            top_k=5,
+            min_backfill_score_frac=0.25,
+        )
+        # Default pads with the weak filler; strict leaves it out.
+        assert len(default.selected) > len(strict.selected)
+        assert len(strict.selected) == 2
+        strict_contents = {c.fact.content for c in strict.selected}
+        assert "weak0" not in strict_contents
+        assert "weak1" not in strict_contents
+
+    def test_strict_backfill_preserves_coverage(self) -> None:
+        strict = self.assembler.assemble(
+            candidates_by_facet=self._strong_plus_weak(),
+            top_k=5,
+            min_backfill_score_frac=0.25,
+        )
+        # The confident cut never sacrifices facet coverage.
+        assert strict.coverage_score == 1.0
+        assert strict.uncovered_facets == set()
+
     def test_constrained_facet_first(self) -> None:
         """Facet with fewer candidates should be served first."""
         candidates = {

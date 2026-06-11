@@ -36,6 +36,7 @@ class CoverageAwareAssembler:
         candidates_by_facet: dict[str, list[CandidateFact]],
         top_k: int,
         n_publishers: int = 3,
+        min_backfill_score_frac: float = 0.0,
     ) -> AssemblyResult:
         """Select top-k facts maximising facet coverage and diversity.
 
@@ -45,6 +46,13 @@ class CoverageAwareAssembler:
             top_k: Maximum number of facts to select.
             n_publishers: Number of distinct trusted publishers in the pool
                 (used for per-agent cap calculation).
+            min_backfill_score_frac: When > 0, a *confident* cut.  After every
+                facet is covered, a backfill candidate is admitted only if its
+                ``final_score`` is at least this fraction of the strongest
+                selected facet winner; weaker filler is left out and the result
+                may contain fewer than ``top_k`` facts.  Mirrors the flat path's
+                adaptive truncation so padding does not inflate the distractor
+                rate.  ``0.0`` keeps the original pad-to-top_k behaviour.
 
         Returns:
             AssemblyResult with selected candidates and coverage metrics.
@@ -114,8 +122,18 @@ class CoverageAwareAssembler:
 
             all_remaining.sort(key=lambda c: c.final_score, reverse=True)
 
+            # Confident-cut threshold: backfill only candidates close enough to the
+            # strongest facet winner.  Coverage (phase 1) is always preserved.
+            score_floor = 0.0
+            if min_backfill_score_frac > 0.0:
+                ref = max((c.final_score for c in selected), default=0.0)
+                score_floor = min_backfill_score_frac * ref
+
             for cand in all_remaining:
                 if len(selected) >= top_k:
+                    break
+                if score_floor > 0.0 and cand.final_score < score_floor:
+                    # Ranked descending — everything past here is weaker filler.
                     break
                 aid = cand.fact.origin_agent_id or "__self__"
                 if agent_counts.get(aid, 0) >= agent_cap:
