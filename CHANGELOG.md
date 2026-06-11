@@ -17,6 +17,83 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.0] — 2026-06-11
+
+First release of the **multi-agent memory** stack: a fan-in recall pipeline that
+reconstructs answers scattered across many agents' shards, a governance spine
+(evidence gating, visibility scoping, abstention, provenance), trust integrity
+hardening, and a bi-temporal `event_time` anchor — all deterministic and
+dependency-free, with an optional LLM seam for the semantic conflict tail.
+The single-agent `KnowledgeBase` API is unchanged.
+
+### Added
+
+- **Fan-in recall subsystem** (`ai_knot.multi_agent`) — facet-aware retrieval for
+  `SharedMemoryPool`: query routing (`QueryShapeRouter`), conjunctive facet
+  decomposition (`ConjunctiveFacetPlanner`), per-facet retrieval
+  (`SharedPoolRecallService`), and coverage-aware assembly
+  (`CoverageAwareAssembler`, greedy set-cover) so one pool query reconstructs an
+  answer no single agent holds in full. Deterministic claim-family resolution
+  (`ClaimFamilyResolver`, IDF-weighted clustering, slotted-wins-over-unslotted
+  with a trust × recency tiebreak), agent-expertise routing
+  (`AgentExpertiseIndex`), and specificity / near-miss / diversity scoring.
+- **Governance spine** on `SharedMemoryPool`:
+  - Evidence-before-belief publish gate — `publish(..., require_evidence=True)`
+    admits only facts carrying a provenance pointer (verbatim / snippet / span)
+    and not flagged unsupported.
+  - `visibility_scope` writer + per-agent read projection —
+    `publish(..., visibility_scope=...)` and `grant_read(agent_id, scope)`:
+    `"global"` facts reach everyone, scoped facts only their owner and granted
+    agents.
+  - Deterministic abstention signal — `last_recall_abstains()` /
+    `last_recall_risk()` flag low-coverage / no-evidence recalls so a caller can
+    decline to answer.
+  - `add_resolved` exposed as an MCP tool (`KnowledgeBase.add_resolved`).
+  - Provenance lineage persisted via fact qualifiers; opt-in trust / usage
+    telemetry persistence (`flush_stats`, `PoolStatsCapable`).
+- **Trust integrity** — monotonic CAS rejects stale-replay re-supersession;
+  laundering-resistant trust accrues penalty over publish *events* (not raw
+  volume); known-malicious agents (trust < 0.2) are discounted even in WIDE
+  recall.
+- **Bi-temporal `event_time`** — structured `event_time` anchor as the default
+  ingest path (`_temporal.py`), persisted across all three backends
+  (YAML / SQLite / PostgreSQL); deterministic supersession seam;
+  `KnowledgeBase.add_resolved()` knowledge-update seam.
+- **Optional semantic conflict-resolver seam** — `SemanticConflictResolver`
+  protocol (`ai_knot.multi_agent.canonical`) injected at
+  `SharedMemoryPool(semantic_resolver=...)`, run after the deterministic
+  resolver. Reference adapter `LLMSemanticConflictResolver`
+  (`ai_knot.integrations.semantic_resolver_llm`) parameterized by a
+  caller-supplied `complete(prompt) -> str` — **zero new core dependencies**;
+  the default path stays deterministic and LLM-free.
+- **Per-intent dense RRF** — dense retrieval wired as a per-intent signal in the
+  query planner (`_query_intent.py`, `retriever.py`).
+
+### Changed
+
+- **PostgreSQL parity** — `topic_channel` and `visibility_scope` now persist.
+- **Recall** gains adaptive result-count truncation, literal-identifier rescue,
+  and confident-cut backfill in fan-in assembly (returns `< top_k` rather than
+  padding with weak same-domain fillers).
+
+### Fixed
+
+- Stale-claim resolution on incident-domain value questions.
+- Per-facet coverage and cold-start trust in fan-in assembly.
+
+### Benchmarks & research
+
+- **Multi-agent acceptance gate + scorecard** (scenarios S8–S26):
+  `tests/eval/benchmark/ma_gate.py`, `--ma-gate`, cross-system backends.
+  Structurally-unreachable targets are marked *advisory* (reported, non-binding);
+  the binding gate is `correct_at_3 ≥ 0.90` and `target_shard_recall_at_10 ≥ 0.60`.
+  See `research/ma_metric_calibration_20260610.md` and
+  `research/s9_clean_resolution_impossibility_20260610.md`.
+- **LongMemEval harness** (`longmemevalbench/`) for long-horizon knowledge-update
+  evaluation.
+
+---
+
 ## [0.9.6] — 2026-04-26
 
 ### Added

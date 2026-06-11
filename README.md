@@ -11,6 +11,10 @@ Most agent frameworks treat memory as a log. ai-knot treats it as a knowledge ba
 It extracts facts from conversations, scores them by importance, and retrieves only what's
 relevant when building the next prompt. Pluggable storage, six LLM providers, no vendor lock-in.
 
+For **teams of agents**, the same store becomes a shared memory pool with fan-in recall,
+evidence-gated publishing, per-agent visibility, and laundering-resistant trust — deterministic
+by default, with an optional LLM seam for the semantic-conflict tail.
+
 ---
 
 ## The problem
@@ -782,6 +786,106 @@ Delta token transfer is typically < 15% of full-sync volume.
 
 ---
 
+## Fan-in recall (multi-agent)
+
+When an answer is **scattered across many agents** — each holding one piece — a flat top-k
+search misses it: the most relevant facts crowd each other out. `pool.recall()` runs a
+fan-in pipeline instead. It routes the query, splits it into facets, retrieves per facet,
+then assembles a set that *covers* every facet rather than over-weighting one.
+
+```python
+results = pool.recall("Which datastore did the team pick, and why?", "writer", top_k=8)
+for fact, score in results:
+    print(f"[{score:.2f}] {fact.content}")
+```
+
+The pipeline (`ai_knot.multi_agent`) is deterministic — no LLM, no graph:
+
+- `QueryShapeRouter` — classify intent and exploration mode,
+- `ConjunctiveFacetPlanner` — decompose the query into facets,
+- `SharedPoolRecallService` — retrieve candidates per facet,
+- `CoverageAwareAssembler` — greedily set-cover the facets (return `< top_k` rather than pad with weak fillers),
+- `ClaimFamilyResolver` — collapse competing claims (slotted-wins-over-unslotted, trust × recency tiebreak).
+
+---
+
+## Governance — evidence, visibility, abstention (multi-agent)
+
+Shared pools have to control *what gets believed, by whom, and when to stay silent*:
+
+```python
+# Evidence-before-belief: in governed pools, only facts that carry a provenance
+# pointer (a witness span from learn()/extraction) are admitted into the pool.
+pool.publish("researcher", fact_ids, kb=researcher, require_evidence=True)
+
+# Visibility scope: keep a fact out of the global pool, share it selectively.
+pool.publish("researcher", [secret.id], kb=researcher, visibility_scope="legal")
+pool.grant_read("counsel", "legal")     # only "counsel" sees "legal"-scoped facts
+
+# Abstention: after a recall, ask whether the evidence was actually thin.
+results = pool.recall("did we ever sign the Acme contract?", "writer", top_k=5)
+if pool.last_recall_abstains():
+    answer = "I don't have enough evidence to answer that."
+```
+
+`require_evidence` enforces the evidence-before-belief invariant; `visibility_scope` +
+`grant_read` give per-agent read projection (`"global"` reaches everyone); and
+`last_recall_abstains()` / `last_recall_risk()` expose a deterministic abstention signal
+when coverage is low or no recalled fact carries evidence. Provenance lineage is persisted
+on the fact, so every shared belief stays traceable to its source.
+
+---
+
+## Trust integrity (multi-agent)
+
+Auto-trust is hardened against the ways a shared pool gets gamed:
+
+- **Monotonic CAS** rejects stale-replay re-supersession — an old write can't reopen a slot a newer write already closed.
+- **Laundering-resistant trust** accrues penalty over publish *events*, not raw volume, so flooding the pool with filler can't dilute a quick-invalidation penalty.
+- **Malicious discount** — an agent whose trust falls below 0.2 is down-weighted even in wide recall, so a known-bad publisher can't resurface by overfetching.
+
+```python
+trust = pool.get_trust("agent_a")   # min(1, used / published) × (1 − quick_inv_rate)
+```
+
+---
+
+## Bi-temporal `event_time`
+
+Every fact carries two clocks: when ai-knot *learned* it (ingest time) and when the event
+it describes *happened* (`event_time`). The event-time anchor is set on ingest and persisted
+across all three backends, so "what did we believe on May 3?" and "what was true as of the
+incident?" become different, answerable questions. Superseding a fact closes the old one
+(`valid_until` is set) instead of deleting it — history stays queryable. `kb.add_resolved()`
+is the dependency-free seam to push pre-structured updates through supersession without an
+LLM extraction call.
+
+---
+
+## Optional semantic conflict resolver (multi-agent)
+
+The deterministic resolver collapses slotted and lexically-near conflicts. Value conflicts
+whose rivals share a *subject* but diverge in wording — "the REST endpoint supports both
+protocols" vs "the REST endpoint is deprecated" — fall below the overlap floor and both
+survive. Resolving those needs semantic judgement, so ai-knot exposes an **opt-in seam**
+rather than paying for an LLM on every conflict:
+
+```python
+from ai_knot.integrations.semantic_resolver_llm import LLMSemanticConflictResolver
+
+def complete(prompt: str) -> str:
+    ...  # call your own model — OpenAI, Claude, a local server
+
+pool = SharedMemoryPool(storage=storage, semantic_resolver=LLMSemanticConflictResolver(complete))
+```
+
+The core ships no model and imports none: the resolver is parameterized by your
+`complete(prompt) -> str` callable, runs *after* the deterministic pass on only the
+candidates it left standing, and the default path stays deterministic and dependency-free.
+That is the honest line versus Zep / Mem0, which pay an LLM call for every conflict.
+
+---
+
 ## Architecture
 
 ```
@@ -790,10 +894,15 @@ Conversation Turns
 [ Extractor ]         LLM distillation → tri-surface facts (canonical/witness/prompt)
        |                 + slot_key induction + ATC verification (Broder, 1997)
 [ KnowledgeBase ]     slot-based dedup + importance scoring + power-law decay
-       |                 + topic channels + publish gating + auto-trust
-[ Storage Adapter ]   YAML / SQLite / PostgreSQL
+       |                 + bi-temporal event_time + topic channels
+[ Storage Adapter ]   YAML / SQLite / PostgreSQL   (event_time + visibility persisted)
        |
-[ Retriever ]         BM25 + slot-exact + char-trigram (Jaccard) + retention fusion
+       ├── single agent ──→ [ Retriever ]          BM25 + slot-exact + char-trigram + retention fusion
+       |
+       └── team of agents ─→ [ SharedMemoryPool ]   evidence-gated publish + visibility scope
+                                    |                  + auto-trust + monotonic CAS
+                             [ Fan-in recall ]       route → facet → cover-assemble → resolve claims
+                                    |                  (+ optional semantic-resolver seam)
        |
 Context String        injected into agent system prompt
 ```
@@ -979,9 +1088,17 @@ kb.decay()  # apply power-law forgetting curve — stale facts lose retention sc
 - [x] Auto-trust from observed behaviour (replaces manual `update_trust()`)
 - [x] MCP `learn`, `health`, `capabilities` tools
 - [x] `ai-knot setup claude` CLI — paste-ready MCP config with absolute paths
+- [x] Bi-temporal `event_time` anchor (persisted across YAML / SQLite / PostgreSQL)
+- [x] Fan-in recall for shared pools (facet routing + coverage-aware assembly + expertise routing)
+- [x] Governance spine (evidence-before-belief gate, `visibility_scope` read projection, abstention signal, provenance lineage)
+- [x] Trust integrity (monotonic CAS, laundering-resistant trust, malicious-agent discount)
+- [x] Optional semantic conflict-resolver seam (`SemanticConflictResolver` + LLM reference adapter, zero core deps)
+- [x] Per-intent dense RRF retrieval signal
+- [x] Multi-agent acceptance gate + scorecard (scenarios S8–S26)
+- [x] LongMemEval knowledge-update harness
 - [ ] MongoDB backend
 - [ ] Qdrant + Weaviate backends (benchmark backend exists; production driver planned)
-- [ ] Semantic embeddings (sentence-transformers / OpenAI)
+- [ ] sentence-transformers embedding backend for large corpora (dense RRF signal already shipped)
 - [ ] LangChain / CrewAI integrations
 - [ ] Web UI knowledge inspector
 - [ ] REST API / sidecar mode
@@ -1001,6 +1118,11 @@ kb.decay()  # apply power-law forgetting curve — stale facts lose retention sc
 | Forgetting curve (type-aware power-law) | Yes | No | No | No |
 | Slot-addressed dedup (no LLM needed) | Yes | No | No | No |
 | Multi-agent auto-trust | Yes | No | No | No |
+| Fan-in recall across agents | Yes | No | No | No |
+| Per-agent visibility + evidence gating | Yes | No | No | No |
+| Trust integrity (laundering-resistant) | Yes | No | No | No |
+| Bi-temporal supersession | Yes (deterministic) | No | Yes (LLM) | No |
+| Deterministic conflict resolution (no LLM) | Yes | No | No | No |
 | Topic channels + publish gating | Yes | No | No | No |
 | Fact verification (ATC) | Yes | No | No | No |
 | Offline eval framework | Yes | No | No | No |

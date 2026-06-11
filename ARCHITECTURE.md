@@ -40,14 +40,16 @@
 
 ```
 types  ←  storage  ←  forgetting
-                   ←  retriever
+                   ←  retriever  ←  multi_agent   (fan-in recall pipeline)
                    ←  extractor
                    ←  knowledge  ←  cli
                                  ←  integrations
 ```
 
-`knowledge.py` is the top of the internal dependency graph.
-Nothing in `storage/`, `forgetting.py`, or `retriever.py` may import from `knowledge.py`.
+`knowledge.py` (and `pool.py`, which defines `SharedMemoryPool`) is the top of the internal
+dependency graph. Nothing in `storage/`, `forgetting.py`, `retriever.py`, or `multi_agent/`
+may import from `knowledge.py`/`pool.py`. The `multi_agent/` fan-in recall pipeline depends
+only on `retriever`, `tokenizer`, and `types`; `SharedMemoryPool` imports it, not the reverse.
 
 ---
 
@@ -79,6 +81,7 @@ The atomic unit of knowledge. All fields are persisted by storage backends excep
 | `source_verbatim` | `str` | `""` | Exact original phrase before LLM normalisation |
 | `valid_from` | `datetime` | now UTC | When this version became active |
 | `valid_until` | `datetime \| None` | `None` | When superseded; `None` = currently active |
+| `event_time` | `datetime \| None` | `None` | Bi-temporal anchor — when the described event *happened* (vs. `valid_from` = when learned); persisted by all backends |
 | `entity` | `str` | `""` | Subject of the fact, e.g. `"jordan lee"` (lowercase) |
 | `attribute` | `str` | `""` | Property being described, e.g. `"salary"` (lowercase) |
 | `version` | `int` | `0` | Monotonic counter; incremented on each supersession |
@@ -245,6 +248,23 @@ list_snapshots(agent_id)              -> list[str]
 delete_snapshot(agent_id, name)       -> None
 ```
 
+### `PoolStatsCapable` (optional)
+
+Persists shared-pool social memory — publish / use / quick-invalidation counters and
+per-fact consumer sets — so trust survives a process restart:
+
+```python
+save_pool_stats(stats: dict)  -> None    # overwrites any prior copy
+load_pool_stats()             -> dict
+```
+
+Opt-in via `SharedMemoryPool(persist_stats=True)`; pools default to in-memory only, so
+this adds no I/O to existing callers. `flush_stats()` writes the current telemetry.
+
+> **Bi-temporal persistence.** All three backends round-trip `event_time` (alongside
+> `valid_from` / `valid_until`), so the supersession history and the event-time anchor
+> survive reload — not just the currently-active frontier.
+
 ### YAMLStorage
 
 File layout: `{base_dir}/{agent_id}/knowledge.yaml`
@@ -380,6 +400,48 @@ overfetch candidates — preventing inflated denominators from wide `top_k` valu
 that changed since the agent's last sync version. Token transfer is typically < 15%
 of a full fact sync. Agents apply deltas to their private KB via `apply_slot_deltas()`.
 
+### Fan-in recall (`ai_knot.multi_agent`)
+
+When a query's answer is spread across many agents' shards, `pool.recall()` delegates to the
+`ai_knot.multi_agent` fan-in pipeline — deterministic, no LLM, no graph:
+
+1. `QueryShapeRouter.route()` — classify `RetrievalIntent` + `ExplorationMode` into a `RoutedPoolQuery`.
+2. `ConjunctiveFacetPlanner.decompose()` — split conjunctive ("X *and* Y") queries into `QueryFacet`s.
+3. `SharedPoolRecallService.recall()` — retrieve `CandidateFact`s per facet, with literal-identifier
+   rescue for exact IDs and `AgentExpertiseIndex` routing to the agents likeliest to hold each facet.
+4. `CoverageAwareAssembler.assemble()` — greedy set-cover so every facet is represented; confident-cut
+   backfill returns `< top_k` rather than padding with weak same-domain fillers.
+5. `ClaimFamilyResolver.resolve()` — IDF-weighted clustering collapses competing claims
+   (slotted-wins-over-unslotted, trust × recency tiebreak).
+
+`SpecificityScorer` / `NearMissDetector` / `DiversityPolicy` (`scoring.py`) shape per-agent and
+per-domain caps; the public data models live in `ai_knot.multi_agent.models`.
+
+### Governance — evidence, visibility, abstention
+
+- **Evidence-before-belief.** `publish(..., require_evidence=True)` admits only facts carrying a
+  provenance pointer (verbatim / snippet / span) and not flagged `supported=False`. Governed
+  deployments enable it for shared/org tiers; default off preserves the legacy `add()` path.
+- **Visibility scope.** `publish(..., visibility_scope=...)` writes the scope; `grant_read(agent_id,
+  scope)` projects reads per agent — `"global"` reaches everyone, a named scope only its owner and
+  granted agents.
+- **Abstention.** Recall computes coverage and an evidence fraction; `last_recall_abstains()` /
+  `last_recall_risk()` surface a deterministic signal (`should_abstain = coverage < 0.5 or
+  evidence_frac == 0`) so a caller can decline to answer instead of guessing.
+- **Provenance lineage** is persisted via fact `qualifiers`, so a shared belief stays traceable.
+
+### Trust integrity
+
+The auto-trust model above is hardened against pool gaming:
+
+- **Monotonic CAS** — a stale replay cannot re-supersede a slot a newer write already closed (`version` only advances).
+- **Laundering-resistant trust** — the quick-invalidation penalty accrues over publish *events*, not raw volume, so flooding the pool with filler cannot dilute it.
+- **Malicious discount** — an agent with trust < 0.2 is down-weighted even in WIDE recall, so a known-bad publisher cannot resurface by overfetching.
+
+The optional `SemanticConflictResolver` seam (see [Extension points](#extension-points)) runs *after*
+the deterministic `ClaimFamilyResolver`, on the candidates it left standing, and returns the ids it
+judges stale; the pool drops them before the trust discount and final cut. The core ships none.
+
 ---
 
 ## Forgetting curve (`ai_knot.forgetting`)
@@ -510,6 +572,7 @@ slot_key  = f"{entity}::{attribute}" if entity and attribute else ""
 | New storage backend | `src/ai_knot/storage/` | `StorageBackend` protocol; optionally also `TemporalStorageCapable`, `AtomicUpdateCapable`, `SnapshotCapable` |
 | New evidence store | `ai_knot.types` | `EvidenceStore` protocol: `get_evidence()`, `save_evidence()`, `delete_evidence()` |
 | New conflict policy | `ai_knot.types` | `ConflictPolicy` protocol + add to `CONFLICT_POLICIES` registry |
+| Semantic conflict resolver | `ai_knot.multi_agent.canonical` | `SemanticConflictResolver` protocol — inject at `SharedMemoryPool(semantic_resolver=...)`; reference `LLMSemanticConflictResolver` (`integrations/`) takes a `complete(prompt) -> str`, zero core deps |
 | New LLM provider | `Extractor._call_<provider>` | Returns `list[dict]` from LLM |
 | New integration | `src/ai_knot/integrations/` | Import `KnowledgeBase`, wrap |
 | Custom retriever | `HybridRetriever(bm25, dense)` | BM25 + dense fusion with graceful fallback |
