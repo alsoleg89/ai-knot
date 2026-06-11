@@ -12,9 +12,11 @@ Three agents publish documentation with deliberate conflicts:
 Agent D queries the pool — must find the NEWEST/correct answer for each topic.
 
 Metrics:
-  conflict_resolution      — fraction of conflicting queries returning the newer answer
+  conflict_resolution      — correct present AND stale rival absent in top-3
+  correct_at_3             — correct answer present in top-3 (retrieval/reader)
+  wrong_suppression        — stale rival absent from top-3 (semantics-bound)
   supersession_propagation — 1.0 if the CAS-updated slot surfaces the corrected value
-  precision_at_3           — fraction of top-3 results per query that are relevant
+  precision_at_3           — exact-keyword precision of top-3 (reported, not gated)
 
 Only runs against MultiAgentMemoryBackend.
 """
@@ -62,6 +64,8 @@ async def run(
 
     # Phase 3: Agent D queries — must find correct/newest answers.
     conflict_hits = 0
+    correct_hits = 0
+    suppression_hits = 0
     precision_total = 0
     precision_relevant = 0
 
@@ -74,6 +78,13 @@ async def run(
 
         if correct_found and not wrong_found:
             conflict_hits += 1
+        # correct_at_3 — the correct answer is surfaced (retrieval/reader quality).
+        if correct_found:
+            correct_hits += 1
+        # wrong_suppression — the stale rival is kept out of the top-3 (the harder,
+        # semantics-bound part of conflict_resolution).
+        if not wrong_found:
+            suppression_hits += 1
 
         # Precision: how many of top-3 are relevant to the query topic?
         for t in texts_lower:
@@ -83,16 +94,22 @@ async def run(
 
     n_queries = len(fixture.competing_queries)
     conflict_resolution = conflict_hits / n_queries
+    correct_at_3 = correct_hits / n_queries
+    wrong_suppression = suppression_hits / n_queries
 
     # Check supersession: the CAS-updated slot must surface v2 keyword.
     r_slot = await backend.pool_retrieve(_QUERIER, fixture.competing_slot_v2[:40], top_k=3)
     supersession_propagation = 1.0 if any("4 minutes" in t.lower() for t in r_slot.texts) else 0.0
 
+    # precision_at_3 measures exact-keyword precision, not topic precision (two of
+    # three queries have a single keyword-bearing fact), so it is reported but no
+    # longer gated — see research/ma_metric_calibration_20260610.md.
     precision_at_3 = precision_relevant / max(precision_total, 1)
 
     notes = (
         f"agents=3+supersession, facts=12+1, queries={n_queries}, "
         f"conflict_resolution={conflict_resolution:.0%}, "
+        f"correct_at_3={correct_at_3:.0%}, wrong_suppression={wrong_suppression:.0%}, "
         f"supersession_propagation={supersession_propagation:.0%}, "
         f"precision_at_3={precision_at_3:.0%}"
     )
@@ -102,6 +119,8 @@ async def run(
         backend_name=backend.name,
         judge_scores={
             "conflict_resolution": [conflict_resolution],
+            "correct_at_3": [correct_at_3],
+            "wrong_suppression": [wrong_suppression],
             "supersession_propagation": [supersession_propagation],
             "precision_at_3": [precision_at_3],
         },

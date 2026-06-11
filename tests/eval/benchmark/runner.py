@@ -760,16 +760,24 @@ def _enforce_ma_gate(metrics_list: list[BenchmarkMetrics]) -> None:
         if not applicable:
             continue
         passed = gate_passed(results)
-        n_pass = sum(1 for r in applicable if r.passed)
+        binding = [r for r in applicable if not r.threshold.advisory]
+        n_pass = sum(1 for r in binding if r.passed)
         click.echo(
-            f"MA gate [{m.backend_name}]: {n_pass}/{len(applicable)} thresholds "
+            f"MA gate [{m.backend_name}]: {n_pass}/{len(binding)} binding thresholds "
             f"{'PASS' if passed else 'FAIL'}"
         )
-        for r in applicable:
+        for r in binding:
             if not r.passed:
                 t = r.threshold
                 click.echo(
                     f"  ✗ {t.scenario_id}/{t.metric} = {r.value:.3f} (need {t.op} {t.target})"
+                )
+        for r in applicable:
+            if r.threshold.advisory and not r.passed:
+                t = r.threshold
+                click.echo(
+                    f"  ℹ {t.scenario_id}/{t.metric} = {r.value:.3f} "
+                    f"(advisory cap, target {t.op} {t.target})"
                 )
         failed_any = failed_any or not passed
     if failed_any:
