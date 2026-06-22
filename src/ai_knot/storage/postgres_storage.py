@@ -70,6 +70,37 @@ CREATE TABLE IF NOT EXISTS "ai-knot_pool_stats" (
 )
 """
 
+_CREATE_ACL_GRANTS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_acl_grants" (
+    agent_id   TEXT NOT NULL,
+    scope      TEXT NOT NULL,
+    granted_at TEXT NOT NULL,
+    granted_by TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (agent_id, scope)
+)
+"""
+
+_CREATE_TRUST_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_trust_events" (
+    seq        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ts         TEXT NOT NULL,
+    agent_id   TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    delta      DOUBLE PRECISION NOT NULL,
+    reason     TEXT NOT NULL DEFAULT ''
+)
+"""
+
+_CREATE_USAGE_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_usage_events" (
+    seq            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ts             TEXT NOT NULL,
+    fact_id        TEXT NOT NULL,
+    agent_id       TEXT NOT NULL,
+    recall_session TEXT NOT NULL DEFAULT ''
+)
+"""
+
 
 class PostgresStorage:
     """Stores facts in a PostgreSQL database.
@@ -102,6 +133,9 @@ class PostgresStorage:
         with self._get_conn() as conn:
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_POOL_STATS_TABLE)
+            conn.execute(_CREATE_ACL_GRANTS_TABLE)
+            conn.execute(_CREATE_TRUST_EVENTS_TABLE)
+            conn.execute(_CREATE_USAGE_EVENTS_TABLE)
             conn.commit()
         self._migrate_db()
 
@@ -125,6 +159,98 @@ class PostgresStorage:
             return {}
         loaded: dict[str, Any] = json.loads(row[0])
         return loaded
+
+    # ------------------------------------------------------------------
+    # ACLStoreCapable implementation
+    # ------------------------------------------------------------------
+
+    def save_grant(
+        self, agent_id: str, scope: str, *, granted_at: str, granted_by: str = ""
+    ) -> None:
+        """Persist a read-scope grant (upsert on ``agent_id`` + ``scope``)."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_acl_grants" (agent_id, scope, granted_at, granted_by) '
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (agent_id, scope) DO UPDATE SET "
+                "granted_at = EXCLUDED.granted_at, granted_by = EXCLUDED.granted_by",
+                (agent_id, scope, granted_at, granted_by),
+            )
+            conn.commit()
+
+    def load_grants(self) -> dict[str, set[str]]:
+        """Load all read-scope grants as ``{agent_id: {scope, ...}}``."""
+        with self._get_conn() as conn:
+            cur = conn.execute('SELECT agent_id, scope FROM "ai-knot_acl_grants"')
+            rows = cur.fetchall()
+        grants: dict[str, set[str]] = {}
+        for agent_id, scope in rows:
+            grants.setdefault(agent_id, set()).add(scope)
+        return grants
+
+    def revoke_grant(self, agent_id: str, scope: str) -> None:
+        """Remove a read-scope grant (no-op if absent)."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'DELETE FROM "ai-knot_acl_grants" WHERE agent_id = %s AND scope = %s',
+                (agent_id, scope),
+            )
+            conn.commit()
+
+    # ------------------------------------------------------------------
+    # EventLedgerCapable implementation
+    # ------------------------------------------------------------------
+
+    def append_trust_event(
+        self, *, ts: str, agent_id: str, event_type: str, delta: float, reason: str = ""
+    ) -> None:
+        """Append one trust-change event to the audit ledger."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_trust_events" (ts, agent_id, event_type, delta, reason) '
+                "VALUES (%s, %s, %s, %s, %s)",
+                (ts, agent_id, event_type, delta, reason),
+            )
+            conn.commit()
+
+    def append_usage_event(
+        self, *, ts: str, fact_id: str, agent_id: str, recall_session: str = ""
+    ) -> None:
+        """Append one fact-usage event to the audit ledger."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_usage_events" (ts, fact_id, agent_id, recall_session) '
+                "VALUES (%s, %s, %s, %s)",
+                (ts, fact_id, agent_id, recall_session),
+            )
+            conn.commit()
+
+    def load_trust_events(self, agent_id: str | None = None) -> list[dict[str, Any]]:
+        """Return trust events in insertion order, optionally filtered by agent."""
+        cols = ("seq", "ts", "agent_id", "event_type", "delta", "reason")
+        sql = f'SELECT {", ".join(cols)} FROM "ai-knot_trust_events"'
+        params: tuple[str, ...] = ()
+        if agent_id is not None:
+            sql += " WHERE agent_id = %s"
+            params = (agent_id,)
+        sql += " ORDER BY seq"
+        with self._get_conn() as conn:
+            cur = conn.execute(sql, params)
+            rows = cur.fetchall()
+        return [dict(zip(cols, row, strict=True)) for row in rows]
+
+    def load_usage_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
+        """Return usage events in insertion order, optionally filtered by fact."""
+        cols = ("seq", "ts", "fact_id", "agent_id", "recall_session")
+        sql = f'SELECT {", ".join(cols)} FROM "ai-knot_usage_events"'
+        params: tuple[str, ...] = ()
+        if fact_id is not None:
+            sql += " WHERE fact_id = %s"
+            params = (fact_id,)
+        sql += " ORDER BY seq"
+        with self._get_conn() as conn:
+            cur = conn.execute(sql, params)
+            rows = cur.fetchall()
+        return [dict(zip(cols, row, strict=True)) for row in rows]
 
     def _migrate_db(self) -> None:
         """Add new columns to existing databases (backward compat)."""

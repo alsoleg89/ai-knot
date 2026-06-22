@@ -247,6 +247,126 @@ class YAMLStorage:
         return data if isinstance(data, dict) else {}
 
     # ------------------------------------------------------------------
+    # ACLStoreCapable / EventLedgerCapable implementation
+    # ------------------------------------------------------------------
+    # NOTE: ``_get_lock`` returns a plain (non-reentrant) lock, so each public
+    # method acquires it exactly once and uses the unlocked read/write helpers
+    # for the load→modify→store cycle (acquiring twice would deadlock).
+
+    @staticmethod
+    def _read_unlocked(path: Path) -> Any:
+        if not path.exists():
+            return None
+        with open(path, encoding="utf-8") as f:
+            return yaml.load(f, Loader=_YamlLoader)
+
+    @staticmethod
+    def _write_unlocked(path: Path, data: Any) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+
+    def _acl_grants_path(self) -> Path:
+        return self._base_dir / "_acl_grants.yaml"
+
+    def _trust_events_path(self) -> Path:
+        return self._base_dir / "_trust_events.yaml"
+
+    def _usage_events_path(self) -> Path:
+        return self._base_dir / "_usage_events.yaml"
+
+    def save_grant(
+        self, agent_id: str, scope: str, *, granted_at: str, granted_by: str = ""
+    ) -> None:
+        """Persist a read-scope grant (upsert on ``agent_id`` + ``scope``)."""
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        path = self._acl_grants_path()
+        with _get_lock(path):
+            raw = self._read_unlocked(path)
+            grants = raw if isinstance(raw, dict) else {}
+            grants.setdefault(agent_id, {})[scope] = {
+                "granted_at": granted_at,
+                "granted_by": granted_by,
+            }
+            self._write_unlocked(path, grants)
+
+    def load_grants(self) -> dict[str, set[str]]:
+        """Load all read-scope grants as ``{agent_id: {scope, ...}}``."""
+        path = self._acl_grants_path()
+        with _get_lock(path):
+            raw = self._read_unlocked(path)
+        if not isinstance(raw, dict):
+            return {}
+        return {agent_id: set(scopes) for agent_id, scopes in raw.items()}
+
+    def revoke_grant(self, agent_id: str, scope: str) -> None:
+        """Remove a read-scope grant (no-op if absent)."""
+        path = self._acl_grants_path()
+        with _get_lock(path):
+            raw = self._read_unlocked(path)
+            grants = raw if isinstance(raw, dict) else {}
+            if scope in grants.get(agent_id, {}):
+                del grants[agent_id][scope]
+                if not grants[agent_id]:
+                    del grants[agent_id]
+                self._write_unlocked(path, grants)
+
+    def _append_event(self, path: Path, record: dict[str, Any]) -> None:
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        with _get_lock(path):
+            raw = self._read_unlocked(path)
+            events = raw if isinstance(raw, list) else []
+            events.append({"seq": len(events) + 1, **record})
+            self._write_unlocked(path, events)
+
+    def _load_events(self, path: Path) -> list[dict[str, Any]]:
+        with _get_lock(path):
+            raw = self._read_unlocked(path)
+        return raw if isinstance(raw, list) else []
+
+    def append_trust_event(
+        self, *, ts: str, agent_id: str, event_type: str, delta: float, reason: str = ""
+    ) -> None:
+        """Append one trust-change event to the audit ledger."""
+        self._append_event(
+            self._trust_events_path(),
+            {
+                "ts": ts,
+                "agent_id": agent_id,
+                "event_type": event_type,
+                "delta": delta,
+                "reason": reason,
+            },
+        )
+
+    def append_usage_event(
+        self, *, ts: str, fact_id: str, agent_id: str, recall_session: str = ""
+    ) -> None:
+        """Append one fact-usage event to the audit ledger."""
+        self._append_event(
+            self._usage_events_path(),
+            {
+                "ts": ts,
+                "fact_id": fact_id,
+                "agent_id": agent_id,
+                "recall_session": recall_session,
+            },
+        )
+
+    def load_trust_events(self, agent_id: str | None = None) -> list[dict[str, Any]]:
+        """Return trust events in insertion order, optionally filtered by agent."""
+        events = self._load_events(self._trust_events_path())
+        if agent_id is not None:
+            events = [e for e in events if e.get("agent_id") == agent_id]
+        return events
+
+    def load_usage_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
+        """Return usage events in insertion order, optionally filtered by fact."""
+        events = self._load_events(self._usage_events_path())
+        if fact_id is not None:
+            events = [e for e in events if e.get("fact_id") == fact_id]
+        return events
+
+    # ------------------------------------------------------------------
     # SnapshotCapable implementation
     # ------------------------------------------------------------------
 
