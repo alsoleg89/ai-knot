@@ -1217,6 +1217,32 @@ class KnowledgeBase(_LearningMixin):
         """
         return self._storage.load(self._agent_id)
 
+    def lineage(self, fact_id: str) -> list[Fact]:
+        """Return the supersession chain for *fact_id*, newest → oldest.
+
+        Walks ``qualifiers["supersedes_id"]`` (written at CAS-supersession time)
+        from the given fact back through each predecessor it replaced.  The first
+        element is *fact_id* itself; the list is empty when no such fact exists.
+        Superseded (inactive) facts are included — the chain is the audit trail
+        of how a slot's value evolved.
+
+        Args:
+            fact_id: The 8-char hex ID to trace.
+
+        Returns:
+            Facts from the given one back to the original, or ``[]`` if unknown.
+        """
+        by_id = {f.id: f for f in self._storage.load(self._agent_id)}
+        chain: list[Fact] = []
+        seen: set[str] = set()
+        cur = by_id.get(fact_id)
+        while cur is not None and cur.id not in seen:
+            chain.append(cur)
+            seen.add(cur.id)
+            prev_id = cur.provenance.supersedes_id
+            cur = by_id.get(prev_id) if prev_id else None
+        return chain
+
     def recall_facts(
         self,
         query: str,

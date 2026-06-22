@@ -340,6 +340,9 @@ class _LearningMixin:
                 handled_ids.add(matched.id)
                 new_fact.importance = min(1.0, matched.importance + 0.05)
                 new_fact.version = matched.version + 1
+                # Record the predecessor link so provenance/lineage can trace the
+                # slot's history (the pool CAS path records this too).
+                new_fact.qualifiers["supersedes_id"] = matched.id
                 # Carry over evidence trail from the old fact.
                 if matched.source_snippets:
                     existing_snips = set(new_fact.source_snippets)
@@ -361,6 +364,8 @@ class _LearningMixin:
             if matched_fact is not None:
                 matched_fact.valid_until = now_close
                 handled_ids.add(matched_fact.id)
+                if new_fact.op != MemoryOp.DELETE:
+                    new_fact.qualifiers["supersedes_id"] = matched_fact.id
                 # Carry over evidence trail from the old entity fact.
                 if matched_fact.source_snippets and new_fact.op != MemoryOp.DELETE:
                     existing_snips = set(new_fact.source_snippets)

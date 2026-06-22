@@ -33,6 +33,7 @@ from ai_knot._mcp_tools import (
     tool_learn,
     tool_list_facts,
     tool_list_snapshots,
+    tool_memory_lineage,
     tool_recall,
     tool_recall_json,
     tool_recall_with_trace,
@@ -214,6 +215,18 @@ def _make_server(kb: KnowledgeBase) -> Any:
     def list_facts() -> str:
         """List all facts stored in memory (JSON format)."""
         return tool_list_facts(kb)
+
+    @app.tool()
+    def memory_lineage(fact_id: str) -> str:
+        """Trace a fact's supersession lineage (newest → oldest) as JSON.
+
+        The audit trail of how a slot's value evolved: each entry's
+        supersedes_id points at the fact it replaced.
+
+        Args:
+            fact_id: The 8-char hex ID to trace (from list_facts/recall_json).
+        """
+        return tool_memory_lineage(kb, fact_id)
 
     @app.tool()
     def stats() -> str:

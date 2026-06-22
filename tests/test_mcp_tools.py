@@ -16,6 +16,7 @@ from ai_knot._mcp_tools import (
     tool_learn,
     tool_list_facts,
     tool_list_snapshots,
+    tool_memory_lineage,
     tool_recall,
     tool_recall_json,
     tool_recall_with_trace,
@@ -25,6 +26,7 @@ from ai_knot._mcp_tools import (
 )
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import Fact
 
 
 @pytest.fixture
@@ -128,6 +130,7 @@ class TestToolCapabilities:
             "recall_json",
             "forget",
             "list_facts",
+            "memory_lineage",
             "stats",
             "snapshot",
             "restore",
@@ -151,6 +154,41 @@ class TestToolListFacts:
         data = json.loads(tool_list_facts(kb))
         assert len(data) == 2
         assert all(set(d) >= {"id", "content", "type", "importance", "retention"} for d in data)
+
+
+# ---- tool_memory_lineage ----------------------------------------------------
+
+
+class TestToolMemoryLineage:
+    @staticmethod
+    def _slot_fact(value: str) -> Fact:
+        return Fact(
+            content=f"Alex earns {value}",
+            entity="Alex",
+            attribute="salary",
+            value_text=value,
+            slot_key="Alex::salary",
+        )
+
+    def test_traces_supersession_chain(self, kb: KnowledgeBase) -> None:
+        old = kb.add_resolved([self._slot_fact("80k")])[0]
+        mid = kb.add_resolved([self._slot_fact("95k")])[0]
+        new = kb.add_resolved([self._slot_fact("120k")])[0]
+        data = json.loads(tool_memory_lineage(kb, new.id))
+        assert [row["id"] for row in data] == [new.id, mid.id, old.id]
+        assert data[0]["value_text"] == "120k"
+        assert data[0]["supersedes_id"] == mid.id
+        assert data[0]["active"] is True
+        assert data[-1]["active"] is False  # the oldest was superseded
+
+    def test_unknown_fact_returns_empty(self, kb: KnowledgeBase) -> None:
+        assert tool_memory_lineage(kb, "ffffffff") == "[]"
+
+    def test_single_fact_has_no_predecessor(self, kb: KnowledgeBase) -> None:
+        only = kb.add_resolved([self._slot_fact("80k")])[0]
+        data = json.loads(tool_memory_lineage(kb, only.id))
+        assert [row["id"] for row in data] == [only.id]
+        assert data[0]["supersedes_id"] == ""
 
 
 # ---- tool_stats -------------------------------------------------------------
