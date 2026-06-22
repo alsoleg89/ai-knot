@@ -192,14 +192,17 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_add_resolved(kb, facts)
 
     @app.tool()
-    def recall(query: str, top_k: int = 5) -> str:
+    def recall(query: str, top_k: int = 5, now: str | None = None) -> str:
         """Recall relevant facts from memory for the current query.
 
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Optional ISO-8601 point-in-time anchor. Excludes facts whose
+                validity ended by ``now`` (superseded knowledge-updates) and
+                computes decay as of ``now``. Defaults to the current time.
         """
-        return tool_recall(kb, query, top_k=top_k)
+        return tool_recall(kb, query, top_k=top_k, now=now)
 
     @app.tool()
     def forget(fact_id: str) -> str:
@@ -239,7 +242,7 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_restore(kb, name)
 
     @app.tool()
-    def recall_json(query: str, top_k: int = 5) -> str:
+    def recall_json(query: str, top_k: int = 5, now: str | None = None) -> str:
         """Recall relevant facts as a JSON array (id, memory, type, importance, retention).
 
         Use instead of recall() when you need structured data rather than plain text.
@@ -247,8 +250,9 @@ def _make_server(kb: KnowledgeBase) -> Any:
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Optional ISO-8601 point-in-time anchor (see recall()).
         """
-        return tool_recall_json(kb, query, top_k=top_k)
+        return tool_recall_json(kb, query, top_k=top_k, now=now)
 
     @app.tool()
     def learn(messages: list[dict[str, str]]) -> str:
@@ -264,7 +268,7 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_learn(kb, messages)
 
     @app.tool()
-    def recall_with_trace(query: str, top_k: int = 5) -> str:
+    def recall_with_trace(query: str, top_k: int = 5, now: str | None = None) -> str:
         """Diagnostic: recall with per-stage pipeline trace (JSON).
 
         Returns context string plus stage1_candidates, pack_fact_ids, and
@@ -274,8 +278,9 @@ def _make_server(kb: KnowledgeBase) -> Any:
         Args:
             query: What the agent needs to know right now.
             top_k: Maximum number of facts to return.
+            now: Optional ISO-8601 point-in-time anchor (see recall()).
         """
-        return tool_recall_with_trace(kb, query, top_k=top_k)
+        return tool_recall_with_trace(kb, query, top_k=top_k, now=now)
 
     @app.tool()
     def list_snapshots() -> str:
