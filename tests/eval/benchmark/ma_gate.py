@@ -122,6 +122,18 @@ GATE: tuple[GateThreshold, ...] = (
         note="latency is environment-dependent (shared CI runners ~170ms vs <90ms local); "
         "tracked by the perf-benchmark job, not a correctness bind",
     ),
+    # Binding domain-coverage at scale: when the markerless query cannot name the
+    # exact target among ~50 identical-content peers, surfacing ANY same-domain
+    # shard is the achievable, meaningful signal — the ambiguity-aware S26 scenario
+    # emits this. The exact-agent target_shard_recall_at_1000 stays advisory below.
+    GateThreshold(
+        "s26_sparse_assembly",
+        "equivalence_recall_at_1000",
+        ">=",
+        0.90,
+        "scale",
+        note=f"domain-coverage gate replacing exact-agent recall@1000 ({_CALIB} S3)",
+    ),
     # Advisory: at N=1000 each target has ~49 identical-content peers and the
     # markerless query cannot name it — exact recall is information-theory bound
     # (~0.33) and the distractor rate has a 0.70 floor at top_k=10 / 3 targets.
