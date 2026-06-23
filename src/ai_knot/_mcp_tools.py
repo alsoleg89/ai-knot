@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ai_knot.knowledge import KnowledgeBase
@@ -35,9 +35,14 @@ def _parse_event_time(event_time: str | None) -> datetime | None:
     if not event_time:
         return None
     try:
-        return datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # Naive inputs (e.g. a date-only "2023-05-08" or "...T23:40:00" without a zone)
+    # are treated as UTC, so the value is comparable with the store's timezone-aware
+    # validity bounds — otherwise recall(now=…) → is_active raises "can't compare
+    # offset-naive and offset-aware datetimes" and the whole recall fails.
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 def tool_add(

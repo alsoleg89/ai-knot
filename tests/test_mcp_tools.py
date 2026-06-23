@@ -104,6 +104,16 @@ class TestToolRecall:
         tool_add(kb, "Caroline took up running")
         assert "Caroline" in tool_recall(kb, "Caroline running", now="not-a-date")
 
+    def test_naive_now_does_not_crash(self, kb: KnowledgeBase) -> None:
+        # A timezone-naive ``now`` (date-only, or a datetime with no offset — exactly
+        # what LongMemEval's question_date supplies) must be treated as UTC, not raise
+        # "can't compare offset-naive and offset-aware datetimes" inside is_active.
+        tool_add(kb, "Caroline took up running")
+        # Future naive anchor → fact is active → recalled (no crash).
+        assert "Caroline" in tool_recall(kb, "Caroline running", now="2099-01-01T23:40:00")
+        # Past naive date-only anchor → fact not yet valid → excluded (no crash).
+        assert tool_recall(kb, "Caroline running", now="2000-01-01") == "No relevant facts found."
+
     def test_now_anchor_applies_to_json_and_trace_variants(self, kb: KnowledgeBase) -> None:
         tool_add(kb, "Caroline took up running")
         past = "2000-01-01T00:00:00+00:00"
