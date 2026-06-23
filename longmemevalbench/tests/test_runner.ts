@@ -202,4 +202,55 @@ describe("runner end-to-end (fakes, no LLM/MCP)", () => {
     expect(report.summary.total).toBe(1);
     expect(report.summary.correct).toBe(0); // declined on an answerable question => WRONG
   });
+
+  it("threads the question_date as the point-in-time recall anchor", async () => {
+    const runId = `test-now-${Date.now()}`;
+    createdRuns.push(runId);
+
+    const tmp = mkdtempSync(resolve(tmpdir(), "lme-"));
+    const file = resolve(tmp, "one.json");
+    writeFileSync(
+      file,
+      JSON.stringify([
+        {
+          question_id: "temporal_001",
+          question_type: "temporal-reasoning",
+          question: "Where did I live?",
+          answer: "Paris",
+          question_date: "2023/05/08 (Mon) 13:56", // non-ISO: must be normalized
+          haystack_session_ids: ["s1"],
+          haystack_dates: ["2020-01-01"],
+          haystack_sessions: [[{ role: "user", content: "I live in Paris", has_answer: true }]],
+          answer_session_ids: ["s1"],
+        },
+      ])
+    );
+
+    let capturedNow: string | undefined = "UNSET";
+    const recordingAdapter = (): AdapterLike => ({
+      async ingest() {},
+      async recall(_question: string, now?: string) {
+        capturedNow = now;
+        return "user: I live in Paris";
+      },
+      async close() {},
+    });
+
+    await runBenchmark({
+      runId,
+      judgeModel: NULL_MODEL,
+      answerModel: NULL_MODEL,
+      judgeModelName: "fake-judge",
+      answerModelName: "fake-reader",
+      aiKnotCommand: "unused",
+      dataFile: file,
+      force: true,
+      _evaluatorOverride: { ...fakeEval(), adapterFactory: recordingAdapter },
+    });
+
+    rmSync(tmp, { recursive: true, force: true });
+    // The raw "2023/05/08 (Mon) 13:56" anchor is normalized to ISO-8601 and passed
+    // through to recall as the point-in-time `now` (the bi-temporal replay lever).
+    expect(capturedNow).toBe("2023-05-08T13:56:00");
+  });
 });
