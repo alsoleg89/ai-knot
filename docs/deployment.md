@@ -208,5 +208,17 @@ ctx = pool.recall("analyst", "q3 revenue")       # scope-filtered, trust-weighte
   run N stateless workers against one PostgreSQL backend.
 - The dense and rerank channels add network / CPU; size them against your latency
   budget (see README "Performance").
-- For a per-request HTTP surface instead of stdio MCP, a FastAPI sidecar is on
-  the roadmap (see [production-readiness.md](production-readiness.md)).
+
+## 11. HTTP sidecar
+
+For a per-request HTTP surface instead of stdio MCP, run the optional sidecar:
+
+```bash
+pip install "ai-knot[server]"
+AI_KNOT_SERVER_TOKEN=secret ai-knot --storage postgres --dsn "$AI_KNOT_DSN" serve svc --host 0.0.0.0 --port 8000
+```
+
+Routes: `GET /health` (open), `POST /v1/recall` (`{query, top_k, now}` → context +
+facts), `POST /v1/facts`, `GET /v1/stats`. When `AI_KNOT_SERVER_TOKEN` is set, the
+`/v1/*` routes require `Authorization: Bearer <token>`. Front it with a TLS-
+terminating reverse proxy in production.

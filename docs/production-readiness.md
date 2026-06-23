@@ -80,9 +80,9 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | Version-sync regression test | 🟡 | pyproject == `__init__` == npm (PR #95) |
 | Recall determinism regression guard | 🟡 | `test_ddsa_output_stable_across_calls` hardened (PR #96) |
 | LongMemEval harness (TS, LLM-judge, checkpoint-resume) | ✅ | `longmemevalbench/` |
-| CI: live S8–S26 gate job | ⬜ | run the MA gate on every PR |
-| CI: PostgreSQL service for backend tests | ⬜ | currently skipped without a server |
-| CI: longmemeval vitest job | ⬜ | wire `npm test` for the harness |
+| CI: live S8–S26 gate job | 🟡 | `runner --multi-agent --ma-gate` on every PR (PR #98) |
+| CI: PostgreSQL service for backend tests | 🟡 | service container + `AI_KNOT_TEST_PG_DSN`; caught a real psycopg3 bulk-save bug (PR #98) |
+| CI: longmemeval vitest job | 🟡 | build npm → typecheck → vitest (PR #98) |
 
 ## 8. Release & versioning
 
@@ -99,7 +99,7 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | MCP server (stdio) | ✅ | Claude Desktop / Claude Code |
 | TypeScript/npm client | ✅ | `learn` / `addResolved` / `recall(now)` / `tags` (PR #87) |
 | OpenClaw memory adapter | ✅ | drop-in adapter |
-| FastAPI HTTP sidecar | ⬜ | `/health`, `/v1/facts`, `/v1/recall`, `/v1/pool/*` |
+| FastAPI HTTP sidecar | 🟡 | `ai-knot serve`: `/health`, `/v1/recall`, `/v1/facts`, `/v1/stats` + optional bearer auth (PR #99) |
 | CLI pool/gov/lifecycle ops | ⬜ | operator commands |
 | Framework integrations (LangGraph / OpenAI Agents / CrewAI / AutoGen) | ⬜ | thin adapters |
 
@@ -116,13 +116,14 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 
 ## Roadmap (planned, in dependency order)
 
-1. **CI hardening** — live S8–S26 gate, PostgreSQL service, longmemeval vitest.
-2. **Governance state machine** (R1.4) — `review_state` + `review_queue` +
-   submit/ratify/reject on the pool.
-3. **Lifecycle engine** (R1.5) — decay / archive / consolidate jobs + lifecycle ledger.
-4. **Temporal/relation graph** (R1.6) — `GraphStorageCapable` edges from provenance.
-5. **Self-repair probes** (R1.7) — generate + run consistency probes over the KB.
-6. **Ecosystem (P2)** — FastAPI sidecar, CLI ops, framework integrations,
-   competitor bench-pack + live Mem0.
-7. **LongMemEval number** — once the dataset is in place, run the harness
+1. **Governance state machine** (R1.4) — `review_state` + `review_queue` +
+   submit/ratify/reject on the pool. *Optional:* overlaps the existing
+   evidence-gate + trust + ACL + abstention controls; warranted only where
+   explicit human/agent ratification is required before a fact becomes visible.
+2. **Lifecycle engine** (R1.5) — decay / archive / consolidate jobs + lifecycle ledger.
+3. **Temporal/relation graph** (R1.6) — `GraphStorageCapable` edges from provenance.
+4. **Self-repair probes** (R1.7) — generate + run consistency probes over the KB.
+5. **Ecosystem (P2)** — CLI pool/gov ops, framework integrations,
+   competitor bench-pack + live Mem0. (HTTP sidecar landed — PR #99.)
+6. **LongMemEval number** — once the dataset is in place, run the harness
    (KU-mode + point-in-time replay) and publish per-type accuracy.
