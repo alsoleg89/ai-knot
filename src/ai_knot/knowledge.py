@@ -77,6 +77,13 @@ def _apply_temporal(fact: Fact, event_time: datetime | None) -> None:
     if event_time is None:
         return
     fact.event_time = event_time
+    # Bi-temporal anchor: a fact about a past event is *valid from* that event's
+    # time, not from when it happened to be ingested.  This makes point-in-time
+    # recall (``recall(now=...)``) correct for historical replay — a fact whose
+    # event_time is after the query time is not yet active.  Recall without a
+    # ``now`` (now = current time) is unaffected: every historical fact remains
+    # active because ``valid_from <= now`` still holds.
+    fact.valid_from = event_time
     resolved = resolve_event_dates(fact.content, event_time)
     if not resolved:
         return

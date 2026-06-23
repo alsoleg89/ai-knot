@@ -28,6 +28,24 @@ logger = logging.getLogger(__name__)
 _LEARN_DEBUG = False  # overridden by KnowledgeBase after import
 
 
+def _supersede_close(superseding: Fact, superseded: Fact, fallback: datetime) -> datetime:
+    """Bi-temporal close time for a superseded fact.
+
+    A fact stays valid until its successor's *event* time — not until the
+    successor happened to be ingested.  This makes point-in-time recall
+    correct: between the two event times the older value is the active one.
+
+    Falls back to ``fallback`` (ingest-now) when the successor carries no
+    event time, or when using it would invert the ``[valid_from, valid_until)``
+    interval (out-of-order ingestion where the "newer" fact has an earlier
+    event time) — preserving today's last-write-wins behaviour for that edge.
+    """
+    et = superseding.event_time
+    if et is None or et < superseded.valid_from:
+        return fallback
+    return et
+
+
 class _LearningMixin:
     """Mixin providing learn/alearn/learn_async/consolidate_episodic to KnowledgeBase.
 
@@ -59,6 +77,7 @@ class _LearningMixin:
         conflict_threshold: float = 0.7,
         timeout: float | None = None,
         batch_size: int = 20,
+        event_time: datetime | None = None,
         **provider_kwargs: str,
     ) -> list[Fact]:
         """Extract and store facts from a conversation using an LLM.
@@ -97,6 +116,10 @@ class _LearningMixin:
                 uses the provider's built-in default (30 s).
             batch_size: Maximum conversation turns sent per LLM call. Longer
                 conversations are split into batches to prevent JSON truncation.
+            event_time: When the conversation took place. Extracted facts are
+                anchored to it (``valid_from`` and supersession close-times),
+                making point-in-time recall correct for historical replay.
+                ``None`` (default, live conversation) keeps ingest-time anchoring.
             **provider_kwargs: Extra args forwarded to the provider constructor
                 (e.g. ``folder_id`` for Yandex, ``base_url`` for openai-compat).
                 Merged with any defaults set at init, with per-call values taking
@@ -124,6 +147,14 @@ class _LearningMixin:
 
         # Stage 2: candidate verification (dedup, future ATC checks).
         verified = self._candidate_phase(candidates)
+
+        # Anchor every extracted fact to the conversation's event time so the
+        # bi-temporal resolver (``_resolve_phase``) sets ``valid_from`` and
+        # supersession close-times against *when the knowledge held*, not when it
+        # was ingested.  ``None`` (live conversation) leaves ingest-time defaults.
+        if event_time is not None:
+            for f in verified:
+                f.event_time = event_time
 
         # Stage 3: resolve against existing knowledge.
         existing = self._storage.load(self._agent_id)
@@ -282,6 +313,13 @@ class _LearningMixin:
         now_close = datetime.now(UTC)
         active_existing = [f for f in existing if f.is_active(now_close)]
 
+        # Bi-temporal anchor: facts carrying an event time become valid from that
+        # time (their successors close at it too — see ``_supersede_close``).  Facts
+        # without an event time keep their ingest-time ``valid_from`` (unchanged).
+        for f in verified:
+            if f.event_time is not None:
+                f.valid_from = f.event_time
+
         to_insert: list[Fact] = []
         handled_ids: set[str] = set()
         n_reinforce = n_supersede = n_branch = n_delete = n_noop = 0
@@ -300,7 +338,7 @@ class _LearningMixin:
                 unhandled = [f for f in active_existing if f.id not in handled_ids]
                 _, matched = resolve_by_slot(new_fact, unhandled)
                 if matched is not None:
-                    matched.valid_until = now_close
+                    matched.valid_until = _supersede_close(new_fact, matched, now_close)
                     handled_ids.add(matched.id)
                 n_delete += 1
                 continue
@@ -336,7 +374,7 @@ class _LearningMixin:
                 n_reinforce += 1
             elif slot_op == "supersede":
                 assert matched is not None
-                matched.valid_until = now_close
+                matched.valid_until = _supersede_close(new_fact, matched, now_close)
                 handled_ids.add(matched.id)
                 new_fact.importance = min(1.0, matched.importance + 0.05)
                 new_fact.version = matched.version + 1
@@ -362,7 +400,7 @@ class _LearningMixin:
             available = [f for f in entity_candidates if f.id not in handled_ids]
             matched_fact = resolve_structured(new_fact, available)
             if matched_fact is not None:
-                matched_fact.valid_until = now_close
+                matched_fact.valid_until = _supersede_close(new_fact, matched_fact, now_close)
                 handled_ids.add(matched_fact.id)
                 if new_fact.op != MemoryOp.DELETE:
                     new_fact.qualifiers["supersedes_id"] = matched_fact.id
@@ -507,6 +545,7 @@ class _LearningMixin:
         conflict_threshold: float = 0.7,
         timeout: float | None = None,
         batch_size: int = 20,
+        event_time: datetime | None = None,
         **provider_kwargs: str,
     ) -> list[Fact]:
         """Async variant of :meth:`learn` — non-blocking for asyncio applications.
@@ -537,6 +576,7 @@ class _LearningMixin:
                 conflict_threshold=conflict_threshold,
                 timeout=timeout,
                 batch_size=batch_size,
+                event_time=event_time,
                 **provider_kwargs,
             ),
         )
@@ -551,6 +591,7 @@ class _LearningMixin:
         conflict_threshold: float = 0.7,
         timeout: float | None = None,
         batch_size: int = 20,
+        event_time: datetime | None = None,
         embed_url: str = "http://localhost:11434",
         embed_model: str = "nomic-embed-text",
         embed_api_key: str | None = None,
@@ -593,6 +634,7 @@ class _LearningMixin:
                 conflict_threshold=conflict_threshold,
                 timeout=timeout,
                 batch_size=batch_size,
+                event_time=event_time,
                 **provider_kwargs,
             ),
         )
