@@ -790,7 +790,16 @@ class KnowledgeBase(_LearningMixin):
         # --- STAGE 3: Intent-weighted RRF fusion (Phase E — replaces greedy) ---
         # Six ranked signals fused via Reciprocal Rank Fusion with per-intent weights.
         # Weights: (BM25, slot, trigram, importance, retention, recency).
-        candidate_id_list = list(candidate_ids)
+        #
+        # Sort the candidate set into a deterministic base order before ranking.
+        # ``candidate_ids`` is a set, whose iteration order over string ids is
+        # hash-seed-randomised per process. Every ranker below is a *stable* sort,
+        # so score-tied facts keep this base order — and RRF rank contributions for
+        # facts tied within a signal depend on it. Without a fixed base, identical
+        # query+state can yield different top-k cuts among ties across processes.
+        # Sorting by id makes retrieval reproducible (non-tied results are
+        # unaffected: stable sorts order them purely by score).
+        candidate_id_list = sorted(candidate_ids)
         query_tokens_frozen = frozenset(_tokenize(query))
         query_trigrams = _char_trigrams(query)
 
@@ -864,10 +873,11 @@ class KnowledgeBase(_LearningMixin):
 
         fused_scores = _rrf_fuse(_rrf_rankers, weights=_rrf_weights)
 
+        # Final selection: fused score descending, fact id ascending as an explicit
+        # deterministic tiebreak (belt-and-suspenders over the sorted base order).
         selected_ids: list[str] = sorted(
             (fid for fid in candidate_id_list if fid in fact_map),
-            key=lambda fid: fused_scores.get(fid, 0.0),
-            reverse=True,
+            key=lambda fid: (-fused_scores.get(fid, 0.0), fid),
         )[:top_k]
 
         if trace is not None:
