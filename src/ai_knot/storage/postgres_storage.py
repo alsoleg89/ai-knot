@@ -232,24 +232,29 @@ class PostgresStorage:
     def _execute_save(self, agent_id: str, rows: list[tuple]) -> None:  # type: ignore[type-arg]
         with self._get_conn() as conn:
             conn.execute('DELETE FROM "ai-knot_facts" WHERE agent_id = %s', (agent_id,))
-            conn.executemany(
-                """INSERT INTO "ai-knot_facts"
-                   (id, agent_id, content, type, importance, retention,
-                    access_count, tags, created_at, last_accessed,
-                    source_snippets, source_spans, supported,
-                    support_confidence, verification_source,
-                    access_intervals, origin_agent_id, visibility,
-                    source_verbatim, valid_from, valid_until,
-                    entity, attribute, version, mesi_state,
-                    canonical_surface, witness_surface, prompt_surface,
-                    slot_key, value_text, qualifiers, state_confidence,
-                    topic_channel, visibility_scope,
-                    claim_key, memory_tier, event_time)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                rows,
-            )
+            # executemany is a Cursor method in psycopg3 (Connection has execute but
+            # not executemany). An empty save is just the DELETE above (clear agent).
+            if rows:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """INSERT INTO "ai-knot_facts"
+                           (id, agent_id, content, type, importance, retention,
+                            access_count, tags, created_at, last_accessed,
+                            source_snippets, source_spans, supported,
+                            support_confidence, verification_source,
+                            access_intervals, origin_agent_id, visibility,
+                            source_verbatim, valid_from, valid_until,
+                            entity, attribute, version, mesi_state,
+                            canonical_surface, witness_surface, prompt_surface,
+                            slot_key, value_text, qualifiers, state_confidence,
+                            topic_channel, visibility_scope,
+                            claim_key, memory_tier, event_time)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s, %s, %s, %s)""",
+                        rows,
+                    )
             conn.commit()
 
     def load(self, agent_id: str) -> list[Fact]:
