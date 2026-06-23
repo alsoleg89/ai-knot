@@ -260,3 +260,36 @@ def setup_claude(agent_id: str, data_dir: str, storage: str) -> None:
     storage_typed: Literal["sqlite", "yaml"] = "sqlite" if storage == "sqlite" else "yaml"
     config = generate_mcp_config(agent_id=agent_id, data_dir=data_dir, storage=storage_typed)
     click.echo(json.dumps(config, indent=2))
+
+
+@main.command()
+@click.argument("agent_id")
+@click.option("--host", default="127.0.0.1", help="Bind address.")
+@click.option("--port", "-p", default=8000, type=int, help="Bind port.")
+@click.pass_context
+def serve(ctx: click.Context, agent_id: str, host: str, port: int) -> None:
+    """Run the HTTP sidecar for AGENT_ID (requires the 'server' extra).
+
+    Exposes /health, /v1/recall, /v1/facts and /v1/stats over HTTP. Set the
+    AI_KNOT_SERVER_TOKEN environment variable to require ``Authorization: Bearer
+    <token>`` on the /v1/* routes.
+
+    \b
+      pip install "ai-knot[server]"
+      ai-knot --storage sqlite serve my-agent --port 8000
+    """
+    import os
+
+    try:
+        import uvicorn
+
+        from ai_knot.server import create_app
+    except ImportError as exc:  # pragma: no cover - exercised via the error path only
+        raise click.ClickException(
+            "HTTP sidecar requires the 'server' extra: pip install 'ai-knot[server]'"
+        ) from exc
+
+    kb = _make_kb(ctx, agent_id)
+    app = create_app(kb, token=os.environ.get("AI_KNOT_SERVER_TOKEN") or None)
+    click.echo(f"ai-knot HTTP sidecar on http://{host}:{port}  (agent: {agent_id})")
+    uvicorn.run(app, host=host, port=port)
