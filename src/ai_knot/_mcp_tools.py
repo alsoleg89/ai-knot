@@ -197,6 +197,10 @@ def tool_capabilities() -> str:
         {"name": "recall_json", "description": "Retrieve relevant facts as JSON array"},
         {"name": "forget", "description": "Remove a fact by ID"},
         {"name": "list_facts", "description": "List all stored facts as JSON array"},
+        {
+            "name": "memory_lineage",
+            "description": "Trace a fact's supersession lineage (audit trail)",
+        },
         {"name": "stats", "description": "Memory statistics"},
         {"name": "snapshot", "description": "Save current state as a named snapshot"},
         {"name": "restore", "description": "Restore state from a named snapshot"},
@@ -258,6 +262,33 @@ def tool_list_facts(kb: KnowledgeBase) -> str:
         for f in facts
     ]
     return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def tool_memory_lineage(kb: KnowledgeBase, fact_id: str) -> str:
+    """Return the supersession lineage of a fact as JSON (newest → oldest).
+
+    Args:
+        kb: The knowledge base instance.
+        fact_id: The 8-char hex ID to trace.
+
+    Returns:
+        JSON array of ``{"id", "content", "value_text", "supersedes_id",
+        "published_by", "active"}`` from the given fact back to the original
+        it replaced; ``"[]"`` when the fact is unknown.
+    """
+    chain = kb.lineage(fact_id)
+    data = [
+        {
+            "id": f.id,
+            "content": f.content,
+            "value_text": f.value_text,
+            "supersedes_id": f.provenance.supersedes_id,
+            "published_by": f.provenance.published_by,
+            "active": f.is_active(),
+        }
+        for f in chain
+    ]
+    return json.dumps(data, ensure_ascii=False)
 
 
 def tool_stats(kb: KnowledgeBase) -> str:
