@@ -18,7 +18,7 @@ import {
   judgeAnswer,
 } from "./evaluator.js";
 import type { Verdict } from "./evaluator.js";
-import { filterQuestions, loadDataset } from "./loader.js";
+import { filterQuestions, loadDataset, parseLmeDate } from "./loader.js";
 import type { LmeQuestion } from "./loader.js";
 import { scoreRecall } from "./recall.js";
 
@@ -174,7 +174,7 @@ export interface EvaluatorFns {
 
 export interface AdapterLike {
   ingest(sessions: LmeQuestion["sessions"]): Promise<void>;
-  recall(question: string): Promise<string>;
+  recall(question: string, now?: string): Promise<string>;
   close(): Promise<void>;
 }
 
@@ -274,7 +274,9 @@ export async function runBenchmark(opts: RunOptions): Promise<Report> {
     const adapter = fns.adapterFactory(q);
     try {
       await adapter.ingest(q.sessions);
-      const context = await adapter.recall(q.question);
+      // Point-in-time recall: anchor retrieval at the question's date so facts
+      // recorded *after* the question was asked are excluded (bi-temporal replay).
+      const context = await adapter.recall(q.question, parseLmeDate(q.questionDate));
       const recall = scoreRecall(q, context);
 
       const { text: answer, shortCircuited } = await fns.answerFn(

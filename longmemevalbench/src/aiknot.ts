@@ -152,11 +152,17 @@ export class AiknotAdapter {
   /**
    * Recall context for a question, unioned across this adapter's namespaces.
    * Returns the concatenated formatted strings (ready for prompt injection).
+   *
+   * ``now`` is the question's query-time anchor (``question_date``). Passed as the
+   * point-in-time bound to the core recall, it filters out facts whose event time
+   * is *after* the question was asked — the bi-temporal lever that makes temporal
+   * and knowledge-update questions correct for historical replay. Omit it (live
+   * query) to see all facts.
    */
-  async recall(question: string): Promise<string> {
+  async recall(question: string, now?: string): Promise<string> {
     const parts: string[] = [];
     for (const ns of this.namespaces()) {
-      const out = await this.kb(ns).recall(question, { topK: this.opts.topK });
+      const out = await this.kb(ns).recall(question, { topK: this.opts.topK, now });
       if (out && out !== "No relevant facts found.") parts.push(out);
     }
     return parts.join("\n");
