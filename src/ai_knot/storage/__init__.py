@@ -4,11 +4,24 @@ from __future__ import annotations
 
 import os
 
-from ai_knot.storage.base import SnapshotCapable, StorageBackend
+from ai_knot.storage.base import (
+    ACLStoreCapable,
+    EventLedgerCapable,
+    SnapshotCapable,
+    StorageBackend,
+)
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 from ai_knot.storage.yaml_storage import YAMLStorage
 
-__all__ = ["SQLiteStorage", "SnapshotCapable", "StorageBackend", "YAMLStorage", "create_storage"]
+__all__ = [
+    "ACLStoreCapable",
+    "EventLedgerCapable",
+    "SQLiteStorage",
+    "SnapshotCapable",
+    "StorageBackend",
+    "YAMLStorage",
+    "create_storage",
+]
 
 _BACKENDS = {
     "yaml": "YAMLStorage",

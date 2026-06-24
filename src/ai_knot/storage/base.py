@@ -132,6 +132,61 @@ class PoolStatsCapable(Protocol):
 
 
 @runtime_checkable
+class ACLStoreCapable(Protocol):
+    """Optional extension for durable per-agent read-scope grants (multi-agent ACL).
+
+    ``SharedMemoryPool`` keeps read-scope grants (``grant_read``) in memory only,
+    so a process restart forgets who may read which scope.  A backend implementing
+    this protocol persists those grants; the pool reloads them on construction.
+    """
+
+    def save_grant(
+        self, agent_id: str, scope: str, *, granted_at: str, granted_by: str = ""
+    ) -> None:
+        """Persist a read-scope grant (idempotent upsert on ``(agent_id, scope)``)."""
+        ...
+
+    def load_grants(self) -> dict[str, set[str]]:
+        """Load all grants as ``{agent_id: {scope, ...}}`` (empty dict if none)."""
+        ...
+
+    def revoke_grant(self, agent_id: str, scope: str) -> None:
+        """Remove a grant. No-op if the grant does not exist."""
+        ...
+
+
+@runtime_checkable
+class EventLedgerCapable(Protocol):
+    """Optional append-only audit ledger for trust changes and fact usage.
+
+    ``PoolStatsCapable`` persists only an aggregate snapshot (current counters);
+    this protocol records *when and why* trust changed and *which recall used a
+    fact*, the event stream an audit needs.  Timestamps are caller-supplied ISO
+    strings — storage never reads the clock, so runs stay deterministic.
+    """
+
+    def append_trust_event(
+        self, *, ts: str, agent_id: str, event_type: str, delta: float, reason: str = ""
+    ) -> None:
+        """Append one trust-change event (publish / use / quick-invalidation / penalty)."""
+        ...
+
+    def append_usage_event(
+        self, *, ts: str, fact_id: str, agent_id: str, recall_session: str = ""
+    ) -> None:
+        """Append one fact-usage event (a recall surfaced ``fact_id`` to ``agent_id``)."""
+        ...
+
+    def load_trust_events(self, agent_id: str | None = None) -> list[dict[str, Any]]:
+        """Return trust events in insertion order; filter by ``agent_id`` when given."""
+        ...
+
+    def load_usage_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
+        """Return usage events in insertion order; filter by ``fact_id`` when given."""
+        ...
+
+
+@runtime_checkable
 class SnapshotCapable(Protocol):
     """Optional extension protocol for backends that support named snapshots.
 

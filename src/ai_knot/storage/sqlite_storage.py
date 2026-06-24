@@ -82,6 +82,37 @@ CREATE TABLE IF NOT EXISTS pool_stats (
 )
 """
 
+_CREATE_ACL_GRANTS_TABLE = """
+CREATE TABLE IF NOT EXISTS acl_grants (
+    agent_id   TEXT NOT NULL,
+    scope      TEXT NOT NULL,
+    granted_at TEXT NOT NULL,
+    granted_by TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (agent_id, scope)
+)
+"""
+
+_CREATE_TRUST_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS trust_events (
+    seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         TEXT NOT NULL,
+    agent_id   TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    delta      REAL NOT NULL,
+    reason     TEXT NOT NULL DEFAULT ''
+)
+"""
+
+_CREATE_USAGE_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS usage_events (
+    seq            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts             TEXT NOT NULL,
+    fact_id        TEXT NOT NULL,
+    agent_id       TEXT NOT NULL,
+    recall_session TEXT NOT NULL DEFAULT ''
+)
+"""
+
 _INSERT_FACTS_SQL = """INSERT INTO facts
    (id, agent_id, content, type, importance, retention,
     access_count, tags, created_at, last_accessed,
@@ -129,6 +160,9 @@ class SQLiteStorage:
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_SNAPSHOTS_TABLE)
             conn.execute(_CREATE_POOL_STATS_TABLE)
+            conn.execute(_CREATE_ACL_GRANTS_TABLE)
+            conn.execute(_CREATE_TRUST_EVENTS_TABLE)
+            conn.execute(_CREATE_USAGE_EVENTS_TABLE)
             for stmt in _CREATE_INDEXES:
                 conn.execute(stmt)
         self._migrate_db()
@@ -472,6 +506,91 @@ class SQLiteStorage:
             return {}
         loaded: dict[str, Any] = json.loads(row[0])
         return loaded
+
+    # ------------------------------------------------------------------
+    # ACLStoreCapable implementation
+    # ------------------------------------------------------------------
+
+    def save_grant(
+        self, agent_id: str, scope: str, *, granted_at: str, granted_by: str = ""
+    ) -> None:
+        """Persist a read-scope grant (upsert on ``agent_id`` + ``scope``)."""
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO acl_grants (agent_id, scope, granted_at, granted_by) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(agent_id, scope) DO UPDATE SET "
+                "granted_at = excluded.granted_at, granted_by = excluded.granted_by",
+                (agent_id, scope, granted_at, granted_by),
+            )
+
+    def load_grants(self) -> dict[str, set[str]]:
+        """Load all read-scope grants as ``{agent_id: {scope, ...}}``."""
+        with self._conn() as conn:
+            rows = conn.execute("SELECT agent_id, scope FROM acl_grants").fetchall()
+        grants: dict[str, set[str]] = {}
+        for agent_id, scope in rows:
+            grants.setdefault(agent_id, set()).add(scope)
+        return grants
+
+    def revoke_grant(self, agent_id: str, scope: str) -> None:
+        """Remove a read-scope grant (no-op if absent)."""
+        with self._conn() as conn:
+            conn.execute(
+                "DELETE FROM acl_grants WHERE agent_id = ? AND scope = ?",
+                (agent_id, scope),
+            )
+
+    # ------------------------------------------------------------------
+    # EventLedgerCapable implementation
+    # ------------------------------------------------------------------
+
+    def append_trust_event(
+        self, *, ts: str, agent_id: str, event_type: str, delta: float, reason: str = ""
+    ) -> None:
+        """Append one trust-change event to the audit ledger."""
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO trust_events (ts, agent_id, event_type, delta, reason) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (ts, agent_id, event_type, delta, reason),
+            )
+
+    def append_usage_event(
+        self, *, ts: str, fact_id: str, agent_id: str, recall_session: str = ""
+    ) -> None:
+        """Append one fact-usage event to the audit ledger."""
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO usage_events (ts, fact_id, agent_id, recall_session) "
+                "VALUES (?, ?, ?, ?)",
+                (ts, fact_id, agent_id, recall_session),
+            )
+
+    def load_trust_events(self, agent_id: str | None = None) -> list[dict[str, Any]]:
+        """Return trust events in insertion order, optionally filtered by agent."""
+        cols = ("seq", "ts", "agent_id", "event_type", "delta", "reason")
+        sql = f"SELECT {', '.join(cols)} FROM trust_events"
+        params: tuple[str, ...] = ()
+        if agent_id is not None:
+            sql += " WHERE agent_id = ?"
+            params = (agent_id,)
+        sql += " ORDER BY seq"
+        with self._conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(zip(cols, row, strict=True)) for row in rows]
+
+    def load_usage_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
+        """Return usage events in insertion order, optionally filtered by fact."""
+        cols = ("seq", "ts", "fact_id", "agent_id", "recall_session")
+        sql = f"SELECT {', '.join(cols)} FROM usage_events"
+        params: tuple[str, ...] = ()
+        if fact_id is not None:
+            sql += " WHERE fact_id = ?"
+            params = (fact_id,)
+        sql += " ORDER BY seq"
+        with self._conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(zip(cols, row, strict=True)) for row in rows]
 
     def save_snapshot(self, agent_id: str, name: str, facts: list[Fact]) -> None:
         """Persist a named snapshot (overwrites if name already exists)."""
