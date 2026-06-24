@@ -72,6 +72,7 @@ _PASSING = {
     "s26_sparse_assembly": {
         "target_shard_recall_at_10": 1.0,
         "target_shard_recall_at_1000": 0.65,
+        "equivalence_recall_at_1000": 1.0,
         "distractor_rate_at_1000": 0.40,
         "p95_retrieve_ms_at_1000": 90.0,
     },
@@ -111,6 +112,7 @@ def test_advisory_caps_do_not_bind() -> None:
         "s26_sparse_assembly": {
             "target_shard_recall_at_10": 1.0,
             "target_shard_recall_at_1000": 0.33,
+            "equivalence_recall_at_1000": 1.0,
             "distractor_rate_at_1000": 0.90,
             "p95_retrieve_ms_at_1000": 90.0,
         },
@@ -148,6 +150,26 @@ def test_passing_metrics_pass_gate() -> None:
     results = evaluate_gate(_metrics("ai_knot_multi_agent", _PASSING))
     assert gate_passed(results)
     assert all(r.passed for r in results if r.applicable)
+
+
+def test_equivalence_recall_at_1000_binds() -> None:
+    # Domain-coverage at scale is BINDING (exact-agent recall@1000 stays advisory):
+    # dropping equivalence_recall_at_1000 below target must fail the gate.
+    scores = {
+        **_PASSING,
+        "s26_sparse_assembly": {
+            **_PASSING["s26_sparse_assembly"],
+            "equivalence_recall_at_1000": 0.40,
+        },
+    }
+    results = evaluate_gate(_metrics("ai_knot_multi_agent", scores))
+    assert not gate_passed(results)
+    failed = {
+        (r.threshold.scenario_id, r.threshold.metric)
+        for r in results
+        if r.applicable and not r.passed
+    }
+    assert ("s26_sparse_assembly", "equivalence_recall_at_1000") in failed
 
 
 def test_absent_metric_not_applicable() -> None:
