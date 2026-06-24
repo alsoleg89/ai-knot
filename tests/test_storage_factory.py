@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ import pytest
 from ai_knot.storage import create_storage
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 from ai_knot.storage.yaml_storage import YAMLStorage
+
+_HAS_PSYCOPG = importlib.util.find_spec("psycopg") is not None
 
 
 class TestCreateStorage:
@@ -46,6 +49,11 @@ class TestCreateStorage:
         with pytest.raises(ValueError, match="DSN"):
             create_storage("postgres")
 
+    @pytest.mark.skipif(
+        _HAS_PSYCOPG,
+        reason="exercises the missing-psycopg ImportError path; with psycopg installed "
+        "create_storage would instead try to connect to the fake DSN",
+    )
     def test_postgres_with_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Should read AI_KNOT_DSN from env when dsn= is not passed."""
         # We can't actually connect, but we can verify the env var path works

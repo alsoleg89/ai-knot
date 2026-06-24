@@ -138,3 +138,82 @@ jobs:
       - run: pip install -e ".[dev]"
       - name: Run full eval and print report
         run: python -m pytest tests/eval/ -v --tb=short --no-cov
+
+  test-postgres:
+    name: Test (PostgreSQL backend)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aiknot
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: aiknot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,postgres,mcp]"
+
+      - name: Run tests against live PostgreSQL
+        # AI_KNOT_TEST_PG_DSN un-skips the Postgres-backed parity/persistence tests.
+        env:
+          AI_KNOT_TEST_PG_DSN: postgresql://aiknot:pass@localhost:5432/aiknot
+        run: pytest -n auto --timeout=20 -m "not slow" --no-cov
+
+  ma-gate:
+    name: Multi-agent acceptance gate (S8–S26)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,mcp]"
+
+      - name: Run acceptance gate (offline mock judge)
+        # Exits non-zero if any binding threshold fails.
+        run: python -m tests.eval.benchmark.runner --multi-agent --mock-judge --ma-storage sqlite --ma-gate
+
+  test-longmemeval:
+    name: Test (LongMemEval harness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build the npm client (file:../npm link target)
+        working-directory: npm
+        run: npm ci && npm run build
+
+      - name: Install harness dependencies
+        working-directory: longmemevalbench
+        run: npm install --no-audit --no-fund
+
+      - name: Type check
+        working-directory: longmemevalbench
+        run: npm run typecheck
+
+      - name: Run tests
+        working-directory: longmemevalbench
+        run: npm test
