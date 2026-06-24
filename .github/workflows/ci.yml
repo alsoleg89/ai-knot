@@ -1,0 +1,219 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Ruff check
+        run: ruff check src/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check src/ tests/
+
+      - name: Mypy
+        run: mypy src/ai_knot/
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,openai,mcp]"
+
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            pytest -n auto --timeout=10 -m "not slow" \
+              --cov=ai_knot --cov-report=xml --cov-report=term-missing
+          else
+            pytest -n auto --timeout=10 -m "not slow" --no-cov
+          fi
+
+      - name: Upload coverage
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  test-npm:
+    name: Test (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: npm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: npm/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  test-e2e:
+    name: E2E (MCP server)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,mcp]"
+
+      - name: Run E2E tests
+        # --no-cov: coverage is measured via subprocess, not import; 80% threshold would fail
+        run: pytest tests/test_mcp_e2e.py -v -m integration --no-cov
+
+  eval-smoke:
+    name: Eval smoke (MRR ≥ 0.50)
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - name: Run eval smoke gate
+        run: python -m pytest tests/eval/test_gates.py -v --tb=short --no-cov
+
+  eval-full:
+    name: Eval full suite
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    needs: [eval-smoke]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - name: Run full eval and print report
+        run: python -m pytest tests/eval/ -v --tb=short --no-cov
+
+  test-postgres:
+    name: Test (PostgreSQL backend)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aiknot
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: aiknot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,postgres,mcp]"
+
+      - name: Run tests against live PostgreSQL
+        # AI_KNOT_TEST_PG_DSN un-skips the Postgres-backed parity/persistence tests.
+        env:
+          AI_KNOT_TEST_PG_DSN: postgresql://aiknot:pass@localhost:5432/aiknot
+        run: pytest -n auto --timeout=20 -m "not slow" --no-cov
+
+  ma-gate:
+    name: Multi-agent acceptance gate (S8–S26)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,mcp]"
+
+      - name: Run acceptance gate (offline mock judge)
+        # Exits non-zero if any binding threshold fails.
+        run: python -m tests.eval.benchmark.runner --multi-agent --mock-judge --ma-storage sqlite --ma-gate
+
+  test-npm-client:
+    name: Test (npm client)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: npm
+        run: npm ci
+
+      - name: Type check
+        working-directory: npm
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: npm
+        run: npm run build
+
+      - name: Run tests
+        working-directory: npm
+        run: npm test

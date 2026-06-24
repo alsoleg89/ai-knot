@@ -1,0 +1,85 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.9.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a token with push rights so the version-bump commit is not
+          # skipped by the branch protection rule that ignores GITHUB_TOKEN pushes.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate version format
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: version must be in X.Y.Z format (e.g. 0.9.0)"
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Bump version in pyproject.toml
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ inputs.version }}"/' pyproject.toml
+
+      - name: Bump version in src/ai_knot/__init__.py
+        run: |
+          sed -i 's/__version__ = ".*"/__version__ = "${{ inputs.version }}"/' src/ai_knot/__init__.py
+
+      - name: Bump version in npm/package.json
+        run: |
+          cd npm
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '${{ inputs.version }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Commit version bump (skip if already at target version)
+        run: |
+          git config user.name "alsoleg89"
+          git config user.email "155813332+alsoleg89@users.noreply.github.com"
+          git add pyproject.toml src/ai_knot/__init__.py npm/package.json
+          if git diff --cached --quiet; then
+            echo "Version already at ${{ inputs.version }} — nothing to commit"
+          else
+            git commit -m "chore: bump version to ${{ inputs.version }}"
+            git push origin HEAD
+          fi
+
+      - name: Create and push tag (skip if already exists)
+        run: |
+          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ inputs.version }} already exists — skipping"
+          else
+            git tag "v${{ inputs.version }}"
+            git push origin "v${{ inputs.version }}"
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
+            --generate-notes
