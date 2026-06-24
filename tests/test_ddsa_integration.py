@@ -10,7 +10,7 @@ import pytest
 import ai_knot._spreading_activation as _sa_module
 import ai_knot.knowledge as _kb_module
 from ai_knot.knowledge import KnowledgeBase
-from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.storage.sqlite_storage import SQLiteStorage
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +26,9 @@ def _enable_ddsa() -> Any:
 
 @pytest.fixture
 def kb(tmp_path: pathlib.Path) -> KnowledgeBase:
-    storage = YAMLStorage(base_dir=str(tmp_path))
+    # SQLite (not YAML): YAML rewrites the whole store on every add, so the
+    # 100-fact pool-cap test is O(n^2) and times out under parallel CI load.
+    storage = SQLiteStorage(db_path=str(tmp_path / "ddsa.db"))
     return KnowledgeBase(agent_id="ddsa_test", storage=storage)
 
 
