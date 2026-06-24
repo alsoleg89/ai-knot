@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,9 @@ from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
 from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
 from ai_knot.storage.base import (
+    ACLStoreCapable,
     AtomicUpdateCapable,
+    EventLedgerCapable,
     PoolStatsCapable,
     StorageBackend,
     TemporalStorageCapable,
@@ -105,8 +108,12 @@ class SharedMemoryPool(_PoolRecallMixin):
         *,
         persist_stats: bool = False,
         semantic_resolver: SemanticConflictResolver | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._storage: StorageBackend = storage or YAMLStorage()
+        # Clock for audit-ledger timestamps and grant times; injectable so tests
+        # are deterministic. Defaults to wall-clock UTC.
+        self._clock: Callable[[], datetime] = clock or (lambda: datetime.now(UTC))
         self._bm25 = BM25Retriever(skip_prf=True)
         self._dense = DenseRetriever()
         # Pool retrieval has a wider semantic gap than private KB recall:
@@ -157,6 +164,10 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._persist_stats = persist_stats
         if persist_stats and isinstance(self._storage, PoolStatsCapable):
             self._restore_stats(self._storage.load_pool_stats())
+        # Restore durable read-scope grants (ACL projection) when supported, so
+        # access grants survive a process restart.
+        if persist_stats and isinstance(self._storage, ACLStoreCapable):
+            self._read_scopes = self._storage.load_grants()
 
     def register(self, agent_id: str) -> None:
         """Register an agent to participate in the shared pool.
@@ -171,15 +182,24 @@ class SharedMemoryPool(_PoolRecallMixin):
         """Return the set of registered agent IDs."""
         return set(self._agents)
 
+    @property
+    def read_scopes(self) -> dict[str, set[str]]:
+        """Return a copy of the per-agent read-scope grants (ACL projection)."""
+        return {agent_id: set(scopes) for agent_id, scopes in self._read_scopes.items()}
+
     def grant_read(self, agent_id: str, scope: str) -> None:
         """Grant *agent_id* read access to a named visibility scope.
 
         Facts published with ``visibility_scope=scope`` then become visible to this
         agent in :meth:`recall`, in addition to public (``"global"``) facts and the
         agent's own.  Scopes are matched verbatim; ``"global"`` needs no grant.
-        Grants are in-memory (per pool instance).
+        Grants persist across restarts when the pool was created with
+        ``persist_stats=True`` and the backend implements ``ACLStoreCapable``;
+        otherwise they are in-memory (per pool instance).
         """
         self._read_scopes.setdefault(agent_id, set()).add(scope)
+        if self._persist_stats and isinstance(self._storage, ACLStoreCapable):
+            self._storage.save_grant(agent_id, scope, granted_at=self._clock().isoformat())
 
     @property
     def last_recall_abstains(self) -> bool:
@@ -236,6 +256,25 @@ class SharedMemoryPool(_PoolRecallMixin):
         """
         if self._persist_stats and isinstance(self._storage, PoolStatsCapable):
             self._storage.save_pool_stats(self._stats_snapshot())
+
+    def _log_trust_event(
+        self, agent_id: str, event_type: str, delta: float, reason: str = ""
+    ) -> None:
+        """Append a trust-change event to the durable audit ledger.
+
+        No-op unless the pool was created with ``persist_stats=True`` and the
+        backend implements :class:`EventLedgerCapable`.  Unlike the aggregate
+        snapshot, this records *when and why* trust changed (publish / quick
+        invalidation), the event stream an audit needs.
+        """
+        if self._persist_stats and isinstance(self._storage, EventLedgerCapable):
+            self._storage.append_trust_event(
+                ts=self._clock().isoformat(),
+                agent_id=agent_id,
+                event_type=event_type,
+                delta=delta,
+                reason=reason,
+            )
 
     def get_trust(self, agent_id: str) -> float:
         """Return the current auto-computed trust score for an agent.
@@ -469,6 +508,7 @@ class SharedMemoryPool(_PoolRecallMixin):
         # Apply trust-tracking side effects outside the storage transaction.
         for agt, count in quick_inv_updates.items():
             self._quick_inv_count[agt] = self._quick_inv_count.get(agt, 0) + count
+            self._log_trust_event(agt, "quick_invalidation", float(count), reason="slot superseded")
         if slot_events:
             self._slot_publish_count[agent_id] = self._slot_publish_count.get(agent_id, 0) + len(
                 slot_events
@@ -476,6 +516,7 @@ class SharedMemoryPool(_PoolRecallMixin):
 
         if published:
             self._publish_count[agent_id] = self._publish_count.get(agent_id, 0) + len(published)
+            self._log_trust_event(agent_id, "publish", float(len(published)))
             logger.info(
                 "Agent '%s' published %d facts to shared pool",
                 agent_id,
