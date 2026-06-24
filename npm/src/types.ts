@@ -48,6 +48,46 @@ export interface AddOptions {
 
 export interface RecallOptions {
   topK?: number;
+  /**
+   * Optional ISO-8601 point-in-time anchor. Facts whose validity ended by this
+   * instant (superseded knowledge-updates) are excluded and decay is computed
+   * as of it. Defaults to the current time when omitted.
+   */
+  now?: string;
+}
+
+/** One conversation turn fed to {@link KnowledgeBase.learn}. */
+export interface LearnMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+/** Result of {@link KnowledgeBase.learn}: how many facts were stored. */
+export interface LearnResult {
+  stored: number;
+  ids: string[];
+}
+
+/**
+ * A pre-structured fact for {@link KnowledgeBase.addResolved}. A fact addressing
+ * an existing active slot with a different value supersedes it (knowledge-update)
+ * — no LLM extraction is performed.
+ */
+export interface ResolvedFact {
+  content: string;
+  entity?: string;
+  attribute?: string;
+  valueText?: string;
+  slotKey?: string;
+  /** ISO-8601 real-world anchor for this fact (see AddOptions.eventTime). */
+  eventTime?: string;
+}
+
+/** One row returned by {@link KnowledgeBase.addResolved}. */
+export interface ResolvedResult {
+  id: string;
+  slot_key: string;
+  version: number;
 }
 
 // ---- Internal JSON-RPC 2.0 types ----------------------------------------

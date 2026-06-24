@@ -64,8 +64,11 @@ const FAKE_FACT: Fact = {
   last_accessed: "2026-01-01T00:00:00.000Z",
 };
 
-// Captures the arguments of the most recent "add" tool call for assertions.
+// Captures the arguments of the most recent tool calls for assertions.
 let lastAddArguments: Record<string, unknown> | undefined;
+let lastRecallArguments: Record<string, unknown> | undefined;
+let lastLearnArguments: Record<string, unknown> | undefined;
+let lastAddResolvedArguments: Record<string, unknown> | undefined;
 
 function kbHandler(req: JsonRpcRequest): object | null {
   if (req.method === "initialize") {
@@ -94,7 +97,14 @@ function kbHandler(req: JsonRpcRequest): object | null {
     } else if (name === "list_facts") {
       text = JSON.stringify([FAKE_FACT]);
     } else if (name === "recall") {
+      lastRecallArguments = callArgs;
       text = "1. [abcd1234] TypeScript is great (relevance: 0.95)";
+    } else if (name === "learn") {
+      lastLearnArguments = callArgs;
+      text = JSON.stringify({ stored: 1, ids: ["abcd1234"] });
+    } else if (name === "add_resolved") {
+      lastAddResolvedArguments = callArgs;
+      text = JSON.stringify([{ id: "abcd1234", slot_key: "alex::salary", version: 1 }]);
     } else if (name === "forget") {
       text = "Fact abcd1234 deleted.";
     } else if (name === "stats") {
@@ -182,6 +192,86 @@ describe("KnowledgeBase", () => {
     const result = await kb.recall("TypeScript");
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
+    await kb.close();
+  });
+
+  it("add() forwards tags as the tags MCP argument", async () => {
+    setup();
+    lastAddArguments = undefined;
+    const kb = new KnowledgeBase();
+    await kb.add("uses Docker", { tags: ["devops", "tools"] });
+    expect(lastAddArguments).toMatchObject({ content: "uses Docker", tags: ["devops", "tools"] });
+    await kb.close();
+  });
+
+  it("recall() forwards now and topK as MCP arguments", async () => {
+    setup();
+    lastRecallArguments = undefined;
+    const kb = new KnowledgeBase();
+    await kb.recall("anything", { now: "2023-05-08T00:00:00+00:00", topK: 7 });
+    expect(lastRecallArguments).toMatchObject({
+      query: "anything",
+      now: "2023-05-08T00:00:00+00:00",
+      top_k: 7,
+    });
+    await kb.close();
+  });
+
+  it("recall() omits now when not provided", async () => {
+    setup();
+    lastRecallArguments = undefined;
+    const kb = new KnowledgeBase();
+    await kb.recall("anything");
+    expect(lastRecallArguments).toBeDefined();
+    expect(lastRecallArguments).not.toHaveProperty("now");
+    await kb.close();
+  });
+
+  it("learn() sends the conversation and parses the result", async () => {
+    setup();
+    lastLearnArguments = undefined;
+    const kb = new KnowledgeBase();
+    const res = await kb.learn([
+      { role: "user", content: "I prefer dark mode" },
+      { role: "assistant", content: "Noted" },
+    ]);
+    expect(lastLearnArguments).toMatchObject({
+      messages: [
+        { role: "user", content: "I prefer dark mode" },
+        { role: "assistant", content: "Noted" },
+      ],
+    });
+    expect(res).toEqual({ stored: 1, ids: ["abcd1234"] });
+    await kb.close();
+  });
+
+  it("addResolved() snake-cases fields and parses results", async () => {
+    setup();
+    lastAddResolvedArguments = undefined;
+    const kb = new KnowledgeBase();
+    const res = await kb.addResolved([
+      {
+        content: "Alex earns 120k",
+        entity: "Alex",
+        attribute: "salary",
+        valueText: "120k",
+        slotKey: "alex::salary",
+        eventTime: "2023-05-08",
+      },
+    ]);
+    expect(lastAddResolvedArguments).toMatchObject({
+      facts: [
+        {
+          content: "Alex earns 120k",
+          entity: "Alex",
+          attribute: "salary",
+          value_text: "120k",
+          slot_key: "alex::salary",
+          event_time: "2023-05-08",
+        },
+      ],
+    });
+    expect(res).toEqual([{ id: "abcd1234", slot_key: "alex::salary", version: 1 }]);
     await kb.close();
   });
 
