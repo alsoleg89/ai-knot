@@ -8,6 +8,8 @@ import pathlib
 import pytest
 
 from ai_knot._mcp_tools import (
+    _MAX_TOP_K,
+    _clamp_top_k,
     tool_add,
     tool_add_resolved,
     tool_capabilities,
@@ -86,6 +88,47 @@ class TestToolRecall:
     def test_empty_kb_returns_no_facts_message(self, kb: KnowledgeBase) -> None:
         result = tool_recall(kb, "anything")
         assert result == "No relevant facts found."
+
+    def test_now_anchor_excludes_facts_not_yet_valid(self, kb: KnowledgeBase) -> None:
+        # A fact is valid from its creation time onward; recalling "as of" a point
+        # before that anchor must exclude it (the time-aware / knowledge-update seam).
+        tool_add(kb, "Caroline took up running")
+        assert (
+            tool_recall(kb, "Caroline running", now="2000-01-01T00:00:00+00:00")
+            == "No relevant facts found."
+        )
+        assert "Caroline" in tool_recall(kb, "Caroline running")
+
+    def test_bad_now_degrades_to_no_anchor(self, kb: KnowledgeBase) -> None:
+        # A malformed timestamp must degrade to "no anchor" (current time), never crash.
+        tool_add(kb, "Caroline took up running")
+        assert "Caroline" in tool_recall(kb, "Caroline running", now="not-a-date")
+
+    def test_naive_now_does_not_crash(self, kb: KnowledgeBase) -> None:
+        # A timezone-naive ``now`` (date-only, or a datetime with no offset — exactly
+        # what LongMemEval's question_date supplies) must be treated as UTC, not raise
+        # "can't compare offset-naive and offset-aware datetimes" inside is_active.
+        tool_add(kb, "Caroline took up running")
+        # Future naive anchor → fact is active → recalled (no crash).
+        assert "Caroline" in tool_recall(kb, "Caroline running", now="2099-01-01T23:40:00")
+        # Past naive date-only anchor → fact not yet valid → excluded (no crash).
+        assert tool_recall(kb, "Caroline running", now="2000-01-01") == "No relevant facts found."
+
+    def test_now_anchor_applies_to_json_and_trace_variants(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "Caroline took up running")
+        past = "2000-01-01T00:00:00+00:00"
+        assert tool_recall_json(kb, "Caroline running", now=past) == "[]"
+        trace = json.loads(tool_recall_with_trace(kb, "Caroline running", now=past))
+        assert trace["pack_fact_ids"] == []
+
+    def test_top_k_is_clamped(self, kb: KnowledgeBase) -> None:
+        assert _clamp_top_k(99999) == _MAX_TOP_K
+        assert _clamp_top_k(0) == 1
+        assert _clamp_top_k(-5) == 1
+        assert _clamp_top_k(5) == 5
+        # An out-of-range top_k must not raise through the tool.
+        tool_add(kb, "Caroline took up running")
+        assert "Caroline" in tool_recall(kb, "Caroline running", top_k=99999)
 
 
 # ---- tool_forget ------------------------------------------------------------

@@ -8,11 +8,21 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.types import ConversationTurn, Fact, MemoryType
+
+# Upper bound on top_k accepted from MCP clients. An unbounded top_k would let a
+# malformed or hostile call pull the entire store into one recall (latency and
+# context blow-up); clamping keeps a single tool call bounded.
+_MAX_TOP_K = 200
+
+
+def _clamp_top_k(top_k: int) -> int:
+    """Clamp a client-supplied ``top_k`` into ``[1, _MAX_TOP_K]``."""
+    return max(1, min(int(top_k), _MAX_TOP_K))
 
 
 def _parse_event_time(event_time: str | None) -> datetime | None:
@@ -25,9 +35,14 @@ def _parse_event_time(event_time: str | None) -> datetime | None:
     if not event_time:
         return None
     try:
-        return datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # Naive inputs (e.g. a date-only "2023-05-08" or "...T23:40:00" without a zone)
+    # are treated as UTC, so the value is comparable with the store's timezone-aware
+    # validity bounds — otherwise recall(now=…) → is_active raises "can't compare
+    # offset-naive and offset-aware datetimes" and the whole recall fails.
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 def tool_add(
@@ -122,18 +137,21 @@ def tool_add_resolved(kb: KnowledgeBase, facts: list[dict[str, Any]]) -> str:
     )
 
 
-def tool_recall(kb: KnowledgeBase, query: str, *, top_k: int = 5) -> str:
+def tool_recall(kb: KnowledgeBase, query: str, *, top_k: int = 5, now: str | None = None) -> str:
     """Recall relevant facts for a query.
 
     Args:
         kb: The knowledge base instance.
         query: What the agent needs to know.
-        top_k: Maximum number of facts to return.
+        top_k: Maximum number of facts to return (clamped to ``[1, 200]``).
+        now: Optional ISO-8601 point-in-time anchor. Facts whose validity has
+            ended by ``now`` (superseded knowledge-updates) are excluded and
+            decay is computed as of ``now``. Defaults to the current time.
 
     Returns:
         Formatted string of relevant facts, or a message if none found.
     """
-    result = kb.recall(query, top_k=top_k)
+    result = kb.recall(query, top_k=_clamp_top_k(top_k), now=_parse_event_time(now))
     return result if result else "No relevant facts found."
 
 
@@ -189,13 +207,16 @@ def tool_capabilities() -> str:
     return json.dumps(tools, ensure_ascii=False)
 
 
-def tool_recall_with_trace(kb: KnowledgeBase, query: str, *, top_k: int = 5) -> str:
+def tool_recall_with_trace(
+    kb: KnowledgeBase, query: str, *, top_k: int = 5, now: str | None = None
+) -> str:
     """Diagnostic variant of recall — returns context string plus per-stage trace.
 
     Args:
         kb: The knowledge base instance.
         query: What the agent needs to know.
-        top_k: Maximum number of facts to return.
+        top_k: Maximum number of facts to return (clamped to ``[1, 200]``).
+        now: Optional ISO-8601 point-in-time anchor (see :func:`tool_recall`).
 
     Returns:
         JSON object with ``{"context", "pack_fact_ids", "trace"}``; trace keys:
@@ -203,8 +224,10 @@ def tool_recall_with_trace(kb: KnowledgeBase, query: str, *, top_k: int = 5) -> 
         stage3b_dense_guarantee, stage4a_ddsa, stage4b_mmr.
         Intended for diagnostics only — not for production use.
     """
-    pairs, trace = kb.recall_facts_with_trace(query, top_k=top_k)
-    context = kb.recall(query, top_k=top_k)
+    top_k = _clamp_top_k(top_k)
+    parsed_now = _parse_event_time(now)
+    pairs, trace = kb.recall_facts_with_trace(query, top_k=top_k, now=parsed_now)
+    context = kb.recall(query, top_k=top_k, now=parsed_now)
     pack_fact_ids = [f.id for f, _ in pairs]
     return json.dumps(
         {"context": context, "pack_fact_ids": pack_fact_ids, "trace": trace},
@@ -249,18 +272,21 @@ def tool_stats(kb: KnowledgeBase) -> str:
     return json.dumps(kb.stats(), ensure_ascii=False, indent=2)
 
 
-def tool_recall_json(kb: KnowledgeBase, query: str, *, top_k: int = 5) -> str:
+def tool_recall_json(
+    kb: KnowledgeBase, query: str, *, top_k: int = 5, now: str | None = None
+) -> str:
     """Recall relevant facts as a JSON array of structured objects.
 
     Args:
         kb: The knowledge base instance.
         query: What the agent needs to know.
-        top_k: Maximum number of facts to return.
+        top_k: Maximum number of facts to return (clamped to ``[1, 200]``).
+        now: Optional ISO-8601 point-in-time anchor (see :func:`tool_recall`).
 
     Returns:
         JSON array of MemoryItem objects, or "[]" if nothing found.
     """
-    facts = kb.recall_facts(query, top_k=top_k)
+    facts = kb.recall_facts(query, top_k=_clamp_top_k(top_k), now=_parse_event_time(now))
     data = [
         {
             "id": f.id,
