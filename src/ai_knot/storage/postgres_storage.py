@@ -1,0 +1,496 @@
+"""PostgreSQL storage backend — remote/cloud-ready production storage.
+
+Provide a DSN (connection string) and the table is auto-created.
+Requires ``psycopg[binary]>=3.1``: ``pip install ai-knot[postgres]``
+
+Example DSN::
+
+    postgresql://user:password@host:5432/dbname
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from datetime import UTC, datetime
+from typing import Any
+
+from ai_knot.storage.base import parse_datetime as _parse_datetime
+from ai_knot.types import Fact, MemoryType, MESIState
+
+logger = logging.getLogger(__name__)
+
+_CREATE_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_facts" (
+    id            TEXT NOT NULL,
+    agent_id      TEXT NOT NULL,
+    content       TEXT NOT NULL,
+    type          TEXT NOT NULL DEFAULT 'semantic',
+    importance    DOUBLE PRECISION NOT NULL DEFAULT 0.8,
+    retention     DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    access_count  INTEGER NOT NULL DEFAULT 0,
+    tags          TEXT NOT NULL DEFAULT '[]',
+    created_at    TEXT NOT NULL,
+    last_accessed TEXT NOT NULL,
+    source_snippets    TEXT NOT NULL DEFAULT '[]',
+    source_spans       TEXT NOT NULL DEFAULT '[]',
+    supported          INTEGER NOT NULL DEFAULT 1,
+    support_confidence DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    verification_source TEXT NOT NULL DEFAULT 'manual',
+    access_intervals   TEXT NOT NULL DEFAULT '[]',
+    origin_agent_id    TEXT NOT NULL DEFAULT '',
+    visibility         TEXT NOT NULL DEFAULT 'private',
+    source_verbatim    TEXT NOT NULL DEFAULT '',
+    valid_from         TEXT NOT NULL DEFAULT '',
+    valid_until        TEXT,
+    entity             TEXT NOT NULL DEFAULT '',
+    attribute          TEXT NOT NULL DEFAULT '',
+    version            INTEGER NOT NULL DEFAULT 0,
+    mesi_state         TEXT NOT NULL DEFAULT 'E',
+    canonical_surface  TEXT NOT NULL DEFAULT '',
+    witness_surface    TEXT NOT NULL DEFAULT '',
+    prompt_surface     TEXT NOT NULL DEFAULT '',
+    slot_key           TEXT NOT NULL DEFAULT '',
+    value_text         TEXT NOT NULL DEFAULT '',
+    qualifiers         TEXT NOT NULL DEFAULT '{}',
+    state_confidence   DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    topic_channel      TEXT NOT NULL DEFAULT '',
+    visibility_scope   TEXT NOT NULL DEFAULT 'global',
+    claim_key          TEXT NOT NULL DEFAULT '',
+    memory_tier        TEXT NOT NULL DEFAULT 'private',
+    event_time         TEXT,
+    PRIMARY KEY (agent_id, id)
+)
+"""
+
+_CREATE_POOL_STATS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_pool_stats" (
+    id   INTEGER PRIMARY KEY CHECK (id = 0),
+    data TEXT NOT NULL
+)
+"""
+
+_CREATE_ACL_GRANTS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_acl_grants" (
+    agent_id   TEXT NOT NULL,
+    scope      TEXT NOT NULL,
+    granted_at TEXT NOT NULL,
+    granted_by TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (agent_id, scope)
+)
+"""
+
+_CREATE_TRUST_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_trust_events" (
+    seq        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ts         TEXT NOT NULL,
+    agent_id   TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    delta      DOUBLE PRECISION NOT NULL,
+    reason     TEXT NOT NULL DEFAULT ''
+)
+"""
+
+_CREATE_USAGE_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS "ai-knot_usage_events" (
+    seq            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ts             TEXT NOT NULL,
+    fact_id        TEXT NOT NULL,
+    agent_id       TEXT NOT NULL,
+    recall_session TEXT NOT NULL DEFAULT ''
+)
+"""
+
+
+class PostgresStorage:
+    """Stores facts in a PostgreSQL database.
+
+    Provide a DSN and the required table is created automatically.
+    Thread-safe via PostgreSQL's native concurrency model.
+
+    Args:
+        dsn: PostgreSQL connection string
+            (e.g. ``postgresql://user:pass@host:5432/db``).
+    """
+
+    def __init__(self, dsn: str) -> None:
+        try:
+            import psycopg  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "PostgreSQL backend requires psycopg. "
+                "Install it with: pip install 'ai-knot[postgres]'"
+            ) from exc
+        self._dsn = dsn
+        self._init_db()
+
+    def _get_conn(self) -> Any:
+        import psycopg  # noqa: F811
+
+        return psycopg.connect(self._dsn, autocommit=False)
+
+    def _init_db(self) -> None:
+        with self._get_conn() as conn:
+            conn.execute(_CREATE_TABLE)
+            conn.execute(_CREATE_POOL_STATS_TABLE)
+            conn.execute(_CREATE_ACL_GRANTS_TABLE)
+            conn.execute(_CREATE_TRUST_EVENTS_TABLE)
+            conn.execute(_CREATE_USAGE_EVENTS_TABLE)
+            conn.commit()
+        self._migrate_db()
+
+    def save_pool_stats(self, stats: dict[str, Any]) -> None:
+        """Persist shared-pool trust/usage telemetry (single-row upsert)."""
+        payload = json.dumps(stats)
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_pool_stats" (id, data) VALUES (0, %s) '
+                "ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+                (payload,),
+            )
+            conn.commit()
+
+    def load_pool_stats(self) -> dict[str, Any]:
+        """Load persisted trust/usage telemetry, or an empty dict if none exists."""
+        with self._get_conn() as conn:
+            cur = conn.execute('SELECT data FROM "ai-knot_pool_stats" WHERE id = 0')
+            row = cur.fetchone()
+        if not row:
+            return {}
+        loaded: dict[str, Any] = json.loads(row[0])
+        return loaded
+
+    # ------------------------------------------------------------------
+    # ACLStoreCapable implementation
+    # ------------------------------------------------------------------
+
+    def save_grant(
+        self, agent_id: str, scope: str, *, granted_at: str, granted_by: str = ""
+    ) -> None:
+        """Persist a read-scope grant (upsert on ``agent_id`` + ``scope``)."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_acl_grants" (agent_id, scope, granted_at, granted_by) '
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (agent_id, scope) DO UPDATE SET "
+                "granted_at = EXCLUDED.granted_at, granted_by = EXCLUDED.granted_by",
+                (agent_id, scope, granted_at, granted_by),
+            )
+            conn.commit()
+
+    def load_grants(self) -> dict[str, set[str]]:
+        """Load all read-scope grants as ``{agent_id: {scope, ...}}``."""
+        with self._get_conn() as conn:
+            cur = conn.execute('SELECT agent_id, scope FROM "ai-knot_acl_grants"')
+            rows = cur.fetchall()
+        grants: dict[str, set[str]] = {}
+        for agent_id, scope in rows:
+            grants.setdefault(agent_id, set()).add(scope)
+        return grants
+
+    def revoke_grant(self, agent_id: str, scope: str) -> None:
+        """Remove a read-scope grant (no-op if absent)."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'DELETE FROM "ai-knot_acl_grants" WHERE agent_id = %s AND scope = %s',
+                (agent_id, scope),
+            )
+            conn.commit()
+
+    # ------------------------------------------------------------------
+    # EventLedgerCapable implementation
+    # ------------------------------------------------------------------
+
+    def append_trust_event(
+        self, *, ts: str, agent_id: str, event_type: str, delta: float, reason: str = ""
+    ) -> None:
+        """Append one trust-change event to the audit ledger."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_trust_events" (ts, agent_id, event_type, delta, reason) '
+                "VALUES (%s, %s, %s, %s, %s)",
+                (ts, agent_id, event_type, delta, reason),
+            )
+            conn.commit()
+
+    def append_usage_event(
+        self, *, ts: str, fact_id: str, agent_id: str, recall_session: str = ""
+    ) -> None:
+        """Append one fact-usage event to the audit ledger."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'INSERT INTO "ai-knot_usage_events" (ts, fact_id, agent_id, recall_session) '
+                "VALUES (%s, %s, %s, %s)",
+                (ts, fact_id, agent_id, recall_session),
+            )
+            conn.commit()
+
+    def load_trust_events(self, agent_id: str | None = None) -> list[dict[str, Any]]:
+        """Return trust events in insertion order, optionally filtered by agent."""
+        cols = ("seq", "ts", "agent_id", "event_type", "delta", "reason")
+        sql = f'SELECT {", ".join(cols)} FROM "ai-knot_trust_events"'
+        params: tuple[str, ...] = ()
+        if agent_id is not None:
+            sql += " WHERE agent_id = %s"
+            params = (agent_id,)
+        sql += " ORDER BY seq"
+        with self._get_conn() as conn:
+            cur = conn.execute(sql, params)
+            rows = cur.fetchall()
+        return [dict(zip(cols, row, strict=True)) for row in rows]
+
+    def load_usage_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
+        """Return usage events in insertion order, optionally filtered by fact."""
+        cols = ("seq", "ts", "fact_id", "agent_id", "recall_session")
+        sql = f'SELECT {", ".join(cols)} FROM "ai-knot_usage_events"'
+        params: tuple[str, ...] = ()
+        if fact_id is not None:
+            sql += " WHERE fact_id = %s"
+            params = (fact_id,)
+        sql += " ORDER BY seq"
+        with self._get_conn() as conn:
+            cur = conn.execute(sql, params)
+            rows = cur.fetchall()
+        return [dict(zip(cols, row, strict=True)) for row in rows]
+
+    def _migrate_db(self) -> None:
+        """Add new columns to existing databases (backward compat)."""
+        new_columns = {
+            "source_snippets": "TEXT NOT NULL DEFAULT '[]'",
+            "source_spans": "TEXT NOT NULL DEFAULT '[]'",
+            "supported": "INTEGER NOT NULL DEFAULT 1",
+            "support_confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
+            "verification_source": "TEXT NOT NULL DEFAULT 'manual'",
+            "access_intervals": "TEXT NOT NULL DEFAULT '[]'",
+            "origin_agent_id": "TEXT NOT NULL DEFAULT ''",
+            "visibility": "TEXT NOT NULL DEFAULT 'private'",
+            "source_verbatim": "TEXT NOT NULL DEFAULT ''",
+            "valid_from": "TEXT NOT NULL DEFAULT ''",
+            "valid_until": "TEXT",
+            "entity": "TEXT NOT NULL DEFAULT ''",
+            "attribute": "TEXT NOT NULL DEFAULT ''",
+            "version": "INTEGER NOT NULL DEFAULT 0",
+            "mesi_state": "TEXT NOT NULL DEFAULT 'E'",
+            "canonical_surface": "TEXT NOT NULL DEFAULT ''",
+            "witness_surface": "TEXT NOT NULL DEFAULT ''",
+            "prompt_surface": "TEXT NOT NULL DEFAULT ''",
+            "slot_key": "TEXT NOT NULL DEFAULT ''",
+            "value_text": "TEXT NOT NULL DEFAULT ''",
+            "qualifiers": "TEXT NOT NULL DEFAULT '{}'",
+            "state_confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
+            "topic_channel": "TEXT NOT NULL DEFAULT ''",
+            "visibility_scope": "TEXT NOT NULL DEFAULT 'global'",
+            "claim_key": "TEXT NOT NULL DEFAULT ''",
+            "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
+            "event_time": "TEXT",
+        }
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                """SELECT column_name FROM information_schema.columns
+                   WHERE table_name = 'ai-knot_facts'"""
+            )
+            existing_cols = {row[0] for row in cur.fetchall()}
+            for col, definition in new_columns.items():
+                if col not in existing_cols:
+                    conn.execute(f'ALTER TABLE "ai-knot_facts" ADD COLUMN {col} {definition}')
+            conn.commit()
+
+    def save(self, agent_id: str, facts: list[Fact]) -> None:
+        """Replace all facts for an agent."""
+        rows = self._build_rows(facts, agent_id)
+        self._execute_save(agent_id, rows)
+        logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
+
+    def save_atomic(self, agent_id: str, facts: list[Fact]) -> None:
+        """Atomically replace facts within a single PostgreSQL transaction (READ COMMITTED).
+
+        Provides statement-level atomicity for single-process writers. Does not
+        enforce SERIALIZABLE isolation — concurrent cross-process writers may
+        interleave. Use advisory locks externally if cross-process CAS is needed.
+        """
+        rows = self._build_rows(facts, agent_id)
+        self._execute_save(agent_id, rows)
+        logger.debug("Atomically saved %d facts for agent '%s'", len(facts), agent_id)
+
+    def _build_rows(self, facts: list[Fact], agent_id: str) -> list[tuple]:  # type: ignore[type-arg]
+        return [
+            (
+                fact.id,
+                agent_id,
+                fact.content,
+                fact.type.value,
+                fact.importance,
+                fact.retention_score,
+                fact.access_count,
+                json.dumps(fact.tags),
+                fact.created_at.isoformat(),
+                fact.last_accessed.isoformat(),
+                json.dumps(fact.source_snippets),
+                json.dumps(fact.source_spans),
+                1 if fact.supported else 0,
+                fact.support_confidence,
+                fact.verification_source,
+                json.dumps(fact.access_intervals),
+                fact.origin_agent_id,
+                fact.visibility,
+                fact.source_verbatim,
+                fact.valid_from.isoformat(),
+                fact.valid_until.isoformat() if fact.valid_until is not None else None,
+                fact.entity,
+                fact.attribute,
+                fact.version,
+                fact.mesi_state,
+                fact.canonical_surface,
+                fact.witness_surface,
+                fact.prompt_surface,
+                fact.slot_key,
+                fact.value_text,
+                json.dumps(fact.qualifiers),
+                fact.state_confidence,
+                fact.topic_channel,
+                fact.visibility_scope,
+                fact.claim_key,
+                fact.memory_tier,
+                fact.event_time.isoformat() if fact.event_time is not None else None,
+            )
+            for fact in facts
+        ]
+
+    def _execute_save(self, agent_id: str, rows: list[tuple]) -> None:  # type: ignore[type-arg]
+        with self._get_conn() as conn:
+            conn.execute('DELETE FROM "ai-knot_facts" WHERE agent_id = %s', (agent_id,))
+            # executemany is a Cursor method in psycopg3 (Connection has execute but
+            # not executemany). An empty save is just the DELETE above (clear agent).
+            if rows:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """INSERT INTO "ai-knot_facts"
+                           (id, agent_id, content, type, importance, retention,
+                            access_count, tags, created_at, last_accessed,
+                            source_snippets, source_spans, supported,
+                            support_confidence, verification_source,
+                            access_intervals, origin_agent_id, visibility,
+                            source_verbatim, valid_from, valid_until,
+                            entity, attribute, version, mesi_state,
+                            canonical_surface, witness_surface, prompt_surface,
+                            slot_key, value_text, qualifiers, state_confidence,
+                            topic_channel, visibility_scope,
+                            claim_key, memory_tier, event_time)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                   %s, %s, %s, %s, %s, %s, %s)""",
+                        rows,
+                    )
+            conn.commit()
+
+    def load(self, agent_id: str) -> list[Fact]:
+        """Load all facts for an agent."""
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                f'{self._SELECT_COLS} FROM "ai-knot_facts" WHERE agent_id = %s ORDER BY created_at',
+                (agent_id,),
+            )
+            rows = cur.fetchall()
+
+        return [self._fact_from_row(row) for row in rows]
+
+    def delete(self, agent_id: str, fact_id: str) -> None:
+        """Remove a single fact by id."""
+        with self._get_conn() as conn:
+            conn.execute(
+                'DELETE FROM "ai-knot_facts" WHERE agent_id = %s AND id = %s',
+                (agent_id, fact_id),
+            )
+            conn.commit()
+
+    def list_agents(self) -> list[str]:
+        """Return all agent_ids that have stored facts."""
+        with self._get_conn() as conn:
+            cur = conn.execute('SELECT DISTINCT agent_id FROM "ai-knot_facts"')
+            rows = cur.fetchall()
+        return [row[0] for row in rows]
+
+    # ------------------------------------------------------------------
+    # TemporalStorageCapable implementation (index-accelerated queries)
+    # ------------------------------------------------------------------
+
+    _SELECT_COLS = """SELECT id, content, type, importance, retention,
+                          access_count, tags, created_at, last_accessed,
+                          source_snippets, source_spans, supported,
+                          support_confidence, verification_source,
+                          access_intervals, origin_agent_id, visibility,
+                          source_verbatim, valid_from, valid_until,
+                          entity, attribute, version, mesi_state,
+                          canonical_surface, witness_surface, prompt_surface,
+                          slot_key, value_text, qualifiers, state_confidence,
+                          topic_channel, visibility_scope,
+                          claim_key, memory_tier, event_time"""
+
+    def _fact_from_row(self, row: tuple[Any, ...]) -> Fact:
+        return Fact(
+            id=row[0],
+            content=row[1],
+            type=MemoryType(row[2]),
+            importance=row[3],
+            retention_score=row[4],
+            access_count=row[5],
+            tags=json.loads(row[6]),
+            created_at=_parse_datetime(row[7]),
+            last_accessed=_parse_datetime(row[8]),
+            source_snippets=json.loads(row[9]),
+            source_spans=json.loads(row[10]),
+            supported=bool(row[11]),
+            support_confidence=float(row[12]),
+            verification_source=str(row[13]),
+            access_intervals=json.loads(row[14]),
+            origin_agent_id=str(row[15]),
+            visibility=str(row[16]),
+            source_verbatim=str(row[17]),
+            valid_from=_parse_datetime(row[18]) if row[18] else datetime.now(UTC),
+            valid_until=_parse_datetime(row[19]) if row[19] else None,
+            entity=str(row[20]) if row[20] else "",
+            attribute=str(row[21]) if row[21] else "",
+            version=int(row[22]) if row[22] is not None else 0,
+            mesi_state=MESIState(str(row[23])) if row[23] else MESIState.EXCLUSIVE,
+            canonical_surface=str(row[24]) if row[24] else "",
+            witness_surface=str(row[25]) if row[25] else "",
+            prompt_surface=str(row[26]) if row[26] else "",
+            slot_key=str(row[27]) if row[27] else "",
+            value_text=str(row[28]) if row[28] else "",
+            qualifiers=json.loads(row[29]) if row[29] else {},
+            state_confidence=float(row[30]) if row[30] is not None else 1.0,
+            topic_channel=str(row[31]) if len(row) > 31 and row[31] else "",
+            visibility_scope=str(row[32]) if len(row) > 32 and row[32] else "global",
+            claim_key=str(row[33]) if len(row) > 33 and row[33] else "",
+            memory_tier=str(row[34]) if len(row) > 34 and row[34] else "private",
+            event_time=_parse_datetime(row[35]) if len(row) > 35 and row[35] else None,
+        )
+
+    def load_active(self, agent_id: str) -> list[Fact]:
+        """Load only currently-active facts (index-accelerated).
+
+        Excludes future-dated facts (``valid_from > now``).
+        """
+        now = datetime.now(UTC).isoformat()
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                f'{self._SELECT_COLS} FROM "ai-knot_facts"'
+                " WHERE agent_id = %s AND valid_until IS NULL"
+                "   AND (valid_from = '' OR valid_from <= %s)"
+                " ORDER BY created_at",
+                (agent_id, now),
+            )
+            rows = cur.fetchall()
+        return [self._fact_from_row(row) for row in rows]
+
+    def load_since_version(self, agent_id: str, since: int, exclude_agent: str) -> list[Fact]:
+        """MESI dirty pull: facts with version > since from agents other than exclude_agent."""
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                f'{self._SELECT_COLS} FROM "ai-knot_facts"'
+                " WHERE agent_id = %s AND version > %s AND origin_agent_id != %s"
+                " ORDER BY version",
+                (agent_id, since, exclude_agent),
+            )
+            rows = cur.fetchall()
+        return [self._fact_from_row(row) for row in rows]
