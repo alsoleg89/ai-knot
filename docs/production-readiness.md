@@ -1,0 +1,129 @@
+# Production Readiness
+
+A feature-by-feature view of what ai-knot guarantees in production, organised by
+readiness dimension. Status is a point-in-time snapshot (2026-06-23).
+
+**Legend** — ✅ shipped on `main` · 🟡 in review (open PR) · ⬜ planned
+
+For how to run it, see [deployment.md](deployment.md). For design rationale, see
+[ARCHITECTURE.md](../ARCHITECTURE.md) and [DECISIONS.md](../DECISIONS.md).
+
+---
+
+## 1. Storage & durability
+
+| Item | Status | Notes |
+|---|---|---|
+| SQLite backend (WAL) | ✅ | single-server / edge |
+| PostgreSQL backend | ✅ | multi-process; `ai-knot_` table prefix; tables auto-created |
+| YAML backend | ✅ | tests / human-inspectable state |
+| Snapshots (version + diff) | ✅ | `kb.snapshot()`, list, diff |
+| `event_time` persisted across backends | ✅ | bi-temporal field round-trips (sqlite/postgres/yaml) |
+| Durable multi-agent ACL grants | 🟡 | `ACLStoreCapable` + `acl_grants` table (PR #88) |
+| Append-only audit ledger | 🟡 | `trust_events` / `usage_events` tables (PR #88) |
+
+## 2. Configuration
+
+| Item | Status | Notes |
+|---|---|---|
+| Env-var configuration | ✅ | documented in [deployment.md](deployment.md) |
+| Typed, validated config object | 🟡 | `AIKnotConfig.from_env()` — range/enum validation, secrets never logged (PR #89) |
+| Heavy-dependency guard | 🟡 | `AI_KNOT_RERANK` requires the opt-in `rerank` extra (PR #89) |
+
+## 3. Bi-temporal correctness
+
+| Item | Status | Notes |
+|---|---|---|
+| `valid_from` / `valid_until` / `is_active(now)` | ✅ | core temporal model |
+| Point-in-time recall (`recall(now=…)`) — core filter | ✅ | superseded facts excluded at query time |
+| Event-time-anchored validity | 🟡 | `valid_from = event_time`; supersession closes at successor's event time; `learn(event_time=…)` (PR #93) |
+| Point-in-time recall exposed over MCP | 🟡 | `recall(now=…)` + `top_k` bound (PR #86) |
+
+## 4. Multi-agent governance
+
+| Item | Status | Notes |
+|---|---|---|
+| Shared memory pool (MESI/CAS, no lost updates) | ✅ | protocol scenarios S10/S11/S13 green |
+| Trust scoring + adversarial discount | ✅ | known-malicious agents discounted on wide recall |
+| Evidence-before-belief gate | ✅ | unsupported claims withheld |
+| Abstention signal | ✅ | recall surfaces "should abstain" risk |
+| Conflict resolution (deterministic + optional semantic) | ✅ | `ClaimFamilyResolver`; opt-in `SemanticConflictResolver` |
+| Per-scope read ACL writer (`grant_read`) | ✅ | in-memory on `main`; durable in PR #88/#90 |
+| Pool wiring: ACL persist+restore, trust-event ledger, injectable clock | 🟡 | PR #90 (stacks on #88) |
+| Fact lineage / provenance (`supersedes_id`) | 🟡 | `lineage()` + `memory_lineage` MCP tool (PR #91) |
+| Acceptance gate (S8–S26, binding vs advisory) | ✅ | `ma_gate.py`; `equivalence_recall_at_1000` bound (PR #92) |
+
+## 5. Retrieval quality & determinism
+
+| Item | Status | Notes |
+|---|---|---|
+| BM25 + intent-weighted RRF fusion | ✅ | no heavy ML deps on the hot path |
+| Dense channel (optional, graceful degradation) | ✅ | skipped if embed endpoint unreachable |
+| Deterministic, reproducible recall | 🟡 | hash-seed-independent candidate ordering + id tiebreak (PR #96) |
+| Cross-encoder rerank | ✅ (opt-in) | OFF by default; behind `rerank` extra |
+
+## 6. Observability
+
+| Item | Status | Notes |
+|---|---|---|
+| Per-stage recall trace | ✅ | `recall_facts_with_trace()` |
+| Pool stats (trust / publish / use / quick-inv) | ✅ | persisted when `persist_stats=True` |
+| Audit ledger query ("when / why / who") | 🟡 | `load_trust_events` / `load_usage_events` (PR #88) |
+| Version introspection | ✅ | `ai_knot.__version__`, CI-guarded sync |
+
+## 7. Testing & CI
+
+| Item | Status | Notes |
+|---|---|---|
+| Unit/integration suite (≈940, mypy --strict, ruff) | ✅ | `format → lint → types → tests` pre-commit order |
+| Multi-agent acceptance gate (mock-judge) | ✅ | `runner --multi-agent --ma-gate` |
+| Version-sync regression test | 🟡 | pyproject == `__init__` == npm (PR #95) |
+| Recall determinism regression guard | 🟡 | `test_ddsa_output_stable_across_calls` hardened (PR #96) |
+| LongMemEval harness (TS, LLM-judge, checkpoint-resume) | ✅ | `longmemevalbench/` |
+| CI: live S8–S26 gate job | 🟡 | `runner --multi-agent --ma-gate` on every PR (PR #98) |
+| CI: PostgreSQL service for backend tests | 🟡 | service container + `AI_KNOT_TEST_PG_DSN`; caught a real psycopg3 bulk-save bug (PR #98) |
+| CI: longmemeval vitest job | 🟡 | build npm → typecheck → vitest (PR #98) |
+
+## 8. Release & versioning
+
+| Item | Status | Notes |
+|---|---|---|
+| Single version across 3 files | ✅ | pyproject / `__init__` / npm/package.json |
+| Drift guard | 🟡 | CI test fails on mismatch (PR #95) |
+| Semver discipline | ✅ | MINOR for new subsystems; see [reference](../CHANGELOG.md) |
+
+## 9. Client & integration surface
+
+| Item | Status | Notes |
+|---|---|---|
+| MCP server (stdio) | ✅ | Claude Desktop / Claude Code |
+| TypeScript/npm client | ✅ | `learn` / `addResolved` / `recall(now)` / `tags` (PR #87) |
+| OpenClaw memory adapter | ✅ | drop-in adapter |
+| FastAPI HTTP sidecar | 🟡 | `ai-knot serve`: `/health`, `/v1/recall`, `/v1/facts`, `/v1/stats` + optional bearer auth (PR #99) |
+| CLI pool/gov/lifecycle ops | ⬜ | operator commands |
+| Framework integrations (LangGraph / OpenAI Agents / CrewAI / AutoGen) | ⬜ | thin adapters |
+
+## 10. Benchmarks & evidence
+
+| Item | Status | Notes |
+|---|---|---|
+| LOCOMO harness (LLM-judge, memvid backend) | ✅ | `aiknotbench/` |
+| LongMemEval point-in-time adapter | 🟡 | `recall(now=question_date)` (PR #94) |
+| LongMemEval real-data run | ⬜ | **blocked**: drop gated `longmemeval_s.json` into `longmemevalbench/data/` |
+| Live competitor bench-pack (Mem0, …) | ⬜ | side-by-side scorecard |
+
+---
+
+## Roadmap (planned, in dependency order)
+
+1. **Governance state machine** (R1.4) — `review_state` + `review_queue` +
+   submit/ratify/reject on the pool. *Optional:* overlaps the existing
+   evidence-gate + trust + ACL + abstention controls; warranted only where
+   explicit human/agent ratification is required before a fact becomes visible.
+2. **Lifecycle engine** (R1.5) — decay / archive / consolidate jobs + lifecycle ledger.
+3. **Temporal/relation graph** (R1.6) — `GraphStorageCapable` edges from provenance.
+4. **Self-repair probes** (R1.7) — generate + run consistency probes over the KB.
+5. **Ecosystem (P2)** — CLI pool/gov ops, framework integrations,
+   competitor bench-pack + live Mem0. (HTTP sidecar landed — PR #99.)
+6. **LongMemEval number** — once the dataset is in place, run the harness
+   (KU-mode + point-in-time replay) and publish per-type accuracy.
