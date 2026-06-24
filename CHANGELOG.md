@@ -13,7 +13,42 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Qdrant and Weaviate backends
 - LangChain / CrewAI integrations
 - Web UI knowledge inspector
-- REST API / sidecar mode
+
+---
+
+## [0.11.0] — 2026-06-24
+
+### Added
+- Typed, validated configuration object — `AIKnotConfig.from_env()` (range/enum
+  validation, secrets never logged) (#89).
+- Point-in-time recall over MCP — `recall(now=…)` plus a `top_k` bound (#86).
+- Event-time-anchored bi-temporal validity — `valid_from = event_time`,
+  supersession closes at the successor's event time, `learn(event_time=…)` (#93).
+- Fact lineage / provenance — `KnowledgeBase.lineage()` and the `memory_lineage`
+  MCP tool, with `supersedes_id` recorded on supersession (#91).
+- Durable multi-agent ACL grants and an append-only audit ledger across the
+  sqlite / postgres / yaml backends (#88), wired into the shared pool with
+  ACL persist/restore, a trust-event ledger and an injectable clock (#90).
+- TypeScript client surface — `learn` / `addResolved` / `recall(now)` / tags (#87)
+  and a LongMemEval point-in-time adapter (`recall(now=question_date)`) (#94).
+- Optional FastAPI HTTP sidecar — `ai-knot serve` exposing `/health`,
+  `/v1/recall`, `/v1/facts`, `/v1/stats` with optional bearer auth (#99).
+- Acceptance-gate domain-coverage threshold `equivalence_recall_at_1000` (#92)
+  and a version-sync release guard across the three version files (#95).
+- CI hardening — PostgreSQL service, the multi-agent S8–S26 gate, and a
+  LongMemEval vitest job (#98); deployment and production-readiness docs (#97).
+
+### Changed
+- Deterministic, reproducible recall — hash-seed-independent candidate ordering
+  and an explicit id tiebreak (#96).
+- Multi-agent acceptance gate: p95 retrieval latency is advisory (it is
+  environment-dependent on shared CI runners); correctness thresholds stay
+  binding, and latency is tracked by the perf-benchmark job (#100).
+
+### Fixed
+- PostgreSQL bulk save — `Connection.executemany` is invalid in psycopg3; use a
+  cursor. Previously broken for any non-empty write and masked by skipped tests (#98).
+- mypy lint on the optional `sentence-transformers` rerank import (#100).
 
 ---
 
