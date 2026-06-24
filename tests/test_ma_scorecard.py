@@ -126,6 +126,24 @@ def test_advisory_caps_do_not_bind() -> None:
     assert all(r.threshold.advisory for r in advisory_failing)
 
 
+def test_latency_does_not_bind_gate() -> None:
+    # p95 retrieval latency is environment-dependent: a shared CI runner measures
+    # ~170ms where local hardware is <90ms.  A correctness-passing run with high
+    # latency must still PASS the gate — latency is advisory, reported not binding.
+    scores = {
+        **_PASSING,
+        "s26_sparse_assembly": {
+            **_PASSING["s26_sparse_assembly"],
+            "p95_retrieve_ms_at_1000": 170.0,  # over the 150ms target
+        },
+    }
+    results = evaluate_gate(_metrics("ai_knot_multi_agent", scores))
+    assert gate_passed(results)
+    p95 = next(r for r in results if r.threshold.metric == "p95_retrieve_ms_at_1000")
+    assert p95.applicable and not p95.passed  # over target...
+    assert p95.threshold.advisory  # ...but advisory, so it does not bind the verdict
+
+
 def test_passing_metrics_pass_gate() -> None:
     results = evaluate_gate(_metrics("ai_knot_multi_agent", _PASSING))
     assert gate_passed(results)
