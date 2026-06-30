@@ -224,7 +224,7 @@ variance at scale. [Full benchmark history →](https://alsoleg89.github.io/ai-k
 
 ## Documentation
 
-📚 [Usage guide](docs/usage.md) · [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Launch post](docs/launch-post.md)
+📚 [Usage guide](docs/usage.md) · [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Launch post](docs/launch-post.md) · [GTM plan](docs/launch-plan.md)
 
 ## Contributing
 
