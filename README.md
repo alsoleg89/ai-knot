@@ -15,7 +15,7 @@ For **teams of agents**, the same store becomes a shared memory pool with fan-in
 evidence-gated publishing, per-agent visibility, and laundering-resistant trust — deterministic
 by default, with an optional LLM seam for the semantic-conflict tail.
 
-📚 **Docs:** [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md)
+📚 **Docs:** [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Release](docs/RELEASE.md)
 
 ---
 
