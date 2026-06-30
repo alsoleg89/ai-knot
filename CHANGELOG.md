@@ -8,6 +8,23 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Deterministic, zero-network recall — an empty `embed_url` disables the dense
+  channel before any network call (air-gapped deploys, reproducible evaluation).
+- CLI `recall --now <iso>` (point-in-time recall) and `lineage <fact_id>`
+  (supersession audit trail).
+- Documentation: reproducible benchmark page with **real LLM-judged LoCoMo (78.0%
+  cat1–4) and LongMemEval (59.6% Oracle) results** plus the deterministic retrieval
+  suite ([docs/benchmarks.md](docs/benchmarks.md)), a full API guide
+  ([docs/usage.md](docs/usage.md)), a release runbook ([docs/RELEASE.md](docs/RELEASE.md)),
+  and a launch piece ([docs/launch-post.md](docs/launch-post.md)).
+
+### Changed
+- README restructured into a results-first landing page; the full API reference
+  moved to `docs/usage.md`.
+- Publish workflows are now idempotent (npm skips an already-published version,
+  PyPI uses `skip-existing`); `setup-node` bumped to 22.
+
 ### Planned
 - MongoDB storage backend
 - Qdrant and Weaviate backends
