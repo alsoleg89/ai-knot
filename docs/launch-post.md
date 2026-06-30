@@ -59,10 +59,25 @@ count — change any one and the headline swings twenty points.
 So ai-knot reports both. On the LLM-judged side, with the reader and judge named:
 **78.0% on LoCoMo** (cat1–4, gpt-4.1 reader / gpt-4o judge — adversarial category
 excluded, the step Zep got wrong), accuracy holding at 74–84% on every one of the ten
-conversations. That is above Mem0's reproducible ~58–66% and Zep's corrected 58%. On
-**LongMemEval** it is near-perfect at information extraction (single-session 95–98%)
-and declines false-premise questions 90% of the time — the confabulation failure mode
-memory systems are supposed to prevent.
+conversations. That is above Mem0's reproducible ~58–66% and Zep's corrected 58%. By
+category:
+
+| LoCoMo category | accuracy | | LongMemEval (Oracle) | accuracy |
+|---|---:|---|---|---:|
+| single-hop | 60.6% | | single-session-assistant | 98.2% |
+| multi-hop | 67.6% | | single-session-user | 95.7% |
+| temporal | 63.5% | | abstention (false-premise) | 90.0% |
+| open-ended | 89.4% | | knowledge-update | 62.8% |
+| **overall** | **78.0%** | | multi-session | 49.6% |
+| | | | temporal-reasoning | 34.6% |
+| | | | **overall** | **59.6%** |
+
+The shape tells the story. On LoCoMo, open-ended synthesis is the strength (89%); on
+LongMemEval, ai-knot is near-perfect at pulling a stated fact back out (single-session
+95–98%) and declines false-premise questions 90% of the time — the confabulation
+failure mode memory systems are supposed to prevent. The weak cells (LoCoMo temporal,
+LongMemEval temporal-reasoning) are honest and pointed-at, not buried — they are reader
+reasoning over timestamps, with retrieval recall already at 94–96%.
 
 And on the side that cannot swing: a deterministic, one-command retrieval suite — `evidence_recall@5`
 on LoCoMo of **0.26** vs 0.15 for a naive log, ranking MRR of **0.83** vs 0.18, no LLM,
