@@ -139,6 +139,20 @@ Measured end-to-end: Python subprocess spawn is one-time; per-call overhead is J
 > ([Reduce Latency docs](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-latency)).
 > Use `storage="sqlite"` for lower variance at scale.
 
+### Retrieval quality (reproducible)
+
+On an in-repo golden suite, ai-knot lifts ranking **MRR 0.18 → 0.83** (precision@1
+0.10 → 0.70) over a naive recency/lexical log, and stays robust to 200 distractors.
+On the public [LoCoMo](https://github.com/snap-research/locomo) benchmark it improves
+retrieval grounding in **every** category — `evidence_recall@5` **0.15 → 0.26 (+71%)**.
+ai-knot also implements the [LongMemEval](https://github.com/xiaowu0162/LongMemEval)
+point-in-time pattern (`recall(now=question_date)`) for temporal/knowledge-update
+questions.
+
+Every number is deterministic and reproducible with one command — see
+**[docs/benchmarks.md](docs/benchmarks.md)**. (These are retrieval-quality metrics,
+not end-to-end QA accuracy; the distinction is spelled out there.)
+
 ---
 
 ## What ai-knot keeps — and what it drops

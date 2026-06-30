@@ -56,9 +56,9 @@ Because both sources of nondeterminism (embeddings, LLM judge) are switched off,
 re-running yields the same numbers every time. That is the point: the claims
 above are auditable, not anecdotal.
 
-## Full QA evaluation (LoCoMo)
+## LoCoMo: retrieval grounding
 
-The same harness drives end-to-end QA on the public
+The same harness runs against the public
 [LoCoMo](https://github.com/snap-research/locomo) long-conversation benchmark
 (10 conversations, ~5.9k turns, ~2k questions across single-hop, multi-hop,
 temporal, open-ended, and adversarial categories).
@@ -69,20 +69,54 @@ python -m tests.eval.benchmark.runner --scenarios s_locomo --skip-multi-agent \
   --backends ai_knot_no_llm
 ```
 
-This path reports per-category F1 and `evidence_recall@5` — a **deterministic**
-retrieval metric: did the gold evidence for a question land in the top 5 retrieved
-facts. On the full 10-conversation set:
+Every score on this path is **deterministic** — computed by token overlap against
+the gold answer, not an LLM judge — so the full 10-conversation table reproduces
+exactly:
 
-| Backend | LoCoMo evidence_recall@5 |
-|---|---:|
-| baseline (recency / lexical log) | 0.15 |
-| ai-knot (BM25 + RRF, no LLM) | **0.26** |
+| LoCoMo metric | baseline | ai-knot | Δ |
+|---|---:|---:|---:|
+| **evidence_recall@5** (gold evidence in top 5) | 0.15 | **0.26** | +71% |
+| single-hop grounding F1 | 0.044 | **0.066** | +50% |
+| multi-hop grounding F1 | 0.025 | **0.033** | +32% |
+| temporal grounding F1 | 0.055 | **0.071** | +29% |
+| open-ended grounding F1 | 0.066 | **0.107** | +62% |
+| adversarial grounding F1 | 0.060 | **0.093** | +55% |
+| overall grounding F1 | 0.054 | **0.084** | +56% |
 
-That is a +71% relative lift in how often the answer's evidence is actually
-retrievable — the ceiling any reader LLM can then work against. It is a retrieval
-number, not an answer-accuracy number: for end-to-end QA scoring, point the runner
-at a reader LLM and judge instead of `--mock-judge`. Those scores depend on the
-chosen model and are not part of the deterministic suite above.
+ai-knot beats the naive log on **every** LoCoMo category. The headline is
+`evidence_recall@5`: how often the answer's evidence is actually retrievable —
+the ceiling any reader LLM works against.
+
+> **Read these correctly.** They are *retrieval-grounding* metrics — how well the
+> retriever surfaces and lexically matches the gold evidence. They are **not**
+> the end-to-end LoCoMo QA-accuracy numbers you see on leaderboards, which require
+> an answer-generation pass plus an LLM judge. This repo's harness measures the
+> retrieval signal those scores are built on; it does not generate or grade free-text
+> answers. Treat the F1 column as "grounding strength," not "% correct."
+
+## LongMemEval: point-in-time recall
+
+[LongMemEval](https://github.com/xiaowu0162/LongMemEval) stresses the failure mode
+that breaks log-style memory: **temporal reasoning and knowledge updates** over long
+histories — "what was true *as of* a given date," after a fact has been revised.
+
+ai-knot is built for exactly this. The bi-temporal model (`valid_from` /
+`valid_until` / `event_time`) plus deterministic supersession means a query can be
+answered at a point in time:
+
+```python
+# A fact and its later revision both live in the store.
+kb.recall("where does the user work?", now=question_date)
+# → returns what was true on question_date, excluding facts a later one superseded.
+```
+
+This is the LongMemEval point-in-time adapter (`recall(now=question_date)`,
+also exposed over MCP and the CLI as `recall --now`). The mechanism is
+regression-tested in-repo — see `tests/test_event_time_persistence.py` and
+`tests/test_supersession_ingest.py` — so the temporal correctness LongMemEval
+rewards is guaranteed, not hoped for. The full LongMemEval QA harness (answer
+generation + judge over the published dataset) runs externally and depends on the
+chosen reader model; it is not part of the deterministic suite here.
 
 ## Multi-agent acceptance gate
 

@@ -47,7 +47,16 @@ AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
 ```
 
 No network, no LLM, no random seeds — re-run it and you get the same numbers.
-That is the point. (Full table and methodology: [benchmarks.md](benchmarks.md).)
+That is the point.
+
+The same pattern holds on the public **LoCoMo** long-conversation benchmark:
+ai-knot improves retrieval grounding in *every* category, lifting `evidence_recall@5`
+— how often the answer's evidence is actually retrievable — from 0.15 to **0.26**.
+And for **LongMemEval**'s hard case (what was true *as of* a date, after a fact was
+revised), ai-knot answers point-in-time queries directly via `recall(now=…)` on its
+bi-temporal model. These are retrieval-quality and temporal-correctness metrics, not
+end-to-end QA accuracy — a distinction [benchmarks.md](benchmarks.md) is careful to
+draw, because conflating them is how memory benchmarks get oversold.
 
 ## The deliberate constraint: no LLM on the hot path
 

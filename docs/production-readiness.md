@@ -108,8 +108,8 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | Item | Status | Notes |
 |---|---|---|
 | Reproducible offline retrieval suite | ✅ | deterministic, zero-network, one command — see [benchmarks.md](benchmarks.md) |
-| LOCOMO recall scenario (offline eval) | ✅ | `tests/eval/benchmark` against the public LoCoMo dataset |
-| LongMemEval point-in-time adapter | ✅ | `recall(now=question_date)` |
+| LOCOMO retrieval grounding (offline eval) | ✅ | deterministic per-category table; `evidence_recall@5` 0.15→0.26 — see [benchmarks.md](benchmarks.md) |
+| LongMemEval point-in-time adapter | ✅ | `recall(now=question_date)`; bi-temporal correctness regression-tested |
 | Live competitor bench-pack (Mem0, …) | ⬜ | side-by-side scorecard |
 
 ---
