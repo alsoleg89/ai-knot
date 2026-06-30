@@ -544,6 +544,11 @@ class KnowledgeBase(_LearningMixin):
         """
         from ai_knot.embedder import embed_texts
 
+        if not self._embed_url:
+            # Dense channel disabled — deterministic, BM25-only recall with no
+            # network calls (and no per-batch "fallback" warnings).
+            return None
+
         new_facts = [f for f in facts if f.id not in self._embedded_ids]
         fact_texts = [f.content for f in new_facts]
 

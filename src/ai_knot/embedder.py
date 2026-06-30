@@ -50,6 +50,10 @@ async def embed_texts(
     """
     if not texts:
         return []
+    if not base_url:
+        # Dense channel explicitly disabled (e.g. air-gapped deploy or
+        # deterministic offline eval) — callers fall back to lexical-only.
+        return []
     url = f"{base_url.rstrip('/')}/v1/embeddings"
     bearer = api_key or "ollama"
     try:
