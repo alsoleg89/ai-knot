@@ -144,3 +144,41 @@ class TestCLIStorageOption:
     def test_invalid_backend(self, runner: CliRunner) -> None:
         result = runner.invoke(main, ["--storage", "redis", "show", "myagent"])
         assert result.exit_code != 0
+
+
+class TestCLIRecallNow:
+    """ai-knot recall --now <iso> — point-in-time (bi-temporal) recall."""
+
+    def test_recall_with_now_accepts_iso_and_returns_fact(
+        self, runner: CliRunner, data_dir: str
+    ) -> None:
+        runner.invoke(main, _cmd(data_dir, ["add", "agent", "User deploys with Docker"]))
+        result = runner.invoke(
+            main, _cmd(data_dir, ["recall", "agent", "deploy", "--now", "2030-01-01T00:00:00"])
+        )
+        assert result.exit_code == 0
+        assert "Docker" in result.output
+
+    def test_recall_with_invalid_now_errors(self, runner: CliRunner, data_dir: str) -> None:
+        runner.invoke(main, _cmd(data_dir, ["add", "agent", "User deploys with Docker"]))
+        result = runner.invoke(
+            main, _cmd(data_dir, ["recall", "agent", "deploy", "--now", "not-a-date"])
+        )
+        assert result.exit_code != 0
+
+
+class TestCLILineage:
+    """ai-knot lineage <agent_id> <fact_id> — supersession audit trail."""
+
+    def test_lineage_unknown_fact(self, runner: CliRunner, data_dir: str) -> None:
+        result = runner.invoke(main, _cmd(data_dir, ["lineage", "agent", "deadbeef"]))
+        assert result.exit_code == 0
+        assert "No fact" in result.output
+
+    def test_lineage_single_version(self, runner: CliRunner, data_dir: str) -> None:
+        add = runner.invoke(main, _cmd(data_dir, ["add", "agent", "User likes Go"]))
+        fact_id = add.output.split()[2].rstrip(":")  # "Added fact <id>: ..."
+        result = runner.invoke(main, _cmd(data_dir, ["lineage", "agent", fact_id]))
+        assert result.exit_code == 0
+        assert "current" in result.output
+        assert "1 version" in result.output

@@ -102,15 +102,62 @@ def add(ctx: click.Context, agent_id: str, content: str, importance: float, fact
 @click.argument("agent_id")
 @click.argument("query")
 @click.option("--top-k", "-k", default=5, type=int, help="Max results.")
+@click.option(
+    "--now",
+    default=None,
+    help="Point-in-time recall: ISO datetime; facts superseded by then are excluded.",
+)
+@click.option(
+    "--include-unsupported",
+    is_flag=True,
+    default=False,
+    help="Include facts that carry no provenance/evidence pointer.",
+)
 @click.pass_context
-def recall(ctx: click.Context, agent_id: str, query: str, top_k: int) -> None:
-    """Retrieve relevant facts for a query."""
+def recall(
+    ctx: click.Context,
+    agent_id: str,
+    query: str,
+    top_k: int,
+    now: str | None,
+    include_unsupported: bool,
+) -> None:
+    """Retrieve relevant facts for a query.
+
+    Pass --now to ask "what was true at this point in time": facts superseded
+    by a later one (as of that instant) are filtered out — the bi-temporal recall.
+    """
     kb = _make_kb(ctx, agent_id)
-    result = kb.recall(query, top_k=top_k)
+    now_dt = _parse_dt(now) if now else None
+    result = kb.recall(query, top_k=top_k, now=now_dt, include_unsupported=include_unsupported)
     if result:
         click.echo(result)
     else:
         click.echo("No relevant facts found.")
+
+
+@main.command()
+@click.argument("agent_id")
+@click.argument("fact_id")
+@click.pass_context
+def lineage(ctx: click.Context, agent_id: str, fact_id: str) -> None:
+    """Show the supersession chain for FACT_ID (newest -> oldest).
+
+    The audit trail of how a slot's value evolved: each fact and the one it
+    replaced, including superseded (inactive) entries.
+    """
+    kb = _make_kb(ctx, agent_id)
+    chain = kb.lineage(fact_id)
+    if not chain:
+        click.echo(f"No fact '{fact_id}' for agent '{agent_id}'.")
+        return
+    for i, fact in enumerate(chain):
+        marker = "current" if i == 0 and fact.is_active() else "superseded"
+        click.echo(
+            f"  [{marker}] {fact.content}\n"
+            f"    id={fact.id}  type={fact.type.value}  created={fact.created_at.isoformat()}"
+        )
+    click.echo(f"\n{len(chain)} version(s) in chain.")
 
 
 @main.command()

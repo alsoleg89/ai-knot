@@ -537,14 +537,16 @@ Weights correspond to: `(bm25, importance, retention, recency)`.
 ## CLI
 
 ```bash
-ai-knot show   my_agent            # list all stored facts
-ai-knot recall my_agent "query"    # test retrieval
-ai-knot add    my_agent "fact"     # add a fact
-ai-knot stats  my_agent            # counts, avg importance, retention
-ai-knot decay  my_agent            # apply forgetting curve
-ai-knot clear  my_agent            # wipe knowledge base
-ai-knot export my_agent out.yaml   # backup to file
-ai-knot import my_agent in.yaml    # restore from backup
+ai-knot show    my_agent            # list all stored facts
+ai-knot recall  my_agent "query"    # test retrieval
+ai-knot recall  my_agent "query" --now 2025-01-01T00:00:00   # point-in-time recall
+ai-knot lineage my_agent <fact_id>  # supersession audit trail for a fact
+ai-knot add     my_agent "fact"     # add a fact
+ai-knot stats   my_agent            # counts, avg importance, retention
+ai-knot decay   my_agent            # apply forgetting curve
+ai-knot clear   my_agent            # wipe knowledge base
+ai-knot export  my_agent out.yaml   # backup to file
+ai-knot import  my_agent in.yaml    # restore from backup
 ```
 
 **MCP setup shortcut** — prints a paste-ready config block for Claude Desktop or Claude Code:

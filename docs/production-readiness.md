@@ -99,7 +99,8 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | TypeScript/npm client | ✅ | `learn` / `addResolved` / `recall(now)` / `tags` |
 | OpenClaw memory adapter | ✅ | drop-in adapter |
 | FastAPI HTTP sidecar | ✅ | `ai-knot serve`: `/health`, `/v1/recall`, `/v1/facts`, `/v1/stats` + optional bearer auth |
-| CLI pool/gov/lifecycle ops | ⬜ | operator commands |
+| CLI lifecycle/audit ops | ✅ | `recall --now` (point-in-time), `lineage` (supersession audit trail), `decay`, `export`/`import` |
+| CLI pool-scoped gov ops | ⬜ | shared-pool operator commands |
 | Framework integrations (LangGraph / OpenAI Agents / CrewAI / AutoGen) | ⬜ | thin adapters |
 
 ## 10. Benchmarks & evidence
