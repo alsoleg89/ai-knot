@@ -69,11 +69,20 @@ python -m tests.eval.benchmark.runner --scenarios s_locomo --skip-multi-agent \
   --backends ai_knot_no_llm
 ```
 
-This path reports per-category F1 and `evidence_recall@5` (a deterministic
-retrieval metric — did the gold evidence make the top 5). For real
-answer-accuracy scoring, point the runner at a reader LLM and judge instead of
-`--mock-judge`; those numbers depend on the chosen model and are not part of the
-deterministic suite above.
+This path reports per-category F1 and `evidence_recall@5` — a **deterministic**
+retrieval metric: did the gold evidence for a question land in the top 5 retrieved
+facts. On the full 10-conversation set:
+
+| Backend | LoCoMo evidence_recall@5 |
+|---|---:|
+| baseline (recency / lexical log) | 0.15 |
+| ai-knot (BM25 + RRF, no LLM) | **0.26** |
+
+That is a +71% relative lift in how often the answer's evidence is actually
+retrievable — the ceiling any reader LLM can then work against. It is a retrieval
+number, not an answer-accuracy number: for end-to-end QA scoring, point the runner
+at a reader LLM and judge instead of `--mock-judge`. Those scores depend on the
+chosen model and are not part of the deterministic suite above.
 
 ## Multi-agent acceptance gate
 

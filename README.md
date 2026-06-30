@@ -1132,6 +1132,13 @@ kb.decay()  # apply power-law forgetting curve — stale facts lose retention sc
 | MCP server | Yes | No | No | No |
 | Free forever | Yes (MIT) | No | No | Yes |
 
+*Fair is fair:* Mem0 is a mature product with a hosted offering and a large
+community; Zep ships a genuine temporal knowledge graph; LangMem integrates
+tightly with LangGraph. ai-knot's bet is a narrow one — deterministic,
+dependency-light, self-hosted memory with a real multi-agent governance model,
+and benchmark numbers you can reproduce. The full positioning, with the trade-offs
+spelled out, is in [docs/launch-post.md](docs/launch-post.md).
+
 ---
 
 ## Contributing
