@@ -1,56 +1,67 @@
-# ai-knot
+<div align="center">
 
-![CI](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml/badge.svg)
-![PyPI](https://img.shields.io/pypi/v/ai-knot)
-![npm](https://img.shields.io/npm/v/ai-knot)
+# 🪢 ai-knot
+
+### Long-term memory for AI agents — structured, self-hosted, deterministic.
+
+Your agent forgets everything between sessions. The usual fix — replaying the whole
+conversation history into every prompt — is slow, expensive, and gets worse every day.
+**ai-knot remembers _facts_, not transcripts:** it distills conversations into a handful
+of structured facts and hands your agent only the 3–5 it needs for the next turn.
+No LLM on the retrieval path. No cloud. No lock-in.
+
+[![CI](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml/badge.svg)](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/ai-knot)](https://pypi.org/project/ai-knot/)
+[![npm](https://img.shields.io/npm/v/ai-knot)](https://www.npmjs.com/package/ai-knot)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 
-**Deterministic memory for AI agents — with benchmark numbers you can actually reproduce.**
+[**Quickstart**](#quickstart-30-seconds) · [**Why ai-knot**](#why-ai-knot) · [**Use cases**](#what-you-can-build) · [**Benchmarks**](docs/benchmarks.md) · [**Docs**](docs/usage.md)
 
-Most agent frameworks treat memory as a log: store every message, replay it, pay to inject six
-months of history into a prompt that needs three sentences of it. ai-knot treats memory as a
-*knowledge base* — it distills conversations into structured facts, retrieves only what the next
-turn needs, and forgets the rest. No LLM on the retrieval path. Pluggable storage. Self-hosted.
-And for teams of agents, a shared memory pool with trust, governance, and bi-temporal supersession.
-
-📚 [Benchmarks](docs/benchmarks.md) · [Usage guide](docs/usage.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Launch post](docs/launch-post.md)
-
-```
-1000 messages (~400k tokens)  ──extract+verify──▶  ~12 facts (~300 tokens)  ──BM25+RRF──▶  3–5 facts injected
-```
+</div>
 
 ---
 
-## Benchmarks you can reproduce
+## See it work
 
-The agent-memory field reports LoCoMo and LongMemEval as an LLM-judged accuracy %. Those numbers
-are also notoriously irreproducible — Zep's **84%** on LoCoMo became **58%** on an independent
-re-run; Mem0's cited **91.6%** reproduces at **~58–66%**. An LLM-judged score moves 20+ points with
-the reader model, the judge, and the prompts.
+```python
+from ai_knot import KnowledgeBase
 
-So ai-knot reports the LLM-judged QA accuracy with the reader model named (as everyone's
-should be), *and* a deterministic, one-command retrieval number that **cannot** move.
+kb = KnowledgeBase(agent_id="assistant")   # persists to disk — survives restarts
 
-| Benchmark | Metric | ai-knot |
-|---|---|---:|
-| **LoCoMo** | QA accuracy — cat1–4, gpt-4.1 reader / gpt-4o judge | **78.0%** |
-| **LongMemEval** | QA accuracy — Oracle, gpt-4.1 / gpt-4o (95–98% on single-session) | **59.6%** |
-| **LoCoMo** | `evidence_recall@5` (deterministic, no LLM) | **0.26** vs 0.15 naive |
-| **Golden suite** | ranking MRR (deterministic, no LLM) | **0.83** vs 0.18 naive |
+kb.add("User is a senior backend developer at Acme Corp")
+kb.add("User writes Go and avoids Java")
+kb.add("User deploys services with Docker and Kubernetes")
+kb.add("Team standup is at 10am")
 
-78.0% on LoCoMo (cat1–4, adversarial excluded per the dataset authors — the step Zep
-got wrong) puts ai-knot above Mem0's reproducible ~58–66% and Zep's corrected 58%. Full
-per-conversation and per-category tables: **[docs/benchmarks.md](docs/benchmarks.md)**.
-
-The deterministic numbers reproduce bit-for-bit:
-
-```bash
-AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
-  --mock-judge --skip-multi-agent --backends baseline,ai_knot_no_llm
+# At inference time, pull ONLY what this turn needs — no LLM call, ~8 ms:
+print(kb.recall("what language and tooling does the user use?"))
+# [1] User writes Go and avoids Java
+# [2] User deploys services with Docker and Kubernetes
+# [3] User is a senior backend developer at Acme Corp
 ```
 
-Full tables, the field landscape, and the methodology stance: **[docs/benchmarks.md](docs/benchmarks.md)**.
+It surfaced the three relevant facts and left the standup noise behind — deterministically,
+with no model call, no embedding round-trip, in single-digit milliseconds. Re-run it tomorrow
+in a fresh process and you get the same answer.
+
+---
+
+## The problem
+
+Most agent frameworks treat memory as a **log**: store every message, replay it all, and
+pay to inject six months of history into a prompt that needs three sentences of it.
+
+```
+❌  log-as-memory                          ✅  ai-knot
+    1000 messages → 400k tokens                1000 messages
+    replayed into every prompt                   ↓ extract + verify
+    $$$ per call, slower every day             ~12 facts → 300 tokens
+    no way to know which 300 matter              ↓ BM25 + rank fusion
+                                               3–5 facts injected — only what's needed
+```
+
+You don't need the transcript. You need the *knowledge* in it. ai-knot keeps the knowledge.
 
 ---
 
@@ -58,9 +69,9 @@ Full tables, the field landscape, and the methodology stance: **[docs/benchmarks
 
 ```bash
 pip install ai-knot                 # core
-pip install "ai-knot[openai]"       # + LLM extraction
+pip install "ai-knot[openai]"       # + LLM-based fact extraction
 pip install "ai-knot[postgres]"     # + PostgreSQL backend
-pip install "ai-knot[mcp]"          # + MCP server (Claude Desktop / Code)
+pip install "ai-knot[mcp]"          # + MCP server (Claude Desktop / Claude Code)
 npm install ai-knot                 # Node / TypeScript (needs Python 3.11+ in PATH)
 ```
 
@@ -71,39 +82,58 @@ from ai_knot import KnowledgeBase
 
 kb = KnowledgeBase(agent_id="my_agent")
 
-# Add facts directly...
-kb.add("User is a senior backend developer at Acme Corp", type="semantic", importance=0.95)
+# 1. Add facts directly...
 kb.add("User prefers Python, dislikes async code", type="procedural", importance=0.85)
+kb.add("User deploys everything in Docker")
 
-# ...or extract them from a conversation
-from ai_knot import ConversationTurn
-kb.learn([ConversationTurn(role="user", content="I deploy everything in Docker")],
-         provider="openai", api_key="sk-...")
+# 2. ...or let ai-knot distill them from a raw conversation (needs an LLM provider):
+#    from ai_knot import ConversationTurn
+#    kb.learn([ConversationTurn(role="user", content="I deploy in Docker")],
+#             provider="openai", api_key="sk-...")
 
-# At inference time, get only what matters — recall never calls an LLM
-context = kb.recall("how should I write this deployment script?")
-# -> "[procedural] User prefers Python, dislikes async code
-#     [semantic]   User deploys everything in Docker"
+# 3. Recall only what the next turn needs — recall never calls an LLM
+print(kb.recall("what are the user's coding preferences?"))
+# [1] User prefers Python, dislikes async code
+# [2] User deploys everything in Docker
 ```
 
-Full API: **[docs/usage.md](docs/usage.md)**.
+That's the whole loop: **`add`/`learn` → `recall`.** Drop the result into your system prompt
+and your agent has memory. Full API — storage backends, bi-temporal recall, tags, decay,
+multi-agent — in **[docs/usage.md](docs/usage.md)**.
+
+---
+
+## What you can build
+
+| You're building… | ai-knot gives you… |
+|---|---|
+| 🤖 **A chatbot that remembers users** | Persistent per-user facts across sessions, without stuffing history into every prompt |
+| 💻 **A coding agent** | Memory of the user's stack, conventions, and past decisions — recalled in milliseconds |
+| 🧑‍🤝‍🧑 **A team of agents** | A shared pool with trust, provenance, and per-agent visibility — not just a common database |
+| 🔒 **Something air-gapped / regulated** | Fully self-hosted, no LLM on the read path, a store you can commit to git and audit |
+| 🧪 **Anything that must be testable** | Deterministic recall you can write regression tests against — it won't flake |
+
+Runnable scripts for each in **[examples/](examples/)**.
 
 ---
 
 ## Why ai-knot
 
-- **Deterministic by design.** Retrieval, dedup, conflict resolution, and bi-temporal supersession
-  run with no LLM on the read path — reproducible, cheap, auditable. The dense channel is optional
-  and degrades gracefully.
-- **Signal, not noise.** LLM extraction + ATC verification + power-law forgetting (Wixted & Ebbesen
-  1997) keep ~12 facts instead of 1000 messages. Stale facts fade; reinforced facts persist.
-- **No vendor lock-in.** SQLite / PostgreSQL / YAML behind one API. The YAML store is human-readable
-  and Git-trackable. Six LLM providers for extraction. Self-hosted, MIT.
-- **Bi-temporal.** Every fact knows when it was learned *and* when its event happened. Ask
-  "what was true as of the incident?" — `recall(now=…)` answers it; superseded facts are excluded,
-  not deleted.
-- **MCP-native.** Ships an `ai-knot-mcp` server — Claude Desktop and Claude Code call it as tools
-  with zero glue code.
+- **🎯 Deterministic by design.** Retrieval, dedup, conflict resolution, and bi-temporal
+  supersession run with **no LLM on the read path** — reproducible, cheap, auditable. The
+  dense (embedding) channel is optional and degrades gracefully if it's offline.
+- **✂️ Signal, not noise.** LLM extraction + verification + power-law forgetting
+  (Wixted & Ebbesen 1997) keep ~12 facts instead of 1000 messages. Stale facts fade;
+  reinforced facts persist.
+- **🔌 No vendor lock-in.** SQLite / PostgreSQL / YAML behind one API. The YAML store is
+  human-readable and Git-trackable. Six LLM providers for extraction. Self-hosted, MIT.
+- **🕰️ Bi-temporal.** Every fact knows when it was *learned* and when its event *happened*.
+  Ask "what was true as of the incident?" — `recall(now=…)` answers it; superseded facts are
+  excluded, not deleted.
+- **🧩 MCP-native.** Ships an `ai-knot-mcp` server — Claude Desktop and Claude Code call it as
+  tools with zero glue code.
+
+---
 
 ## Built for teams of agents
 
@@ -112,36 +142,67 @@ The same store becomes a `SharedMemoryPool` — the part that's genuinely hard t
 - **Fan-in recall** — answers scattered across agents are set-covered, not crowded out.
 - **Evidence-before-belief** — a claim with no provenance pointer is withheld, not published.
 - **Per-agent visibility** — keep facts out of the global pool or share them selectively.
-- **Laundering-resistant trust** — known-bad publishers are discounted even on wide recall; flooding
-  can't wash out a quick-invalidation penalty.
-- **Deterministic conflict resolution** — slotted supersession + monotonic CAS, with an *optional*
-  LLM seam for the semantic tail (off by default).
+- **Laundering-resistant trust** — known-bad publishers are discounted even on wide recall;
+  flooding can't wash out a quick-invalidation penalty.
+- **Deterministic conflict resolution** — slotted supersession + monotonic CAS, with an
+  *optional* LLM seam for the semantic tail (off by default).
 
 Enforced by a scored acceptance gate (scenarios S8–S26) that runs on every PR. Details in
-[docs/usage.md](docs/usage.md#multi-agent) and [production-readiness.md](docs/production-readiness.md).
+[docs/usage.md](docs/usage.md#multi-agent).
 
 ---
 
-## Why not just use Mem0 / Zep / LangMem?
+## Benchmarks you can actually reproduce
+
+Agent-memory benchmark numbers are in a credibility crisis — Zep's **84%** on LoCoMo became
+**58%** on an independent re-run; Mem0's cited **91.6%** reproduces at **~58–66%**. An
+LLM-judged score swings 20+ points with the reader model, the judge, and the prompts.
+
+So ai-knot reports **two** numbers: the LLM-judged QA accuracy *with the reader and judge
+named* (as everyone's should be), **and** a deterministic, one-command retrieval number that
+**cannot** drift.
+
+| Benchmark | Metric | ai-knot |
+|---|---|---:|
+| **LoCoMo** | QA accuracy — cat1–4, gpt-4.1 reader / gpt-4o judge | **78.0%** |
+| **LongMemEval** | QA accuracy — Oracle, gpt-4.1 / gpt-4o (95–98% on single-session) | **59.6%** |
+| **LoCoMo** | `evidence_recall@5` — deterministic, no LLM | **0.26** vs 0.15 naive |
+| **Golden suite** | ranking MRR — deterministic, no LLM | **0.83** vs 0.18 naive |
+
+78.0% on LoCoMo (adversarial category excluded per the dataset authors — the step Zep got
+wrong) holds at **74–84% on every one of the 10 conversations**, above Mem0's reproducible
+~58–66% and Zep's corrected 58%. The deterministic numbers re-run bit-for-bit:
+
+```bash
+AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
+  --mock-judge --skip-multi-agent --backends baseline,ai_knot_no_llm
+```
+
+Full per-conversation and per-category tables, the field landscape, and the methodology
+stance: **[docs/benchmarks.md](docs/benchmarks.md)**.
+
+---
+
+## How it compares
 
 | | ai-knot | Mem0 | Zep | LangMem |
-|---|---|---|---|---|
-| Self-hosted / no cloud required | Yes | Partial | Partial | Yes |
-| Pluggable + human-readable store | Yes | No | No | No |
-| No LLM on the retrieval path | Yes | No | No | No |
-| Reproducible benchmark numbers | Yes | Disputed | Disputed | — |
-| Type-aware power-law forgetting | Yes | No | No | No |
-| Deterministic conflict resolution | Yes | No | No | No |
-| Bi-temporal supersession | Yes (deterministic) | No | Yes (LLM) | No |
-| Multi-agent trust + governance | Yes | No | No | No |
-| Fan-in recall across agents | Yes | No | No | No |
-| MCP server | Yes | No | No | No |
-| Free forever | Yes (MIT) | No | No | Yes |
+|---|:---:|:---:|:---:|:---:|
+| Self-hosted / no cloud required | ✅ | ◑ | ◑ | ✅ |
+| Pluggable + human-readable store | ✅ | ❌ | ❌ | ❌ |
+| No LLM on the retrieval path | ✅ | ❌ | ❌ | ❌ |
+| Reproducible benchmark numbers | ✅ | ⚠️ | ⚠️ | — |
+| Type-aware power-law forgetting | ✅ | ❌ | ❌ | ❌ |
+| Deterministic conflict resolution | ✅ | ❌ | ❌ | ❌ |
+| Bi-temporal supersession | ✅ det. | ❌ | ✅ LLM | ❌ |
+| Multi-agent trust + governance | ✅ | ❌ | ❌ | ❌ |
+| Fan-in recall across agents | ✅ | ❌ | ❌ | ❌ |
+| MCP server | ✅ | ❌ | ❌ | ❌ |
+| License | MIT | proprietary core | proprietary core | MIT |
 
-*Fair is fair:* Mem0 is a mature product with a hosted offering and a large community; Zep ships a
-genuine temporal knowledge graph; LangMem integrates tightly with LangGraph. ai-knot's bet is a
-narrow one — **deterministic, dependency-light, self-hosted memory with a real multi-agent
-governance model, and numbers you can reproduce.** Full positioning and trade-offs:
+*Fair is fair:* Mem0 is a mature product with a hosted offering and a large community; Zep
+ships a genuine temporal knowledge graph; LangMem integrates tightly with LangGraph. ai-knot's
+bet is a narrow one — **deterministic, dependency-light, self-hosted memory with a real
+multi-agent governance model, and numbers you can reproduce.** Full positioning and trade-offs:
 [docs/launch-post.md](docs/launch-post.md).
 
 ---
@@ -156,10 +217,14 @@ In-process BM25 recall, measured with `pytest-benchmark`:
 | 1 000 | ~8 ms | ~25 ms |
 | 10 000 | ~80 ms | ~200 ms |
 
-MCP tool round-trip (stdio): `add` ~15 ms / `recall` ~20 ms p50. Use `storage="sqlite"` for
-lower variance at scale. [Full benchmark history →](https://alsoleg89.github.io/ai-knot/dev/bench/)
+MCP tool round-trip (stdio): `add` ~15 ms / `recall` ~20 ms p50. Use `SQLiteStorage` for lower
+variance at scale. [Full benchmark history →](https://alsoleg89.github.io/ai-knot/dev/bench/)
 
 ---
+
+## Documentation
+
+📚 [Usage guide](docs/usage.md) · [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Launch post](docs/launch-post.md)
 
 ## Contributing
 
@@ -168,4 +233,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## License
 
-MIT. Found a bug or a missing backend? Open an issue. Built something with it? We'd like to hear.
+MIT. Found a bug or a missing backend? [Open an issue.](https://github.com/alsoleg89/ai-knot/issues)
+Built something with it? We'd like to hear.

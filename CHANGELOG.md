@@ -19,9 +19,19 @@ Versioning: [Semantic Versioning](https://semver.org/).
   ([docs/usage.md](docs/usage.md)), a release runbook ([docs/RELEASE.md](docs/RELEASE.md)),
   and a launch piece ([docs/launch-post.md](docs/launch-post.md)).
 
+### Fixed
+- `add(type="procedural")` (a bare string, as shown in the docs) no longer
+  crashes on the SQLite backend — `Fact` now coerces a string `type` into
+  `MemoryType` on construction, so every storage round-trip is safe.
+- The optional dense channel now degrades quietly: when the embedding endpoint
+  is unreachable the BM25-only fallback is reported **once per instance** (then
+  at debug level) instead of warning on every `add`/`recall` — a clean first-run
+  experience for installs without an embedding server.
+
 ### Changed
-- README restructured into a results-first landing page; the full API reference
-  moved to `docs/usage.md`.
+- README rewritten as a developer-first landing page — a "see it work" example up
+  top, the problem stated in token math, a use-case table, then the reproducible
+  benchmarks. The full API reference lives in `docs/usage.md`.
 - Publish workflows are now idempotent (npm skips an already-published version,
   PyPI uses `skip-existing`); `setup-node` bumped to 22.
 

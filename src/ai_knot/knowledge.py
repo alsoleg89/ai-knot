@@ -209,6 +209,10 @@ class KnowledgeBase(_LearningMixin):
         self._embed_model = embed_model
         self._embed_api_key = embed_api_key
         self._embedded_ids: set[str] = set()
+        # Dense channel is optional. If the embed endpoint is unreachable we fall
+        # back to BM25-only — warn once per instance, then stay quiet so a fresh
+        # install with no embedding server doesn't spam stderr on every add().
+        self._embed_fallback_warned = False
         self._default_provider = provider
         self._default_api_key = api_key
         self._default_model = model
@@ -528,6 +532,23 @@ class KnowledgeBase(_LearningMixin):
     # Embedding batch size — avoids Ollama timeout on large fact sets.
     _EMBED_BATCH: int = 256
 
+    def _warn_embed_fallback(self) -> None:
+        """Log the BM25-only fallback once per instance, then stay at debug.
+
+        The dense channel is optional; on a fresh install with no embedding
+        server reachable this would otherwise fire on every ``add``/``recall``.
+        """
+        if self._embed_fallback_warned:
+            logger.debug("Embedding unavailable — using BM25-only (already reported)")
+            return
+        self._embed_fallback_warned = True
+        logger.warning(
+            "Embedding endpoint unreachable (%s) — using BM25-only retrieval. "
+            "This is a supported mode; set embed_url to a running endpoint to "
+            "enable the dense channel. (Reported once per instance.)",
+            self._embed_url or "<disabled>",
+        )
+
     def _embed_for_recall(
         self,
         facts: list[Fact],
@@ -584,10 +605,7 @@ class KnowledgeBase(_LearningMixin):
                             ),
                         ).result(timeout=120)
                         if not vecs:
-                            logger.warning(
-                                "Embedding batch failed (%d texts) — falling back to BM25-only",
-                                len(batch),
-                            )
+                            self._warn_embed_fallback()
                             return None
                         all_vectors.extend(vecs)
             else:
@@ -601,14 +619,11 @@ class KnowledgeBase(_LearningMixin):
                         )
                     )
                     if not vecs:
-                        logger.warning(
-                            "Embedding batch failed (%d texts) — falling back to BM25-only",
-                            len(batch),
-                        )
+                        self._warn_embed_fallback()
                         return None
                     all_vectors.extend(vecs)
         except Exception:
-            logger.warning("Embedding unavailable — falling back to BM25-only")
+            self._warn_embed_fallback()
             return None
 
         if not all_vectors:

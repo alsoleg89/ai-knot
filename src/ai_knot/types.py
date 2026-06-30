@@ -156,6 +156,13 @@ class Fact:
     # NOOP = skip entirely. Storage backends do not serialize this field.
     op: MemoryOp = MemoryOp.ADD
 
+    def __post_init__(self) -> None:
+        # Coerce a plain string ``type`` ("semantic"/"procedural"/"episodic") into
+        # MemoryType so the public ``add(type="procedural")`` ergonomic — and any
+        # storage round-trip — never produces a bare str (which lacks ``.value``).
+        if not isinstance(self.type, MemoryType):
+            self.type = MemoryType(self.type)
+
     @property
     def answer_surface(self) -> str:
         """Compact text for LLM prompts and F1 scoring."""
