@@ -9,6 +9,11 @@ Versioning: [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- LangChain / LangGraph adapters (`ai_knot.integrations.langchain`):
+  `AiKnotRetriever` (Runnable `invoke` / `get_relevant_documents`) and
+  `AiKnotChatMemory` (`save_context` / `load_memory_variables`, the
+  `BaseChatMemory` shape). No hard `langchain` dependency — real `Document`
+  objects when `langchain_core` is present, a shim otherwise.
 - Deterministic, zero-network recall — an empty `embed_url` disables the dense
   channel before any network call (air-gapped deploys, reproducible evaluation).
 - CLI `recall --now <iso>` (point-in-time recall) and `lineage <fact_id>`

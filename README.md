@@ -130,8 +130,9 @@ Runnable scripts for each in **[examples/](examples/)**.
 - **🕰️ Bi-temporal.** Every fact knows when it was *learned* and when its event *happened*.
   Ask "what was true as of the incident?" — `recall(now=…)` answers it; superseded facts are
   excluded, not deleted.
-- **🧩 MCP-native.** Ships an `ai-knot-mcp` server — Claude Desktop and Claude Code call it as
-  tools with zero glue code.
+- **🧩 MCP-native & framework-ready.** Ships an `ai-knot-mcp` server (Claude Desktop / Claude
+  Code, zero glue) plus thin **LangChain / LangGraph** adapters — an `AiKnotRetriever` for RAG
+  chains and an `AiKnotChatMemory` drop-in, with no hard LangChain dependency.
 
 ---
 

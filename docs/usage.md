@@ -20,6 +20,7 @@ The complete API reference. For the quick pitch and benchmarks, see the
 - [Knowledge on disk (YAML)](#knowledge-on-disk)
 - [MCP server](#mcp-server)
 - [OpenClaw / framework adapters](#openclaw)
+- [LangChain / LangGraph](#langchain--langgraph)
 - [OpenAI integration](#openai-integration)
 - [Multi-agent: shared pool](#multi-agent)
 - [Bi-temporal `event_time`](#bi-temporal-event_time)
@@ -340,6 +341,45 @@ memory.update(results[0]["id"], "Deploy on Thursdays")
 
 > `add()` stores only the last user message (warns on multi-turn) — use `kb.learn(turns, api_key=...)`
 > for full extraction. `update()` assigns a new ID.
+
+---
+
+## LangChain / LangGraph
+
+Two thin adapters let a LangChain or LangGraph agent use ai-knot as long-term
+memory. ai-knot takes **no** hard dependency on LangChain — if `langchain_core`
+is installed the retriever yields real `Document` objects, otherwise a shim with
+the same `page_content` / `metadata` surface.
+
+**As a retriever** (RAG chains, LangGraph nodes):
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.langchain import AiKnotRetriever
+
+kb = KnowledgeBase("my_agent")
+kb.add("User ships in Go and avoids Java")
+
+retriever = AiKnotRetriever(kb, top_k=3)
+docs = retriever.invoke("what language does the user use?")   # or .get_relevant_documents(...)
+print(docs[0].page_content)        # "User ships in Go and avoids Java"
+print(docs[0].metadata["score"])   # fusion relevance score
+```
+
+**As conversational memory** (drop-in for `BaseChatMemory`):
+
+```python
+from ai_knot.integrations.langchain import AiKnotChatMemory
+
+memory = AiKnotChatMemory(kb)                                  # memory_key="history"
+memory.save_context({"input": "I deploy everything in Docker"}, {"output": "Noted."})
+memory.load_memory_variables({"input": "how should I deploy?"})
+# {"history": "[1] I deploy everything in Docker"}
+```
+
+`save_context` distills the user turn into a stored fact; `load_memory_variables`
+recalls only the facts relevant to the current input — so the prompt carries
+durable knowledge, not the whole transcript. `clear()` forgets every fact.
 
 ---
 
