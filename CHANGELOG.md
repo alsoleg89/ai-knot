@@ -13,7 +13,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
   `AiKnotRetriever` (Runnable `invoke` / `get_relevant_documents`) and
   `AiKnotChatMemory` (`save_context` / `load_memory_variables`, the
   `BaseChatMemory` shape). No hard `langchain` dependency — real `Document`
-  objects when `langchain_core` is present, a shim otherwise.
+  objects when `langchain_core` is present, a shim otherwise. Runnable example in
+  `examples/langchain_integration.py`.
 - Deterministic, zero-network recall — an empty `embed_url` disables the dense
   channel before any network call (air-gapped deploys, reproducible evaluation).
 - CLI `recall --now <iso>` (point-in-time recall) and `lineage <fact_id>`
@@ -32,6 +33,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
   is unreachable the BM25-only fallback is reported **once per instance** (then
   at debug level) instead of warning on every `add`/`recall` — a clean first-run
   experience for installs without an embedding server.
+- Corrected the `recall()` output format shown in the README and the npm package
+  README (`[1] …`, not `[semantic] …`) so the snippets match real output.
 
 ### Changed
 - README rewritten as a developer-first landing page — a "see it work" example up

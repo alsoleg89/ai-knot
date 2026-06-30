@@ -1,11 +1,19 @@
-# ai-knot
+# 🪢 ai-knot
 
 ![npm](https://img.shields.io/npm/v/ai-knot)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Agent memory for Node.js and TypeScript.** Stores facts, retrieves what's relevant, forgets the rest.
+**Long-term memory for AI agents — for Node.js and TypeScript.**
 
-TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) Python library — communicates with the `ai-knot-mcp` subprocess via JSON-RPC 2.0 over stdio.
+Your agent forgets everything between sessions. The usual fix — replaying the whole
+conversation into every prompt — is slow and expensive. ai-knot remembers *facts*, not
+transcripts: it distills conversations into a handful of structured facts and hands your
+agent only the few it needs for the next turn. No LLM on the retrieval path. Self-hosted.
+
+TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) library — it
+talks to the `ai-knot-mcp` subprocess over JSON-RPC. Same deterministic engine,
+[reproducible benchmarks](https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md)
+(LoCoMo 78.0%, deterministic ranking MRR 0.83).
 
 ---
 
@@ -42,10 +50,10 @@ const kb = new KnowledgeBase({
 // Add a fact
 await kb.add('User prefers TypeScript');
 
-// Recall relevant facts for a query
+// Recall relevant facts for a query — never calls an LLM
 const context = await kb.recall('what language does user prefer?');
 console.log(context);
-// -> "[semantic] User prefers TypeScript"
+// -> "[1] User prefers TypeScript"
 
 // Use context in your prompt
 const response = await openai.chat.completions.create({
