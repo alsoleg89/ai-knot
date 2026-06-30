@@ -49,14 +49,23 @@ AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
 No network, no LLM, no random seeds — re-run it and you get the same numbers.
 That is the point.
 
-The same pattern holds on the public **LoCoMo** long-conversation benchmark:
-ai-knot improves retrieval grounding in *every* category, lifting `evidence_recall@5`
-— how often the answer's evidence is actually retrievable — from 0.15 to **0.26**.
-And for **LongMemEval**'s hard case (what was true *as of* a date, after a fact was
-revised), ai-knot answers point-in-time queries directly via `recall(now=…)` on its
-bi-temporal model. These are retrieval-quality and temporal-correctness metrics, not
-end-to-end QA accuracy — a distinction [benchmarks.md](benchmarks.md) is careful to
-draw, because conflating them is how memory benchmarks get oversold.
+This matters because the usual memory-benchmark numbers are in a credibility
+crisis. Zep reported 84% on LoCoMo; an independent re-run put it at 58% once the
+excluded adversarial category was removed and the prompts were held fixed. Mem0's
+own materials cite 91.6%; independent reproductions land near 58–66%. An LLM-judged
+score is a function of the reader model, the judge, the prompts, and the run
+count — change any one and the headline swings twenty points.
+
+So ai-knot leads with numbers that cannot swing. On the public **LoCoMo** dataset it
+improves retrieval grounding in *every* category, lifting `evidence_recall@5` — how
+often the answer's evidence is actually retrievable — from 0.15 to **0.26**, scored
+deterministically. For **LongMemEval**'s hard case (what was true *as of* a date,
+after a fact was revised), ai-knot answers point-in-time queries directly via
+`recall(now=…)` on its bi-temporal model, with the temporal correctness
+regression-tested in the repo. These are retrieval-quality and temporal-correctness
+metrics, not LLM-judged QA accuracy — and [benchmarks.md](benchmarks.md) draws that
+line explicitly, because blurring it is how this field got into its credibility
+mess. The reproducibility *is* the marketing.
 
 ## The deliberate constraint: no LLM on the hot path
 

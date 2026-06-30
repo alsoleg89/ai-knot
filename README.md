@@ -139,19 +139,25 @@ Measured end-to-end: Python subprocess spawn is one-time; per-call overhead is J
 > ([Reduce Latency docs](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-latency)).
 > Use `storage="sqlite"` for lower variance at scale.
 
-### Retrieval quality (reproducible)
+### Benchmarks (reproducible, not vibes)
 
-On an in-repo golden suite, ai-knot lifts ranking **MRR 0.18 → 0.83** (precision@1
-0.10 → 0.70) over a naive recency/lexical log, and stays robust to 200 distractors.
-On the public [LoCoMo](https://github.com/snap-research/locomo) benchmark it improves
-retrieval grounding in **every** category — `evidence_recall@5` **0.15 → 0.26 (+71%)**.
-ai-knot also implements the [LongMemEval](https://github.com/xiaowu0162/LongMemEval)
-point-in-time pattern (`recall(now=question_date)`) for temporal/knowledge-update
-questions.
+LoCoMo/LongMemEval leaderboard numbers are notoriously irreproducible — Zep's 84%
+on LoCoMo became 58% on an independent re-run; Mem0's cited 91.6% reproduces at
+~58–66%. So ai-knot leads with numbers that **cannot** move: deterministic, fixed
+seeds, one command.
 
-Every number is deterministic and reproducible with one command — see
-**[docs/benchmarks.md](docs/benchmarks.md)**. (These are retrieval-quality metrics,
-not end-to-end QA accuracy; the distinction is spelled out there.)
+- **Golden retrieval suite** — ranking **MRR 0.18 → 0.83** (precision@1 0.10 → 0.70)
+  vs a naive recency/lexical log; robust to 200 distractors.
+- **[LoCoMo](https://github.com/snap-research/locomo)** — beats the naive log in
+  *every* category; `evidence_recall@5` **0.15 → 0.26 (+71%)**, scored deterministically.
+- **[LongMemEval](https://github.com/xiaowu0162/LongMemEval)** — its hard categories
+  (knowledge-update, temporal-reasoning) are answered point-in-time via
+  `recall(now=question_date)`, regression-tested in-repo.
+
+Full tables, the field landscape, and the methodology stance:
+**[docs/benchmarks.md](docs/benchmarks.md)**. (These are retrieval-quality /
+temporal-correctness metrics, explicitly distinguished there from LLM-judged QA
+accuracy.)
 
 ---
 
