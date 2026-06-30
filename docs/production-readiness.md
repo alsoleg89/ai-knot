@@ -107,8 +107,9 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 
 | Item | Status | Notes |
 |---|---|---|
-| Reproducible offline retrieval suite | ✅ | deterministic, zero-network, one command — see [benchmarks.md](benchmarks.md) |
-| LOCOMO retrieval grounding (offline eval) | ✅ | deterministic per-category table; `evidence_recall@5` 0.15→0.26 — see [benchmarks.md](benchmarks.md) |
+| LoCoMo QA accuracy (LLM-judged) | ✅ | **78.0%** cat1–4 full-10, gpt-4.1/gpt-4o; per-conv 74–84% — see [benchmarks.md](benchmarks.md) |
+| LongMemEval QA accuracy (LLM-judged) | ✅ | **59.6%** Oracle, gpt-4.1/gpt-4o; single-session 95–98%, abstention 90% |
+| Reproducible deterministic suite | ✅ | zero-network, fixed seeds, one command; MRR 0.18→0.83, `evidence_recall@5` 0.15→0.26 |
 | LongMemEval point-in-time adapter | ✅ | `recall(now=question_date)`; bi-temporal correctness regression-tested |
 | Live competitor bench-pack (Mem0, …) | ⬜ | side-by-side scorecard |
 

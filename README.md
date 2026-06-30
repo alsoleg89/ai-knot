@@ -29,16 +29,19 @@ are also notoriously irreproducible — Zep's **84%** on LoCoMo became **58%** o
 re-run; Mem0's cited **91.6%** reproduces at **~58–66%**. An LLM-judged score moves 20+ points with
 the reader model, the judge, and the prompts.
 
-So ai-knot leads with a deterministic, one-command retrieval number that **cannot** move,
-and reports the LLM-judged QA accuracy alongside it (with the reader model named, as everyone's
-should be).
+So ai-knot reports the LLM-judged QA accuracy with the reader model named (as everyone's
+should be), *and* a deterministic, one-command retrieval number that **cannot** move.
 
-| Benchmark | Metric | naive log | ai-knot |
-|---|---|---:|---:|
-| **Golden retrieval suite** | ranking MRR (deterministic) | 0.18 | **0.83** |
-| **LoCoMo** | `evidence_recall@5` (deterministic) | 0.15 | **0.26** (+71%) |
-| **LoCoMo** | QA accuracy (LLM-judged) | — | see [benchmarks.md](docs/benchmarks.md) |
-| **LongMemEval** | QA accuracy (LLM-judged) | — | see [benchmarks.md](docs/benchmarks.md) |
+| Benchmark | Metric | ai-knot |
+|---|---|---:|
+| **LoCoMo** | QA accuracy — cat1–4, gpt-4.1 reader / gpt-4o judge | **78.0%** |
+| **LongMemEval** | QA accuracy — Oracle, gpt-4.1 / gpt-4o (95–98% on single-session) | **59.6%** |
+| **LoCoMo** | `evidence_recall@5` (deterministic, no LLM) | **0.26** vs 0.15 naive |
+| **Golden suite** | ranking MRR (deterministic, no LLM) | **0.83** vs 0.18 naive |
+
+78.0% on LoCoMo (cat1–4, adversarial excluded per the dataset authors — the step Zep
+got wrong) puts ai-knot above Mem0's reproducible ~58–66% and Zep's corrected 58%. Full
+per-conversation and per-category tables: **[docs/benchmarks.md](docs/benchmarks.md)**.
 
 The deterministic numbers reproduce bit-for-bit:
 

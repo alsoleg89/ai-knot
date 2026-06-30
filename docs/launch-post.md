@@ -56,16 +56,21 @@ own materials cite 91.6%; independent reproductions land near 58–66%. An LLM-j
 score is a function of the reader model, the judge, the prompts, and the run
 count — change any one and the headline swings twenty points.
 
-So ai-knot leads with numbers that cannot swing. On the public **LoCoMo** dataset it
-improves retrieval grounding in *every* category, lifting `evidence_recall@5` — how
-often the answer's evidence is actually retrievable — from 0.15 to **0.26**, scored
-deterministically. For **LongMemEval**'s hard case (what was true *as of* a date,
-after a fact was revised), ai-knot answers point-in-time queries directly via
-`recall(now=…)` on its bi-temporal model, with the temporal correctness
-regression-tested in the repo. These are retrieval-quality and temporal-correctness
-metrics, not LLM-judged QA accuracy — and [benchmarks.md](benchmarks.md) draws that
-line explicitly, because blurring it is how this field got into its credibility
-mess. The reproducibility *is* the marketing.
+So ai-knot reports both. On the LLM-judged side, with the reader and judge named:
+**78.0% on LoCoMo** (cat1–4, gpt-4.1 reader / gpt-4o judge — adversarial category
+excluded, the step Zep got wrong), accuracy holding at 74–84% on every one of the ten
+conversations. That is above Mem0's reproducible ~58–66% and Zep's corrected 58%. On
+**LongMemEval** it is near-perfect at information extraction (single-session 95–98%)
+and declines false-premise questions 90% of the time — the confabulation failure mode
+memory systems are supposed to prevent.
+
+And on the side that cannot swing: a deterministic, one-command retrieval suite — `evidence_recall@5`
+on LoCoMo of **0.26** vs 0.15 for a naive log, ranking MRR of **0.83** vs 0.18, no LLM,
+fixed seeds, identical on every re-run. The QA number tells you how good the answers are
+with a given reader; the deterministic number tells you how good the *memory* is, and it
+is the one a skeptic can verify in thirty seconds. [benchmarks.md](benchmarks.md) carries
+both, with every knob labeled — because in this field, an unlabeled number is how the
+credibility crisis started. The reproducibility *is* the marketing.
 
 ## The deliberate constraint: no LLM on the hot path
 

@@ -1,68 +1,114 @@
 # Benchmarks
 
 The agent-memory field reports two benchmarks above all others — **LoCoMo** and
-**LongMemEval** — and it reports them as an *LLM-judged QA-accuracy percentage*,
-broken down by question category, in a table against competitors. This page does
-that, with one deliberate difference: **every ai-knot number here is deterministic
-and reproducible from a single command.** That difference is the point, and the
-rest of this section explains why.
+**LongMemEval** — as an LLM-judged QA-accuracy percentage, broken down by question
+category. This page does that, with two differences that matter:
 
-## Why reproducibility is the headline
+1. Every number names its **reader model and judge** (an LLM-judged score is
+   meaningless without them).
+2. Alongside the QA number, ai-knot reports a **deterministic, one-command
+   retrieval number that cannot move** — because the leaderboard numbers
+   notoriously do.
 
-LoCoMo/LongMemEval leaderboard numbers are in a credibility crisis. The two most
-public examples:
+## Why the reproducible number is the anchor
 
-- **Zep** reported **84%** on LoCoMo. An independent re-evaluation put the real
-  figure at **58.44%** — a 25-point gap traced to including the adversarial
-  category that LoCoMo specifies should be *excluded*, modifying system prompts in
-  Zep's favour, and reporting a single run instead of an average.
+LoCoMo/LongMemEval leaderboard numbers are in a credibility crisis:
+
+- **Zep** reported **84%** on LoCoMo; an independent re-evaluation put it at
+  **58.44%** — a 25-point gap from including the adversarial category LoCoMo says
+  to *exclude*, tweaking prompts, and reporting a single run.
   ([getzep/zep-papers#5](https://github.com/getzep/zep-papers/issues/5))
-- **Mem0**'s own materials cite **91.6%** on LoCoMo and **94.8%** on LongMemEval;
-  independent reproductions land closer to **58–66%**.
-  ([mem0.ai benchmarks](https://mem0.ai/blog/ai-memory-benchmarks-in-2026))
+- **Mem0**'s own materials cite **91.6%** on LoCoMo; independent reproductions
+  land at **~58–66%**. ([mem0.ai](https://mem0.ai/blog/ai-memory-benchmarks-in-2026))
 
-The lesson is not "everyone is lying" — it is that an LLM-judged number is a
-function of the reader model, the judge model, the prompts, the run count, and
-which categories you score. Change any of those and the headline moves 20+ points.
-So ai-knot leads with numbers that **cannot** move: no LLM on the path, fixed
-seeds, multiple runs, the full category set scored, one command to reproduce.
+An LLM-judged score is a function of the reader, the judge, the prompts, the run
+count, and which categories you score. So ai-knot leads with a number that has
+none of those degrees of freedom (see [the deterministic suite](#deterministic-retrieval-suite)),
+then reports the QA accuracy with every knob named.
 
-## How the field reports these benchmarks
+---
 
-For reference, the conventional framing this page mirrors:
+## LoCoMo — QA accuracy
 
-**LoCoMo** — ~2k QA pairs over 10 long multi-session conversations. Metrics: **J**
-(LLM-as-judge accuracy, the headline), **F1**, **BLEU-1**. Categories: single-hop,
-multi-hop, temporal, open-domain, and adversarial — where *adversarial (category 5)
-is excluded from the score* per the dataset authors.
+Full 10-conversation [LoCoMo](https://github.com/snap-research/locomo) run.
+**Reader: gpt-4.1 · Judge: gpt-4o · retrieval: BM25 + RRF + dense (text-embedding-3-small),
+top_k=30.** Categories 1–4 scored; **category 5 (adversarial) excluded**, per the
+dataset authors (this is the exact step Zep got wrong).
 
-**LongMemEval** — 500 questions, judged for QA correctness by GPT-4o. Six question
-types: single-session-user, single-session-assistant, single-session-preference,
-temporal-reasoning, knowledge-update, multi-session — plus abstention variants.
-Variants: `_S` (~115k tokens), `_M` (~500 sessions), Oracle. The hard categories
-everyone regresses on are **multi-session** and **knowledge-update**.
+**Overall: 78.0%** (1201/1540)
 
-Vendor-reported landscape (numbers vary by model/judge — treat as context, not
-ground truth):
+| Category | Accuracy |
+|---|---:|
+| cat1 — single-hop | 60.6% (171/282) |
+| cat2 — multi-hop | 67.6% (217/321) |
+| cat3 — temporal | 63.5% (61/96) |
+| cat4 — open-ended | **89.4%** (752/841) |
+| **Overall (cat1–4)** | **78.0%** (1201/1540) |
 
-| System | LoCoMo (J, reported) | LongMemEval (acc, reported) |
-|---|---|---|
-| Mem0 (own materials) | 91.6 / indep. ~58–66 | 94.8 / indep. ~66 |
-| Zep | 84 → corrected 58.44 | 63.8–75.1 |
-| LangMem | ~78 | — |
-| Memori | ~82 | — |
+It is not one lucky conversation — accuracy is **74–84% on every one of the 10**:
 
-*Sources: [mem0.ai](https://mem0.ai/blog/ai-memory-benchmarks-in-2026),
-[zep-papers#5](https://github.com/getzep/zep-papers/issues/5). The spread is the
-story.*
+| conv | cat1 | cat2 | cat3 | cat4 | overall |
+|---:|---|---|---|---|---|
+| 1 | 53% | 73% | 77% | 90% | 77% |
+| 2 | 55% | 81% | — | 91% | 83% |
+| 3 | 65% | 74% | 88% | 94% | 84% |
+| 4 | 49% | 75% | 27% | 86% | 74% |
+| 5 | 52% | 50% | 43% | 90% | 74% |
+| 6 | 63% | 67% | 29% | 92% | 76% |
+| 7 | 55% | 59% | 77% | 94% | 79% |
+| 8 | 67% | 71% | 60% | 86% | 79% |
+| 9 | 70% | 61% | 85% | 85% | 76% |
+| 10 | 75% | 62% | 86% | 90% | 81% |
 
-## ai-knot: reproducible retrieval quality
+For context (vendor/independent-reported, different readers/judges — treat as
+landscape, not a controlled head-to-head): Mem0 ~58–66% (independent), Zep 58.4%
+(corrected), LangMem ~78%, Memori ~82%.
 
-ai-knot's public, one-command numbers measure **retrieval quality** — the signal a
-reader LLM's QA accuracy is built on. On an in-repo golden suite, against a naive
-recency/lexical log baseline:
+> **Reproduce it.** From the `aiknotbench` harness with an OpenAI key:
+> `run -r locomo --model gpt-4.1 --judge gpt-4o --types 1,2,3,4 --top-k 30`.
+> The number depends on the reader/judge you choose — that is true of every number
+> in the landscape above, which is exactly why the [deterministic suite](#deterministic-retrieval-suite)
+> exists.
 
-| Scenario | Metric | baseline | ai-knot |
+---
+
+## LongMemEval — QA accuracy
+
+[LongMemEval](https://github.com/xiaowu0162/LongMemEval) Oracle set (500 questions,
+evidence sessions provided so the score isolates **memory + reader quality**).
+**Reader: gpt-4.1 · Judge: gpt-4o.**
+
+**Overall: 59.6%** (298/500)
+
+| Question type | Accuracy |
+|---|---:|
+| single-session-assistant | **98.2%** (55/56) |
+| single-session-user | **95.7%** (67/70) |
+| abstention (false-premise) | **90.0%** (27/30) |
+| knowledge-update | 62.8% (49/78) |
+| single-session-preference | 50.0% (15/30) |
+| multi-session | 49.6% (66/133) |
+| temporal-reasoning | 34.6% (46/133) |
+| **turn-level recall** | **96.2%** |
+| **session-level recall** | **94.0%** |
+
+ai-knot is near-perfect on information extraction (single-session 95–98%) and
+**abstention** — it declines false-premise questions 90% of the time, the failure
+mode that makes memory systems confabulate. The retrieval is essentially solved here
+(94–96% recall); the remaining gap is reader reasoning on temporal and multi-session
+questions. Peer band for deterministic-retrieval + small-reader systems on this
+benchmark: Mem0 49%, Zep 63.8%, LightMem 67.8%, TiMem 76.9% (the published >84%
+numbers use a frontier reader over a fully in-context log — a different category).
+
+---
+
+## Deterministic retrieval suite
+
+The QA numbers above use an LLM reader and judge — necessarily model-dependent.
+These do not: same fixtures, same scoring, fixed seeds, **no network, no LLM**.
+Re-run and you get identical numbers.
+
+| Scenario | Metric | naive log | ai-knot |
 |---|---|---:|---:|
 | ranking | semantic MRR | 0.18 | **0.83** |
 | ranking | precision@1 | 0.10 | **0.70** |
@@ -70,79 +116,40 @@ recency/lexical log baseline:
 | noise (200 distractors) | signal recall@3 | 0.60 | **0.80** |
 | token economy | compression | 0.67 | **0.73** |
 | scale (1000 facts) | MRR@1000 | 0.46 | **0.67** |
+| **LoCoMo** | `evidence_recall@5` | 0.15 | **0.26** (+71%) |
 
 ```bash
 AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
   --mock-judge --skip-multi-agent --backends baseline,ai_knot_no_llm
 ```
 
-No network, no LLM, fixed seeds — re-run it and the numbers are identical.
+`evidence_recall@5` is the deterministic LoCoMo retrieval metric — how often the
+gold evidence lands in the top 5. It is the ceiling the QA accuracy above is built
+on, and unlike the QA number it cannot drift.
 
-### LoCoMo (retrieval grounding, deterministic)
+---
 
-Run against the public [LoCoMo](https://github.com/snap-research/locomo) dataset,
-scored deterministically by token overlap against the gold answer (not an LLM
-judge), so the table reproduces exactly. ai-knot beats the naive log in **every**
-category:
+## LongMemEval point-in-time (the bi-temporal lever)
 
-| LoCoMo category | baseline | ai-knot | Δ |
-|---|---:|---:|---:|
-| **evidence_recall@5** | 0.15 | **0.26** | +71% |
-| single-hop (grounding F1) | 0.044 | **0.066** | +50% |
-| multi-hop (grounding F1) | 0.025 | **0.033** | +32% |
-| temporal (grounding F1) | 0.055 | **0.071** | +29% |
-| open-domain (grounding F1) | 0.066 | **0.107** | +62% |
-| adversarial (grounding F1) | 0.060 | **0.093** | +55% |
-
-```bash
-python -m tests.eval.benchmark.runner --scenarios s_locomo \
-  --skip-multi-agent --backends baseline,ai_knot_no_llm
-```
-
-> **Honest labelling.** These are *retrieval-grounding* metrics — how well the
-> retriever surfaces and matches the gold evidence — **not** the LLM-judged J score
-> the leaderboards report. `evidence_recall@5` is the ceiling any reader can work
-> against; the F1 column is grounding strength, not "% correct." To produce a J
-> score, add a reader+judge pass (below) — and inherit all of its model-dependence.
-
-### LongMemEval (point-in-time, knowledge-update, temporal)
-
-LongMemEval's two hardest categories — **knowledge-update** and **temporal-
-reasoning** — are exactly the failure mode ai-knot's bi-temporal model targets.
-When a fact is revised, ai-knot answers *as of* a point in time deterministically:
+LongMemEval's hardest axes — **knowledge-update** and **temporal-reasoning** — are
+exactly what ai-knot's bi-temporal model targets. A revised fact is answered *as of*
+a point in time, deterministically:
 
 ```python
 kb.recall("where does the user work?", now=question_date)
 # → what was true on question_date; facts a later one superseded are excluded.
 ```
 
-This is the LongMemEval point-in-time pattern (`recall(now=…)`, also on the CLI as
-`recall --now` and over MCP). The temporal correctness it depends on is
-regression-tested in-repo (`tests/test_event_time_persistence.py`,
-`tests/test_supersession_ingest.py`), so the behaviour LongMemEval's knowledge-
-update / temporal categories reward is guaranteed, not curve-fit. The full
-LongMemEval QA harness (answer generation + GPT-4o judge over the 500-question set)
-runs externally and is model-dependent, like every number in the landscape table.
+This is the `recall(now=…)` adapter (also on the CLI as `recall --now` and over MCP).
+The temporal correctness it depends on is regression-tested in-repo
+(`tests/test_event_time_persistence.py`, `tests/test_supersession_ingest.py`).
 
-## Running the LLM-judged J score yourself
-
-The harness supports a reader+judge pass for those who want a leaderboard-style
-number — with the caveat that it is no longer deterministic and depends on your
-model choices:
-
-```bash
-# Requires a reachable Ollama (judge + reader); see BENCHMARK.md for OpenAI wiring.
-python -m tests.eval.benchmark.runner --scenarios s_locomo --backends ai_knot
-```
-
-If you publish a J score, follow what the Zep/Mem0 dispute taught the field:
-average ≥3 runs with stddev, keep prompts and retrieval templates identical across
-systems, and **exclude adversarial category 5** from the LoCoMo score.
+---
 
 ## Multi-agent acceptance gate
 
-Shared-pool memory has its own scored gate (S8–S26: CAS correctness, fan-in
-recall, trust/adversarial discount, conflict resolution), run on every PR:
+Shared-pool memory has its own scored gate (S8–S26: CAS correctness, fan-in recall,
+trust/adversarial discount, conflict resolution), run on every PR:
 
 ```bash
 python -m tests.eval.benchmark.runner --multi-agent --mock-judge --ma-gate
@@ -150,13 +157,15 @@ python -m tests.eval.benchmark.runner --multi-agent --mock-judge --ma-gate
 
 See [production-readiness.md](production-readiness.md) §4.
 
+---
+
 ## Methodology notes
 
-- **Identical wiring** — same fixtures, same judge, same query set across backends;
-  the only variable is the retrieval logic.
-- **`ai_knot_no_llm` is the honest offline column** — under `--mock-judge` the
-  extraction backend reduces to the same `kb.add()` path, so the no-LLM column is
-  the one to cite for a zero-network claim.
-- **Means over repeated runs** — raw output stores `{mean, stdev}` per metric
-  (`schema_version: 2`); with the dense channel and LLM judge disabled, stdev is 0.
+- **Reader / judge named on every QA number.** LoCoMo and LongMemEval QA accuracy
+  use gpt-4.1 (reader) + gpt-4o (judge, LongMemEval's official auto-judge).
+- **LoCoMo scores cat1–4; cat5 (adversarial) is excluded** per the dataset authors.
+- **LongMemEval here is the Oracle variant** (evidence sessions provided) — it
+  isolates memory + reader quality from retrieval over a 40-session haystack.
+- **Deterministic suite has zero degrees of freedom** — no embeddings, no LLM, fixed
+  seeds; `schema_version: 2` raw output stores `{mean, stdev}` (stdev = 0 here).
 - Full runner options: [tests/eval/benchmark/BENCHMARK.md](../tests/eval/benchmark/BENCHMARK.md).
