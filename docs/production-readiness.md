@@ -115,7 +115,7 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | LongMemEval QA accuracy (LLM-judged) | ✅ | **59.6%** Oracle, gpt-4.1/gpt-4o; single-session 95–98%, abstention 90% |
 | Reproducible deterministic suite | ✅ | zero-network, fixed seeds, one command; MRR 0.18→0.83, `evidence_recall@5` 0.15→0.26 |
 | LongMemEval point-in-time adapter | ✅ | `recall(now=question_date)`; bi-temporal correctness regression-tested |
-| Live competitor bench-pack (Mem0, …) | ⬜ | side-by-side scorecard |
+| Competitor bench-pack profiles + scorecard generator | ✅ | `scripts/run_competitor_bench_pack.py` emits raw JSON + curated scorecard for `offline`, `local-llm`, and `real` profiles |
 
 ---
 
@@ -128,5 +128,4 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 2. **Lifecycle engine** — decay / archive / consolidate jobs + lifecycle ledger.
 3. **Temporal/relation graph** — `GraphStorageCapable` edges from provenance.
 4. **Self-repair probes** — generate + run consistency probes over the KB.
-5. **Ecosystem** — CLI pool/gov ops, framework integrations,
-   competitor bench-pack + live Mem0.
+5. **Ecosystem** — CLI pool/gov ops and any post-launch framework expansion.

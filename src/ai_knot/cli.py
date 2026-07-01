@@ -194,6 +194,26 @@ def recall(
 @click.argument("agent_id")
 @click.argument("fact_id")
 @click.pass_context
+def forget(ctx: click.Context, agent_id: str, fact_id: str) -> None:
+    """Remove a single fact by ID."""
+    kb = _make_kb(ctx, agent_id)
+    facts = kb.list_facts()
+    target = next((fact for fact in facts if fact.id == fact_id), None)
+    if target is None:
+        click.echo(f"No fact '{fact_id}' for agent '{agent_id}'.")
+        return
+    kb.forget(fact_id)
+    click.echo(f"Forgot fact {fact_id}: {target.content}")
+
+
+# CLI alias for users who think in CRUD rather than memory terminology.
+main.add_command(forget, "delete")
+
+
+@main.command()
+@click.argument("agent_id")
+@click.argument("fact_id")
+@click.pass_context
 def lineage(ctx: click.Context, agent_id: str, fact_id: str) -> None:
     """Show the supersession chain for FACT_ID (newest -> oldest).
 

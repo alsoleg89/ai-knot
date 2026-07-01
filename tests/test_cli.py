@@ -71,6 +71,34 @@ class TestCLIRecall:
         assert "K8s" in result.output or "deploy" in result.output.lower()
 
 
+class TestCLIForget:
+    """ai-knot forget/delete <agent_id> <fact_id>."""
+
+    def test_forget_removes_single_fact(self, runner: CliRunner, data_dir: str) -> None:
+        add = runner.invoke(main, _cmd(data_dir, ["add", "agent", "Fact to remove"]))
+        fact_id = add.output.split()[2].rstrip(":")
+
+        result = runner.invoke(main, _cmd(data_dir, ["forget", "agent", fact_id]))
+        assert result.exit_code == 0
+        assert "Forgot fact" in result.output
+
+        show = runner.invoke(main, _cmd(data_dir, ["show", "agent"]))
+        assert "Fact to remove" not in show.output
+
+    def test_delete_alias_removes_single_fact(self, runner: CliRunner, data_dir: str) -> None:
+        add = runner.invoke(main, _cmd(data_dir, ["add", "agent", "Alias target"]))
+        fact_id = add.output.split()[2].rstrip(":")
+
+        result = runner.invoke(main, _cmd(data_dir, ["delete", "agent", fact_id]))
+        assert result.exit_code == 0
+        assert "Forgot fact" in result.output
+
+    def test_forget_unknown_fact_is_non_fatal(self, runner: CliRunner, data_dir: str) -> None:
+        result = runner.invoke(main, _cmd(data_dir, ["forget", "agent", "deadbeef"]))
+        assert result.exit_code == 0
+        assert "No fact" in result.output
+
+
 class TestCLIStats:
     """ai-knot stats <agent_id>."""
 

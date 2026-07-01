@@ -256,13 +256,16 @@ kb = KnowledgeBase("agent", rrf_weights=(5.0, 2.0, 2.0, 1.0))
 ## CLI
 
 ```bash
-ai-knot show    my_agent
+ai-knot add     my_agent "fact"
 ai-knot recall  my_agent "query"
 ai-knot recall  my_agent "query" --now 2025-01-01T00:00:00   # point-in-time recall
+ai-knot show    my_agent                                      # list stored facts + IDs
+ai-knot forget  my_agent <fact_id>                            # single-fact delete
+ai-knot delete  my_agent <fact_id>                            # alias for forget
 ai-knot lineage my_agent <fact_id>                           # supersession audit trail
 ai-knot doctor --json                                        # install / integration triage
-ai-knot add     my_agent "fact"
 ai-knot stats   my_agent
+ai-knot clear   my_agent                                      # wipe the whole namespace
 ai-knot decay   my_agent
 ai-knot export  my_agent out.yaml
 ai-knot import  my_agent in.yaml
@@ -270,6 +273,11 @@ ai-knot setup claude --agent-id bot --storage sqlite         # paste-ready MCP c
 ai-knot setup openclaw --agent-id bot --storage sqlite       # OpenClaw config
 ai-knot serve   my_agent --port 8000                         # HTTP sidecar + browser inspector
 ```
+
+The baseline human-operated loop is `add -> recall -> show -> forget`. That is
+the closest CLI analogue to what competitor READMEs like Mem0 surface early with
+`add` and `search`: one command to write memory, one to retrieve it, and one to
+remove a mistaken fact without blowing away the whole store.
 
 If CLI install or integration setup behaves unexpectedly, start with
 `ai-knot doctor --json` and [troubleshooting.md](troubleshooting.md).

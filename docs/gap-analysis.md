@@ -48,7 +48,7 @@ readiness**, not core product legitimacy.
 
 | Gap | Why it matters | Status |
 |---|---|---|
-| No live competitor bench-pack | would reinforce the reproducibility wedge | **Open** |
+| No live competitor bench-pack | would reinforce the reproducibility wedge | **Closed in this update** (repo-native offline / local-llm / real profiles plus a publish-ready scorecard generator now ship in-repo) |
 | No lightweight web UI knowledge inspector | would make demos and debugging more shareable | **Closed in this update** |
 | No notebook-based walkthrough | would help educational and social channels | **Closed in this update** |
 | No surface-specific proof asset prepared | concrete proof converts better than generic capability lists | **Closed in this update** (CrewAI + OpenClaw + Claude MCP case-study/post assets now in-repo; public posting still maintainer-only) |
@@ -84,6 +84,7 @@ readiness**, not core product legitimacy.
 25. Added a zero-network browser-inspector demo so the new surface is trialable with one command
 26. Added a rendered zero-network notebook walkthrough for educational and social sharing
 27. Added a GitHub Pages-ready landing page and deployment workflow for shareable launch links
+28. Added a repo-native competitor bench-pack script, guide, and scorecard flow for offline, local-llm, and real comparison profiles
 
 ## Highest-value remaining work
 
@@ -96,7 +97,8 @@ readiness**, not core product legitimacy.
 
 3. Push the Codespaces path live via public `main` and validate the first-run experience
 4. Publish the prepared CrewAI, OpenClaw, and Claude MCP case-study / demo threads
-5. Optionally replace the static README visual with an animated terminal clip after launch
+5. Run and publish a fresh competitor bench-pack from merged `main`, ideally with the `real` profile
+6. Optionally replace the static README visual with an animated terminal clip after launch
 
 ## Non-goals for this launch cycle
 

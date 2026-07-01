@@ -134,6 +134,13 @@ AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
 gold evidence lands in the top 5. It is the ceiling the QA accuracy above is built
 on, and unlike the QA number it cannot drift.
 
+If you want a **shareable side-by-side scorecard** instead of a raw harness run,
+use [competitor-bench-pack.md](competitor-bench-pack.md) and:
+
+```bash
+python scripts/run_competitor_bench_pack.py --profile offline
+```
+
 ---
 
 ## LongMemEval point-in-time (the bi-temporal lever)

@@ -45,6 +45,9 @@ python -m tests.eval.benchmark.runner --mock-judge
 # Offline, only non-LLM backends (guaranteed zero network calls)
 python -m tests.eval.benchmark.runner --mock-judge --backends baseline,ai_knot_no_llm
 
+# Publish-ready competitor scorecard wrapper
+python scripts/run_competitor_bench_pack.py --profile offline
+
 # Specific scenarios only
 python -m tests.eval.benchmark.runner --scenarios s1,s3,s5 --mock-judge
 
@@ -66,6 +69,7 @@ python -m tests.eval.benchmark.runner --scenarios legacy --mock-judge
 - `benchmark_report.md` — Markdown summary with protocol/retrieval split tables
 - `benchmark_raw.json` — Schema v2: each metric is `{"mean": X, "stdev": Y}`, with `schema_version: 2` at root
 - `benchmark_live.jsonl` — One JSON line per completed scenario (live streaming), includes `language` field
+- `scripts/run_competitor_bench_pack.py` — higher-level wrapper that turns a runner invocation into a publish-ready scorecard bundle
 
 ---
 

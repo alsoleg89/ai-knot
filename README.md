@@ -139,6 +139,21 @@ That's the whole loop: **`add`/`learn` → `recall`.** Drop the result into your
 and your agent has memory. Full API — storage backends, bi-temporal recall, tags, decay,
 multi-agent — in **[docs/usage.md](docs/usage.md)**.
 
+## Basic memory commands
+
+The strongest memory tools expose a dead-simple terminal loop early. `ai-knot`
+should be no different:
+
+```bash
+ai-knot add    assistant "User deploys APIs with Docker and Kubernetes"
+ai-knot recall assistant "what does the user deploy with?"
+ai-knot show   assistant
+ai-knot forget assistant <fact_id>   # or: ai-knot delete assistant <fact_id>
+```
+
+Use `show` to list stored facts and their IDs. Use `forget` / `delete` for a
+single fact, and `clear` only when you want to wipe the whole agent namespace.
+
 ## What it looks like in your stack
 
 The strongest memory READMEs do not stop at a low-level primitive. They also show the
@@ -207,6 +222,7 @@ the branch is on `main`, the repo now also ships a GitHub Pages-ready site in
 | Open a read-only browser inspector over your memory store | [Deployment guide → Browser inspector](docs/deployment.md#browser-inspector) |
 | Launch the browser inspector with seeded sample data | [`python examples/browser_inspector_demo.py`](examples/browser_inspector_demo.py) |
 | Walk through the core product in a rendered notebook | [examples/notebook_walkthrough.ipynb](examples/notebook_walkthrough.ipynb) |
+| Generate a publish-ready competitor scorecard | [`python scripts/run_competitor_bench_pack.py --profile offline`](scripts/run_competitor_bench_pack.py) |
 | Share memory across multiple agents | [examples/shared_pool.py](examples/shared_pool.py) |
 | Teach a coding assistant how to integrate ai-knot | [skills/README.md](skills/README.md) |
 | Grab the maintainer launch checklist | [docs/launch-checklist.md](docs/launch-checklist.md) |

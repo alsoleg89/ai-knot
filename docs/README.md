@@ -12,6 +12,7 @@
 | [deployment.md](deployment.md) | Install, storage backends, configuration (env vars), the MCP server, HTTP sidecar, browser inspector, observability, backup, security, scaling. |
 | [troubleshooting.md](troubleshooting.md) | First-run, install, MCP, and public-release troubleshooting with `ai-knot doctor` and the public launch checker. |
 | [benchmarks.md](benchmarks.md) | Reproducible benchmark methodology, deterministic retrieval suite, LoCoMo and LongMemEval results. |
+| [competitor-bench-pack.md](competitor-bench-pack.md) | How to generate a publish-ready side-by-side benchmark scorecard against baseline, vector-store, and Mem0-style controls. |
 | [production-readiness.md](production-readiness.md) | Feature-by-feature readiness status across storage, retrieval, governance, observability, CI, release, integrations, benchmarks. |
 | [demo-script.md](demo-script.md) | Script and framing for the short terminal demo/GIF used in launch materials. |
 | [launch-checklist.md](launch-checklist.md) | Maintainer-only preflight checklist: merge/publish/release/demo gates before public launch. |

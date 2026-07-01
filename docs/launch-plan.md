@@ -105,7 +105,7 @@ field with a credibility crisis, the honest number *is* the hook.
    posts can link to a cleaner landing page than raw GitHub markdown.
 
 ### P2 — depth, post-launch
-7. Live side-by-side competitor bench-pack (Mem0) in-repo.
+7. Run the in-repo competitor bench-pack and export a fresh scorecard (`real` profile if the stack is available).
 8. More storage backends (Qdrant/Weaviate/Mongo) — community-PR friendly asks.
 9. Public benchmark write-up and competitor scorecard refresh after launch.
 
@@ -199,4 +199,4 @@ rendered notebook walkthrough.
 3. Enable the GitHub Pages landing page after `main` is updated.
 4. Publish the prepared CrewAI, OpenClaw, and Claude/MCP surface-specific proof posts.
 5. Validate the public Codespaces quickstart after the branch is on `main`.
-6. Live competitor bench-pack; more backends.
+6. Fresh public competitor scorecard refresh; more backends only if they add a real channel.
