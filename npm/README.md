@@ -82,15 +82,21 @@ await kb.close();
 flows. It keeps ai-knot dependency-light: ai-knot does the recall, and your AI
 SDK code keeps control of the model call.
 
+If you want the shortest repo-native proof before wiring Python or a model call:
+
+```bash
+npm run example:vercel-ai-sdk-surface
+```
+
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { AiKnotAISDKMemory, KnowledgeBase } from 'ai-knot';
 
+const dataDir = '/absolute/path/to/tmp-or-app-data';
 const kb = new KnowledgeBase({
   agentId: 'assistant',
-  storage: 'sqlite',
-  dbPath: '/absolute/path/to/memory.db',
+  dataDir,
 });
 
 await kb.add('User prefers TypeScript over JavaScript');
@@ -120,6 +126,20 @@ const messagesWithMemory = await memory.buildMessages([
 ```
 
 Full repo-native example: [`npm/examples/vercel-ai-sdk.ts`](examples/vercel-ai-sdk.ts)
+
+Run it from this repo with:
+
+```bash
+OPENAI_API_KEY=... npm run example:vercel-ai-sdk
+```
+
+This end-to-end path requires the Python-side `ai-knot-mcp` binary. A normal
+`npm install` runs the postinstall hook that tries to install
+`ai-knot[mcp]` automatically; if that step was skipped or failed, run:
+
+```bash
+pip install "ai-knot[mcp]"
+```
 
 If you want to inspect the same memory surface before any model call,
 use the repo-native surface proof:

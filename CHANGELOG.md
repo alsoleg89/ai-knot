@@ -71,6 +71,10 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Rendered notebook walkthrough:
   `examples/notebook_walkthrough.ipynb` covers the zero-network `add` → `recall`
   loop, point-in-time recall, and the path into the browser inspector.
+- Repo-native Vercel AI SDK demo commands:
+  `cd npm && npm run example:vercel-ai-sdk-surface` now gives a true zero-network
+  `system` / `messages` proof, and `examples/vercel-ai-sdk.ts` now uses a temporary
+  local store instead of a hand-edited placeholder path.
 
 ### Fixed
 - `add(type="procedural")` (a bare string, as shown in the docs) no longer
@@ -84,6 +88,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
   README (`[1] …`, not `[semantic] …`) so the snippets match real output.
 - Corrected stale repository URLs (`ai-knot.git`, not `ai_knot.git`) and brought
   contributor / development docs in line with the current release workflows.
+- `npm/package-lock.json` is now version-synced with `npm/package.json`, and the
+  version guard now fails if the lockfile still advertises an older npm package version.
 
 ### Changed
 - README rewritten as a developer-first landing page — a "see it work" example up
@@ -109,6 +115,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
   path as a first-class distribution surface.
 - Publish workflows are now idempotent (npm skips an already-published version,
   PyPI uses `skip-existing`); `setup-node` bumped to 22.
+- The public launch-state audit now runs automatically on pushes to `main` and
+  on a daily schedule, not only by manual dispatch.
 
 ### Planned
 - MongoDB storage backend

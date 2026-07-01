@@ -1,12 +1,15 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { AiKnotAISDKMemory, KnowledgeBase } from "ai-knot";
 
 async function main(): Promise<void> {
+  const dataDir = mkdtempSync(join(tmpdir(), "ai-knot-vercel-ai-sdk-"));
   const kb = new KnowledgeBase({
     agentId: "assistant",
-    storage: "sqlite",
-    dbPath: "/absolute/path/to/ai-knot.db",
+    dataDir,
   });
 
   await kb.add("User prefers TypeScript over JavaScript");
@@ -29,6 +32,7 @@ async function main(): Promise<void> {
     console.log(text);
   } finally {
     await kb.close();
+    rmSync(dataDir, { recursive: true, force: true });
   }
 }
 

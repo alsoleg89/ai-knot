@@ -187,6 +187,7 @@ Latest targeted checks completed in this workspace:
 
 - `npm run typecheck` in `npm/`: passed
 - `npm test` in `npm/`: passed
+- `npm run example:vercel-ai-sdk-surface` in `npm/`: passed
 - `npm run build` in `npm/`: passed
 - `ruff check` on the new integration/example paths: passed
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
@@ -212,6 +213,8 @@ Important practical interpretation:
 - the new PydanticAI adapter and MCP `search` / `list` / `delete` aliases are verified, not just documented,
 - the core Python API and npm client now also expose the same `search` / `list` / `delete`
   loop the README promises,
+- the Vercel AI SDK surface now has both a true zero-network adapter proof and a
+  runnable repo command path, not just a static file reference,
 - version-sync protections already exist in the repo.
 - a one-command public-state verifier now exists:
   [`scripts/check_public_release.py`](../scripts/check_public_release.py)

@@ -177,7 +177,8 @@ of a Python framework or MCP client.
 > your existing AI SDK code.
 >
 > Fastest proof:
-> - repo-native example: `npm/examples/vercel-ai-sdk.ts`
+> - zero-network surface proof: `cd npm && npm run example:vercel-ai-sdk-surface`
+> - repo-native example: `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk`
 > - npm package docs: `npm/README.md`
 >
 > Repo: https://github.com/alsoleg89/ai-knot
@@ -190,15 +191,15 @@ of a Python framework or MCP client.
 > Use `AiKnotAISDKMemory` to build your `system` / `messages` surface from
 > deterministic recalled facts, with no LLM on the retrieval path.
 >
-> Shortest proof: `npm/examples/vercel-ai-sdk.ts`
+> Shortest proof: `cd npm && npm run example:vercel-ai-sdk-surface`
 >
 > https://github.com/alsoleg89/ai-knot
 
 **Reply snippet:**
 > If you want the shortest TypeScript proof, start with
-> `npm/examples/vercel-ai-sdk.ts`. It shows the exact `AiKnotAISDKMemory`
-> object and `generateText()` shape without hiding the model call behind
-> framework magic.
+> `cd npm && npm run example:vercel-ai-sdk-surface`. Then switch to
+> `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk` for the real
+> `generateText()` path without hiding the model call behind framework magic.
 
 ---
 

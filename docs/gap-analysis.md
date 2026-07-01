@@ -91,6 +91,7 @@ readiness**, not core product legitimacy.
 32. Aligned the core Python API, npm client, README, skill surface, and usage docs around the market-standard `add -> search -> list -> delete` memory loop while keeping `learn` / `recall` / `forget` aliases for agent-memory framing
 33. Moved the public launch-state verifier from manual-only use to an automatic GitHub Actions guardrail on `main`, while keeping manual dispatch for on-demand checks
 34. Raised the `search` / `recall` memory loop into the README hero snippet, Pages landing page, developer article, and launch post so first-time visitors see the market-standard loop immediately
+35. Tightened the Vercel AI SDK path with a true zero-network surface demo, runnable repo-native example commands, and a real example that no longer depends on a hand-edited placeholder storage path
 
 ## Highest-value remaining work
 

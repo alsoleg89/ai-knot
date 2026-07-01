@@ -40,24 +40,27 @@ same TypeScript ergonomics and gain persistence underneath.
 
 ### Repo-native surface proof
 
-Inspect the repo-native example in:
+Run the zero-network repo proof:
 
-```text
-npm/examples/vercel-ai-sdk-surface.ts
+```bash
+cd npm
+npm run example:vercel-ai-sdk-surface
 ```
 
 What it proves:
 
 - `AiKnotAISDKMemory` builds the exact `system` surface now,
 - recall is deterministic and local,
-- the integration can be inspected before wiring a real model call.
+- the integration can be inspected before wiring Python, MCP, or a real model call.
 
 ### Real Vercel AI SDK wiring
 
 ```bash
-npm install ai-knot ai @ai-sdk/openai
-OPENAI_API_KEY=... node npm/examples/vercel-ai-sdk.ts
+cd npm
+OPENAI_API_KEY=... npm run example:vercel-ai-sdk
 ```
+
+If the Python-side `ai-knot-mcp` binary is missing, run `pip install "ai-knot[mcp]"`.
 
 What it proves:
 
@@ -101,8 +104,8 @@ stack or replaying too much chat history into every `system` prompt.
 > app runtime and add deterministic long-term memory underneath.
 >
 > Fastest proof:
-> - `npm/examples/vercel-ai-sdk-surface.ts` for the repo-native surface proof
-> - `npm/examples/vercel-ai-sdk.ts` for the real model-wiring path
+> - `cd npm && npm run example:vercel-ai-sdk-surface` for the zero-network surface proof
+> - `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk` for the real model-wiring path
 
 ### X / LinkedIn
 
@@ -111,8 +114,8 @@ stack or replaying too much chat history into every `system` prompt.
 > `AiKnotAISDKMemory` builds the exact `system` / `messages` surface AI SDK apps
 > already use, with deterministic recalled facts and no LLM on the read path.
 >
-> Repo-native surface proof: `npm/examples/vercel-ai-sdk-surface.ts`
-> Full wiring: `npm/examples/vercel-ai-sdk.ts`
+> Zero-network surface proof: `cd npm && npm run example:vercel-ai-sdk-surface`
+> Full wiring: `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk`
 >
 > https://github.com/alsoleg89/ai-knot
 
@@ -120,8 +123,8 @@ stack or replaying too much chat history into every `system` prompt.
 
 > If you want the TypeScript app path instead of a Python adapter, start with
 > the Vercel AI SDK surface. The named adapter now builds the `system` /
-> `messages` inputs directly, and `npm/examples/vercel-ai-sdk-surface.ts`
-> lets you inspect the local proof before any model call.
+> `messages` inputs directly, and `cd npm && npm run example:vercel-ai-sdk-surface`
+> gives you the local proof before any model call.
 
 ---
 
@@ -129,8 +132,8 @@ stack or replaying too much chat history into every `system` prompt.
 
 Lead with one of these, in order:
 
-1. `npm/examples/vercel-ai-sdk-surface.ts`
-2. `npm/examples/vercel-ai-sdk.ts`
+1. `cd npm && npm run example:vercel-ai-sdk-surface`
+2. `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk`
 3. [../npm/README.md](../npm/README.md)
 
 Do not send TypeScript app builders to Python docs first. Send them to the app-shaped proof.

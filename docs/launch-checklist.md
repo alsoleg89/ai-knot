@@ -193,8 +193,9 @@ If you have time for a second follow-up, use PydanticAI next. The repo now has:
 
 If you have time for a third follow-up, use Vercel AI SDK next. The repo now has:
 
-- the repo-native `npm/examples/vercel-ai-sdk-surface.ts` surface proof,
-- the repo-native `npm/examples/vercel-ai-sdk.ts` proof,
+- the zero-network `cd npm && npm run example:vercel-ai-sdk-surface` surface proof,
+- the real `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk` proof,
+- the repo-native `npm/examples/vercel-ai-sdk-surface.ts` and `npm/examples/vercel-ai-sdk.ts` files,
 - npm-side docs in [../npm/README.md](../npm/README.md),
 - channel-ready copy in [vercel-ai-sdk-case-study.md](vercel-ai-sdk-case-study.md).
 

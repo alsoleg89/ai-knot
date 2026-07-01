@@ -187,8 +187,10 @@ What it does:
 
 Try next:
 
-- repo-native surface proof: [`../npm/examples/vercel-ai-sdk-surface.ts`](../npm/examples/vercel-ai-sdk-surface.ts)
-- repo-native example: [`npm/examples/vercel-ai-sdk.ts`](../npm/examples/vercel-ai-sdk.ts)
+- zero-network repo proof: `cd npm && npm run example:vercel-ai-sdk-surface`
+- repo-native surface file: [`../npm/examples/vercel-ai-sdk-surface.ts`](../npm/examples/vercel-ai-sdk-surface.ts)
+- real wiring example: `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk`
+- repo-native example file: [`../npm/examples/vercel-ai-sdk.ts`](../npm/examples/vercel-ai-sdk.ts)
 - npm package docs: [../npm/README.md](../npm/README.md)
 - distribution-ready proof asset: [vercel-ai-sdk-case-study.md](vercel-ai-sdk-case-study.md)
 

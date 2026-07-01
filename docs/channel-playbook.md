@@ -37,7 +37,7 @@ move the whole sequence by exactly one week rather than launching half-ready.
 | 2026-07-21 | Awesome-list PRs | small PRs | category inclusion | repo link | long-tail discovery |
 | 2026-07-28 | Follow-up post | X / GitHub discussion / Reddit comment | surface-specific proof: CrewAI | try the CrewAI demo or example | reactivate observers with concrete integration value |
 | 2026-08-01 | Second follow-up post | X / GitHub discussion / Reddit comment | Python framework proof: PydanticAI | run the PydanticAI surface demo or integration example | reach Python agent builders evaluating lighter frameworks |
-| 2026-08-04 | Third follow-up post | X / GitHub discussion / Reddit comment | TypeScript app proof: Vercel AI SDK | try the npm example or npm README path | reach TS app builders who will not start from Python |
+| 2026-08-04 | Third follow-up post | X / GitHub discussion / Reddit comment | TypeScript app proof: Vercel AI SDK | run `cd npm && npm run example:vercel-ai-sdk-surface`, then try the real npm example | reach TS app builders who will not start from Python |
 | 2026-08-08 | Fourth follow-up post | X / GitHub discussion / Reddit comment | app/MCP proof: OpenClaw | run the OpenClaw demo or setup command | widen discovery beyond Python frameworks |
 | 2026-08-11 | Fifth follow-up post | X / GitHub discussion / Reddit comment | Claude MCP proof | run the Claude setup demo or setup command | reach tool-first Claude users |
 
@@ -63,7 +63,7 @@ move the whole sequence by exactly one week rather than launching half-ready.
 - Follow-up posts: lead with one concrete surface, not the whole product.
 - Best prepared follow-up surface today: `CrewAI` via `docs/crewai-case-study.md`.
 - Second prepared follow-up surface: `PydanticAI` via `docs/pydanticai-case-study.md`, `examples/pydanticai_surface_demo.py`, and `examples/pydanticai_integration.py`.
-- Third prepared follow-up surface: `Vercel AI SDK` via `docs/vercel-ai-sdk-case-study.md`, `npm/examples/vercel-ai-sdk-surface.ts`, `npm/examples/vercel-ai-sdk.ts`, and `npm/README.md`.
+- Third prepared follow-up surface: `Vercel AI SDK` via `docs/vercel-ai-sdk-case-study.md`, `cd npm && npm run example:vercel-ai-sdk-surface`, `cd npm && OPENAI_API_KEY=... npm run example:vercel-ai-sdk`, `npm/examples/vercel-ai-sdk-surface.ts`, `npm/examples/vercel-ai-sdk.ts`, and `npm/README.md`.
 - Fourth prepared follow-up surface: `OpenClaw` via `docs/openclaw-case-study.md`.
 - Fifth prepared follow-up surface: `Claude MCP` via `docs/claude-mcp-case-study.md`.
 - Next-best follow-up surfaces after that: `OpenAI Agents SDK`, then the HTTP sidecar.
