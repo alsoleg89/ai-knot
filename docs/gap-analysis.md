@@ -86,6 +86,7 @@ readiness**, not core product legitimacy.
 27. Added a GitHub Pages-ready landing page and deployment workflow for shareable launch links
 28. Added a repo-native competitor bench-pack script, guide, and scorecard flow for offline, local-llm, and real comparison profiles
 29. Added a named Vercel AI SDK adapter for the npm package, plus repo-native example and docs routing for the mainstream TypeScript app path
+30. Added a dependency-light PydanticAI adapter, runnable examples, and docs routing for a framework-native Python agent surface
 
 ## Highest-value remaining work
 

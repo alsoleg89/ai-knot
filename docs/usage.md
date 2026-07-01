@@ -24,6 +24,7 @@ For a surface-by-surface routing guide, see [integrations.md](integrations.md).
 - [LangChain / LangGraph](#langchain--langgraph)
 - [CrewAI](#crewai)
 - [OpenAI Agents SDK](#openai-agents-sdk)
+- [PydanticAI](#pydanticai)
 - [AutoGen](#autogen)
 - [OpenAI integration](#openai-integration)
 - [Multi-agent: shared pool](#multi-agent)
@@ -343,8 +344,9 @@ pip install "ai-knot[mcp]"
 }
 ```
 
-**Tools:** `add`, `recall`, `recall_json`, `learn`, `forget`, `list_facts`, `stats`,
-`snapshot`, `restore`, `list_snapshots`, `health`, `capabilities`.
+**Tools:** `add`, `search`, `recall`, `recall_json`, `learn`, `delete`,
+`forget`, `list`, `list_facts`, `stats`, `snapshot`, `restore`,
+`list_snapshots`, `health`, `capabilities`.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -355,6 +357,8 @@ pip install "ai-knot[mcp]"
 
 > **TypeScript agents:** always use `recall_json` — returns a stable JSON array.
 > **Claude Desktop** launches from a non-interactive shell; always set an absolute `AI_KNOT_DATA_DIR`/`AI_KNOT_DB_PATH`.
+> Prefer the market-standard verbs? `search`, `list`, and `delete` are aliases
+> for `recall`, `list_facts`, and `forget`.
 > Want the shortest setup proof? Run [`examples/claude_mcp_setup.py`](../examples/claude_mcp_setup.py).
 > For channel-ready copy, see [claude-mcp-case-study.md](claude-mcp-case-study.md).
 
@@ -538,6 +542,55 @@ conversation state; it adds a durable fact layer on top.
 
 ---
 
+## PydanticAI
+
+`AiKnotPydanticAIMemory` adds ai-knot's long-term fact recall to a PydanticAI
+run through the framework's runtime `instructions=` surface. That keeps memory
+query-aware: the injected block is built from the current user prompt, not from
+static setup text alone.
+
+There is **no hard dependency** on `pydantic-ai`. Importing the adapter is safe
+without the framework installed; the package is required only when you run a
+real PydanticAI `Agent`.
+
+```bash
+pip install "ai-knot[pydanticai]"
+```
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.pydanticai import AiKnotPydanticAIMemory
+
+kb = KnowledgeBase("assistant")
+kb.add("User prefers Python over Java")
+kb.add("User deploys APIs with Docker Compose")
+
+memory = AiKnotPydanticAIMemory(kb, top_k=5)
+result = memory.run_sync(
+    agent,
+    "Write a local deployment checklist.",
+    instructions="You are a concise staff engineer.",
+)
+```
+
+What the adapter does:
+
+- recalls only the facts relevant to the current user prompt,
+- appends them under `## Agent Memory` to the runtime `instructions=...` payload,
+- preserves your existing PydanticAI short-term conversation/history behavior,
+- supports sync, async, and streaming runs that accept `instructions=...`.
+
+This is the right surface when you're already on PydanticAI and want a durable
+fact layer without replacing the rest of the framework's run loop.
+
+> Runnable examples:
+> [`examples/pydanticai_surface_demo.py`](../examples/pydanticai_surface_demo.py)
+> for the zero-network memory-surface proof, and
+> [`examples/pydanticai_integration.py`](../examples/pydanticai_integration.py)
+> for a real adapter wiring path.
+
+---
+
 ## AutoGen
 
 `AiKnotAutoGenMemory` implements the async memory shape used by AutoGen's
@@ -703,4 +756,5 @@ kb.add("No unittest — use pytest only", type=MemoryType.PROCEDURAL, importance
 ```
 
 See [`examples/`](../examples/) for runnable scripts (`quickstart.py`, `shared_pool.py`,
-`coding_agent.py`, `openai_integration.py`, `multilingual.py`).
+`coding_agent.py`, `openai_integration.py`, `multilingual.py`,
+`pydanticai_surface_demo.py`, `pydanticai_integration.py`).

@@ -7,7 +7,7 @@ skills standard.
 
 | Skill | What it covers | Install |
 |---|---|---|
-| `ai-knot` | deterministic agent memory across the core Python API, MCP, CrewAI, AutoGen, the OpenAI Agents SDK, LangChain / LangGraph, TypeScript routing, and first-run troubleshooting | `npx skills add https://github.com/alsoleg89/ai-knot --skill ai-knot` |
+| `ai-knot` | deterministic agent memory across the core Python API, MCP, CrewAI, AutoGen, the OpenAI Agents SDK, PydanticAI, LangChain / LangGraph, TypeScript routing, and first-run troubleshooting | `npx skills add https://github.com/alsoleg89/ai-knot --skill ai-knot` |
 
 ## When to use it
 

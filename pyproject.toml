@@ -34,7 +34,8 @@ server = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 crewai = ["crewai"]
 autogen = ["autogen-agentchat", "autogen-ext[openai]"]
 agents = ["openai-agents"]
-integrations = ["crewai", "autogen-agentchat", "autogen-ext[openai]", "openai-agents"]
+pydanticai = ["pydantic-ai"]
+integrations = ["crewai", "autogen-agentchat", "autogen-ext[openai]", "openai-agents", "pydantic-ai"]
 benchmark = ["qdrant-client>=1.8", "mem0ai>=0.1", "chromadb>=0.5", "ollama>=0.3"]
 dev = [
     "pytest>=8.0",

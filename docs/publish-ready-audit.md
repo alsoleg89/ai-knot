@@ -95,6 +95,7 @@ Prepared surfaces in-repo:
 - OpenClaw: [openclaw-case-study.md](openclaw-case-study.md), [examples/openclaw_integration.py](../examples/openclaw_integration.py)
 - Claude/MCP: [claude-mcp-case-study.md](claude-mcp-case-study.md), [examples/claude_mcp_setup.py](../examples/claude_mcp_setup.py)
 - OpenAI Agents SDK: [examples/openai_agents_integration.py](../examples/openai_agents_integration.py)
+- PydanticAI: [examples/pydanticai_surface_demo.py](../examples/pydanticai_surface_demo.py), [examples/pydanticai_integration.py](../examples/pydanticai_integration.py)
 - AutoGen: [examples/autogen_integration.py](../examples/autogen_integration.py)
 - LangChain / LangGraph: [examples/langchain_integration.py](../examples/langchain_integration.py)
 - Vercel AI SDK: [../npm/examples/vercel-ai-sdk.ts](../npm/examples/vercel-ai-sdk.ts), [../npm/README.md](../npm/README.md)
@@ -119,7 +120,8 @@ Prepared surfaces in-repo:
 ### Install paths are aligned
 
 - Python extras are in [pyproject.toml](../pyproject.toml): `crewai`,
-  `autogen`, `agents`, `integrations`, `mcp`, `server`, `openai`, `postgres`.
+  `autogen`, `agents`, `pydanticai`, `integrations`, `mcp`, `server`, `openai`,
+  `postgres`.
 - README and integrations docs route by surface instead of forcing one generic install path.
 
 ---
@@ -158,7 +160,7 @@ Current repo-native research assets:
 
 Prepared channel wedges now cover:
 
-- framework-first: CrewAI
+- framework-first: CrewAI and PydanticAI
 - app/MCP-first: OpenClaw
 - Claude tool-first: Claude/MCP
 
@@ -177,16 +179,21 @@ Latest targeted checks completed in this workspace:
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
 - `ruff check src/ai_knot/server/app.py src/ai_knot/cli.py tests/test_server.py`: passed
 - `ruff check examples/browser_inspector_demo.py tests/test_examples.py`: passed
+- `ruff check src/ai_knot/integrations/pydanticai.py src/ai_knot/_mcp_tools.py src/ai_knot/mcp_server.py tests/test_integrations_pydanticai.py tests/test_mcp_tools.py tests/test_examples.py`: passed
 - `pytest tests/test_site_artifacts.py -q --no-cov`: passed
 - `pytest tests/test_server.py -q --no-cov`: passed
 - `pytest tests/test_public_release_script.py -q --no-cov`: passed
 - `pytest tests/test_examples.py tests/test_server.py -q --no-cov`: passed
 - `pytest tests/test_examples.py tests/test_integrations_crewai.py tests/test_integrations_autogen.py tests/test_integrations_openai_agents.py tests/test_integrations_openclaw.py tests/test_version_sync.py -q --no-cov`: passing in targeted batches during this branch work
+- `pytest tests/test_mcp_tools.py tests/test_mcp_server.py tests/test_integrations_pydanticai.py tests/test_examples.py tests/test_version_sync.py -q --no-cov`: passed
+- `pytest tests/test_mcp_e2e.py -q --no-cov`: skipped in this workspace because `ai-knot[mcp]` is not installed
+- `mypy src/ai_knot/integrations/pydanticai.py src/ai_knot/_mcp_tools.py src/ai_knot/mcp_server.py`: passed
 
 Important practical interpretation:
 
 - the new launch-facing examples are not just prose artifacts,
 - the integration surfaces have regression coverage,
+- the new PydanticAI adapter and MCP `search` / `list` / `delete` aliases are verified, not just documented,
 - version-sync protections already exist in the repo.
 - a one-command public-state verifier now exists:
   [`scripts/check_public_release.py`](../scripts/check_public_release.py)

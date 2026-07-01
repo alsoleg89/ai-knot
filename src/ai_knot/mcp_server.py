@@ -21,15 +21,18 @@ Configuration is via environment variables:
 
 from __future__ import annotations
 
+import builtins
 from typing import Any
 
 from ai_knot._mcp_tools import (
     tool_add,
     tool_add_resolved,
     tool_capabilities,
+    tool_delete,
     tool_forget,
     tool_health,
     tool_learn,
+    tool_list,
     tool_list_facts,
     tool_list_snapshots,
     tool_memory_lineage,
@@ -37,6 +40,7 @@ from ai_knot._mcp_tools import (
     tool_recall_json,
     tool_recall_with_trace,
     tool_restore,
+    tool_search,
     tool_snapshot,
     tool_stats,
 )
@@ -104,9 +108,11 @@ def _make_server(kb: KnowledgeBase) -> Any:
         instructions=(
             "Use these tools to manage persistent agent memory. "
             "learn: extract and store knowledge from a conversation (preferred). "
-            "add: store a single fact directly. recall: retrieve relevant context as text. "
+            "add: store a single fact directly. "
+            "search/recall: retrieve relevant context as text. "
             "recall_json: retrieve relevant context as structured JSON. "
-            "forget: remove a fact by ID. list_facts: view all stored facts as JSON. "
+            "delete/forget: remove a fact by ID. "
+            "list/list_facts: view all stored facts as JSON. "
             "stats: memory statistics. snapshot/restore: version the memory state. "
             "list_snapshots: see available snapshots. "
             "health: check server status. capabilities: list all available tools."
@@ -167,6 +173,11 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_recall(kb, query, top_k=top_k, now=now)
 
     @app.tool()
+    def search(query: str, top_k: int = 5, now: str | None = None) -> str:
+        """Alias for recall() using the market-standard search verb."""
+        return tool_search(kb, query, top_k=top_k, now=now)
+
+    @app.tool()
     def forget(fact_id: str) -> str:
         """Remove a specific fact by its ID.
 
@@ -174,6 +185,16 @@ def _make_server(kb: KnowledgeBase) -> Any:
             fact_id: The 8-char hex ID shown in list_facts output.
         """
         return tool_forget(kb, fact_id)
+
+    @app.tool()
+    def delete(fact_id: str) -> str:
+        """Alias for forget() using the CRUD-style delete verb."""
+        return tool_delete(kb, fact_id)
+
+    @app.tool()
+    def list() -> str:
+        """Alias for list_facts() using the familiar list verb."""
+        return tool_list(kb)
 
     @app.tool()
     def list_facts() -> str:
@@ -229,7 +250,7 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_recall_json(kb, query, top_k=top_k, now=now)
 
     @app.tool()
-    def learn(messages: list[dict[str, str]]) -> str:
+    def learn(messages: builtins.list[dict[str, str]]) -> str:
         """Extract and store knowledge from a conversation.
 
         Preferred over add() for multi-turn conversations — the LLM identifies

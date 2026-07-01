@@ -214,3 +214,15 @@ def test_example15_notebook_walkthrough_exists_and_mentions_core_flow() -> None:
     assert "Point-in-time recall" in source_text
     assert "browser_inspector_demo.py" in source_text
     assert "what language, framework, and database does the user use?" in source_text
+
+
+def test_example16_pydanticai_surface_demo_builds_runtime_instructions() -> None:
+    from examples.pydanticai_surface_demo import build_demo_result
+
+    result = build_demo_result()
+
+    assert result.user_prompt == "Write a deployment checklist for my stack."
+    assert isinstance(result.instructions, str)
+    assert "You are a concise staff engineer." in result.instructions
+    assert "Agent Memory" in result.instructions
+    assert "Python" in result.instructions or "Docker Compose" in result.instructions

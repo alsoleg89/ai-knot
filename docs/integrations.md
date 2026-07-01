@@ -5,12 +5,17 @@ The fastest way to pick the right `ai-knot` entry point for your stack.
 If you're evaluating the project, start here first, then jump into the full API
 reference in [usage.md](usage.md).
 
+Across surfaces, the recognizable memory loop stays the same: store with
+`add`/`learn`, retrieve with `search`/`recall`, inspect with `list`, and remove
+with `delete`/`forget`.
+
 | Surface | Best for | Install | Start here |
 |---|---|---|---|
 | Core Python API | chatbots, coding agents, custom app logic | `pip install ai-knot` | [`examples/quickstart.py`](../examples/quickstart.py) |
 | CrewAI | native `Crew(memory=...)` / `Agent(memory=...)` wiring | `pip install "ai-knot[crewai]"` | [`examples/crewai_integration.py`](../examples/crewai_integration.py) |
 | AutoGen | `AssistantAgent(memory=[...])` with persistent facts | `pip install "ai-knot[autogen]"` | [`examples/autogen_integration.py`](../examples/autogen_integration.py) |
 | OpenAI Agents SDK | `RunConfig` hook into existing SDK runs | `pip install "ai-knot[agents]"` | [`examples/openai_agents_integration.py`](../examples/openai_agents_integration.py) |
+| PydanticAI | per-run `instructions=` memory injection on an existing `Agent` | `pip install "ai-knot[pydanticai]"` | [`examples/pydanticai_integration.py`](../examples/pydanticai_integration.py) |
 | OpenClaw | MCP-backed desktop/app memory or Python-side provider compatibility | `pip install "ai-knot[mcp]"` | [`examples/openclaw_integration.py`](../examples/openclaw_integration.py) |
 | LangChain / LangGraph | retriever or chat-memory drop-in | `pip install ai-knot` | [`examples/langchain_integration.py`](../examples/langchain_integration.py) |
 | Vercel AI SDK | prepend recalled facts to `generateText()` / `streamText()` inputs | `npm install ai-knot ai @ai-sdk/openai` | [`npm/examples/vercel-ai-sdk.ts`](../npm/examples/vercel-ai-sdk.ts) |
@@ -110,6 +115,40 @@ run_config = memory.build_run_config()
 
 See also: [usage.md#openai-agents-sdk](usage.md#openai-agents-sdk)
 
+### PydanticAI
+
+Use `AiKnotPydanticAIMemory` when you already have a PydanticAI `Agent` and
+want ai-knot to append query-relevant long-term facts through the framework's
+runtime `instructions=` hook on each run.
+
+```bash
+pip install "ai-knot[pydanticai]"
+```
+
+```python
+from ai_knot.integrations.pydanticai import AiKnotPydanticAIMemory
+
+memory = AiKnotPydanticAIMemory(kb, top_k=5)
+result = memory.run_sync(
+    agent,
+    "Write a deployment checklist.",
+    instructions="You are a concise staff engineer.",
+)
+```
+
+What it does:
+
+- recalls only the facts relevant to the current user prompt,
+- appends them under `## Agent Memory` to the same runtime `instructions` surface PydanticAI already uses,
+- stays dependency-light: importing the adapter does not require `pydantic-ai`,
+- works with sync, async, and streaming run methods that accept `instructions=...`.
+
+Try next:
+
+- zero-network surface proof: [`examples/pydanticai_surface_demo.py`](../examples/pydanticai_surface_demo.py)
+- real integration example: [`examples/pydanticai_integration.py`](../examples/pydanticai_integration.py)
+- full API notes: [usage.md#pydanticai](usage.md#pydanticai)
+
 ### Vercel AI SDK
 
 Use `AiKnotAISDKMemory` when you already have a Vercel AI SDK app and want
@@ -193,8 +232,8 @@ npx skills add https://github.com/alsoleg89/ai-knot --skill ai-knot
 
 This surface is most useful when:
 
-- you want an assistant to route between core Python, MCP, CrewAI, AutoGen, and the OpenAI Agents SDK without guessing,
-- you want the assistant to know the exact ai-knot object names (`KnowledgeBase`, `AiKnotCrewAIMemory`, `AiKnotAutoGenMemory`, `AiKnotAgentsMemory`),
+- you want an assistant to route between core Python, MCP, CrewAI, AutoGen, the OpenAI Agents SDK, and PydanticAI without guessing,
+- you want the assistant to know the exact ai-knot object names (`KnowledgeBase`, `AiKnotCrewAIMemory`, `AiKnotAutoGenMemory`, `AiKnotAgentsMemory`, `AiKnotPydanticAIMemory`),
 - you want first-run troubleshooting (`ai-knot doctor --json`) loaded as part of the integration path.
 
 See also: [../skills/README.md](../skills/README.md)
@@ -234,8 +273,9 @@ See also: [deployment.md#browser-inspector](deployment.md#browser-inspector)
 ## Status
 
 The stack-specific surfaces that matter most for a first launch are now in-repo:
-CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain / LangGraph, Vercel AI SDK,
-MCP, assistant skills, TypeScript, and the HTTP sidecar/browser inspector. The
+CrewAI, AutoGen, OpenAI Agents SDK, PydanticAI, OpenClaw, LangChain / LangGraph,
+Vercel AI SDK, MCP, assistant skills, TypeScript, and the HTTP sidecar/browser
+inspector. The
 remaining gaps are less about adapters and more about public distribution:
 publishing the updated branch, npm parity, and turning the prepared proof assets
 into public posts.

@@ -101,7 +101,7 @@ That makes reproducibility part of the product promise, not just a footnote.
 - **LongMemEval:** 59.6% QA accuracy (Oracle)
 - **Deterministic retrieval suite:** MRR 0.83 vs 0.18 naive
 - **Backends:** SQLite / PostgreSQL / YAML
-- **Surfaces:** Python, npm/TypeScript, Vercel AI SDK, MCP, HTTP sidecar + browser inspector, CrewAI, OpenAI Agents SDK, LangChain/LangGraph
+- **Surfaces:** Python, npm/TypeScript, Vercel AI SDK, MCP, HTTP sidecar + browser inspector, CrewAI, OpenAI Agents SDK, PydanticAI, LangChain/LangGraph
 - **Read path:** no LLM required
 
 ## Message pillars
@@ -149,12 +149,13 @@ That honesty helps trust.
 1. **Primary CTA:** try the README quickstart
 2. **Secondary CTA:** try the CLI memory loop: `ai-knot add`, `ai-knot search`, `ai-knot list`, `ai-knot delete`
 3. **Tertiary CTA:** inspect the benchmark command and methodology
-4. **Surface CTA:** choose a surface: CrewAI, MCP, TypeScript, LangChain, HTTP
+4. **Surface CTA:** choose a surface: CrewAI, PydanticAI, MCP, TypeScript, LangChain, HTTP
 5. **Contributor CTA:** ask for the next adapter or backend
 
 ## What to say in 30 seconds
 
 > ai-knot is a self-hosted memory layer for agents that stores facts instead of
 > replaying whole transcripts. Retrieval is deterministic, so recall is cheap,
-> auditable, and testable. It works over SQLite/Postgres/YAML, ships an MCP server
-> and TypeScript client, and publishes benchmark numbers you can actually re-run.
+> auditable, and testable. It works over SQLite/Postgres/YAML, ships an MCP server,
+> framework adapters including PydanticAI, and a TypeScript client, and publishes
+> benchmark numbers you can actually re-run.

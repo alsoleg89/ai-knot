@@ -78,7 +78,8 @@ pip install "ai-knot[server]"             # + HTTP sidecar
 pip install "ai-knot[crewai]"             # + CrewAI adapter
 pip install "ai-knot[autogen]"            # + AutoGen adapter
 pip install "ai-knot[agents]"             # + OpenAI Agents SDK adapter
-pip install "ai-knot[integrations]"       # + CrewAI + AutoGen + OpenAI Agents SDK
+pip install "ai-knot[pydanticai]"         # + PydanticAI adapter
+pip install "ai-knot[integrations]"       # + CrewAI + AutoGen + OpenAI Agents SDK + PydanticAI
 npm install ai-knot                        # Node / TypeScript (needs Python 3.11+ in PATH)
 ```
 
@@ -92,6 +93,7 @@ Mix extras by surface as needed, for example:
 | CrewAI | `pip install "ai-knot[crewai]"` |
 | AutoGen | `pip install "ai-knot[autogen]"` |
 | OpenAI Agents SDK | `pip install "ai-knot[agents]"` |
+| PydanticAI | `pip install "ai-knot[pydanticai]"` |
 | Claude Desktop / Claude Code / OpenClaw via MCP | `pip install "ai-knot[mcp]"` |
 | HTTP sidecar deployment | `pip install "ai-knot[server]"` |
 | `learn()` with OpenAI-backed extraction | `pip install "ai-knot[openai]"` |
@@ -110,7 +112,7 @@ starts are:
 | If you're trying to… | Do this first | You get |
 |---|---|---|
 | Prove the core memory loop locally | `pip install ai-knot` then [`python examples/quickstart.py`](examples/quickstart.py) | direct `add` / `learn` / `recall` in under a minute |
-| Plug memory into an existing framework | `pip install "ai-knot[integrations]"` then [docs/integrations.md](docs/integrations.md) | native CrewAI, AutoGen, and OpenAI Agents SDK objects |
+| Plug memory into an existing framework | `pip install "ai-knot[integrations]"` then [docs/integrations.md](docs/integrations.md) | native CrewAI, AutoGen, OpenAI Agents SDK, and PydanticAI objects |
 | Give Claude or OpenClaw persistent memory | `pip install "ai-knot[mcp]"` then `ai-knot setup openclaw --agent-id assistant --storage sqlite` | paste-ready MCP config plus `ai-knot doctor --json` |
 | Inspect memory over HTTP or call it from Node | `pip install "ai-knot[server]"` or `npm install ai-knot` | HTTP sidecar, browser inspector, and the npm client path |
 
@@ -158,6 +160,9 @@ context terms, `show` if you prefer that verb for listing, and `forget` if that
 reads more naturally than `delete`. Use `clear` only when you want to wipe the
 whole agent namespace.
 
+Those same familiar verbs also exist over MCP: `search` aliases `recall`,
+`list` aliases `list_facts`, and `delete` aliases `forget`.
+
 If you want ai-knot to **extract facts from raw text** instead of adding them one
 by one:
 
@@ -199,6 +204,19 @@ from ai_knot.integrations.openai_agents import AiKnotAgentsMemory
 
 run_config = AiKnotAgentsMemory(kb, top_k=5).build_run_config()
 result = Runner.run_sync(agent, "Write a deployment checklist.", run_config=run_config)
+```
+
+### PydanticAI
+
+```python
+from ai_knot.integrations.pydanticai import AiKnotPydanticAIMemory
+
+memory = AiKnotPydanticAIMemory(kb, top_k=5)
+result = memory.run_sync(
+    agent,
+    "Write a deployment checklist.",
+    instructions="You are a concise staff engineer.",
+)
 ```
 
 ### TypeScript / Vercel AI SDK
@@ -248,6 +266,8 @@ the branch is on `main`, the repo now also ships a GitHub Pages-ready site in
 | Add long-term memory to a CrewAI `Crew` or `Agent` | [examples/crewai_integration.py](examples/crewai_integration.py) |
 | Add long-term memory to an AutoGen `AssistantAgent` | [examples/autogen_integration.py](examples/autogen_integration.py) |
 | Add long-term memory to the OpenAI Agents SDK | [examples/openai_agents_integration.py](examples/openai_agents_integration.py) |
+| Add long-term memory to a PydanticAI `Agent` | [examples/pydanticai_integration.py](examples/pydanticai_integration.py) |
+| See the PydanticAI runtime-instructions surface without an API key | [examples/pydanticai_surface_demo.py](examples/pydanticai_surface_demo.py) |
 | Use ai-knot from Node / TypeScript | [npm/README.md](npm/README.md) |
 | Add long-term memory to a Vercel AI SDK app | [npm/examples/vercel-ai-sdk.ts](npm/examples/vercel-ai-sdk.ts) |
 | Give Claude Desktop / Claude Code persistent memory | [Deployment guide → MCP server](docs/deployment.md#4-run-the-mcp-server) |
@@ -296,7 +316,8 @@ Runnable scripts for each in **[examples/](examples/)**.
   Code, zero glue), a **CrewAI** memory adapter (`AiKnotCrewAIMemory` via `Crew(memory=...)`
   or `Agent(memory=memory.scope(...))`), an **AutoGen** memory adapter
   (`AiKnotAutoGenMemory` via `memory=[...]`), an **OpenAI Agents SDK** adapter
-  (`AiKnotAgentsMemory` via `RunConfig`), and thin
+  (`AiKnotAgentsMemory` via `RunConfig`), a **PydanticAI** adapter
+  (`AiKnotPydanticAIMemory` via per-run `instructions=...`), and thin
   **LangChain / LangGraph** adapters — an `AiKnotRetriever` for RAG chains and an
   `AiKnotChatMemory` drop-in, plus a **FastAPI sidecar + browser inspector** for
   HTTP-native debugging and demos, with no hard LangChain dependency.

@@ -101,6 +101,7 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | OpenClaw memory adapter | ✅ | drop-in adapter + `ai-knot setup openclaw` MCP config flow |
 | CrewAI memory adapter | ✅ | `AiKnotCrewAIMemory` via `Crew(memory=...)` / `Agent(memory=memory.scope(...))`; no hard `crewai` dep |
 | OpenAI Agents SDK adapter | ✅ | `AiKnotAgentsMemory` via `RunConfig.call_model_input_filter`; no hard `openai-agents` dep |
+| PydanticAI adapter | ✅ | `AiKnotPydanticAIMemory` via per-run `instructions=...`; no hard `pydantic-ai` dep |
 | AutoGen memory adapter | ✅ | `AiKnotAutoGenMemory` via `AssistantAgent(memory=[...])`; no hard `autogen-*` dep |
 | LangChain / LangGraph adapters | ✅ | `AiKnotRetriever` (Runnable `invoke`) + `AiKnotChatMemory` (`BaseChatMemory` shape); no hard langchain dep |
 | FastAPI HTTP sidecar + browser inspector | ✅ | `ai-knot serve`: `/health`, `POST /v1/recall`, `POST/GET /v1/facts`, `/v1/stats`, `/inspect` + optional bearer auth |

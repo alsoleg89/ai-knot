@@ -4,6 +4,7 @@ description: >
   Deterministic, self-hosted long-term memory for AI agents. Trigger when the
   user wants persistent memory, MCP-backed assistant memory, or wants to
   integrate ai-knot into Python, CrewAI, AutoGen, the OpenAI Agents SDK,
+  PydanticAI,
   LangChain/LangGraph, TypeScript, or HTTP services. This is the default
   ai-knot skill for product and integration usage.
 license: MIT
@@ -29,6 +30,7 @@ needs an LLM; LLMs are optional only on the write/extraction path.
 | CrewAI | `pip install "ai-knot[crewai]"` | `AiKnotCrewAIMemory` via `Crew(memory=...)` |
 | AutoGen | `pip install "ai-knot[autogen]"` | `AiKnotAutoGenMemory` via `AssistantAgent(memory=[...])` |
 | OpenAI Agents SDK | `pip install "ai-knot[agents]"` | `AiKnotAgentsMemory(...).build_run_config()` |
+| PydanticAI | `pip install "ai-knot[pydanticai]"` | `AiKnotPydanticAIMemory(...).run_sync(agent, prompt, instructions=...)` |
 | Claude / OpenClaw / MCP clients | `pip install "ai-knot[mcp]"` | `ai-knot setup claude ...` or `ai-knot setup openclaw ...` |
 | HTTP sidecar | `pip install "ai-knot[server]"` | `ai-knot serve` |
 | Node / TypeScript | `npm install ai-knot` | use the npm wrapper / Python sidecar path |
@@ -83,6 +85,19 @@ run_config = AiKnotAgentsMemory(kb, top_k=5).build_run_config()
 result = Runner.run_sync(agent, "Write a deployment checklist.", run_config=run_config)
 ```
 
+### PydanticAI
+
+```python
+from ai_knot.integrations.pydanticai import AiKnotPydanticAIMemory
+
+memory = AiKnotPydanticAIMemory(kb, top_k=5)
+result = memory.run_sync(
+    agent,
+    "Write a deployment checklist.",
+    instructions="You are a concise staff engineer.",
+)
+```
+
 ### Claude / OpenClaw / any MCP client
 
 ```bash
@@ -118,4 +133,6 @@ Read only what you need:
   [../../examples/crewai_integration.py](../../examples/crewai_integration.py),
   [../../examples/autogen_integration.py](../../examples/autogen_integration.py),
   [../../examples/openai_agents_integration.py](../../examples/openai_agents_integration.py),
+  [../../examples/pydanticai_integration.py](../../examples/pydanticai_integration.py),
+  [../../examples/pydanticai_surface_demo.py](../../examples/pydanticai_surface_demo.py),
   [../../examples/openclaw_integration.py](../../examples/openclaw_integration.py)
