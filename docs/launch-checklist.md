@@ -134,6 +134,10 @@ The repo now ships:
 If you want to use GitHub Pages in launch posts, enable Pages after merge and
 confirm the site deploys from the workflow before posting externally.
 
+The landing page now also ships Open Graph / Twitter preview metadata pointing
+at `docs/assets/hero-demo-poster.png`. After enabling Pages, verify one unfurl
+in a channel you care about before the main launch.
+
 ### 6.6. Validate the Codespaces first-run path
 
 The install-free path is now documented explicitly in:

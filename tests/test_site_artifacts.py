@@ -22,6 +22,10 @@ def test_pages_site_exists_and_covers_core_message() -> None:
     html = site_path.read_text(encoding="utf-8")
 
     assert "<title>ai-knot | Deterministic memory for AI agents</title>" in html
+    assert 'rel="canonical" href="https://alsoleg89.github.io/ai-knot/"' in html
+    assert 'property="og:title" content="ai-knot | Deterministic memory for AI agents"' in html
+    assert "hero-demo-poster.png" in html
+    assert 'name="twitter:card" content="summary_large_image"' in html
     assert "Store facts. Not transcripts." in html
     assert "browser inspector" in html.lower()
     assert "notebook walkthrough" in html.lower()

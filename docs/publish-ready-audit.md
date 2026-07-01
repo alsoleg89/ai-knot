@@ -221,6 +221,8 @@ Important practical interpretation:
   runnable repo command path, not just a static file reference,
 - the Codespaces/devcontainer path now has an exact first-run guide plus a test
   that guards the devcontainer install contract,
+- the Pages landing page now includes share-preview metadata for cleaner social
+  unfurls once Pages is enabled,
 - the GitHub Release page can now be rendered from repo-owned launch copy and
   changelog content instead of generic auto-generated notes,
 - version-sync protections already exist in the repo.
