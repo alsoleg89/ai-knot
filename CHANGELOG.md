@@ -75,6 +75,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
   `cd npm && npm run example:vercel-ai-sdk-surface` now gives a true zero-network
   `system` / `messages` proof, and `examples/vercel-ai-sdk.ts` now uses a temporary
   local store instead of a hand-edited placeholder path.
+- Repo-native GitHub Release renderer:
+  `scripts/render_github_release.py` now turns the release page into a deterministic
+  artifact built from `docs/announce.md` + `CHANGELOG.md`.
 
 ### Fixed
 - `add(type="procedural")` (a bare string, as shown in the docs) no longer
@@ -117,6 +120,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
   PyPI uses `skip-existing`); `setup-node` bumped to 22.
 - The public launch-state audit now runs automatically on pushes to `main` and
   on a daily schedule, not only by manual dispatch.
+- The release workflow now refreshes `npm/package-lock.json` during version bumps
+  and creates or updates the GitHub Release with repo-owned notes instead of
+  generic auto-generated notes.
 
 ### Planned
 - MongoDB storage backend

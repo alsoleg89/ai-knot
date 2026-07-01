@@ -92,6 +92,7 @@ readiness**, not core product legitimacy.
 33. Moved the public launch-state verifier from manual-only use to an automatic GitHub Actions guardrail on `main`, while keeping manual dispatch for on-demand checks
 34. Raised the `search` / `recall` memory loop into the README hero snippet, Pages landing page, developer article, and launch post so first-time visitors see the market-standard loop immediately
 35. Tightened the Vercel AI SDK path with a true zero-network surface demo, runnable repo-native example commands, and a real example that no longer depends on a hand-edited placeholder storage path
+36. Turned GitHub release notes into a repo-owned artifact by rendering them from `docs/announce.md` + `CHANGELOG.md`, and updated the release workflow to keep `npm/package-lock.json` version-synced during release bumps
 
 ## Highest-value remaining work
 

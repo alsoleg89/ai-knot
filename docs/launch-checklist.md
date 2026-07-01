@@ -90,7 +90,8 @@ If `v0.11.0` is not already released publicly:
    - npm publish
 
 If the version/tag already exists, confirm the GitHub Release page has notes that
-reflect the current branch state.
+reflect the current branch state. The workflow now renders those notes from
+repo-owned copy instead of generic GitHub auto-notes.
 
 ### 5. Finalize the README hero asset
 

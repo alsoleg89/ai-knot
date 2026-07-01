@@ -22,9 +22,11 @@ single entry point. It:
 
 1. Validates `X.Y.Z` format.
 2. Bumps the version in all three files (no-op if already at target).
-3. Commits as `alsoleg89` and pushes (skipped if nothing changed).
-4. Creates and pushes tag `vX.Y.Z` (skipped if it already exists).
-5. Cuts a GitHub Release with generated notes.
+3. Refreshes `npm/package-lock.json` so the npm lockfile stays version-synced.
+4. Commits as `alsoleg89` and pushes (skipped if nothing changed).
+5. Creates and pushes tag `vX.Y.Z` (skipped if it already exists).
+6. Renders a repo-owned GitHub Release body from `docs/announce.md` + `CHANGELOG.md`.
+7. Creates or updates the GitHub Release with those notes.
 
 Pushing the tag fans out to two independent publish workflows:
 
@@ -34,6 +36,17 @@ Pushing the tag fans out to two independent publish workflows:
   version is already on the registry, so re-running a tag is safe.
 
 Both verify the tag matches `package.json` / `pyproject.toml` before publishing.
+
+The GitHub Release page is no longer left to generic `--generate-notes`. The
+workflow now renders release notes from repo-owned copy via:
+
+```bash
+python scripts/render_github_release.py --version 0.11.0
+```
+
+That keeps the public release page aligned with the launch framing already
+prepared in `docs/announce.md` and the exact shipped changes recorded in
+`CHANGELOG.md`.
 
 ## Pre-release gate (run locally first)
 

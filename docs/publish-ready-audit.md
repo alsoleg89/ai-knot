@@ -189,6 +189,7 @@ Latest targeted checks completed in this workspace:
 - `npm test` in `npm/`: passed
 - `npm run example:vercel-ai-sdk-surface` in `npm/`: passed
 - `npm run build` in `npm/`: passed
+- `python scripts/render_github_release.py --version 0.11.0`: passed
 - `ruff check` on the new integration/example paths: passed
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
 - `ruff check src/ai_knot/server/app.py src/ai_knot/cli.py tests/test_server.py`: passed
@@ -215,6 +216,8 @@ Important practical interpretation:
   loop the README promises,
 - the Vercel AI SDK surface now has both a true zero-network adapter proof and a
   runnable repo command path, not just a static file reference,
+- the GitHub Release page can now be rendered from repo-owned launch copy and
+  changelog content instead of generic auto-generated notes,
 - version-sync protections already exist in the repo.
 - a one-command public-state verifier now exists:
   [`scripts/check_public_release.py`](../scripts/check_public_release.py)
