@@ -37,8 +37,9 @@ and the sequence in [launch-plan.md](launch-plan.md).
 > plus `ai-knot learn` when you want raw text distilled into facts.
 >
 > SQLite / Postgres / YAML behind one API, CrewAI + AutoGen + OpenAI Agents SDK
-> adapters, LangChain / LangGraph adapters, an MCP server for Claude Desktop/Code,
-> and a TypeScript client plus Vercel AI SDK adapter for Node apps. MIT-licensed.
+> + PydanticAI adapters, LangChain / LangGraph adapters, an MCP server for Claude
+> Desktop/Code, and a TypeScript client plus Vercel AI SDK adapter for Node apps.
+> MIT-licensed.
 >
 > Repo + reproducible benchmarks: https://github.com/alsoleg89/ai-knot
 
@@ -50,7 +51,7 @@ and the sequence in [launch-plan.md](launch-plan.md).
 > `ai-knot v0.11.0` turns agent memory into a reproducible, self-hosted knowledge layer:
 > deterministic recall, no LLM on the retrieval path, SQLite/Postgres/YAML backends,
 > bi-temporal `recall(now=...)`, an MCP server for Claude, CrewAI + AutoGen +
-> OpenAI Agents SDK adapters, a TypeScript client plus Vercel AI SDK adapter,
+> OpenAI Agents SDK + PydanticAI adapters, a TypeScript client plus Vercel AI SDK adapter,
 > and a multi-agent shared pool
 > with trust, provenance, and visibility controls.
 >
@@ -109,6 +110,49 @@ integration instead of the full product tour.
 > `python examples/crewai_surface_demo.py`. It shows the exact memory object and
 > scoped agent view without needing an API key. Then switch to
 > `examples/crewai_integration.py` for a real Crew run.
+
+---
+
+## Surface-specific follow-up: PydanticAI
+
+Use this when you want a Python-framework proof that feels close to the host
+agent runtime, but lighter-weight than a full app or multi-agent story.
+
+**Title options:**
+
+- PydanticAI users: ai-knot now adds long-term memory through runtime `instructions=...`
+- ai-knot adds deterministic, self-hosted memory to PydanticAI agents
+
+**Short post:**
+> If you're already using PydanticAI, `ai-knot` now plugs into the framework's
+> runtime `instructions=...` surface through `AiKnotPydanticAIMemory`.
+>
+> The point is durable facts with query-aware recall: ai-knot appends only the
+> relevant long-term memory block for the current prompt, while PydanticAI keeps
+> its own short-term conversation flow.
+>
+> Fastest proof:
+> - zero-network adapter demo: `python examples/pydanticai_surface_demo.py`
+> - full wiring example: `examples/pydanticai_integration.py`
+>
+> Repo: https://github.com/alsoleg89/ai-knot
+
+**X / LinkedIn version:**
+> PydanticAI path for `ai-knot` is ready:
+>
+> `pip install "ai-knot[pydanticai]"`
+>
+> Use `AiKnotPydanticAIMemory` to append deterministic recalled facts through
+> runtime `instructions=...`.
+>
+> Shortest proof: `python examples/pydanticai_surface_demo.py`
+>
+> https://github.com/alsoleg89/ai-knot
+
+**Reply snippet:**
+> If you want the shortest PydanticAI proof, start with
+> `python examples/pydanticai_surface_demo.py`. It shows the exact runtime
+> `instructions=...` payload ai-knot builds, with no API key or model call.
 
 ---
 
@@ -265,7 +309,7 @@ publishing, per-agent visibility, and laundering-resistant trust. Deterministic 
 default; optional LLM seam for the semantic tail.
 
 6/ Self-hosted, MIT, SQLite/Postgres/YAML, MCP server for Claude, CrewAI,
-AutoGen, OpenAI Agents SDK, TypeScript client + Vercel AI SDK adapter,
+AutoGen, OpenAI Agents SDK, PydanticAI, TypeScript client + Vercel AI SDK adapter,
 LangChain / LangGraph adapters.
 The benchmark harness ships in the repo — so does the gate that keeps it honest.
 → https://github.com/alsoleg89/ai-knot
@@ -287,7 +331,7 @@ The benchmark harness ships in the repo — so does the gate that keeps it hones
 > vary wildly by harness and judge model.
 >
 > If you care about local-first or air-gapped agent stacks, the interesting surfaces are:
-> MCP server for Claude, CrewAI, AutoGen, OpenAI Agents SDK, TypeScript client,
+> MCP server for Claude, CrewAI, AutoGen, OpenAI Agents SDK, PydanticAI, TypeScript client,
 > Vercel AI SDK adapter,
 > HTTP sidecar + browser inspector, and a shared multi-agent pool with trust /
 > provenance / visibility controls.

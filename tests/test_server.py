@@ -45,6 +45,24 @@ def test_add_then_recall(tmp_path: pathlib.Path) -> None:
     assert "Kubernetes" in out["context"]
     assert any("Kubernetes" in f["content"] for f in out["facts"])
 
+    search = client.post("/v1/search", json={"query": "where does the user deploy", "top_k": 5})
+    assert search.status_code == 200
+    assert search.json() == out
+
+
+def test_delete_fact_endpoint_removes_single_fact(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    added = client.post("/v1/facts", json={"content": "User deploys on Kubernetes"})
+    fact_id = added.json()["id"]
+
+    deleted = client.delete(f"/v1/facts/{fact_id}")
+    assert deleted.status_code == 204
+    assert deleted.text == ""
+
+    listed = client.get("/v1/facts")
+    assert listed.status_code == 200
+    assert listed.json()["facts"] == []
+
 
 def test_list_facts_filters_by_activity_and_reports_totals(tmp_path: pathlib.Path) -> None:
     client = _client(tmp_path)
@@ -131,7 +149,9 @@ def test_bearer_token_guards_v1_but_not_health(tmp_path: pathlib.Path) -> None:
     assert client.get("/health").status_code == 200
     # /v1/* without the token is rejected.
     assert client.post("/v1/recall", json={"query": "x"}).status_code == 401
+    assert client.post("/v1/search", json={"query": "x"}).status_code == 401
     assert client.get("/v1/facts").status_code == 401
+    assert client.delete("/v1/facts/abcd1234").status_code == 401
     assert client.get("/v1/stats").status_code == 401
     assert client.get("/inspect").status_code == 401
     # ...and accepted with the right bearer token.

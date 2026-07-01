@@ -162,6 +162,8 @@ whole agent namespace.
 
 Those same familiar verbs also exist over MCP: `search` aliases `recall`,
 `list` aliases `list_facts`, and `delete` aliases `forget`.
+The HTTP sidecar now mirrors the same loop with `POST /v1/facts`,
+`POST /v1/search`, `GET /v1/facts`, and `DELETE /v1/facts/{fact_id}`.
 
 If you want ai-knot to **extract facts from raw text** instead of adding them one
 by one:

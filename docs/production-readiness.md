@@ -104,7 +104,7 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | PydanticAI adapter | ✅ | `AiKnotPydanticAIMemory` via per-run `instructions=...`; no hard `pydantic-ai` dep |
 | AutoGen memory adapter | ✅ | `AiKnotAutoGenMemory` via `AssistantAgent(memory=[...])`; no hard `autogen-*` dep |
 | LangChain / LangGraph adapters | ✅ | `AiKnotRetriever` (Runnable `invoke`) + `AiKnotChatMemory` (`BaseChatMemory` shape); no hard langchain dep |
-| FastAPI HTTP sidecar + browser inspector | ✅ | `ai-knot serve`: `/health`, `POST /v1/recall`, `POST/GET /v1/facts`, `/v1/stats`, `/inspect` + optional bearer auth |
+| FastAPI HTTP sidecar + browser inspector | ✅ | `ai-knot serve`: `/health`, `POST /v1/search` / `/v1/recall`, `POST/GET/DELETE /v1/facts`, `/v1/stats`, `/inspect` + optional bearer auth |
 | CLI lifecycle/audit ops | ✅ | `recall --now` (point-in-time), `lineage` (supersession audit trail), `decay`, `export`/`import` |
 | CLI pool-scoped gov ops | ⬜ | shared-pool operator commands |
 | Additional framework adapters | ⬜ | optional expansion after launch; no longer blocking the main launch |

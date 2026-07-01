@@ -4,8 +4,10 @@ Endpoints (all JSON):
 
   ``GET  /health``      → liveness + version (unauthenticated)
   ``GET  /v1/facts``    → list stored facts for inspection/debugging
+  ``POST /v1/search``   → alias for recall using the familiar search verb
   ``POST /v1/recall``   → point-in-time recall: context string + structured facts
   ``POST /v1/facts``    → add a fact
+  ``DELETE /v1/facts/{fact_id}`` → remove a single fact by ID
   ``GET  /v1/stats``    → knowledge-base statistics
   ``GET  /inspect``     → read-only browser inspector over the same knowledge base
 
@@ -103,6 +105,14 @@ def _matching_facts(
     if not include_inactive:
         facts = [fact for fact in facts if fact.is_active(now_dt)]
     return sorted(facts, key=lambda fact: (fact.created_at, fact.id), reverse=True)
+
+
+def _recall_payload(kb: KnowledgeBase, req: RecallRequest) -> dict[str, Any]:
+    """Build the shared response payload for recall/search HTTP routes."""
+    now = _parse_dt(req.now)
+    facts = kb.recall_facts(req.query, top_k=req.top_k, now=now)
+    context = kb.recall(req.query, top_k=req.top_k, now=now)
+    return {"context": context, "facts": [_serialize_fact(f) for f in facts]}
 
 
 def _fmt_dt(value: datetime | None) -> str:
@@ -488,10 +498,12 @@ def create_app(kb: KnowledgeBase, *, token: str | None = None) -> FastAPI:
 
     @app.post("/v1/recall")
     def recall(req: RecallRequest, _: None = Depends(require_auth)) -> dict[str, Any]:
-        now = _parse_dt(req.now)
-        facts = kb.recall_facts(req.query, top_k=req.top_k, now=now)
-        context = kb.recall(req.query, top_k=req.top_k, now=now)
-        return {"context": context, "facts": [_serialize_fact(f) for f in facts]}
+        return _recall_payload(kb, req)
+
+    @app.post("/v1/search")
+    def search(req: RecallRequest, _: None = Depends(require_auth)) -> dict[str, Any]:
+        """Alias for ``/v1/recall`` using the familiar search verb."""
+        return _recall_payload(kb, req)
 
     @app.post("/v1/facts", status_code=201)
     def add_fact(req: FactRequest, _: None = Depends(require_auth)) -> dict[str, Any]:
@@ -511,6 +523,12 @@ def create_app(kb: KnowledgeBase, *, token: str | None = None) -> FastAPI:
             event_time=_parse_dt(req.event_time),
         )
         return _serialize_fact(fact)
+
+    @app.delete("/v1/facts/{fact_id}", status_code=204)
+    def delete_fact(fact_id: str, _: None = Depends(require_auth)) -> None:
+        """Remove a single stored fact by ID."""
+        kb.forget(fact_id)
+        return None
 
     @app.get("/v1/stats")
     def stats(_: None = Depends(require_auth)) -> dict[str, Any]:

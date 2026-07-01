@@ -33,6 +33,10 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - OpenAI Agents SDK adapter (`ai_knot.integrations.openai_agents`) plus a runnable
   `examples/openai_agents_integration.py` example and docs coverage in
   `docs/usage.md`.
+- PydanticAI adapter (`ai_knot.integrations.pydanticai`) plus runnable
+  `examples/pydanticai_integration.py` and
+  `examples/pydanticai_surface_demo.py` examples and docs coverage in
+  `README.md`, `docs/usage.md`, and `docs/integrations.md`.
 - AutoGen memory adapter (`ai_knot.integrations.autogen`) plus a runnable
   `examples/autogen_integration.py` example, docs coverage in `docs/usage.md`,
   and a new integration index in `docs/integrations.md`.
@@ -58,6 +62,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Read-only browser inspector on top of the HTTP sidecar:
   `GET /inspect` plus `GET /v1/facts` for debugging and demo flows without
   adding a separate UI stack.
+- HTTP sidecar CRUD/search parity with the rest of the product:
+  `POST /v1/search` as a market-standard alias for `POST /v1/recall`, plus
+  `DELETE /v1/facts/{fact_id}` for single-fact removal over HTTP.
 - Zero-network browser-inspector demo:
   `examples/browser_inspector_demo.py` seeds sample facts and launches the
   sidecar for a copy/paste first run.
@@ -91,6 +98,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
   the onboarding pattern strong competitor READMEs use.
 - The HTTP surface is now easier to demo and debug: the sidecar exposes a
   browser inspector in addition to the JSON routes.
+- The basic memory loop is now consistent across CLI, MCP, and HTTP:
+  `add` → `search` → `list` → `delete`, with `recall` / `forget` kept as
+  agent-memory aliases where appropriate.
 - Framework error paths and examples now point users to the repo-native install
   extras first, with the raw upstream package names as fallback.
 - OpenClaw docs and launch routing now treat the MCP/app path as a first-class

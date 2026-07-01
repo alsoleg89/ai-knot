@@ -262,7 +262,8 @@ ai-knot --storage sqlite serve my_agent --port 8000
 
 Then:
 
-- JSON API: `POST /v1/recall`, `POST /v1/facts`, `GET /v1/facts`, `GET /v1/stats`
+- JSON API: `POST /v1/facts`, `POST /v1/search`, `GET /v1/facts`, `DELETE /v1/facts/{fact_id}`, `GET /v1/stats`
+- `POST /v1/recall` is still available when you want the agent-memory wording instead of `search`
 - browser inspector: open `http://127.0.0.1:8000/inspect`
 - zero-network seeded demo: [`examples/browser_inspector_demo.py`](../examples/browser_inspector_demo.py)
 

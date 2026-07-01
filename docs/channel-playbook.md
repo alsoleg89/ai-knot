@@ -36,9 +36,10 @@ move the whole sequence by exactly one week rather than launching half-ready.
 | 2026-07-21 | r/MachineLearning | methodology post | reproducible metrics over hype | benchmark docs | attract skeptics and researchers |
 | 2026-07-21 | Awesome-list PRs | small PRs | category inclusion | repo link | long-tail discovery |
 | 2026-07-28 | Follow-up post | X / GitHub discussion / Reddit comment | surface-specific proof: CrewAI | try the CrewAI demo or example | reactivate observers with concrete integration value |
-| 2026-08-01 | Second follow-up post | X / GitHub discussion / Reddit comment | TypeScript app proof: Vercel AI SDK | try the npm example or npm README path | reach TS app builders who will not start from Python |
-| 2026-08-04 | Third follow-up post | X / GitHub discussion / Reddit comment | app/MCP proof: OpenClaw | run the OpenClaw demo or setup command | widen discovery beyond Python frameworks |
-| 2026-08-11 | Fourth follow-up post | X / GitHub discussion / Reddit comment | Claude MCP proof | run the Claude setup demo or setup command | reach tool-first Claude users |
+| 2026-08-01 | Second follow-up post | X / GitHub discussion / Reddit comment | Python framework proof: PydanticAI | run the PydanticAI surface demo or integration example | reach Python agent builders evaluating lighter frameworks |
+| 2026-08-04 | Third follow-up post | X / GitHub discussion / Reddit comment | TypeScript app proof: Vercel AI SDK | try the npm example or npm README path | reach TS app builders who will not start from Python |
+| 2026-08-08 | Fourth follow-up post | X / GitHub discussion / Reddit comment | app/MCP proof: OpenClaw | run the OpenClaw demo or setup command | widen discovery beyond Python frameworks |
+| 2026-08-11 | Fifth follow-up post | X / GitHub discussion / Reddit comment | Claude MCP proof | run the Claude setup demo or setup command | reach tool-first Claude users |
 
 ## Channel cards
 
@@ -61,10 +62,11 @@ move the whole sequence by exactly one week rather than launching half-ready.
 - LinkedIn: lead with auditability, storage control, and multi-agent governance.
 - Follow-up posts: lead with one concrete surface, not the whole product.
 - Best prepared follow-up surface today: `CrewAI` via `docs/crewai-case-study.md`.
-- Second prepared follow-up surface: `Vercel AI SDK` via `npm/examples/vercel-ai-sdk.ts` and `npm/README.md`.
-- Third prepared follow-up surface: `OpenClaw` via `docs/openclaw-case-study.md`.
-- Fourth prepared follow-up surface: `Claude MCP` via `docs/claude-mcp-case-study.md`.
-- Next-best follow-up surfaces after that: `OpenAI Agents SDK`.
+- Second prepared follow-up surface: `PydanticAI` via `examples/pydanticai_surface_demo.py`, `examples/pydanticai_integration.py`, and `docs/announce.md`.
+- Third prepared follow-up surface: `Vercel AI SDK` via `npm/examples/vercel-ai-sdk.ts` and `npm/README.md`.
+- Fourth prepared follow-up surface: `OpenClaw` via `docs/openclaw-case-study.md`.
+- Fifth prepared follow-up surface: `Claude MCP` via `docs/claude-mcp-case-study.md`.
+- Next-best follow-up surfaces after that: `OpenAI Agents SDK`, then the HTTP sidecar.
 
 ## Direct outreach templates
 
@@ -75,7 +77,7 @@ move the whole sequence by exactly one week rather than launching half-ready.
 > for a signal boost yet; I want one honest pass on install friction or on whether the
 > benchmark docs feel convincing. If you have 10 minutes, the fastest path is the
 > README quickstart, the CLI loop (`ai-knot add/search/list/delete` or `ai-knot learn`),
-> or the CrewAI / OpenClaw / OpenAI Agents examples here: <repo link>
+> or the CrewAI / PydanticAI / OpenClaw / OpenAI Agents examples here: <repo link>
 
 ### Benchmark skeptic DM
 
@@ -110,6 +112,8 @@ move the whole sequence by exactly one week rather than launching half-ready.
 > the core product. Start with
 > `examples/crewai_surface_demo.py` if you want the shortest CrewAI proof, or
 > `examples/crewai_integration.py` if you are on CrewAI and want full wiring. Start with
+> `python examples/pydanticai_surface_demo.py` if you want the shortest PydanticAI proof, or
+> `examples/pydanticai_integration.py` if you want a real PydanticAI agent wiring path. Start with
 > `python examples/openclaw_integration.py` if you want the shortest OpenClaw proof, or
 > `ai-knot setup openclaw` if you want the app config path. Start with
 > `python examples/claude_mcp_setup.py` if you want the shortest Claude/MCP proof, or
@@ -128,8 +132,9 @@ move the whole sequence by exactly one week rather than launching half-ready.
 
 - broken-install issues or comments
 - npm version-mismatch complaints
-- which surface gets mentioned first: CrewAI, Vercel AI SDK, OpenClaw, Claude MCP, OpenAI Agents, LangChain
+- which surface gets mentioned first: CrewAI, PydanticAI, Vercel AI SDK, OpenClaw, Claude MCP, OpenAI Agents, LangChain
 - clicks or replies specifically on the CrewAI follow-up asset
+- clicks or replies specifically on the PydanticAI follow-up asset
 - clicks or replies specifically on the Vercel AI SDK follow-up asset
 - clicks or replies specifically on the OpenClaw follow-up asset
 - clicks or replies specifically on the Claude MCP follow-up asset

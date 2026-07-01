@@ -114,6 +114,9 @@ Prepared surfaces in-repo:
   and public-release failure paths
 - the HTTP sidecar now includes both JSON inspection (`GET /v1/facts`) and a
   read-only browser inspector (`/inspect`) for first-wave debugging
+- the HTTP sidecar now also mirrors the familiar memory loop with
+  `POST /v1/facts`, `POST /v1/search`, `GET /v1/facts`, and
+  `DELETE /v1/facts/{fact_id}`
 - the repo now includes a GitHub Pages-ready landing page so outreach can use a
   cleaner URL after merge
 
@@ -178,6 +181,7 @@ Latest targeted checks completed in this workspace:
 - `ruff check` on the new integration/example paths: passed
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
 - `ruff check src/ai_knot/server/app.py src/ai_knot/cli.py tests/test_server.py`: passed
+- `ruff check src/ai_knot/server/app.py tests/test_server.py`: passed
 - `ruff check examples/browser_inspector_demo.py tests/test_examples.py`: passed
 - `ruff check src/ai_knot/integrations/pydanticai.py src/ai_knot/_mcp_tools.py src/ai_knot/mcp_server.py tests/test_integrations_pydanticai.py tests/test_mcp_tools.py tests/test_examples.py`: passed
 - `pytest tests/test_site_artifacts.py -q --no-cov`: passed

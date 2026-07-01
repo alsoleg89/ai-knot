@@ -223,10 +223,16 @@ AI_KNOT_SERVER_TOKEN=secret ai-knot --storage postgres --dsn "$AI_KNOT_DSN" serv
 Routes:
 
 - `GET /health` (open)
+- `POST /v1/search` (`{query, top_k, now}` → context + facts; alias for `/v1/recall`)
 - `POST /v1/recall` (`{query, top_k, now}` → context + facts)
 - `POST /v1/facts`
 - `GET /v1/facts` (read-only fact listing for debugging / inspection)
+- `DELETE /v1/facts/{fact_id}`
 - `GET /v1/stats`
+
+Across CLI, MCP, and HTTP, the familiar memory loop is now the same:
+`add` → `search` → `list` → `delete`, with `recall` / `forget` kept as
+agent-memory aliases.
 
 When `AI_KNOT_SERVER_TOKEN` is set, the `/v1/*` routes require
 `Authorization: Bearer <token>`. Front it with a TLS-terminating reverse proxy

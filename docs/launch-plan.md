@@ -77,8 +77,12 @@ field with a credibility crisis, the honest number *is* the hook.
 - Deterministic hero demo + recording script prepared for the README/social demo asset.
 - Buyer-facing comparison guide added.
 - Vercel AI SDK adapter and npm-side example/docs added so the mainstream TypeScript app path is explicit instead of generic.
+- PydanticAI adapter and repo-native examples/docs added for a framework-native
+  Python agent surface that uses runtime `instructions=...`.
 - CrewAI follow-up distribution assets prepared: zero-network demo, case-study copy, and a maintainer launch checklist.
 - Vercel AI SDK follow-up distribution assets prepared: named adapter, npm-side example, and channel copy for the TypeScript app path.
+- PydanticAI follow-up distribution copy prepared in `docs/announce.md`, tied to
+  `examples/pydanticai_surface_demo.py` and `examples/pydanticai_integration.py`.
 - OpenClaw follow-up distribution asset prepared: app/MCP case-study copy routed to the zero-network example and setup command.
 - Claude/MCP follow-up distribution asset prepared: zero-network setup demo plus channel-ready case-study copy.
 - Lightweight browser inspector added on top of the HTTP sidecar for demos and debugging.
@@ -98,7 +102,7 @@ field with a credibility crisis, the honest number *is* the hook.
 3. **A 20-second demo GIF/asciinema** at the top of the README (add → recall →
    "it remembered"). Top dev READMEs all have one; text-only converts worse.
 4. **Publish the prepared proof posts.**
-   CrewAI, Vercel AI SDK, OpenClaw, and Claude/MCP now all have repo-native follow-up assets; the remaining
+   CrewAI, PydanticAI, Vercel AI SDK, OpenClaw, and Claude/MCP now all have repo-native follow-up assets; the remaining
    step is to post them publicly so developers see exact workflows they can copy.
 5. **Validate and publish the install-free path.** Codespaces support is now in-repo;
    the maintainer should verify the public `codespaces.new` flow after merging to `main`.
@@ -158,7 +162,8 @@ is green and the demo asset is in.
 **Week 3 — credibility and ecosystem pull**
 - Post the methodology angle to r/MachineLearning.
 - Submit awesome-list PRs (agent memory, MCP, AI infra).
-- Publish the prepared CrewAI follow-up, then Vercel AI SDK, then OpenClaw, then Claude/MCP, then rotate to LangChain or HTTP sidecar.
+- Publish the prepared CrewAI follow-up, then PydanticAI, then Vercel AI SDK,
+  then OpenClaw, then Claude/MCP, then rotate to LangChain or HTTP sidecar.
 
 **Week 4 — retention and pull-through**
 - Ship the next framework adapter.
@@ -190,7 +195,7 @@ copy, release runbook + idempotent publish workflows, CLI audit ops, LangChain /
 LangGraph adapters, a docs-based launch kit (positioning, competitive analysis,
 gap analysis, FAQ, whitepaper, developer article), and refreshed contributor docs.
 Codespaces/devcontainer support, a buyer-facing comparison guide, a demo-recording
-flow, CrewAI / AutoGen / OpenAI Agents adapters, CrewAI / OpenClaw / Claude MCP
+flow, CrewAI / AutoGen / OpenAI Agents / PydanticAI adapters, CrewAI / OpenClaw / Claude MCP
 case-study / proof assets, and a submission pack for directory/listing distribution
 are also now in the repo. The same is now true for the browser inspector and the
 rendered notebook walkthrough.
@@ -199,6 +204,6 @@ rendered notebook walkthrough.
 1. *(maintainer)* npm publish to `0.11.0`; merge/push the launch-ready branch to public `main`.
 2. Demo GIF or terminal capture in README.
 3. Enable the GitHub Pages landing page after `main` is updated.
-4. Publish the prepared CrewAI, Vercel AI SDK, OpenClaw, and Claude/MCP surface-specific proof posts.
+4. Publish the prepared CrewAI, PydanticAI, Vercel AI SDK, OpenClaw, and Claude/MCP surface-specific proof posts.
 5. Validate the public Codespaces quickstart after the branch is on `main`.
 6. Fresh public competitor scorecard refresh; more backends only if they add a real channel.
