@@ -100,6 +100,19 @@ Mix extras by surface as needed, for example:
 If install or setup fails, start with `ai-knot doctor --json` and
 [docs/troubleshooting.md](docs/troubleshooting.md).
 
+## Choose your path in 60 seconds
+
+The best READMEs in this category do not force one generic onboarding path.
+They route you into the surface you already have. For `ai-knot`, the fastest
+starts are:
+
+| If you're trying to… | Do this first | You get |
+|---|---|---|
+| Prove the core memory loop locally | `pip install ai-knot` then [`python examples/quickstart.py`](examples/quickstart.py) | direct `add` / `learn` / `recall` in under a minute |
+| Plug memory into an existing framework | `pip install "ai-knot[integrations]"` then [docs/integrations.md](docs/integrations.md) | native CrewAI, AutoGen, and OpenAI Agents SDK objects |
+| Give Claude or OpenClaw persistent memory | `pip install "ai-knot[mcp]"` then `ai-knot setup openclaw --agent-id assistant --storage sqlite` | paste-ready MCP config plus `ai-knot doctor --json` |
+| Inspect memory over HTTP or call it from Node | `pip install "ai-knot[server]"` or `npm install ai-knot` | HTTP sidecar, browser inspector, and the npm client path |
+
 ## Quickstart (30 seconds)
 
 ```python

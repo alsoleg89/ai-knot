@@ -34,6 +34,23 @@ That is the core reason these READMEs convert curiosity into trials.
 
 ---
 
+## Pattern matrix
+
+| Project | First route in README | Integration surfaces named early | First proof hook | Takeaway for `ai-knot` |
+|---|---|---|---|---|
+| Mem0 | benchmark/research -> library vs self-hosted vs cloud vs CLI | SDKs, server, cloud, CLI, skills, framework demos | benchmark table | route by deployment shape, not only by language |
+| Graphiti | category label -> MCP tip -> quickstart | Python, MCP, REST, database backends | temporal graph visual + MCP callout | keep MCP visible before deep API detail |
+| Letta | CLI path vs API path | terminal product shell, hosted API, Python, TypeScript | runnable product shell | separate "use it myself" from "embed it" |
+| LangMem | framework-native agent example | LangGraph tools + store | working agent code block | lead with the host-framework object names |
+| OpenClaw | onboard path -> docs by goal -> channel/app routes | CLI onboarding, apps, channels, skills, doctor | local assistant shell | docs-by-goal navigation makes a large surface feel simple |
+
+Two patterns matter most across these projects:
+
+1. the first route is specific, not abstract;
+2. the README names the exact surface the developer already has in front of them.
+
+---
+
 ## Mem0
 
 ### README shape
@@ -178,19 +195,56 @@ LangMem is strongest where it is most native:
 
 ---
 
+## OpenClaw as an app-channel example
+
+OpenClaw is not a memory system, but it is a useful README reference because it
+solves a similar adoption problem from the opposite direction: a broad surface
+area with many ways to start.
+
+### README shape
+
+OpenClaw's README routes visitors by:
+
+- install vs onboarding,
+- daemon vs foreground/debug mode,
+- channels/apps/tools,
+- docs by goal,
+- troubleshooting via `doctor`.
+
+### Integration shape
+
+The important pattern is not just "supports many things." It is that the README
+turns a wide product surface into a few specific first actions:
+
+- `openclaw onboard`,
+- `openclaw gateway status`,
+- `openclaw doctor`,
+- goal-based docs links.
+
+### What `ai-knot` should copy
+
+- keep `setup` and `doctor` commands visible for MCP/app paths,
+- keep troubleshooting attached to onboarding rather than buried later,
+- keep the README navigable by job, not only by subsystem.
+
+---
+
 ## What changed in `ai-knot` because of this review
 
 This pass applied the market patterns directly:
 
-1. The root [README.md](../README.md) now includes a `What it looks like in your stack`
+1. The root [README.md](../README.md) now includes a `Choose your path in 60 seconds`
+   block so visitors can start from core Python, framework adapters, MCP/app
+   setup, or the HTTP/Node path without guessing.
+2. The root [README.md](../README.md) already includes a `What it looks like in your stack`
    section with native snippets for CrewAI, AutoGen, the OpenAI Agents SDK, and
    MCP clients.
-2. The integrations index now includes an assistant-facing skill surface.
-3. The repo now ships a reference skill in [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
+3. The integrations index now includes an assistant-facing skill surface.
+4. The repo now ships a reference skill in [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
    plus a [skills/README.md](../skills/README.md) entry point.
-4. The HTTP sidecar now includes a lightweight browser inspector, closing the
+5. The HTTP sidecar now includes a lightweight browser inspector, closing the
    earlier "product shell" gap for demos and debugging.
-5. The repo now includes a rendered notebook walkthrough, giving social and educational
+6. The repo now includes a rendered notebook walkthrough, giving social and educational
    channels a shareable artifact beyond README prose.
 
 ---
@@ -212,3 +266,4 @@ executed.
 - Graphiti README: https://github.com/getzep/graphiti
 - Letta README: https://github.com/letta-ai/letta
 - LangMem README: https://github.com/langchain-ai/langmem
+- OpenClaw README: https://github.com/openclaw/openclaw
