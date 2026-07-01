@@ -70,6 +70,12 @@ class TestCLIRecall:
         assert result.exit_code == 0
         assert "K8s" in result.output or "deploy" in result.output.lower()
 
+    def test_search_alias_with_facts(self, runner: CliRunner, data_dir: str) -> None:
+        runner.invoke(main, _cmd(data_dir, ["add", "myagent", "User deploys on K8s"]))
+        result = runner.invoke(main, _cmd(data_dir, ["search", "myagent", "deploy"]))
+        assert result.exit_code == 0
+        assert "K8s" in result.output or "deploy" in result.output.lower()
+
 
 class TestCLIForget:
     """ai-knot forget/delete <agent_id> <fact_id>."""

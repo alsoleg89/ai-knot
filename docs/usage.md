@@ -257,6 +257,7 @@ kb = KnowledgeBase("agent", rrf_weights=(5.0, 2.0, 2.0, 1.0))
 
 ```bash
 ai-knot add     my_agent "fact"
+ai-knot search  my_agent "query"                                 # alias for recall
 ai-knot recall  my_agent "query"
 ai-knot recall  my_agent "query" --now 2025-01-01T00:00:00   # point-in-time recall
 ai-knot show    my_agent                                      # list stored facts + IDs
@@ -274,10 +275,10 @@ ai-knot setup openclaw --agent-id bot --storage sqlite       # OpenClaw config
 ai-knot serve   my_agent --port 8000                         # HTTP sidecar + browser inspector
 ```
 
-The baseline human-operated loop is `add -> recall -> show -> forget`. That is
-the closest CLI analogue to what competitor READMEs like Mem0 surface early with
-`add` and `search`: one command to write memory, one to retrieve it, and one to
-remove a mistaken fact without blowing away the whole store.
+The baseline human-operated loop is `add -> search -> show -> forget`. `search`
+and `recall` are the same underlying command: `search` matches the way tools
+like Mem0 frame the operation, while `recall` matches the way agent builders
+usually talk about injecting context into the next turn.
 
 If CLI install or integration setup behaves unexpectedly, start with
 `ai-knot doctor --json` and [troubleshooting.md](troubleshooting.md).

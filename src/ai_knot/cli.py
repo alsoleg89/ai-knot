@@ -190,6 +190,10 @@ def recall(
         click.echo("No relevant facts found.")
 
 
+# CLI alias for users who think in search terms rather than recall semantics.
+main.add_command(recall, "search")
+
+
 @main.command()
 @click.argument("agent_id")
 @click.argument("fact_id")

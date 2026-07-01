@@ -36,6 +36,14 @@ print(context)
 
 That is the core product loop: `add` or `learn`, then `recall`.
 
+If you want to prove the same loop without opening Python first:
+
+```bash
+ai-knot add    assistant "User prefers Python over Java"
+ai-knot search assistant "what language does the user prefer?"
+ai-knot show   assistant
+```
+
 ## 2. Why this is better than replaying history
 
 The goal of memory is not to preserve every sentence. The goal is to preserve the

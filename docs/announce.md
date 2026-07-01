@@ -50,7 +50,8 @@ and the sequence in [launch-plan.md](launch-plan.md).
 > with trust, provenance, and visibility controls.
 >
 > The repo now ships both named-reader QA benchmarks and a deterministic retrieval suite
-> you can rerun locally. Start with the 30-second quickstart in the README.
+> you can rerun locally. Start with the 30-second quickstart in the README, or with
+> the CLI loop: `ai-knot add`, `ai-knot search`, `ai-knot show`, `ai-knot forget`.
 
 **Pinned discussion opener:**
 > If you are evaluating memory for agents, start with the README quickstart and the
