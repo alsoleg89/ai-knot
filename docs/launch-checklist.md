@@ -92,19 +92,21 @@ reflect the current branch state.
 
 ### 5. Finalize the README hero asset
 
-Current repo-safe placeholders already exist:
+Current repo-native assets already exist:
 
+- [`docs/assets/hero-demo.gif`](assets/hero-demo.gif)
+- [`docs/assets/hero-demo-poster.png`](assets/hero-demo-poster.png)
 - [`docs/assets/hero-demo.svg`](assets/hero-demo.svg)
 - [`docs/assets/social-card.svg`](assets/social-card.svg)
 
-Preferred public asset:
+The current GIF is reproducible from:
 
 ```bash
-python examples/hero_demo.py
+./.venv/bin/python scripts/render_hero_demo_gif.py
 ```
 
-Record a 12-20s terminal clip and replace the placeholder only if the clip is
-cleaner than the current static visual. Do not delay launch on perfect motion.
+If you later record a live 12-20s terminal clip, replace the generated GIF only
+if the live capture is clearly better. Do not delay launch on perfect motion.
 
 ### 6. Set GitHub metadata before posting
 
@@ -138,8 +140,10 @@ Start from:
 3. r/LocalLLaMA
 4. Show HN + X + LinkedIn
 5. Prepared CrewAI follow-up
-6. Prepared OpenClaw follow-up
-7. Prepared Claude/MCP follow-up
+6. Prepared PydanticAI follow-up
+7. Prepared Vercel AI SDK follow-up
+8. Prepared OpenClaw follow-up
+9. Prepared Claude/MCP follow-up
 
 Copy is already in:
 
@@ -166,7 +170,8 @@ Use the fix sequence from [RELEASE.md](RELEASE.md):
 
 ### The demo clip is not ready
 
-Launch with the existing static hero asset, then replace it in the first follow-up.
+Launch with the generated README hero GIF, then replace it later only if a live
+terminal capture is clearly better.
 
 ### You only have time for one follow-up surface
 
@@ -176,13 +181,25 @@ Use CrewAI first. The repo now has:
 - a full example,
 - channel-ready copy.
 
-If you have time for a second follow-up, use OpenClaw next. The repo now has:
+If you have time for a second follow-up, use PydanticAI next. The repo now has:
+
+- the zero-network `examples/pydanticai_surface_demo.py` proof,
+- a real `examples/pydanticai_integration.py` wiring path,
+- channel-ready copy in [announce.md](announce.md).
+
+If you have time for a third follow-up, use Vercel AI SDK next. The repo now has:
+
+- the repo-native `npm/examples/vercel-ai-sdk.ts` proof,
+- npm-side docs in [../npm/README.md](../npm/README.md),
+- channel-ready copy in [announce.md](announce.md).
+
+If you have time for a fourth follow-up, use OpenClaw next. The repo now has:
 
 - the paste-ready `ai-knot setup openclaw` flow,
 - a zero-network `examples/openclaw_integration.py` proof,
 - channel-ready copy in [openclaw-case-study.md](openclaw-case-study.md).
 
-If you have time for a third follow-up, use Claude/MCP next. The repo now has:
+If you have time for a fifth follow-up, use Claude/MCP next. The repo now has:
 
 - the paste-ready `ai-knot setup claude` flow,
 - a zero-network `examples/claude_mcp_setup.py` proof,

@@ -26,7 +26,7 @@ readiness**, not core product legitimacy.
 |---|---|---|
 | Public GitHub `main` does not reflect the launch-ready branch | people judge the product from the public repo, not the local branch | **Open** |
 | npm latest is still `0.9.3` while PyPI is `0.11.0` | broken version parity destroys trust for TS users | **Open** |
-| No short demo asset in the README hero | benchmark-heavy products still need a fast visual proof | **Closed in this update** (static SVG hero + social card now in-repo) |
+| No short demo asset in the README hero | benchmark-heavy products still need a fast visual proof | **Closed in this update** (generated GIF hero + poster, plus static SVG/social fallback, now in-repo) |
 
 ## P1 — lifts trial conversion and shareability
 
@@ -71,7 +71,7 @@ readiness**, not core product legitimacy.
 12. Fixed stale repo URLs and refreshed contributor / development docs
 13. Fixed the npm package repository URL in local metadata for the next publish
 14. Surfaced the OpenAI Agents SDK adapter across README, usage docs, and readiness docs
-15. Added repo-native visual launch assets: `docs/assets/hero-demo.svg` for the README hero and `docs/assets/social-card.svg` for release/social export
+15. Added repo-native visual launch assets: a generated `docs/assets/hero-demo.gif` + `docs/assets/hero-demo-poster.png` for the README hero, plus `docs/assets/hero-demo.svg` and `docs/assets/social-card.svg` fallbacks
 16. Added a submission pack with ready-to-paste directory blurbs, GitHub topics, repo description, and awesome-list snippets
 17. Added an AutoGen adapter, runnable example, and framework-focused integration docs/index
 18. Added a CrewAI adapter, runnable example, and native docs coverage for `Crew(memory=...)` / `Agent(memory=memory.scope(...))`
@@ -98,9 +98,8 @@ readiness**, not core product legitimacy.
 ### High-leverage follow-ups
 
 3. Push the Codespaces path live via public `main` and validate the first-run experience
-4. Publish the prepared CrewAI, OpenClaw, and Claude MCP case-study / demo threads
+4. Publish the prepared CrewAI, PydanticAI, Vercel AI SDK, OpenClaw, and Claude MCP proof threads
 5. Run and publish a fresh competitor bench-pack from merged `main`, ideally with the `real` profile
-6. Optionally replace the static README visual with an animated terminal clip after launch
 
 ## Non-goals for this launch cycle
 

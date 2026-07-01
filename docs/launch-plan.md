@@ -79,6 +79,8 @@ field with a credibility crisis, the honest number *is* the hook.
 - Vercel AI SDK adapter and npm-side example/docs added so the mainstream TypeScript app path is explicit instead of generic.
 - PydanticAI adapter and repo-native examples/docs added for a framework-native
   Python agent surface that uses runtime `instructions=...`.
+- A repo-native generated GIF hero demo now ships in `docs/assets/hero-demo.gif`,
+  with `scripts/render_hero_demo_gif.py` keeping it reproducible.
 - CrewAI follow-up distribution assets prepared: zero-network demo, case-study copy, and a maintainer launch checklist.
 - Vercel AI SDK follow-up distribution assets prepared: named adapter, npm-side example, and channel copy for the TypeScript app path.
 - PydanticAI follow-up distribution copy prepared in `docs/announce.md`, tied to
@@ -99,21 +101,19 @@ field with a credibility crisis, the honest number *is* the hook.
    only after the public landing page matches this branch. *(needs maintainer: merge/push.)*
 
 ### P1 — strongly lifts conversion / shareability
-3. **A 20-second demo GIF/asciinema** at the top of the README (add → recall →
-   "it remembered"). Top dev READMEs all have one; text-only converts worse.
-4. **Publish the prepared proof posts.**
+3. **Publish the prepared proof posts.**
    CrewAI, PydanticAI, Vercel AI SDK, OpenClaw, and Claude/MCP now all have repo-native follow-up assets; the remaining
    step is to post them publicly so developers see exact workflows they can copy.
-5. **Validate and publish the install-free path.** Codespaces support is now in-repo;
+4. **Validate and publish the install-free path.** Codespaces support is now in-repo;
    the maintainer should verify the public `codespaces.new` flow after merging to `main`.
-6. **Enable GitHub Pages after merge.** The repo now contains `docs/site/index.html`
+5. **Enable GitHub Pages after merge.** The repo now contains `docs/site/index.html`
    and `.github/workflows/pages.yml`; once `main` is live, enable Pages so launch
    posts can link to a cleaner landing page than raw GitHub markdown.
 
 ### P2 — depth, post-launch
-7. Run the in-repo competitor bench-pack and export a fresh scorecard (`real` profile if the stack is available).
-8. More storage backends (Qdrant/Weaviate/Mongo) — community-PR friendly asks.
-9. Public benchmark write-up and competitor scorecard refresh after launch.
+6. Run the in-repo competitor bench-pack and export a fresh scorecard (`real` profile if the stack is available).
+7. More storage backends (Qdrant/Weaviate/Mongo) — community-PR friendly asks.
+8. Public benchmark write-up and competitor scorecard refresh after launch.
 
 ---
 
@@ -143,7 +143,7 @@ is green and the demo asset is in.
 **Week 0 — pre-flight**
 - [ ] Publish npm `0.11.0` so the public registry matches PyPI. *(maintainer)*
 - [ ] Merge/push the launch-ready branch so public `main` matches this repo state. *(maintainer)*
-- [ ] Record the 20-second demo GIF or terminal capture and add it to the README hero.
+- [ ] Confirm the generated README hero GIF is the public asset you want to ship, or replace it with a live terminal capture only if the live clip is clearly better.
 - [ ] Cut a tagged GitHub release with notes pulled from `CHANGELOG.md`.
 
 **Week 1 — soft launch / failure-finding**
@@ -195,15 +195,14 @@ copy, release runbook + idempotent publish workflows, CLI audit ops, LangChain /
 LangGraph adapters, a docs-based launch kit (positioning, competitive analysis,
 gap analysis, FAQ, whitepaper, developer article), and refreshed contributor docs.
 Codespaces/devcontainer support, a buyer-facing comparison guide, a demo-recording
-flow, CrewAI / AutoGen / OpenAI Agents / PydanticAI adapters, CrewAI / OpenClaw / Claude MCP
+flow, a generated hero GIF asset, CrewAI / AutoGen / OpenAI Agents / PydanticAI adapters, CrewAI / OpenClaw / Claude MCP
 case-study / proof assets, and a submission pack for directory/listing distribution
 are also now in the repo. The same is now true for the browser inspector and the
 rendered notebook walkthrough.
 
 **Remaining, in priority order:**
 1. *(maintainer)* npm publish to `0.11.0`; merge/push the launch-ready branch to public `main`.
-2. Demo GIF or terminal capture in README.
-3. Enable the GitHub Pages landing page after `main` is updated.
-4. Publish the prepared CrewAI, PydanticAI, Vercel AI SDK, OpenClaw, and Claude/MCP surface-specific proof posts.
-5. Validate the public Codespaces quickstart after the branch is on `main`.
-6. Fresh public competitor scorecard refresh; more backends only if they add a real channel.
+2. Enable the GitHub Pages landing page after `main` is updated.
+3. Publish the prepared CrewAI, PydanticAI, Vercel AI SDK, OpenClaw, and Claude/MCP surface-specific proof posts.
+4. Validate the public Codespaces quickstart after the branch is on `main`.
+5. Fresh public competitor scorecard refresh; more backends only if they add a real channel.

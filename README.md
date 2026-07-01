@@ -18,7 +18,7 @@ No LLM on the retrieval path. No cloud. No lock-in.
 
 [**Quickstart**](#quickstart-30-seconds) · [**Open in Codespaces**](https://codespaces.new/alsoleg89/ai-knot) · [**Surface snippets**](#what-it-looks-like-in-your-stack) · [**Integrations**](docs/integrations.md) · [**Why ai-knot**](#why-ai-knot) · [**Use cases**](#what-you-can-build) · [**Benchmarks**](docs/benchmarks.md) · [**Docs**](docs/usage.md)
 
-<img src="docs/assets/hero-demo.svg" alt="ai-knot demo: store facts once, recall only what matters, with deterministic memory persisted across restarts" width="1200" />
+<img src="docs/assets/hero-demo.gif" alt="ai-knot demo: store facts once, recall only what matters, with deterministic memory persisted across restarts" width="1200" />
 
 </div>
 

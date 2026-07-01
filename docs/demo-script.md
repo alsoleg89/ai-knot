@@ -32,7 +32,15 @@ python examples/hero_demo.py
 
 If you need a repo-native placeholder before recording a real clip, use:
 
-- [`docs/assets/hero-demo.svg`](assets/hero-demo.svg) for the README hero
+- generate the current README hero with:
+
+```bash
+./.venv/bin/python scripts/render_hero_demo_gif.py
+```
+
+- [`docs/assets/hero-demo.gif`](assets/hero-demo.gif) for the animated README hero
+- [`docs/assets/hero-demo-poster.png`](assets/hero-demo-poster.png) for the last-frame poster / preview
+- [`docs/assets/hero-demo.svg`](assets/hero-demo.svg) as the static fallback
 - [`docs/assets/social-card.svg`](assets/social-card.svg) for exported PNG social cards
 
 ## Recording beats

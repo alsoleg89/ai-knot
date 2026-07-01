@@ -79,6 +79,8 @@ This is why the launch is still prepared-but-not-executed rather than fully done
 
 - [README.md](../README.md) leads with the problem, the 30-second loop, and the
   deterministic wedge.
+- [README.md](../README.md) now uses a repo-native generated GIF hero asset
+  (`docs/assets/hero-demo.gif`) instead of a static placeholder.
 - [README.md](../README.md) now also shows framework-native and MCP-native
   surface snippets near the top, not only generic API primitives.
 - [README.md](../README.md) now also routes readers to the browser inspector as
@@ -184,6 +186,7 @@ Latest targeted checks completed in this workspace:
 - `ruff check src/ai_knot/server/app.py tests/test_server.py`: passed
 - `ruff check examples/browser_inspector_demo.py tests/test_examples.py`: passed
 - `ruff check src/ai_knot/integrations/pydanticai.py src/ai_knot/_mcp_tools.py src/ai_knot/mcp_server.py tests/test_integrations_pydanticai.py tests/test_mcp_tools.py tests/test_examples.py`: passed
+- `./.venv/bin/python scripts/render_hero_demo_gif.py`: passed
 - `pytest tests/test_site_artifacts.py -q --no-cov`: passed
 - `pytest tests/test_server.py -q --no-cov`: passed
 - `pytest tests/test_public_release_script.py -q --no-cov`: passed
@@ -196,6 +199,7 @@ Latest targeted checks completed in this workspace:
 Important practical interpretation:
 
 - the new launch-facing examples are not just prose artifacts,
+- the generated README hero GIF is repo-native and reproducible,
 - the integration surfaces have regression coverage,
 - the new PydanticAI adapter and MCP `search` / `list` / `delete` aliases are verified, not just documented,
 - version-sync protections already exist in the repo.

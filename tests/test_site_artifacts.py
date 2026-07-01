@@ -5,6 +5,18 @@ from __future__ import annotations
 import pathlib
 
 
+def test_hero_demo_asset_exists_and_is_wired_into_readme_and_site() -> None:
+    gif_path = pathlib.Path("docs/assets/hero-demo.gif")
+    poster_path = pathlib.Path("docs/assets/hero-demo-poster.png")
+    readme = pathlib.Path("README.md").read_text(encoding="utf-8")
+    site = pathlib.Path("docs/site/index.html").read_text(encoding="utf-8")
+
+    assert gif_path.exists()
+    assert poster_path.exists()
+    assert "docs/assets/hero-demo.gif" in readme
+    assert "../assets/hero-demo.gif" in site
+
+
 def test_pages_site_exists_and_covers_core_message() -> None:
     site_path = pathlib.Path("docs/site/index.html")
     html = site_path.read_text(encoding="utf-8")
