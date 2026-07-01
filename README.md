@@ -111,7 +111,7 @@ starts are:
 
 | If you're trying to… | Do this first | You get |
 |---|---|---|
-| Prove the core memory loop locally | `pip install ai-knot` then [`python examples/quickstart.py`](examples/quickstart.py) | direct `add` / `learn` / `recall` in under a minute |
+| Prove the core memory loop locally | `pip install ai-knot` then [`python examples/quickstart.py`](examples/quickstart.py) | direct `add` / `search` / `recall` in under a minute |
 | Plug memory into an existing framework | `pip install "ai-knot[integrations]"` then [docs/integrations.md](docs/integrations.md) | native CrewAI, AutoGen, OpenAI Agents SDK, and PydanticAI objects |
 | Give Claude or OpenClaw persistent memory | `pip install "ai-knot[mcp]"` then `ai-knot setup openclaw --agent-id assistant --storage sqlite` | paste-ready MCP config plus `ai-knot doctor --json` |
 | Inspect memory over HTTP or call it from Node | `pip install "ai-knot[server]"` or `npm install ai-knot` | HTTP sidecar, browser inspector, and the npm client path |
@@ -138,7 +138,7 @@ print(kb.recall("what are the user's coding preferences?"))
 # [2] User deploys everything in Docker
 ```
 
-That's the whole loop: **`add`/`learn` → `recall`.** Drop the result into your system prompt
+That's the whole loop: **`add`/`learn` → `search`/`recall`.** Drop the result into your system prompt
 and your agent has memory. Full API — storage backends, bi-temporal recall, tags, decay,
 multi-agent — in **[docs/usage.md](docs/usage.md)**.
 
@@ -153,6 +153,16 @@ ai-knot search assistant "what does the user deploy with?"   # alias: ai-knot re
 ai-knot list   assistant                                  # alias: ai-knot show
 ai-knot delete assistant <fact_id>                        # alias: ai-knot forget
 ```
+
+The same loop is explicit across the main surfaces:
+
+| Surface | Add | Search | List | Delete |
+|---|---|---|---|---|
+| Core Python | `kb.add(...)` | `kb.search(...)` / `kb.recall(...)` | `kb.list()` / `kb.list_facts()` | `kb.delete(id)` / `kb.forget(id)` |
+| TypeScript / npm | `await kb.add(...)` | `await kb.search(...)` / `await kb.recall(...)` | `await kb.list()` / `await kb.listFacts()` | `await kb.delete(id)` / `await kb.forget(id)` |
+| CLI | `ai-knot add ...` | `ai-knot search ...` / `ai-knot recall ...` | `ai-knot list ...` / `ai-knot show ...` | `ai-knot delete ...` / `ai-knot forget ...` |
+| MCP | `add` | `search` / `recall` | `list` / `list_facts` | `delete` / `forget` |
+| HTTP sidecar | `POST /v1/facts` | `POST /v1/search` | `GET /v1/facts` | `DELETE /v1/facts/{fact_id}` |
 
 The market-standard loop is `add` → `search` → `list` → `delete`. `ai-knot`
 also keeps the agent-memory words: use `recall` if you think in next-turn
@@ -271,6 +281,7 @@ the branch is on `main`, the repo now also ships a GitHub Pages-ready site in
 | Add long-term memory to a PydanticAI `Agent` | [examples/pydanticai_integration.py](examples/pydanticai_integration.py) |
 | See the PydanticAI runtime-instructions surface without an API key | [examples/pydanticai_surface_demo.py](examples/pydanticai_surface_demo.py) |
 | Use ai-knot from Node / TypeScript | [npm/README.md](npm/README.md) |
+| Inspect the Vercel AI SDK memory surface before wiring a model call | [npm/examples/vercel-ai-sdk-surface.ts](npm/examples/vercel-ai-sdk-surface.ts) |
 | Add long-term memory to a Vercel AI SDK app | [npm/examples/vercel-ai-sdk.ts](npm/examples/vercel-ai-sdk.ts) |
 | Give Claude Desktop / Claude Code persistent memory | [Deployment guide → MCP server](docs/deployment.md#4-run-the-mcp-server) |
 | Plug memory into LangChain / LangGraph | [examples/langchain_integration.py](examples/langchain_integration.py) |

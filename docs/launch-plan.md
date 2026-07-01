@@ -83,7 +83,12 @@ field with a credibility crisis, the honest number *is* the hook.
   with `scripts/render_hero_demo_gif.py` keeping it reproducible.
 - CrewAI follow-up distribution assets prepared: zero-network demo, case-study copy, and a maintainer launch checklist.
 - Vercel AI SDK follow-up distribution assets prepared: named adapter, npm-side example, and channel copy for the TypeScript app path.
-- PydanticAI follow-up distribution copy prepared in `docs/announce.md`, tied to
+- Vercel AI SDK follow-up case-study asset prepared in
+  `docs/vercel-ai-sdk-case-study.md`, tied to the new repo-native
+  `npm/examples/vercel-ai-sdk-surface.ts` proof and the real
+  `npm/examples/vercel-ai-sdk.ts` example.
+- PydanticAI follow-up case-study asset prepared in
+  `docs/pydanticai-case-study.md`, tied to
   `examples/pydanticai_surface_demo.py` and `examples/pydanticai_integration.py`.
 - OpenClaw follow-up distribution asset prepared: app/MCP case-study copy routed to the zero-network example and setup command.
 - Claude/MCP follow-up distribution asset prepared: zero-network setup demo plus channel-ready case-study copy.
@@ -195,7 +200,7 @@ copy, release runbook + idempotent publish workflows, CLI audit ops, LangChain /
 LangGraph adapters, a docs-based launch kit (positioning, competitive analysis,
 gap analysis, FAQ, whitepaper, developer article), and refreshed contributor docs.
 Codespaces/devcontainer support, a buyer-facing comparison guide, a demo-recording
-flow, a generated hero GIF asset, CrewAI / AutoGen / OpenAI Agents / PydanticAI adapters, CrewAI / OpenClaw / Claude MCP
+flow, a generated hero GIF asset, CrewAI / AutoGen / OpenAI Agents / PydanticAI adapters, CrewAI / PydanticAI / Vercel AI SDK / OpenClaw / Claude MCP
 case-study / proof assets, and a submission pack for directory/listing distribution
 are also now in the repo. The same is now true for the browser inspector and the
 rendered notebook walkthrough.

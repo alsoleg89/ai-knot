@@ -61,6 +61,22 @@ kb.learn(turns, provider="openai-compat",                    # any compatible AP
 context = kb.recall("how should I deploy this?")   # recall never calls the LLM
 ```
 
+## Core memory loop
+
+`ai-knot` keeps both the agent-memory verbs and the CRUD-style verbs that other
+memory systems train developers to expect:
+
+```python
+kb.add("User prefers Python")
+kb.search("what language does the user use?")   # alias: kb.recall(...)
+kb.list()                                       # alias: kb.list_facts()
+kb.delete(fact_id)                              # alias: kb.forget(...)
+```
+
+Use `recall()` when you want next-turn memory language in your app code. Use
+`search()` when you want the familiar market-standard `add -> search -> list ->
+delete` loop.
+
 ### Pluggable storage backends
 
 No vendor lock-in. Swap backends with one line — same API, same code.

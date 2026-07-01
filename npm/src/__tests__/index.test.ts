@@ -195,6 +195,13 @@ describe("KnowledgeBase", () => {
     await kb.close();
   });
 
+  it("search() matches recall()", async () => {
+    setup();
+    const kb = new KnowledgeBase();
+    await expect(kb.search("TypeScript")).resolves.toEqual(await kb.recall("TypeScript"));
+    await kb.close();
+  });
+
   it("add() forwards tags as the tags MCP argument", async () => {
     setup();
     lastAddArguments = undefined;
@@ -309,6 +316,13 @@ describe("KnowledgeBase", () => {
     await kb.close();
   });
 
+  it("list() matches listFacts()", async () => {
+    setup();
+    const kb = new KnowledgeBase();
+    await expect(kb.list()).resolves.toEqual(await kb.listFacts());
+    await kb.close();
+  });
+
   it("stats() returns a Stats object", async () => {
     setup();
     const kb = new KnowledgeBase();
@@ -321,6 +335,13 @@ describe("KnowledgeBase", () => {
     setup();
     const kb = new KnowledgeBase();
     await expect(kb.forget("abcd1234")).resolves.toBeUndefined();
+    await kb.close();
+  });
+
+  it("delete() resolves without error", async () => {
+    setup();
+    const kb = new KnowledgeBase();
+    await expect(kb.delete("abcd1234")).resolves.toBeUndefined();
     await kb.close();
   });
 

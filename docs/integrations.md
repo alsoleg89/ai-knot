@@ -147,6 +147,7 @@ Try next:
 
 - zero-network surface proof: [`examples/pydanticai_surface_demo.py`](../examples/pydanticai_surface_demo.py)
 - real integration example: [`examples/pydanticai_integration.py`](../examples/pydanticai_integration.py)
+- distribution-ready proof asset: [pydanticai-case-study.md](pydanticai-case-study.md)
 - full API notes: [usage.md#pydanticai](usage.md#pydanticai)
 
 ### Vercel AI SDK
@@ -186,8 +187,10 @@ What it does:
 
 Try next:
 
+- repo-native surface proof: [`../npm/examples/vercel-ai-sdk-surface.ts`](../npm/examples/vercel-ai-sdk-surface.ts)
 - repo-native example: [`npm/examples/vercel-ai-sdk.ts`](../npm/examples/vercel-ai-sdk.ts)
 - npm package docs: [../npm/README.md](../npm/README.md)
+- distribution-ready proof asset: [vercel-ai-sdk-case-study.md](vercel-ai-sdk-case-study.md)
 
 ### OpenClaw
 

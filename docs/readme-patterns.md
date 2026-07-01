@@ -52,6 +52,28 @@ Two patterns matter most across these projects:
 1. the first route is specific, not abstract;
 2. the README names the exact surface the developer already has in front of them.
 
+## What the memory verbs look like in the market
+
+The official sources are not consistent on *one* universal vocabulary, but the
+pattern is clear:
+
+- `Mem0` makes `add` and `search` explicit in both its agent-signup quickstart
+  and CLI section.
+- `Graphiti` frames the loop as `add episodes` plus `search relationships` /
+  `search nodes`.
+- `LangMem` surfaces `create_manage_memory_tool(...)` and
+  `create_search_memory_tool(...)`, so "manage" and "search" are the first verbs
+  framework users see.
+- `Letta` is the outlier: it leads with CLI vs API, and memory appears through
+  `memory_blocks` plus message-based agent calls rather than CRUD verbs.
+
+That means `ai-knot` should not force one wording everywhere. The right move is:
+
+1. keep the market-standard `add -> search -> list -> delete` loop visible across
+   Python, TypeScript, CLI, MCP, and HTTP;
+2. keep the agent-memory words `learn`, `recall`, and `forget` for teams that
+   think in next-turn context rather than CRUD.
+
 ---
 
 ## Mem0
@@ -258,6 +280,9 @@ This pass applied the market patterns directly:
    channels a shareable artifact beyond README prose.
 7. The root README and CLI now expose a market-standard memory loop:
    `add -> search -> list -> delete`, with `recall` / `show` / `forget` kept as
+   aliases for agent-memory framing.
+8. The core Python API, npm client, skill surface, and usage docs now expose the
+   same loop explicitly, so the README promise matches the actual SDK contract.
    agent-oriented aliases and `learn` surfaced for raw-text extraction.
 
 ---

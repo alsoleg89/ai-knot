@@ -109,6 +109,13 @@ export class KnowledgeBase {
   }
 
   /**
+   * Alias for recall() using the market-standard search verb.
+   */
+  async search(query: string, options: RecallOptions = {}): Promise<string> {
+    return this.recall(query, options);
+  }
+
+  /**
    * Extract and store facts from a conversation (the LLM-backed ingest path).
    * Mirrors the `learn` MCP tool; requires the server to have an LLM provider
    * configured, otherwise it falls back to storing the last user message.
@@ -147,12 +154,26 @@ export class KnowledgeBase {
   }
 
   /**
+   * Alias for forget() using the CRUD-style delete verb.
+   */
+  async delete(factId: string): Promise<void> {
+    await this.forget(factId);
+  }
+
+  /**
    * List all stored facts as structured objects.
    */
   async listFacts(): Promise<Fact[]> {
     const text = await this.client.call("list_facts", {});
     if (text === "No facts stored.") return [];
     return JSON.parse(text) as Fact[];
+  }
+
+  /**
+   * Alias for listFacts() using the familiar list verb.
+   */
+  async list(): Promise<Fact[]> {
+    return this.listFacts();
   }
 
   /**

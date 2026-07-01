@@ -25,7 +25,7 @@ needs an LLM; LLMs are optional only on the write/extraction path.
 
 | Surface | Install | Use this shape |
 |---|---|---|
-| Core Python | `pip install ai-knot` | `KnowledgeBase.add(...)`, `KnowledgeBase.recall(...)` |
+| Core Python | `pip install ai-knot` | `KnowledgeBase.add(...)`, `KnowledgeBase.search(...)` / `KnowledgeBase.recall(...)` |
 | `learn()` extraction | `pip install "ai-knot[openai]"` | `KnowledgeBase(..., provider="openai")` |
 | CrewAI | `pip install "ai-knot[crewai]"` | `AiKnotCrewAIMemory` via `Crew(memory=...)` |
 | AutoGen | `pip install "ai-knot[autogen]"` | `AiKnotAutoGenMemory` via `AssistantAgent(memory=[...])` |
@@ -40,7 +40,7 @@ needs an LLM; LLMs are optional only on the write/extraction path.
 All integrations reduce to the same loop:
 
 1. store facts with `add(...)` or `learn(...)`;
-2. call `recall(...)` for the next turn;
+2. call `search(...)` / `recall(...)` for the next turn;
 3. inject only the recalled facts into the model context.
 
 Minimal example:
@@ -52,7 +52,7 @@ kb = KnowledgeBase(agent_id="assistant")
 kb.add("User prefers Python over Java")
 kb.add("User deploys APIs with Docker and Kubernetes")
 
-facts = kb.recall("what stack does the user use?")
+facts = kb.search("what stack does the user use?")  # alias: kb.recall(...)
 ```
 
 ## Framework-native entry points

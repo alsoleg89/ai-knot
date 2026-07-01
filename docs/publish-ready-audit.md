@@ -50,6 +50,8 @@ This is why the launch is still prepared-but-not-executed rather than fully done
 3. the public `main` branch still does not expose:
    - `docs/assets/hero-demo.gif`
    - `docs/crewai-case-study.md`
+   - `docs/pydanticai-case-study.md`
+   - `docs/vercel-ai-sdk-case-study.md`
    - `docs/openclaw-case-study.md`
    - `docs/claude-mcp-case-study.md`
    - `docs/publish-ready-audit.md`
@@ -58,6 +60,7 @@ This is why the launch is still prepared-but-not-executed rather than fully done
    - `examples/notebook_walkthrough.ipynb`
    - `examples/pydanticai_integration.py`
    - `examples/pydanticai_surface_demo.py`
+   - `npm/examples/vercel-ai-sdk-surface.ts`
    - `scripts/render_hero_demo_gif.py`
    - `skills/README.md`
 
@@ -102,10 +105,10 @@ Prepared surfaces in-repo:
 - OpenClaw: [openclaw-case-study.md](openclaw-case-study.md), [examples/openclaw_integration.py](../examples/openclaw_integration.py)
 - Claude/MCP: [claude-mcp-case-study.md](claude-mcp-case-study.md), [examples/claude_mcp_setup.py](../examples/claude_mcp_setup.py)
 - OpenAI Agents SDK: [examples/openai_agents_integration.py](../examples/openai_agents_integration.py)
-- PydanticAI: [examples/pydanticai_surface_demo.py](../examples/pydanticai_surface_demo.py), [examples/pydanticai_integration.py](../examples/pydanticai_integration.py)
+- PydanticAI: [pydanticai-case-study.md](pydanticai-case-study.md), [examples/pydanticai_surface_demo.py](../examples/pydanticai_surface_demo.py), [examples/pydanticai_integration.py](../examples/pydanticai_integration.py)
 - AutoGen: [examples/autogen_integration.py](../examples/autogen_integration.py)
 - LangChain / LangGraph: [examples/langchain_integration.py](../examples/langchain_integration.py)
-- Vercel AI SDK: [../npm/examples/vercel-ai-sdk.ts](../npm/examples/vercel-ai-sdk.ts), [../npm/README.md](../npm/README.md)
+- Vercel AI SDK: [vercel-ai-sdk-case-study.md](vercel-ai-sdk-case-study.md), [../npm/examples/vercel-ai-sdk-surface.ts](../npm/examples/vercel-ai-sdk-surface.ts), [../npm/examples/vercel-ai-sdk.ts](../npm/examples/vercel-ai-sdk.ts), [../npm/README.md](../npm/README.md)
 - TypeScript / npm: [../npm/README.md](../npm/README.md)
 - Assistant skills: [../skills/README.md](../skills/README.md), [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
 - HTTP/browser inspection: [deployment.md#browser-inspector](deployment.md#browser-inspector)

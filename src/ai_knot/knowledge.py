@@ -1246,6 +1246,22 @@ class KnowledgeBase(_LearningMixin):
                 lines.append(f"[{len(lines) + 1}] {text}")
         return "\n".join(lines)
 
+    def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        include_unsupported: bool = False,
+    ) -> str:
+        """Alias for recall() using the market-standard search verb."""
+        return self.recall(
+            query,
+            top_k=top_k,
+            now=now,
+            include_unsupported=include_unsupported,
+        )
+
     def list_facts(self) -> list[Fact]:
         """Return all stored facts for this agent.
 
@@ -1253,6 +1269,10 @@ class KnowledgeBase(_LearningMixin):
             List of all Facts, in storage order.
         """
         return self._storage.load(self._agent_id)
+
+    def list(self) -> list[Fact]:
+        """Alias for list_facts() using the familiar list verb."""
+        return self.list_facts()
 
     def lineage(self, fact_id: str) -> list[Fact]:
         """Return the supersession chain for *fact_id*, newest → oldest.
@@ -1407,6 +1427,10 @@ class KnowledgeBase(_LearningMixin):
         """
         self._storage.delete(self._agent_id, fact_id)
         logger.info("Forgot fact '%s' from agent '%s'", fact_id, self._agent_id)
+
+    def delete(self, fact_id: str) -> None:
+        """Alias for forget() using the CRUD-style delete verb."""
+        self.forget(fact_id)
 
     def decay(self, *, now: datetime | None = None) -> None:
         """Apply Ebbinghaus forgetting curve to all stored facts.

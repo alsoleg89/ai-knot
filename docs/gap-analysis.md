@@ -51,7 +51,7 @@ readiness**, not core product legitimacy.
 | No live competitor bench-pack | would reinforce the reproducibility wedge | **Closed in this update** (repo-native offline / local-llm / real profiles plus a publish-ready scorecard generator now ship in-repo) |
 | No lightweight web UI knowledge inspector | would make demos and debugging more shareable | **Closed in this update** |
 | No notebook-based walkthrough | would help educational and social channels | **Closed in this update** |
-| No surface-specific proof asset prepared | concrete proof converts better than generic capability lists | **Closed in this update** (CrewAI + OpenClaw + Claude MCP case-study/post assets now in-repo; public posting still maintainer-only) |
+| No surface-specific proof asset prepared | concrete proof converts better than generic capability lists | **Closed in this update** (CrewAI + PydanticAI + Vercel AI SDK + OpenClaw + Claude MCP proof assets now in-repo; public posting still maintainer-only) |
 
 ---
 
@@ -87,6 +87,8 @@ readiness**, not core product legitimacy.
 28. Added a repo-native competitor bench-pack script, guide, and scorecard flow for offline, local-llm, and real comparison profiles
 29. Added a named Vercel AI SDK adapter for the npm package, plus repo-native example and docs routing for the mainstream TypeScript app path
 30. Added a dependency-light PydanticAI adapter, runnable examples, and docs routing for a framework-native Python agent surface
+31. Added dedicated PydanticAI and Vercel AI SDK proof assets, plus a zero-network Vercel AI SDK surface demo for channel-specific follow-ups
+32. Aligned the core Python API, npm client, README, skill surface, and usage docs around the market-standard `add -> search -> list -> delete` memory loop while keeping `learn` / `recall` / `forget` aliases for agent-memory framing
 
 ## Highest-value remaining work
 

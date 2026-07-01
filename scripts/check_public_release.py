@@ -30,6 +30,8 @@ README_MARKERS = [
 PUBLIC_FILE_MARKERS = [
     "docs/assets/hero-demo.gif",
     "docs/crewai-case-study.md",
+    "docs/pydanticai-case-study.md",
+    "docs/vercel-ai-sdk-case-study.md",
     "docs/openclaw-case-study.md",
     "docs/claude-mcp-case-study.md",
     "docs/publish-ready-audit.md",
@@ -38,6 +40,7 @@ PUBLIC_FILE_MARKERS = [
     "examples/notebook_walkthrough.ipynb",
     "examples/pydanticai_integration.py",
     "examples/pydanticai_surface_demo.py",
+    "npm/examples/vercel-ai-sdk-surface.ts",
     "scripts/render_hero_demo_gif.py",
     "skills/README.md",
 ]

@@ -57,8 +57,8 @@ const kb = new KnowledgeBase({
 // Add a fact
 await kb.add('User prefers TypeScript');
 
-// Recall relevant facts for a query — never calls an LLM
-const context = await kb.recall('what language does user prefer?');
+// Search relevant facts for a query — alias: recall(), never calls an LLM
+const context = await kb.search('what language does user prefer?');
 console.log(context);
 // -> "[1] User prefers TypeScript"
 
@@ -121,6 +121,11 @@ const messagesWithMemory = await memory.buildMessages([
 
 Full repo-native example: [`npm/examples/vercel-ai-sdk.ts`](examples/vercel-ai-sdk.ts)
 
+If you want to inspect the same memory surface before any model call,
+use the repo-native surface proof:
+
+[`npm/examples/vercel-ai-sdk-surface.ts`](examples/vercel-ai-sdk-surface.ts)
+
 ---
 
 ## API
@@ -143,7 +148,10 @@ const kb = new KnowledgeBase({
 
 ```typescript
 await kb.add(content, options?)   // → Fact
+await kb.search(query, options?)  // → string (alias: recall)
 await kb.recall(query, options?)  // → string (formatted facts)
+await kb.list()                   // → Fact[] (alias: listFacts)
+await kb.delete(factId)           // → void (alias: forget)
 await kb.forget(factId)           // → void
 await kb.listFacts()              // → Fact[]
 await kb.stats()                  // → Stats
@@ -151,6 +159,9 @@ await kb.snapshot(name)           // → void
 await kb.restore(name)            // → void
 await kb.close()                  // → void (shuts down subprocess)
 ```
+
+If you prefer the familiar memory-tool loop, use `add -> search -> list -> delete`.
+If you prefer agent-memory language, keep `recall -> listFacts -> forget`.
 
 ### `new AiKnotAISDKMemory(recallClient, options?)`
 
@@ -231,7 +242,7 @@ Always call `kb.close()` when done:
 const kb = new KnowledgeBase({ agentId: 'bot' });
 try {
   await kb.add('...');
-  const ctx = await kb.recall('...');
+  const ctx = await kb.search('...');
 } finally {
   await kb.close();
 }

@@ -15,9 +15,9 @@ kb.add("User prefers Python, dislikes async code", type=MemoryType.PROCEDURAL, i
 kb.add("User deploys everything in Docker", importance=0.80)
 kb.add("Deploy failed last Tuesday", type=MemoryType.EPISODIC, importance=0.40)
 
-# Recall relevant facts for a query.
+# Search relevant facts for a query (alias: recall()).
 print("=== Query: 'how should I write this deployment script?' ===")
-context = kb.recall("how should I write this deployment script?")
+context = kb.search("how should I write this deployment script?")
 print(context)
 
 print()

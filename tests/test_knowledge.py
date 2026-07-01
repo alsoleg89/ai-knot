@@ -111,6 +111,24 @@ class TestForget:
         assert len(facts) == 1
 
 
+class TestMarketAliases:
+    """CRUD-style aliases for the core memory loop."""
+
+    def test_search_alias_matches_recall(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        assert kb.search("what language?") == kb.recall("what language?")
+
+    def test_list_alias_matches_list_facts(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        kb.add("User deploys with Docker")
+        assert kb.list() == kb.list_facts()
+
+    def test_delete_alias_matches_forget(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("Forgettable fact")
+        kb.delete(fact.id)
+        assert kb.list_facts() == []
+
+
 class TestDecay:
     """Applying forgetting curve to all facts."""
 

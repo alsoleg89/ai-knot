@@ -62,8 +62,8 @@ move the whole sequence by exactly one week rather than launching half-ready.
 - LinkedIn: lead with auditability, storage control, and multi-agent governance.
 - Follow-up posts: lead with one concrete surface, not the whole product.
 - Best prepared follow-up surface today: `CrewAI` via `docs/crewai-case-study.md`.
-- Second prepared follow-up surface: `PydanticAI` via `examples/pydanticai_surface_demo.py`, `examples/pydanticai_integration.py`, and `docs/announce.md`.
-- Third prepared follow-up surface: `Vercel AI SDK` via `npm/examples/vercel-ai-sdk.ts` and `npm/README.md`.
+- Second prepared follow-up surface: `PydanticAI` via `docs/pydanticai-case-study.md`, `examples/pydanticai_surface_demo.py`, and `examples/pydanticai_integration.py`.
+- Third prepared follow-up surface: `Vercel AI SDK` via `docs/vercel-ai-sdk-case-study.md`, `npm/examples/vercel-ai-sdk-surface.ts`, `npm/examples/vercel-ai-sdk.ts`, and `npm/README.md`.
 - Fourth prepared follow-up surface: `OpenClaw` via `docs/openclaw-case-study.md`.
 - Fifth prepared follow-up surface: `Claude MCP` via `docs/claude-mcp-case-study.md`.
 - Next-best follow-up surfaces after that: `OpenAI Agents SDK`, then the HTTP sidecar.

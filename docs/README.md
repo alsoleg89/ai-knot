@@ -30,6 +30,8 @@
 | [whitepaper.md](whitepaper.md) | Research-style long-form launch piece for GitHub Pages, a PDF, Substack, or a personal site. |
 | [developer-article.md](developer-article.md) | Technical article for a developer audience: how to add deterministic memory to an agent quickly. |
 | [crewai-case-study.md](crewai-case-study.md) | Surface-specific proof asset for the CrewAI channel: demo flow, post copy, and reply snippets. |
+| [pydanticai-case-study.md](pydanticai-case-study.md) | Surface-specific proof asset for the PydanticAI channel: runtime-instructions angle, demo flow, and reply snippets. |
+| [vercel-ai-sdk-case-study.md](vercel-ai-sdk-case-study.md) | Surface-specific proof asset for the Vercel AI SDK channel: app-shaped demo flow, post copy, and reply snippets. |
 | [openclaw-case-study.md](openclaw-case-study.md) | Surface-specific proof asset for the OpenClaw / MCP app channel: config flow, demo path, and post copy. |
 | [claude-mcp-case-study.md](claude-mcp-case-study.md) | Surface-specific proof asset for Claude Desktop / Claude Code via MCP: setup path, proof flow, and post copy. |
 | [faq.md](faq.md) | FAQ and objections handling for launch threads, sales calls, and docs. |

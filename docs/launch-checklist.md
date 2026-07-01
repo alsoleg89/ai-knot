@@ -149,6 +149,8 @@ Copy is already in:
 
 - [announce.md](announce.md)
 - [crewai-case-study.md](crewai-case-study.md)
+- [pydanticai-case-study.md](pydanticai-case-study.md)
+- [vercel-ai-sdk-case-study.md](vercel-ai-sdk-case-study.md)
 - [openclaw-case-study.md](openclaw-case-study.md)
 - [claude-mcp-case-study.md](claude-mcp-case-study.md)
 - [channel-playbook.md](channel-playbook.md)
@@ -185,13 +187,14 @@ If you have time for a second follow-up, use PydanticAI next. The repo now has:
 
 - the zero-network `examples/pydanticai_surface_demo.py` proof,
 - a real `examples/pydanticai_integration.py` wiring path,
-- channel-ready copy in [announce.md](announce.md).
+- channel-ready copy in [pydanticai-case-study.md](pydanticai-case-study.md).
 
 If you have time for a third follow-up, use Vercel AI SDK next. The repo now has:
 
+- the repo-native `npm/examples/vercel-ai-sdk-surface.ts` surface proof,
 - the repo-native `npm/examples/vercel-ai-sdk.ts` proof,
 - npm-side docs in [../npm/README.md](../npm/README.md),
-- channel-ready copy in [announce.md](announce.md).
+- channel-ready copy in [vercel-ai-sdk-case-study.md](vercel-ai-sdk-case-study.md).
 
 If you have time for a fourth follow-up, use OpenClaw next. The repo now has:
 
