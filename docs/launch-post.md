@@ -179,7 +179,7 @@ If you want the same proof from a terminal instead of Python:
 ```bash
 ai-knot add    assistant "User is a senior backend developer who prefers Python"
 ai-knot search assistant "what does the user do?"
-ai-knot show   assistant
+ai-knot list   assistant
 
 export AI_KNOT_PROVIDER=openai
 export OPENAI_API_KEY=sk-...

@@ -42,7 +42,7 @@ If you want to prove the same loop without opening Python first:
 ai-knot add    assistant "User prefers Python over Java"
 ai-knot learn  assistant "User deploys in Docker and uses PostgreSQL"
 ai-knot search assistant "what language does the user prefer?"
-ai-knot show   assistant
+ai-knot list   assistant
 ```
 
 ## 2. Why this is better than replaying history

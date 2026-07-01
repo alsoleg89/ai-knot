@@ -127,6 +127,10 @@ def show(ctx: click.Context, agent_id: str) -> None:
     click.echo(f"\n{len(facts)} facts total.")
 
 
+# CLI alias for users who expect a CRUD-style "list" verb.
+main.add_command(show, "list")
+
+
 @main.command()
 @click.argument("agent_id")
 @click.argument("content")

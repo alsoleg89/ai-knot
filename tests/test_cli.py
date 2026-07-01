@@ -29,7 +29,7 @@ def _cmd(data_dir: str, args: list[str]) -> list[str]:
 
 
 class TestCLIShow:
-    """ai-knot show <agent_id>."""
+    """ai-knot show/list <agent_id>."""
 
     def test_show_empty(self, runner: CliRunner, data_dir: str) -> None:
         result = runner.invoke(main, _cmd(data_dir, ["show", "myagent"]))
@@ -39,6 +39,12 @@ class TestCLIShow:
     def test_show_with_facts(self, runner: CliRunner, data_dir: str) -> None:
         runner.invoke(main, _cmd(data_dir, ["add", "myagent", "User likes Python"]))
         result = runner.invoke(main, _cmd(data_dir, ["show", "myagent"]))
+        assert result.exit_code == 0
+        assert "Python" in result.output
+
+    def test_list_alias_with_facts(self, runner: CliRunner, data_dir: str) -> None:
+        runner.invoke(main, _cmd(data_dir, ["add", "myagent", "User likes Python"]))
+        result = runner.invoke(main, _cmd(data_dir, ["list", "myagent"]))
         assert result.exit_code == 0
         assert "Python" in result.output
 

@@ -33,7 +33,7 @@ and the sequence in [launch-plan.md](launch-plan.md).
 > happened, so `recall(now=…)` answers "what was true as of X".
 >
 > If you prefer a terminal proof over SDK snippets, the repo now exposes a short
-> memory loop: `ai-knot add`, `ai-knot search`, `ai-knot show`, `ai-knot forget`,
+> memory loop: `ai-knot add`, `ai-knot search`, `ai-knot list`, `ai-knot delete`,
 > plus `ai-knot learn` when you want raw text distilled into facts.
 >
 > SQLite / Postgres / YAML behind one API, CrewAI + AutoGen + OpenAI Agents SDK
@@ -55,7 +55,7 @@ and the sequence in [launch-plan.md](launch-plan.md).
 >
 > The repo now ships both named-reader QA benchmarks and a deterministic retrieval suite
 > you can rerun locally. Start with the 30-second quickstart in the README, or with
-> the CLI loop: `ai-knot add`, `ai-knot search`, `ai-knot show`, `ai-knot forget`.
+> the CLI loop: `ai-knot add`, `ai-knot search`, `ai-knot list`, `ai-knot delete`.
 > If you want extraction from raw notes instead of manual facts, use
 > `ai-knot learn` with `AI_KNOT_PROVIDER` / `OPENAI_API_KEY`.
 

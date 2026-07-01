@@ -30,7 +30,7 @@ Common pattern:
 5. **Minimize "what do I install?" ambiguity.**
    The install line follows the surface.
 6. **Use command words the market already expects.**
-   `add`, `search`, `show`, `doctor`, `onboard`, not only project-specific
+   `add`, `search`, `list`, `delete`, `doctor`, `onboard`, not only project-specific
    vocabulary.
 
 That is the core reason these READMEs convert curiosity into trials.
@@ -68,6 +68,8 @@ Mem0's README starts with a benchmark/research hook, then routes visitors into:
 - integrations and demos.
 
 It does not force one default path for everyone.
+Its first CLI proof is literal and low-friction: `mem0 init`, `mem0 add`,
+`mem0 search`.
 
 ### Integration shape
 
@@ -216,6 +218,9 @@ OpenClaw's README routes visitors by:
 - docs by goal,
 - troubleshooting via `doctor`.
 
+Its first-run verbs are equally explicit: `openclaw onboard`,
+`openclaw gateway status`, `openclaw doctor`.
+
 ### Integration shape
 
 The important pattern is not just "supports many things." It is that the README
@@ -252,8 +257,8 @@ This pass applied the market patterns directly:
 6. The repo now includes a rendered notebook walkthrough, giving social and educational
    channels a shareable artifact beyond README prose.
 7. The root README and CLI now expose a market-standard memory loop:
-   `add -> search -> show -> forget`, with `recall` kept as an alias for
-   agent-oriented language and `learn` surfaced for raw-text extraction.
+   `add -> search -> list -> delete`, with `recall` / `show` / `forget` kept as
+   agent-oriented aliases and `learn` surfaced for raw-text extraction.
 
 ---
 

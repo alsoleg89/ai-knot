@@ -79,8 +79,8 @@ Start with:
 
 - `ai-knot add assistant "User deploys in Docker"`
 - `ai-knot search assistant "what does the user deploy with?"`
-- `ai-knot show assistant`
-- `ai-knot forget assistant <fact_id>`
+- `ai-knot list assistant`
+- `ai-knot delete assistant <fact_id>`
 
 If you want ai-knot to extract facts from raw text rather than add them one by
 one, use `ai-knot learn assistant "raw note here"` with a configured provider.

@@ -147,14 +147,15 @@ should be no different:
 ```bash
 ai-knot add    assistant "User deploys APIs with Docker and Kubernetes"
 ai-knot search assistant "what does the user deploy with?"   # alias: ai-knot recall
-ai-knot show   assistant
-ai-knot forget assistant <fact_id>   # or: ai-knot delete assistant <fact_id>
+ai-knot list   assistant                                  # alias: ai-knot show
+ai-knot delete assistant <fact_id>                        # alias: ai-knot forget
 ```
 
-Use `search` if you think in memory/database terms; use `recall` if you think in
-agent-context terms. They are the same command surface. Use `show` to list
-stored facts and their IDs. Use `forget` / `delete` for a single fact, and
-`clear` only when you want to wipe the whole agent namespace.
+The market-standard loop is `add` → `search` → `list` → `delete`. `ai-knot`
+also keeps the agent-memory words: use `recall` if you think in next-turn
+context terms, `show` if you prefer that verb for listing, and `forget` if that
+reads more naturally than `delete`. Use `clear` only when you want to wipe the
+whole agent namespace.
 
 If you want ai-knot to **extract facts from raw text** instead of adding them one
 by one:

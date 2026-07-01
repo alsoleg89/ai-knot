@@ -261,6 +261,7 @@ ai-knot learn   my_agent "raw text to distill into facts"
 ai-knot search  my_agent "query"                                 # alias for recall
 ai-knot recall  my_agent "query"
 ai-knot recall  my_agent "query" --now 2025-01-01T00:00:00   # point-in-time recall
+ai-knot list    my_agent                                      # alias for show
 ai-knot show    my_agent                                      # list stored facts + IDs
 ai-knot forget  my_agent <fact_id>                            # single-fact delete
 ai-knot delete  my_agent <fact_id>                            # alias for forget
@@ -276,10 +277,11 @@ ai-knot setup openclaw --agent-id bot --storage sqlite       # OpenClaw config
 ai-knot serve   my_agent --port 8000                         # HTTP sidecar + browser inspector
 ```
 
-The baseline human-operated loop is `add -> search -> show -> forget`. `search`
-and `recall` are the same underlying command: `search` matches the way tools
-like Mem0 frame the operation, while `recall` matches the way agent builders
-usually talk about injecting context into the next turn.
+The baseline human-operated loop is `add -> search -> list -> delete`. That is
+the most recognizable shape if you come from tools like Mem0 or from CRUD-style
+CLIs. `ai-knot` also preserves the agent-memory language: `search` and `recall`
+are the same underlying command, `list` and `show` are the same listing
+surface, and `delete` / `forget` both remove a single fact by ID.
 
 If you want the CLI to do LLM-backed extraction instead of manual `add()` calls:
 
