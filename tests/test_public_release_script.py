@@ -62,6 +62,8 @@ def test_main_reports_failing_public_state(
     assert "npm latest:  0.9.3" in out
     assert "[FAIL] npm matches local" in out
     assert "[FAIL] public repo file: docs/crewai-case-study.md" in out
+    assert "[FAIL] public repo file: docs/assets/hero-demo.gif" in out
+    assert "[FAIL] public repo file: examples/pydanticai_surface_demo.py" in out
 
 
 def test_main_reports_green_state(

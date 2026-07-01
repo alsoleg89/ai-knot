@@ -43,10 +43,12 @@ This is why the launch is still prepared-but-not-executed rather than fully done
 
 1. public npm latest is still `0.9.3` instead of `0.11.0`;
 2. the public README is still missing launch-branch markers such as
-   `Install by surface`, `What it looks like in your stack`, `skills/README.md`,
-   `Browser inspector`, `examples/crewai_surface_demo.py`, and
-   `docs/launch-checklist.md`;
+   `Install by surface`, `What it looks like in your stack`, `PydanticAI`,
+   `skills/README.md`, `Browser inspector`, `hero-demo.gif`,
+   `examples/crewai_surface_demo.py`, `examples/pydanticai_surface_demo.py`,
+   and `docs/launch-checklist.md`;
 3. the public `main` branch still does not expose:
+   - `docs/assets/hero-demo.gif`
    - `docs/crewai-case-study.md`
    - `docs/openclaw-case-study.md`
    - `docs/claude-mcp-case-study.md`
@@ -54,6 +56,9 @@ This is why the launch is still prepared-but-not-executed rather than fully done
    - `docs/readme-patterns.md`
    - `docs/site/index.html`
    - `examples/notebook_walkthrough.ipynb`
+   - `examples/pydanticai_integration.py`
+   - `examples/pydanticai_surface_demo.py`
+   - `scripts/render_hero_demo_gif.py`
    - `skills/README.md`
 
 ---

@@ -18,13 +18,17 @@ NPM_URL = "https://registry.npmjs.org/ai-knot"
 README_MARKERS = [
     "Install by surface",
     "What it looks like in your stack",
+    "PydanticAI",
     "skills/README.md",
     "Browser inspector",
+    "hero-demo.gif",
     "examples/crewai_surface_demo.py",
+    "examples/pydanticai_surface_demo.py",
     "docs/launch-checklist.md",
 ]
 
 PUBLIC_FILE_MARKERS = [
+    "docs/assets/hero-demo.gif",
     "docs/crewai-case-study.md",
     "docs/openclaw-case-study.md",
     "docs/claude-mcp-case-study.md",
@@ -32,6 +36,9 @@ PUBLIC_FILE_MARKERS = [
     "docs/readme-patterns.md",
     "docs/site/index.html",
     "examples/notebook_walkthrough.ipynb",
+    "examples/pydanticai_integration.py",
+    "examples/pydanticai_surface_demo.py",
+    "scripts/render_hero_demo_gif.py",
     "skills/README.md",
 ]
 
