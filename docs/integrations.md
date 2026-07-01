@@ -13,6 +13,7 @@ reference in [usage.md](usage.md).
 | OpenAI Agents SDK | `RunConfig` hook into existing SDK runs | `pip install "ai-knot[agents]"` | [`examples/openai_agents_integration.py`](../examples/openai_agents_integration.py) |
 | OpenClaw | MCP-backed desktop/app memory or Python-side provider compatibility | `pip install "ai-knot[mcp]"` | [`examples/openclaw_integration.py`](../examples/openclaw_integration.py) |
 | LangChain / LangGraph | retriever or chat-memory drop-in | `pip install ai-knot` | [`examples/langchain_integration.py`](../examples/langchain_integration.py) |
+| Vercel AI SDK | prepend recalled facts to `generateText()` / `streamText()` inputs | `npm install ai-knot ai @ai-sdk/openai` | [`npm/examples/vercel-ai-sdk.ts`](../npm/examples/vercel-ai-sdk.ts) |
 | MCP server | Claude Desktop / Claude Code / any MCP client | `pip install "ai-knot[mcp]"` | [deployment.md#4-run-the-mcp-server](deployment.md#4-run-the-mcp-server) |
 | Skills / coding assistants | teach Codex / Claude Code / OpenClaw-style tools ai-knot's surfaces up front | `npx skills add https://github.com/alsoleg89/ai-knot --skill ai-knot` | [../skills/README.md](../skills/README.md) |
 | TypeScript / npm | Node apps with the Python sidecar/client path | `npm install ai-knot` | [../npm/README.md](../npm/README.md) |
@@ -109,6 +110,46 @@ run_config = memory.build_run_config()
 
 See also: [usage.md#openai-agents-sdk](usage.md#openai-agents-sdk)
 
+### Vercel AI SDK
+
+Use `AiKnotAISDKMemory` when you already have a Vercel AI SDK app and want
+ai-knot to fill the `system` or `messages` surface with recalled long-term
+facts instead of replaying whole transcripts.
+
+```bash
+npm install ai-knot ai @ai-sdk/openai
+```
+
+```typescript
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { AiKnotAISDKMemory, KnowledgeBase } from "ai-knot";
+
+const kb = new KnowledgeBase({ agentId: "assistant", storage: "sqlite" });
+const memory = new AiKnotAISDKMemory(kb, { topK: 4 });
+const system = await memory.buildSystem("Write a deploy checklist.", {
+  baseSystem: "You are a concise staff engineer.",
+});
+
+const { text } = await generateText({
+  model: openai("gpt-5"),
+  system,
+  prompt: "Write a deploy checklist.",
+});
+```
+
+What it does:
+
+- recalls only the facts relevant to the current user input,
+- composes them into the exact `system` string shape AI SDK apps already use,
+- keeps model choice, streaming, and route/UI wiring inside your own AI SDK code,
+- also supports `buildMessages()` if your app already operates on message arrays.
+
+Try next:
+
+- repo-native example: [`npm/examples/vercel-ai-sdk.ts`](../npm/examples/vercel-ai-sdk.ts)
+- npm package docs: [../npm/README.md](../npm/README.md)
+
 ### OpenClaw
 
 Use the MCP config path if you're integrating with the OpenClaw app. Use the
@@ -193,8 +234,8 @@ See also: [deployment.md#browser-inspector](deployment.md#browser-inspector)
 ## Status
 
 The stack-specific surfaces that matter most for a first launch are now in-repo:
-CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain / LangGraph, MCP,
-assistant skills, TypeScript, and the HTTP sidecar/browser inspector. The
+CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain / LangGraph, Vercel AI SDK,
+MCP, assistant skills, TypeScript, and the HTTP sidecar/browser inspector. The
 remaining gaps are less about adapters and more about public distribution:
 publishing the updated branch, npm parity, and turning the prepared proof assets
 into public posts.

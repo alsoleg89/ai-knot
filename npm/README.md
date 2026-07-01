@@ -34,6 +34,13 @@ The postinstall script automatically runs `pip install "ai-knot[mcp]"`. If pip i
 pip install "ai-knot[mcp]"
 ```
 
+If you want the shortest app-level TypeScript path with a mainstream runtime,
+pair it with the Vercel AI SDK:
+
+```bash
+npm install ai-knot ai @ai-sdk/openai
+```
+
 ---
 
 ## Quickstart
@@ -69,6 +76,53 @@ await kb.close();
 
 ---
 
+## Vercel AI SDK
+
+`AiKnotAISDKMemory` is the named adapter for AI SDK-style `system` / `messages`
+flows. It keeps ai-knot dependency-light: ai-knot does the recall, and your AI
+SDK code keeps control of the model call.
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { AiKnotAISDKMemory, KnowledgeBase } from 'ai-knot';
+
+const kb = new KnowledgeBase({
+  agentId: 'assistant',
+  storage: 'sqlite',
+  dbPath: '/absolute/path/to/memory.db',
+});
+
+await kb.add('User prefers TypeScript over JavaScript');
+await kb.add('User deploys services with Docker Compose');
+
+const memory = new AiKnotAISDKMemory(kb, { topK: 4 });
+const userInput = 'Write a local deployment checklist for my stack.';
+
+const system = await memory.buildSystem(userInput, {
+  baseSystem: 'You are a concise staff engineer.',
+});
+
+const { text } = await generateText({
+  model: openai('gpt-5'),
+  system,
+  prompt: userInput,
+});
+```
+
+If you already have an AI SDK `messages` array, use `buildMessages()` instead:
+
+```typescript
+const messagesWithMemory = await memory.buildMessages([
+  { role: 'system', content: 'You are a concise staff engineer.' },
+  { role: 'user', content: 'Write a deployment checklist for my stack.' },
+]);
+```
+
+Full repo-native example: [`npm/examples/vercel-ai-sdk.ts`](examples/vercel-ai-sdk.ts)
+
+---
+
 ## API
 
 ### `new KnowledgeBase(options?)`
@@ -96,6 +150,23 @@ await kb.stats()                  // → Stats
 await kb.snapshot(name)           // → void
 await kb.restore(name)            // → void
 await kb.close()                  // → void (shuts down subprocess)
+```
+
+### `new AiKnotAISDKMemory(recallClient, options?)`
+
+```typescript
+const memory = new AiKnotAISDKMemory(kb, {
+  topK?: number,
+  now?: string,
+  header?: string,  // default: "Relevant long-term memory (ai-knot):"
+});
+```
+
+Methods:
+
+```typescript
+await memory.buildSystem(input, options?)    // → string | undefined
+await memory.buildMessages(messages, options?) // → messages with a prepended system message
 ```
 
 ### `add` options

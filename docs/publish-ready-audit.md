@@ -97,6 +97,7 @@ Prepared surfaces in-repo:
 - OpenAI Agents SDK: [examples/openai_agents_integration.py](../examples/openai_agents_integration.py)
 - AutoGen: [examples/autogen_integration.py](../examples/autogen_integration.py)
 - LangChain / LangGraph: [examples/langchain_integration.py](../examples/langchain_integration.py)
+- Vercel AI SDK: [../npm/examples/vercel-ai-sdk.ts](../npm/examples/vercel-ai-sdk.ts), [../npm/README.md](../npm/README.md)
 - TypeScript / npm: [../npm/README.md](../npm/README.md)
 - Assistant skills: [../skills/README.md](../skills/README.md), [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
 - HTTP/browser inspection: [deployment.md#browser-inspector](deployment.md#browser-inspector)

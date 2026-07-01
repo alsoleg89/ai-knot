@@ -96,6 +96,7 @@ Mix extras by surface as needed, for example:
 | HTTP sidecar deployment | `pip install "ai-knot[server]"` |
 | `learn()` with OpenAI-backed extraction | `pip install "ai-knot[openai]"` |
 | Node / TypeScript | `npm install ai-knot` |
+| Vercel AI SDK app | `npm install ai-knot ai @ai-sdk/openai` |
 
 If install or setup fails, start with `ai-knot doctor --json` and
 [docs/troubleshooting.md](docs/troubleshooting.md).
@@ -200,6 +201,25 @@ run_config = AiKnotAgentsMemory(kb, top_k=5).build_run_config()
 result = Runner.run_sync(agent, "Write a deployment checklist.", run_config=run_config)
 ```
 
+### TypeScript / Vercel AI SDK
+
+```typescript
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { AiKnotAISDKMemory, KnowledgeBase } from "ai-knot";
+
+const kb = new KnowledgeBase({ agentId: "assistant", storage: "sqlite" });
+const memory = new AiKnotAISDKMemory(kb, { topK: 5 });
+const system = await memory.buildSystem("Write a deploy checklist.", {
+  baseSystem: "You are a concise staff engineer.",
+});
+const { text } = await generateText({
+  model: openai("gpt-5"),
+  system,
+  prompt: "Write a deploy checklist.",
+});
+```
+
 ### Claude / OpenClaw / any MCP client
 
 ```bash
@@ -229,6 +249,7 @@ the branch is on `main`, the repo now also ships a GitHub Pages-ready site in
 | Add long-term memory to an AutoGen `AssistantAgent` | [examples/autogen_integration.py](examples/autogen_integration.py) |
 | Add long-term memory to the OpenAI Agents SDK | [examples/openai_agents_integration.py](examples/openai_agents_integration.py) |
 | Use ai-knot from Node / TypeScript | [npm/README.md](npm/README.md) |
+| Add long-term memory to a Vercel AI SDK app | [npm/examples/vercel-ai-sdk.ts](npm/examples/vercel-ai-sdk.ts) |
 | Give Claude Desktop / Claude Code persistent memory | [Deployment guide → MCP server](docs/deployment.md#4-run-the-mcp-server) |
 | Plug memory into LangChain / LangGraph | [examples/langchain_integration.py](examples/langchain_integration.py) |
 | Expose memory over HTTP | [Deployment guide → HTTP sidecar](docs/deployment.md#11-http-sidecar) |

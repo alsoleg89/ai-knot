@@ -101,7 +101,7 @@ That makes reproducibility part of the product promise, not just a footnote.
 - **LongMemEval:** 59.6% QA accuracy (Oracle)
 - **Deterministic retrieval suite:** MRR 0.83 vs 0.18 naive
 - **Backends:** SQLite / PostgreSQL / YAML
-- **Surfaces:** Python, npm/TypeScript, MCP, HTTP sidecar + browser inspector, CrewAI, OpenAI Agents SDK, LangChain/LangGraph
+- **Surfaces:** Python, npm/TypeScript, Vercel AI SDK, MCP, HTTP sidecar + browser inspector, CrewAI, OpenAI Agents SDK, LangChain/LangGraph
 - **Read path:** no LLM required
 
 ## Message pillars

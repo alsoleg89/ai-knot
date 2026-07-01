@@ -85,6 +85,7 @@ readiness**, not core product legitimacy.
 26. Added a rendered zero-network notebook walkthrough for educational and social sharing
 27. Added a GitHub Pages-ready landing page and deployment workflow for shareable launch links
 28. Added a repo-native competitor bench-pack script, guide, and scorecard flow for offline, local-llm, and real comparison profiles
+29. Added a named Vercel AI SDK adapter for the npm package, plus repo-native example and docs routing for the mainstream TypeScript app path
 
 ## Highest-value remaining work
 

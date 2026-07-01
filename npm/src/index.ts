@@ -1,4 +1,11 @@
 import { McpClient } from "./client.js";
+import {
+  AiKnotAISDKMemory,
+  type AISDKMessageLike,
+  type AiKnotAISDKBuildMessagesOptions,
+  type AiKnotAISDKBuildSystemOptions,
+  type AiKnotAISDKMemoryOptions,
+} from "./ai_sdk.js";
 import type {
   AddOptions,
   Fact,
@@ -10,6 +17,14 @@ import type {
   ResolvedResult,
   Stats,
 } from "./types.js";
+
+export {
+  AiKnotAISDKMemory,
+  type AISDKMessageLike,
+  type AiKnotAISDKBuildMessagesOptions,
+  type AiKnotAISDKBuildSystemOptions,
+  type AiKnotAISDKMemoryOptions,
+} from "./ai_sdk.js";
 
 export type {
   AddOptions,

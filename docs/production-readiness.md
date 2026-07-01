@@ -97,6 +97,7 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 |---|---|---|
 | MCP server (stdio) | ✅ | Claude Desktop / Claude Code |
 | TypeScript/npm client | ✅ | `learn` / `addResolved` / `recall(now)` / `tags` |
+| Vercel AI SDK adapter | ✅ | `AiKnotAISDKMemory` builds AI SDK `system` / `messages` surfaces from recalled facts; no hard `ai` dependency |
 | OpenClaw memory adapter | ✅ | drop-in adapter + `ai-knot setup openclaw` MCP config flow |
 | CrewAI memory adapter | ✅ | `AiKnotCrewAIMemory` via `Crew(memory=...)` / `Agent(memory=memory.scope(...))`; no hard `crewai` dep |
 | OpenAI Agents SDK adapter | ✅ | `AiKnotAgentsMemory` via `RunConfig.call_model_input_filter`; no hard `openai-agents` dep |
