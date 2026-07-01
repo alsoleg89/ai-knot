@@ -14,12 +14,16 @@ category. This page does that, with two differences that matter:
 
 LoCoMo/LongMemEval leaderboard numbers are in a credibility crisis:
 
-- **Zep** reported **84%** on LoCoMo; an independent re-evaluation put it at
-  **58.44%** — a 25-point gap from including the adversarial category LoCoMo says
-  to *exclude*, tweaking prompts, and reporting a single run.
-  ([getzep/zep-papers#5](https://github.com/getzep/zep-papers/issues/5))
-- **Mem0**'s own materials cite **91.6%** on LoCoMo; independent reproductions
-  land at **~58–66%**. ([mem0.ai](https://mem0.ai/blog/ai-memory-benchmarks-in-2026))
+- **Zep** reported **84%** on LoCoMo from a single run; an independent
+  re-evaluation that restricted scoring to the four validated categories, aligned
+  the prompts, and averaged ten runs put it at **58.44% ± 0.20** — a ~25-point gap
+  traced to a scoring-denominator error (cat-5 answers counted in the numerator
+  but not the denominator). Zep disputes the re-run and claims **75.14%** with its
+  own config. ([getzep/zep-papers#5](https://github.com/getzep/zep-papers/issues/5))
+- Across the field, published LoCoMo claims now span **~55% to >90%** (Mem0,
+  ByteRover, Memori, MemMachine, …), with the leading vendors openly contesting
+  each other's methodology. The number you see depends on whose harness ran it.
+  ([mem0.ai](https://mem0.ai/blog/ai-memory-benchmarks-in-2026))
 
 An LLM-judged score is a function of the reader, the judge, the prompts, the run
 count, and which categories you score. So ai-knot leads with a number that has
@@ -60,9 +64,12 @@ It is not one lucky conversation — accuracy is **74–84% on every one of the 
 | 9 | 70% | 61% | 85% | 85% | 76% |
 | 10 | 75% | 62% | 86% | 90% | 81% |
 
-For context (vendor/independent-reported, different readers/judges — treat as
-landscape, not a controlled head-to-head): Mem0 ~58–66% (independent), Zep 58.4%
-(corrected), LangMem ~78%, Memori ~82%.
+For context (vendor/independent-reported, different readers/judges, different
+harnesses — treat as landscape, **not** a controlled head-to-head): Zep 84%
+claimed → 58.4% corrected → 75.1% Zep's rebuttal; Mem0 high-60s (own paper) and
+~55% in ByteRover's re-run; newer entrants claim 80–92%. The spread *is* the
+point — none of these is comparable to another without the same reader, judge,
+prompts, and category set.
 
 > **Reproduce it.** From the `aiknotbench` harness with an OpenAI key:
 > `run -r locomo --model gpt-4.1 --judge gpt-4o --types 1,2,3,4 --top-k 30`.

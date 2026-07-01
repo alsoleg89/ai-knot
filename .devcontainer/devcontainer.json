@@ -1,0 +1,30 @@
+{
+  "name": "ai-knot",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "postCreateCommand": "bash -lc 'pip install -e \".[dev,mcp,postgres,server]\" && cd npm && AI_KNOT_SKIP_PYTHON_INSTALL=1 npm ci'",
+  "remoteEnv": {
+    "AI_KNOT_SKIP_PYTHON_INSTALL": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/python/current/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": [
+          "tests"
+        ]
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  }
+}

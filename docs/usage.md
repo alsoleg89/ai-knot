@@ -2,6 +2,7 @@
 
 The complete API reference. For the quick pitch and benchmarks, see the
 [README](../README.md); for production guarantees, [production-readiness.md](production-readiness.md).
+For a surface-by-surface routing guide, see [integrations.md](integrations.md).
 
 - [Initialization — storage + provider](#initialization)
 - [Memory types](#memory-types)
@@ -19,8 +20,11 @@ The complete API reference. For the quick pitch and benchmarks, see the
 - [CLI](#cli)
 - [Knowledge on disk (YAML)](#knowledge-on-disk)
 - [MCP server](#mcp-server)
-- [OpenClaw / framework adapters](#openclaw)
+- [OpenClaw](#openclaw)
 - [LangChain / LangGraph](#langchain--langgraph)
+- [CrewAI](#crewai)
+- [OpenAI Agents SDK](#openai-agents-sdk)
+- [AutoGen](#autogen)
 - [OpenAI integration](#openai-integration)
 - [Multi-agent: shared pool](#multi-agent)
 - [Bi-temporal `event_time`](#bi-temporal-event_time)
@@ -256,14 +260,19 @@ ai-knot show    my_agent
 ai-knot recall  my_agent "query"
 ai-knot recall  my_agent "query" --now 2025-01-01T00:00:00   # point-in-time recall
 ai-knot lineage my_agent <fact_id>                           # supersession audit trail
+ai-knot doctor --json                                        # install / integration triage
 ai-knot add     my_agent "fact"
 ai-knot stats   my_agent
 ai-knot decay   my_agent
 ai-knot export  my_agent out.yaml
 ai-knot import  my_agent in.yaml
 ai-knot setup claude --agent-id bot --storage sqlite         # paste-ready MCP config
+ai-knot setup openclaw --agent-id bot --storage sqlite       # OpenClaw config
 ai-knot serve   my_agent --port 8000                         # HTTP sidecar (server extra)
 ```
+
+If CLI install or integration setup behaves unexpectedly, start with
+`ai-knot doctor --json` and [troubleshooting.md](troubleshooting.md).
 
 ---
 
@@ -321,6 +330,8 @@ pip install "ai-knot[mcp]"
 
 > **TypeScript agents:** always use `recall_json` — returns a stable JSON array.
 > **Claude Desktop** launches from a non-interactive shell; always set an absolute `AI_KNOT_DATA_DIR`/`AI_KNOT_DB_PATH`.
+> Want the shortest setup proof? Run [`examples/claude_mcp_setup.py`](../examples/claude_mcp_setup.py).
+> For channel-ready copy, see [claude-mcp-case-study.md](claude-mcp-case-study.md).
 
 ---
 
@@ -328,8 +339,17 @@ pip install "ai-knot[mcp]"
 
 | Situation | Solution |
 |---|---|
-| OpenClaw TypeScript app | `generate_mcp_config()` → paste into `~/.openclaw/openclaw.json` |
+| OpenClaw TypeScript app | `ai-knot setup openclaw ...` or `generate_mcp_config()` |
 | Python agent (LangChain, LangGraph, CrewAI) | `OpenClawMemoryAdapter(kb)` |
+
+```bash
+ai-knot setup openclaw --agent-id my_agent --storage sqlite
+```
+
+Copy the printed JSON into:
+
+- macOS / Linux: `~/.openclaw/openclaw.json`
+- Windows: `%APPDATA%\OpenClaw\openclaw.json`
 
 ```python
 from ai_knot.integrations.openclaw import OpenClawMemoryAdapter
@@ -341,6 +361,8 @@ memory.update(results[0]["id"], "Deploy on Thursdays")
 
 > `add()` stores only the last user message (warns on multi-turn) — use `kb.learn(turns, api_key=...)`
 > for full extraction. `update()` assigns a new ID.
+> Want both flows in one place? Run [`examples/openclaw_integration.py`](../examples/openclaw_integration.py).
+> For distribution copy and the app-first message angle, see [openclaw-case-study.md](openclaw-case-study.md).
 
 ---
 
@@ -380,6 +402,160 @@ memory.load_memory_variables({"input": "how should I deploy?"})
 `save_context` distills the user turn into a stored fact; `load_memory_variables`
 recalls only the facts relevant to the current input — so the prompt carries
 durable knowledge, not the whole transcript. `clear()` forgets every fact.
+
+---
+
+## CrewAI
+
+`AiKnotCrewAIMemory` lets ai-knot plug into CrewAI's native memory surface.
+Use it when you want `Crew(memory=...)` or `Agent(memory=memory.scope(...))`
+to keep persistent facts in ai-knot instead of CrewAI's default unified memory
+backend.
+
+There is **no hard dependency** on `crewai`. Importing the adapter is safe
+without CrewAI installed; the real CrewAI package is only needed for actual
+`Crew` / `Agent` runs.
+
+```bash
+pip install "ai-knot[crewai]"
+```
+
+If you want ai-knot itself to do LLM-backed `extract_memories()` from raw CrewAI
+task output, combine it with a provider extra such as
+`pip install "ai-knot[crewai,openai]"`.
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.crewai import AiKnotCrewAIMemory
+
+kb = KnowledgeBase(
+    agent_id="assistant",
+    provider="openai",  # enables LLM-backed extract_memories() for CrewAI task outputs
+)
+kb.add("User prefers Python over Java")
+kb.add("User deploys APIs with Docker and Kubernetes")
+
+memory = AiKnotCrewAIMemory(kb, top_k=5)
+
+researcher = Agent(
+    role="Researcher",
+    goal="Find stack constraints",
+    backstory="Keeps durable implementation notes",
+    memory=memory.scope("/agent/researcher"),
+)
+
+crew = Crew(
+    agents=[researcher, writer],
+    tasks=[task],
+    memory=memory,
+)
+```
+
+What the adapter does:
+
+- exposes ai-knot through CrewAI's native `remember` / `recall` shape,
+- returns CrewAI-style memory records and matches,
+- supports hierarchical scope views via `memory.scope(...)`,
+- stores CrewAI scope/categories/metadata alongside ai-knot facts,
+- uses ai-knot's extraction path for `extract_memories()` when the `KnowledgeBase`
+  has a default provider configured, else falls back to a simple line/sentence split.
+
+This is the right surface when you're already on CrewAI but want deterministic,
+self-hosted ai-knot retrieval instead of CrewAI's default memory backend.
+
+> Runnable examples:
+> [`examples/crewai_surface_demo.py`](../examples/crewai_surface_demo.py) for a
+> zero-network memory-surface proof, and
+> [`examples/crewai_integration.py`](../examples/crewai_integration.py) for a real
+> Crew / Agent wiring path.
+
+---
+
+## OpenAI Agents SDK
+
+`AiKnotAgentsMemory` adds ai-knot's long-term fact recall to an OpenAI Agents SDK
+run. It uses the SDK's `call_model_input_filter` hook to append relevant memory
+to the model instructions immediately before each model call.
+
+There is **no hard dependency** on `openai-agents`. Importing the adapter is safe
+without the SDK installed; the import is required only when you build a real
+`RunConfig` or execute a run.
+
+```bash
+pip install "ai-knot[agents]"
+```
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.openai_agents import AiKnotAgentsMemory
+
+kb = KnowledgeBase("assistant")
+kb.add("User prefers Python over Java")
+kb.add("User deploys APIs with Docker and Kubernetes")
+
+memory = AiKnotAgentsMemory(kb, top_k=5)
+run_config = memory.build_run_config()
+
+# Pass run_config into Runner.run(...) / Runner.run_sync(...)
+```
+
+What the adapter does:
+
+- extracts the latest user text from Responses-style input items,
+- recalls the most relevant long-term facts from ai-knot,
+- appends them to the model instructions under `## Agent Memory`,
+- composes with an existing `call_model_input_filter` if you already have one.
+
+This complements the SDK's session history. It does **not** replace short-term
+conversation state; it adds a durable fact layer on top.
+
+> Runnable example: [`examples/openai_agents_integration.py`](../examples/openai_agents_integration.py)
+
+---
+
+## AutoGen
+
+`AiKnotAutoGenMemory` implements the async memory shape used by AutoGen's
+`AssistantAgent(memory=[...])` path. ai-knot stays responsible for long-term
+fact storage and ranked recall; AutoGen stays responsible for the agent loop and
+short-term context.
+
+There is **no hard dependency** on AutoGen. Importing the adapter is safe
+without `autogen-core` / `autogen-agentchat`; those packages are needed only for
+real AutoGen runs.
+
+```bash
+pip install "ai-knot[autogen]"
+```
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.autogen import AiKnotAutoGenMemory
+
+kb = KnowledgeBase("assistant")
+kb.add("User prefers Python over Java")
+kb.add("User deploys APIs with Docker and Kubernetes")
+
+memory = AiKnotAutoGenMemory(kb, top_k=5)
+agent = AssistantAgent(
+    name="coding_assistant",
+    model_client=model_client,
+    memory=[memory],
+)
+```
+
+What the adapter does:
+
+- reads the latest user turn from AutoGen's `model_context`,
+- recalls the top relevant facts from ai-knot,
+- converts them into AutoGen `MemoryContent` objects for `query()`,
+- injects a `SystemMessage` block during `update_context()`,
+- supports `add()`, `clear()`, and `close()` for protocol compatibility.
+
+This is the right surface when you want AutoGen-native memory wiring but do not
+want to move your persistent memory into another hosted or vector-only store.
+
+> Runnable example: [`examples/autogen_integration.py`](../examples/autogen_integration.py)
 
 ---
 

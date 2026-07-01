@@ -1,8 +1,11 @@
 # ai-knot — go-to-market & launch plan
 
-The single source of truth for *how we ship this to developers*. Copy lives in
-[announce.md](announce.md) (Show HN, threads) and [launch-post.md](launch-post.md)
-(long-form). This file is the strategy that sequences them.
+The single source of truth for *how we ship this to developers*. Positioning
+lives in [positioning.md](positioning.md), copy in [announce.md](announce.md),
+long-form assets in [whitepaper.md](whitepaper.md) and
+[developer-article.md](developer-article.md), and competitive context in
+[competitive-analysis.md](competitive-analysis.md). The dated execution checklist
+lives in [channel-playbook.md](channel-playbook.md).
 
 ---
 
@@ -26,8 +29,8 @@ pay to replay the whole transcript. ai-knot keeps the *knowledge*, not the log,
 and retrieves only what the next turn needs — with no LLM on the read path.
 
 **Why now:** (a) Agent frameworks are exploding but treat memory as an append-only
-log; (b) the agent-memory benchmark numbers everyone quotes don't reproduce, so
-there's an open lane for an *honest* entrant; (c) MCP just made "bring your own
+log; (b) the agent-memory benchmark numbers everyone quotes do not reproduce, so
+there is an open lane for an *honest* entrant; (c) MCP made "bring your own
 memory tool" a first-class integration surface for Claude Desktop/Code.
 
 **Why different:** deterministic retrieval (no LLM on the hot path → reproducible,
@@ -42,21 +45,19 @@ in 30 seconds.
 
 | Project | Strength we respect | Our wedge against it |
 |---|---|---|
-| **Mem0** | Mature, hosted offering, large community, broad framework glue | Self-hosted + deterministic + reproducible numbers; their 91.6% reproduces at ~58–66% |
-| **Zep / Graphiti** | Genuine temporal knowledge graph; strong relational memory | Their bi-temporal reasoning needs an LLM; ours is deterministic supersession. Their 84% LoCoMo → 58% corrected |
-| **Letta (MemGPT)** | Strong brand, "agent OS" narrative, self-editing memory | We're a *library* you drop into any agent, not a runtime to adopt; deterministic recall |
-| **LangMem** | Path of least resistance inside LangGraph | Framework-agnostic; no lock-in; MCP-native |
+| **Mem0** | Mature, hosted offering, large community, broad framework glue | Self-hosted + deterministic + reproducible numbers |
+| **Graphiti / Zep** | Genuine temporal knowledge graph; strong relational memory | Deterministic supersession, lower operational complexity |
+| **Letta** | Strong brand, product shell, stateful-agent narrative | ai-knot is a library you drop into any agent stack |
+| **LangMem** | Path of least resistance inside LangGraph | Framework-agnostic; MCP-native; storage control |
 
 **What made these projects spread** (and what we copy):
 - A **dead-simple `pip install` + 5-line snippet** that demonstrates the magic.
-- A **benchmark claim** that gives the project a number to rally around.
-- **MCP / framework integration surfaces** that let people try it inside the tool
-  they already use.
-- A **clear "why a log isn't enough"** narrative that names the pain.
+- A **benchmark or concept hook** that gives the project a story people can repeat.
+- **MCP / framework / app surfaces** that let people try it inside the tools they already use.
+- A **clear category label** that says what the project is in one sentence.
 
-We now have all four. The differentiator we lean on hardest: **reproducibility as
-the marketing** — in a field with a credibility crisis, the honest number *is* the
-hook.
+The differentiator we lean on hardest: **reproducibility as the marketing**. In a
+field with a credibility crisis, the honest number *is* the hook.
 
 ---
 
@@ -66,20 +67,36 @@ hook.
 - Developer-first README with a verified, runnable "see it work" example.
 - Real, named-reader LLM-judged numbers + a deterministic one-command number.
 - String-`type` SQLite crash fixed; embed-fallback noise silenced (clean first run).
-- Full API guide split into `docs/usage.md`; launch copy ready in `announce.md`.
+- Full API guide split into `docs/usage.md`; release runbook in `docs/RELEASE.md`.
+- Dedicated positioning, competitive-analysis, gap-analysis, FAQ, whitepaper, and developer article docs.
+- Contributor and development docs updated to the current repo URL and release flow.
+- README onboarding upgraded with start-by-surface quick paths (Python, TS, MCP, HTTP, AutoGen, LangChain, shared pool).
+- Dedicated integrations index added so framework/runtime entry points are obvious.
+- Repo-native install extras added for CrewAI, AutoGen, and the OpenAI Agents SDK so each surface has a direct package path.
+- Codespaces/devcontainer path added for install-free trials.
+- Deterministic hero demo + recording script prepared for the README/social demo asset.
+- Buyer-facing comparison guide added.
+- CrewAI follow-up distribution assets prepared: zero-network demo, case-study copy, and a maintainer launch checklist.
+- OpenClaw follow-up distribution asset prepared: app/MCP case-study copy routed to the zero-network example and setup command.
+- Claude/MCP follow-up distribution asset prepared: zero-network setup demo plus channel-ready case-study copy.
 
 ### P0 — blocks a credible launch (do before posting)
-1. **npm/PyPI version sync.** npm is stuck at 0.9.3 while PyPI is 0.11.0. Rotate
-   `NPM_TOKEN` (see [RELEASE.md](RELEASE.md)) and publish. A broken `npm install`
-   on launch day kills trust. *(needs maintainer: secret rotation.)*
-2. **Merge PR #103 to main** so the repo a visitor lands on is the new one.
+1. **npm/PyPI version sync.** As of **June 30, 2026**, PyPI is on `0.11.0` while npm
+   is still on `0.9.3`. Rotate `NPM_TOKEN` if needed (see [RELEASE.md](RELEASE.md))
+   and publish. A broken or outdated `npm install` on launch day kills trust.
+   *(needs maintainer: registry publish rights.)*
+2. **Push/merge the launch-ready branch to public `main`.** The public GitHub repo still
+   shows the pre-launch packaging and has **1 star**; the distribution push should start
+   only after the public landing page matches this branch. *(needs maintainer: merge/push.)*
 
 ### P1 — strongly lifts conversion / shareability
 3. **A 20-second demo GIF/asciinema** at the top of the README (add → recall →
    "it remembered"). Top dev READMEs all have one; text-only converts worse.
-4. **One framework adapter shipped** (LangGraph *or* OpenAI Agents SDK) — turns
-   "interesting library" into "drop-in for my stack." Highest integration-pull.
-5. **A hosted/Colab "try without installing" notebook** linked from the README.
+4. **Publish the prepared proof posts.**
+   CrewAI, OpenClaw, and Claude/MCP now all have repo-native follow-up assets; the remaining
+   step is to post them publicly so developers see exact workflows they can copy.
+5. **Validate and publish the install-free path.** Codespaces support is now in-repo;
+   the maintainer should verify the public `codespaces.new` flow after merging to `main`.
 
 ### P2 — depth, post-launch
 6. Live side-by-side competitor bench-pack (Mem0) in-repo.
@@ -94,44 +111,51 @@ hook.
 |---|---|---|---|
 | **GitHub release + pinned discussion** | "v0.x — reproducible agent memory" | Star, try the 5-line snippet | Day 0 (soft) |
 | **r/LocalLLaMA** | Self-hosted, no-cloud, runs offline | Repo link + snippet | Day 1 (soft) |
-| **Show HN** | "deterministic agent memory with reproducible benchmarks" | Repo link, invite scrutiny of the numbers | Day 3 (main) |
-| **X/Twitter thread** | The reproducibility-crisis hook (Zep 84→58, Mem0 91→58–66) | Repo link, thread | Day 3 (with HN) |
-| **dev.to / Medium** | Long-form launch-post.md | "Try it" + repo | Day 4 |
-| **LinkedIn** | Same thread, professional framing | Repo link | Day 4 |
-| **Awesome-lists PRs** (Agent Memory, awesome-mcp) | Listing | Inclusion | Week 2 |
-| **r/MachineLearning** | The benchmark methodology piece | Discussion | Week 2 |
+| **Show HN** | "deterministic agent memory with reproducible benchmarks" | Repo link, invite scrutiny of the numbers | Week 2 (main) |
+| **X/Twitter thread** | The reproducibility-crisis hook | Repo link, thread | Week 2 |
+| **LinkedIn** | Same thesis, more trust / infra framing | Repo link | Week 2 |
+| **Dev.to / Medium** | Technical article + whitepaper | "Try it" + repo | Week 2 |
+| **r/MachineLearning** | Methodology and deterministic benchmark angle | Discussion | Week 3 |
+| **Awesome-lists PRs** | Listing | Inclusion | Week 3 |
+| **1:1 founder / maintainer outreach** | "Stress-test the benchmarks or adapter flow" | Feedback, first users, quotes | Weeks 1–3 |
+| **Follow-up release / adapter post** | "Now works with X stack" | Re-engage observers | Week 4 |
 
 **Soft launch first** (release + Reddit + a few DMs) to shake out install bugs and
-collect the first ⭐ and testimonials; **main launch** (Show HN + threads) only
-after P0 is green and the demo GIF is in.
+collect the first testimonials; **main launch** (Show HN + threads) only after P0
+is green and the demo asset is in.
 
 ---
 
-## 5. Two-week launch sequence
+## 5. Four-week launch sequence
 
-**Week 0 — pre-flight (P0 + P1.3)**
-- [ ] Rotate `NPM_TOKEN`, publish npm to version parity with PyPI. *(maintainer)*
-- [ ] Merge PR #103 → main. *(maintainer)*
-- [ ] Record the 20-second demo GIF, add to README hero.
-- [ ] Cut a tagged GitHub release with notes drawn from CHANGELOG.
+**Week 0 — pre-flight**
+- [ ] Publish npm `0.11.0` so the public registry matches PyPI. *(maintainer)*
+- [ ] Merge/push the launch-ready branch so public `main` matches this repo state. *(maintainer)*
+- [ ] Record the 20-second demo GIF or terminal capture and add it to the README hero.
+- [ ] Cut a tagged GitHub release with notes pulled from `CHANGELOG.md`.
 
-**Week 1 — soft launch**
+**Week 1 — soft launch / failure-finding**
 - Day 0: GitHub release + pinned discussion.
-- Day 1: r/LocalLLaMA post (snippet + offline angle). Watch for install issues.
-- Day 2: fix anything the soft launch surfaced; gather one or two quotes.
+- Day 1: r/LocalLLaMA post with the self-hosted / no-LLM-on-read-path angle.
+- Day 2: direct outreach to 10-20 builders who already care about agent memory,
+  MCP, or air-gapped deployments. Goal: find install friction and collect the
+  first two or three honest quotes.
+- Day 3-4: fix anything the soft launch surfaced; tighten docs and FAQ from real questions.
 
-**Week 1–2 — main launch**
-- Day 3 (Tue–Thu, ~9am ET): **Show HN** + X thread + LinkedIn, same hour.
-  Be present in the HN thread all day — answer every skeptical benchmark question
-  with the reproduce-it command.
-- Day 4: publish long-form on dev.to / Medium; cross-link from HN if alive.
-- Day 5: thank-you + "what we're building next" follow-up; open "good first issue"
-  labels (storage backends) to convert interest into contributors.
+**Week 2 — main launch**
+- Tue-Thu, ~9am ET: **Show HN** + X thread + LinkedIn in the same window.
+- Same day: publish the developer article on Dev.to or Medium.
+- Next day: reply to every benchmark / methodology question with a direct reproduce-it command.
 
-**Week 2 — sustain**
-- Submit awesome-list PRs (Agent Memory, awesome-mcp).
-- Post the methodology piece to r/MachineLearning.
-- Ship the first framework adapter (P1.4); announce as a small follow-up.
+**Week 3 — credibility and ecosystem pull**
+- Post the methodology angle to r/MachineLearning.
+- Submit awesome-list PRs (agent memory, MCP, AI infra).
+- Publish the prepared CrewAI follow-up, then OpenClaw, then Claude/MCP, then rotate to LangChain or HTTP sidecar.
+
+**Week 4 — retention and pull-through**
+- Ship the next framework adapter.
+- Publish a "what we learned from launch" follow-up with the next roadmap asks.
+- Open and label community-friendly issues for backends and adapters.
 
 ---
 
@@ -140,7 +164,7 @@ after P0 is green and the demo GIF is in.
 | Signal | Soft-launch target | Main-launch target |
 |---|---|---|
 | GitHub stars | first 25–50 | 300+ in launch week |
-| `pip`/`npm` installs | install works, zero "Invalid Version" reports | steady daily |
+| `pip`/`npm` installs | install works, zero version-mismatch complaints | steady daily |
 | HN | — | front-page /new, >30 points |
 | Developer trust | no broken-install reports | benchmark questions answered, not contested |
 | Integration pull | — | ≥1 "can you add X backend/adapter" issue |
@@ -152,14 +176,19 @@ the launch's job is to invite scrutiny, not deflect it.
 
 ## 7. Done vs remaining
 
-**Done (hands-on this program):** developer-first README, real reproducible
-benchmarks across both suites, usage/benchmarks/deployment/production-readiness
-docs, launch copy (Show HN + threads + long-form), release runbook + idempotent
-publish workflows, CLI audit ops, two first-run DX bug fixes, this GTM plan.
+**Done (hands-on this program):** developer-first README, reproducible benchmarks
+across both suites, usage/benchmarks/deployment/production-readiness docs, launch
+copy, release runbook + idempotent publish workflows, CLI audit ops, LangChain /
+LangGraph adapters, a docs-based launch kit (positioning, competitive analysis,
+gap analysis, FAQ, whitepaper, developer article), and refreshed contributor docs.
+Codespaces/devcontainer support, a buyer-facing comparison guide, a demo-recording
+flow, CrewAI / AutoGen / OpenAI Agents adapters, CrewAI / OpenClaw / Claude MCP
+case-study / proof assets, and a submission pack for directory/listing distribution
+are also now in the repo.
 
 **Remaining, in priority order:**
-1. *(maintainer)* npm token rotation → version parity; merge PR #103.
-2. Demo GIF in README.
-3. One framework adapter (LangGraph / OpenAI Agents).
-4. "Try without installing" notebook.
+1. *(maintainer)* npm publish to `0.11.0`; merge/push the launch-ready branch to public `main`.
+2. Demo GIF or terminal capture in README.
+3. Publish the prepared CrewAI, OpenClaw, and Claude/MCP surface-specific proof posts.
+4. Validate the public Codespaces quickstart after the branch is on `main`.
 5. Live competitor bench-pack; more backends; web inspector.

@@ -5,6 +5,8 @@ import pathlib
 import pytest
 
 from ai_knot import KnowledgeBase, MemoryType
+from ai_knot.integrations.crewai import AiKnotCrewAIMemory
+from ai_knot.integrations.openclaw import OpenClawMemoryAdapter, generate_mcp_config
 from ai_knot.storage import SQLiteStorage, YAMLStorage, create_storage
 
 
@@ -105,3 +107,77 @@ def test_recall_does_not_need_provider(kb: KnowledgeBase) -> None:
     kb.add("User deploys everything in Docker")
     context = kb.recall("how should I deploy this?")
     assert "Docker" in context
+
+
+def test_example9_persistence_across_restarts(tmp_path: pathlib.Path) -> None:
+    db_path = tmp_path / "hero-demo.db"
+    writer = KnowledgeBase(agent_id="assistant", storage=SQLiteStorage(db_path=str(db_path)))
+    writer.add("User prefers Python", type=MemoryType.PROCEDURAL)
+    writer.add("User deploys with Docker and Kubernetes")
+
+    reader = KnowledgeBase(agent_id="assistant", storage=SQLiteStorage(db_path=str(db_path)))
+    context = reader.recall("what stack and preferences should I use?")
+    assert "Python" in context
+    assert "Docker" in context or "Kubernetes" in context
+
+
+def test_example10_openclaw_config_and_adapter(tmp_path: pathlib.Path) -> None:
+    config = generate_mcp_config(agent_id="bot", data_dir=str(tmp_path), storage="sqlite")
+    env = config["mcpServers"]["ai-knot"]["env"]
+    assert env["AI_KNOT_AGENT_ID"] == "bot"
+    assert env["AI_KNOT_STORAGE"] == "sqlite"
+    assert env["AI_KNOT_DATA_DIR"] == str(tmp_path.resolve())
+
+    kb = KnowledgeBase(agent_id="bot", storage=SQLiteStorage(db_path=str(tmp_path / "bot.db")))
+    memory = OpenClawMemoryAdapter(kb)
+    memory.add([{"role": "user", "content": "Deploy with Docker Compose on Fridays"}])
+
+    results = memory.search("deployment schedule")
+    assert results
+    assert "Docker Compose" in results[0]["memory"]
+
+
+def test_example11_crewai_adapter_without_crewai(tmp_path: pathlib.Path) -> None:
+    kb = KnowledgeBase(agent_id="crew-demo", storage=YAMLStorage(base_dir=str(tmp_path)))
+    memory = AiKnotCrewAIMemory(kb, top_k=3)
+    researcher = memory.scope("/agent/researcher")
+
+    researcher.remember("Use PostgreSQL for billing", categories=["database"])
+
+    results = memory.recall("postgresql", scope="/agent/researcher")
+    assert results
+    assert "PostgreSQL" in results[0].record.content
+
+
+def test_example12_crewai_surface_demo_scopes(tmp_path: pathlib.Path) -> None:
+    kb = KnowledgeBase(agent_id="crew-surface-demo", storage=YAMLStorage(base_dir=str(tmp_path)))
+    memory = AiKnotCrewAIMemory(kb, top_k=3)
+    researcher = memory.scope("/agent/researcher")
+    writer = memory.scope("/agent/writer")
+
+    researcher.remember("User deploys APIs with Docker and Kubernetes", categories=["ops"])
+    researcher.remember("Primary database is PostgreSQL", categories=["database"])
+    writer.remember("Release notes should stay concise and numbered", categories=["docs"])
+
+    research_results = researcher.recall("database and deployment")
+    writer_results = writer.recall("release notes")
+
+    assert memory.list_scopes("/") == ["/agent"]
+    assert memory.info("/agent").record_count == 3
+    assert research_results
+    assert (
+        "PostgreSQL" in research_results[0].record.content
+        or "Docker" in research_results[0].record.content
+    )
+    assert writer_results
+    assert "Release notes" in writer_results[0].record.content
+
+
+def test_example13_claude_mcp_setup_config(tmp_path: pathlib.Path) -> None:
+    config = generate_mcp_config(agent_id="claude-demo", data_dir=str(tmp_path), storage="sqlite")
+    env = config["mcpServers"]["ai-knot"]["env"]
+
+    assert config["mcpServers"]["ai-knot"]["command"] == "ai-knot-mcp"
+    assert env["AI_KNOT_AGENT_ID"] == "claude-demo"
+    assert env["AI_KNOT_STORAGE"] == "sqlite"
+    assert env["AI_KNOT_DATA_DIR"] == str(tmp_path.resolve())

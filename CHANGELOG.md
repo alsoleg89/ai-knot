@@ -24,6 +24,35 @@ Versioning: [Semantic Versioning](https://semver.org/).
   suite ([docs/benchmarks.md](docs/benchmarks.md)), a full API guide
   ([docs/usage.md](docs/usage.md)), a release runbook ([docs/RELEASE.md](docs/RELEASE.md)),
   and a launch piece ([docs/launch-post.md](docs/launch-post.md)).
+- Launch/distribution docs: positioning, competitive analysis, prioritized gap
+  analysis, FAQ + objections handling, a whitepaper, and a developer-focused
+  article. `docs/README.md` now indexes the full launch kit.
+- A Codespaces/devcontainer path for install-free trials, a deterministic
+  `examples/hero_demo.py` launch demo, a demo-recording guide, and a buyer-facing
+  comparison guide.
+- OpenAI Agents SDK adapter (`ai_knot.integrations.openai_agents`) plus a runnable
+  `examples/openai_agents_integration.py` example and docs coverage in
+  `docs/usage.md`.
+- AutoGen memory adapter (`ai_knot.integrations.autogen`) plus a runnable
+  `examples/autogen_integration.py` example, docs coverage in `docs/usage.md`,
+  and a new integration index in `docs/integrations.md`.
+- CrewAI memory adapter (`ai_knot.integrations.crewai`) plus a runnable
+  `examples/crewai_integration.py` example and docs coverage in `docs/usage.md`
+  and `docs/integrations.md`.
+- OpenClaw onboarding tightened: `ai-knot setup openclaw` now prints the
+  paste-ready MCP config, and `examples/openclaw_integration.py` demonstrates
+  both the app-config and Python-adapter paths.
+- Repo-native install extras for framework surfaces:
+  `ai-knot[crewai]`, `ai-knot[autogen]`, `ai-knot[agents]`, and
+  `ai-knot[integrations]`.
+- Zero-network CrewAI surface demo (`examples/crewai_surface_demo.py`), a
+  CrewAI case-study / follow-up launch asset, and a maintainer launch checklist.
+- OpenClaw follow-up launch asset (`docs/openclaw-case-study.md`) tied to the
+  zero-network `examples/openclaw_integration.py` proof and the paste-ready
+  `ai-knot setup openclaw` flow.
+- Claude/MCP follow-up launch asset (`docs/claude-mcp-case-study.md`) tied to
+  the zero-network `examples/claude_mcp_setup.py` proof and the paste-ready
+  `ai-knot setup claude` flow.
 
 ### Fixed
 - `add(type="procedural")` (a bare string, as shown in the docs) no longer
@@ -35,18 +64,29 @@ Versioning: [Semantic Versioning](https://semver.org/).
   experience for installs without an embedding server.
 - Corrected the `recall()` output format shown in the README and the npm package
   README (`[1] …`, not `[semantic] …`) so the snippets match real output.
+- Corrected stale repository URLs (`ai-knot.git`, not `ai_knot.git`) and brought
+  contributor / development docs in line with the current release workflows.
 
 ### Changed
 - README rewritten as a developer-first landing page — a "see it work" example up
   top, the problem stated in token math, a use-case table, then the reproducible
   benchmarks. The full API reference lives in `docs/usage.md`.
+- README onboarding now includes quick-start paths by surface (Python, TS, MCP,
+  HTTP, AutoGen, LangChain, shared pool) so a visitor can reach a relevant trial flow faster.
+- Integration docs now pair each surface with a concrete install command, mirroring
+  the onboarding pattern strong competitor READMEs use.
+- Framework error paths and examples now point users to the repo-native install
+  extras first, with the raw upstream package names as fallback.
+- OpenClaw docs and launch routing now treat the MCP/app path as a first-class
+  distribution surface, not just a secondary adapter note.
+- Claude Desktop / Claude Code docs and launch routing now treat the MCP setup
+  path as a first-class distribution surface.
 - Publish workflows are now idempotent (npm skips an already-published version,
   PyPI uses `skip-existing`); `setup-node` bumped to 22.
 
 ### Planned
 - MongoDB storage backend
 - Qdrant and Weaviate backends
-- LangChain / CrewAI integrations
 - Web UI knowledge inspector
 
 ---

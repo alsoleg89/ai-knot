@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pathlib
+import subprocess
+import sys
 
 import pytest
 from click.testing import CliRunner
@@ -82,6 +84,50 @@ class TestCLIStats:
         result = runner.invoke(main, _cmd(data_dir, ["stats", "myagent"]))
         assert result.exit_code == 0
         assert "2" in result.output
+
+
+class TestCLIDoctor:
+    """ai-knot doctor."""
+
+    def test_doctor_text_output(self, runner: CliRunner, data_dir: str) -> None:
+        result = runner.invoke(main, _cmd(data_dir, ["doctor"]))
+        assert result.exit_code == 0
+        assert "ai_knot_version:" in result.output
+        assert "storage_backend: yaml" in result.output
+
+    def test_doctor_json_output(self, runner: CliRunner, data_dir: str) -> None:
+        result = runner.invoke(
+            main,
+            ["--storage", "sqlite", "--data-dir", data_dir, "doctor", "--json"],
+        )
+        assert result.exit_code == 0
+
+        import json
+
+        payload = json.loads(result.output)
+        assert payload["ai_knot_version"] == "0.11.0"
+        assert payload["cli"]["storage_backend"] == "sqlite"
+        assert payload["cli"]["data_dir"] == str(pathlib.Path(data_dir).resolve())
+        assert "modules" in payload
+        assert "env" in payload
+
+    def test_doctor_module_entrypoint(self, data_dir: str) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ai_knot.cli",
+                "--data-dir",
+                data_dir,
+                "doctor",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert '"ai_knot_version"' in result.stdout
 
 
 class TestCLIClear:
@@ -182,3 +228,20 @@ class TestCLILineage:
         assert result.exit_code == 0
         assert "current" in result.output
         assert "1 version" in result.output
+
+
+class TestCLISetup:
+    """ai-knot setup <client>."""
+
+    def test_setup_claude_outputs_mcp_json(self, runner: CliRunner) -> None:
+        result = runner.invoke(main, ["setup", "claude", "--agent-id", "bot"])
+        assert result.exit_code == 0
+        assert '"mcpServers"' in result.output
+        assert '"AI_KNOT_AGENT_ID": "bot"' in result.output
+
+    def test_setup_openclaw_outputs_mcp_json(self, runner: CliRunner) -> None:
+        result = runner.invoke(main, ["setup", "openclaw", "--agent-id", "bot"])
+        assert result.exit_code == 0
+        assert '"mcpServers"' in result.output
+        assert '"AI_KNOT_AGENT_ID": "bot"' in result.output
+        assert '"AI_KNOT_STORAGE": "sqlite"' in result.output

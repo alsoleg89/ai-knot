@@ -76,3 +76,9 @@ package exists, but the token is missing, expired, or lacks publish rights for
 curl -s https://pypi.org/pypi/ai-knot/json        | python3 -c "import sys,json;print('PyPI:', json.load(sys.stdin)['info']['version'])"
 curl -s https://registry.npmjs.org/ai-knot        | python3 -c "import sys,json;print('npm: ', json.load(sys.stdin)['dist-tags']['latest'])"
 ```
+
+**Verify the full public launch state (registries + public `main` markers):**
+
+```bash
+./.venv/bin/python scripts/check_public_release.py
+```

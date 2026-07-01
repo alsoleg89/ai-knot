@@ -1,0 +1,162 @@
+# Integrations
+
+The fastest way to pick the right `ai-knot` entry point for your stack.
+
+If you're evaluating the project, start here first, then jump into the full API
+reference in [usage.md](usage.md).
+
+| Surface | Best for | Install | Start here |
+|---|---|---|---|
+| Core Python API | chatbots, coding agents, custom app logic | `pip install ai-knot` | [`examples/quickstart.py`](../examples/quickstart.py) |
+| CrewAI | native `Crew(memory=...)` / `Agent(memory=...)` wiring | `pip install "ai-knot[crewai]"` | [`examples/crewai_integration.py`](../examples/crewai_integration.py) |
+| AutoGen | `AssistantAgent(memory=[...])` with persistent facts | `pip install "ai-knot[autogen]"` | [`examples/autogen_integration.py`](../examples/autogen_integration.py) |
+| OpenAI Agents SDK | `RunConfig` hook into existing SDK runs | `pip install "ai-knot[agents]"` | [`examples/openai_agents_integration.py`](../examples/openai_agents_integration.py) |
+| OpenClaw | MCP-backed desktop/app memory or Python-side provider compatibility | `pip install "ai-knot[mcp]"` | [`examples/openclaw_integration.py`](../examples/openclaw_integration.py) |
+| LangChain / LangGraph | retriever or chat-memory drop-in | `pip install ai-knot` | [`examples/langchain_integration.py`](../examples/langchain_integration.py) |
+| MCP server | Claude Desktop / Claude Code / any MCP client | `pip install "ai-knot[mcp]"` | [deployment.md#4-run-the-mcp-server](deployment.md#4-run-the-mcp-server) |
+| TypeScript / npm | Node apps with the Python sidecar/client path | `npm install ai-knot` | [../npm/README.md](../npm/README.md) |
+| HTTP sidecar | polyglot services and remote agent runtimes | `pip install "ai-knot[server]"` | [deployment.md#11-http-sidecar](deployment.md#11-http-sidecar) |
+
+---
+
+## Recommended routes
+
+### CrewAI
+
+Use `AiKnotCrewAIMemory` when you want ai-knot to look like a native CrewAI
+memory object and plug directly into `Crew(memory=...)` or an agent-scoped
+`memory.scope(...)` view.
+
+```bash
+pip install "ai-knot[crewai]"
+```
+
+If you want ai-knot itself to do LLM-backed `extract_memories()` from raw CrewAI
+task output, combine it with a provider extra such as
+`pip install "ai-knot[crewai,openai]"`.
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.crewai import AiKnotCrewAIMemory
+
+kb = KnowledgeBase("assistant", provider="openai")
+kb.add("User prefers Python")
+kb.add("User deploys APIs with Docker and Kubernetes")
+
+memory = AiKnotCrewAIMemory(kb, top_k=5)
+crew = Crew(agents=[researcher, writer], tasks=[task], memory=memory)
+```
+
+What it does:
+
+- lets CrewAI call ai-knot through the native `remember` / `recall` surface,
+- supports scoped views via `memory.scope("/agent/researcher")`,
+- preserves CrewAI's tool ergonomics while keeping storage and retrieval in ai-knot,
+- uses ai-knot's own extraction path for `extract_memories()` when the `KnowledgeBase`
+  has a default provider configured.
+
+Try one of these next:
+
+- zero-network adapter demo: [`examples/crewai_surface_demo.py`](../examples/crewai_surface_demo.py)
+- full Crew wiring example: [`examples/crewai_integration.py`](../examples/crewai_integration.py)
+- distribution-ready proof asset: [crewai-case-study.md](crewai-case-study.md)
+- full API notes: [usage.md#crewai](usage.md#crewai)
+
+### AutoGen
+
+Use `AiKnotAutoGenMemory` when you already have an AutoGen `AssistantAgent` and
+want long-term memory without replacing AutoGen's own short-term context flow.
+
+```bash
+pip install "ai-knot[autogen]"
+```
+
+```python
+from ai_knot import KnowledgeBase
+from ai_knot.integrations.autogen import AiKnotAutoGenMemory
+
+kb = KnowledgeBase("assistant")
+kb.add("User prefers Python")
+kb.add("User deploys APIs with Docker and Kubernetes")
+
+memory = AiKnotAutoGenMemory(kb, top_k=5)
+agent = AssistantAgent(name="assistant", model_client=model_client, memory=[memory])
+```
+
+What it does:
+
+- extracts the latest user turn from AutoGen's model context,
+- recalls only the most relevant facts from ai-knot,
+- injects them as a `SystemMessage`,
+- keeps the adapter dependency-light and self-hosted.
+
+See also: [usage.md#autogen](usage.md#autogen)
+
+### OpenAI Agents SDK
+
+Use `AiKnotAgentsMemory` when you're already on the OpenAI Agents SDK and want
+the long-term memory hook inside `RunConfig`.
+
+```bash
+pip install "ai-knot[agents]"
+```
+
+```python
+memory = AiKnotAgentsMemory(kb, top_k=5)
+run_config = memory.build_run_config()
+```
+
+See also: [usage.md#openai-agents-sdk](usage.md#openai-agents-sdk)
+
+### OpenClaw
+
+Use the MCP config path if you're integrating with the OpenClaw app. Use the
+Python adapter only if you need OpenClaw-style provider compatibility inside
+your own runtime.
+
+```bash
+ai-knot setup openclaw --agent-id my_agent --storage sqlite
+```
+
+Try one of these next:
+
+- zero-network proof of both flows: [`examples/openclaw_integration.py`](../examples/openclaw_integration.py)
+- app/MCP distribution angle: [openclaw-case-study.md](openclaw-case-study.md)
+- full API notes: [usage.md#openclaw](usage.md#openclaw)
+
+### Claude Desktop / Claude Code
+
+Use the MCP path when you want Claude to call ai-knot as a tool with no custom
+Python glue in your project.
+
+```bash
+ai-knot setup claude --agent-id my_agent --storage sqlite
+```
+
+Try one of these next:
+
+- zero-network setup proof: [`examples/claude_mcp_setup.py`](../examples/claude_mcp_setup.py)
+- Claude/MCP distribution angle: [claude-mcp-case-study.md](claude-mcp-case-study.md)
+- deployment notes: [deployment.md#4-run-the-mcp-server](deployment.md#4-run-the-mcp-server)
+
+### LangChain / LangGraph
+
+Use `AiKnotRetriever` for RAG or graph nodes, and `AiKnotChatMemory` when you
+want a conversational-memory shape.
+
+```python
+retriever = AiKnotRetriever(kb, top_k=3)
+docs = retriever.invoke("what language does the user use?")
+```
+
+See also: [usage.md#langchain--langgraph](usage.md#langchain--langgraph)
+
+---
+
+## Status
+
+The stack-specific surfaces that matter most for a first launch are now in-repo:
+CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain / LangGraph, MCP,
+TypeScript, and the HTTP sidecar. The remaining gaps are less about adapters
+and more about public distribution: publishing the updated branch, npm parity,
+and turning the prepared proof assets into public posts.

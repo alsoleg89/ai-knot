@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
+import os
+import platform
+import shutil
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -9,6 +15,7 @@ from typing import Any
 import click
 import yaml
 
+from ai_knot import __version__
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage import create_storage
 from ai_knot.types import Fact, MemoryType
@@ -28,6 +35,53 @@ def _parse_dt(value: str) -> datetime:
     """Parse an ISO-format datetime string, ensuring UTC timezone."""
     dt = datetime.fromisoformat(value)
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _module_available(name: str) -> bool:
+    """Return True when *name* can be imported in this environment."""
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
+def _doctor_payload(ctx: click.Context) -> dict[str, Any]:
+    """Collect machine-readable environment diagnostics for install triage."""
+    data_dir = str(Path(ctx.obj["data_dir"]).resolve())
+    return {
+        "ai_knot_version": __version__,
+        "python_version": sys.version.split()[0],
+        "python_executable": sys.executable,
+        "platform": platform.platform(),
+        "cli": {
+            "storage_backend": ctx.obj["storage"],
+            "data_dir": data_dir,
+            "dsn_configured": bool(ctx.obj.get("dsn")),
+        },
+        "commands": {
+            "ai_knot_mcp_on_path": shutil.which("ai-knot-mcp") is not None,
+        },
+        "modules": {
+            "mcp": _module_available("mcp"),
+            "psycopg": _module_available("psycopg"),
+            "openai": _module_available("openai"),
+            "fastapi": _module_available("fastapi"),
+            "uvicorn": _module_available("uvicorn"),
+            "crewai": _module_available("crewai"),
+            "autogen_agentchat": _module_available("autogen_agentchat"),
+            "autogen_ext": _module_available("autogen_ext"),
+            "openai_agents_sdk": _module_available("agents"),
+            "langchain_core": _module_available("langchain_core"),
+        },
+        "env": {
+            "AI_KNOT_DSN": bool(os.environ.get("AI_KNOT_DSN")),
+            "AI_KNOT_PROVIDER": bool(os.environ.get("AI_KNOT_PROVIDER")),
+            "AI_KNOT_SERVER_TOKEN": bool(os.environ.get("AI_KNOT_SERVER_TOKEN")),
+            "OPENAI_API_KEY": bool(os.environ.get("OPENAI_API_KEY")),
+            "ANTHROPIC_API_KEY": bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "LLM_API_KEY": bool(os.environ.get("LLM_API_KEY")),
+        },
+    }
 
 
 @click.group()
@@ -175,6 +229,23 @@ def stats(ctx: click.Context, agent_id: str) -> None:
 
 
 @main.command()
+@click.option("--json", "json_output", is_flag=True, help="Emit JSON for bug reports and triage.")
+@click.pass_context
+def doctor(ctx: click.Context, json_output: bool) -> None:
+    """Print environment diagnostics for install and integration triage.
+
+    The report avoids printing secret values; it only reports whether the
+    relevant environment variables are present. Use ``--json`` when filing an
+    issue so the output is easy to paste and inspect.
+    """
+    payload = _doctor_payload(ctx)
+    if json_output:
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    click.echo(yaml.safe_dump(payload, sort_keys=False, default_flow_style=False))
+
+
+@main.command()
 @click.argument("agent_id")
 @click.pass_context
 def decay(ctx: click.Context, agent_id: str) -> None:
@@ -274,6 +345,17 @@ def setup() -> None:
     """Set up ai-knot integrations."""
 
 
+def _emit_mcp_config(agent_id: str, data_dir: str, storage: str) -> None:
+    """Print the MCP config JSON used by Claude/OpenClaw clients."""
+    from typing import Literal
+
+    from ai_knot.integrations.openclaw import generate_mcp_config
+
+    storage_typed: Literal["sqlite", "yaml"] = "sqlite" if storage == "sqlite" else "yaml"
+    config = generate_mcp_config(agent_id=agent_id, data_dir=data_dir, storage=storage_typed)
+    click.echo(json.dumps(config, indent=2))
+
+
 @setup.command("claude")
 @click.option("--agent-id", default="default", show_default=True, help="Agent namespace.")
 @click.option(
@@ -299,14 +381,35 @@ def setup_claude(agent_id: str, data_dir: str, storage: str) -> None:
 
     Under the "mcpServers" key.
     """
-    import json
-    from typing import Literal
+    _emit_mcp_config(agent_id, data_dir, storage)
 
-    from ai_knot.integrations.openclaw import generate_mcp_config
 
-    storage_typed: Literal["sqlite", "yaml"] = "sqlite" if storage == "sqlite" else "yaml"
-    config = generate_mcp_config(agent_id=agent_id, data_dir=data_dir, storage=storage_typed)
-    click.echo(json.dumps(config, indent=2))
+@setup.command("openclaw")
+@click.option("--agent-id", default="default", show_default=True, help="Agent namespace.")
+@click.option(
+    "--data-dir",
+    default=".ai_knot",
+    show_default=True,
+    help="Data directory (resolved to absolute path).",
+)
+@click.option(
+    "--storage",
+    default="sqlite",
+    show_default=True,
+    type=click.Choice(["sqlite", "yaml"]),
+    help="Storage backend.",
+)
+def setup_openclaw(agent_id: str, data_dir: str, storage: str) -> None:
+    """Output a paste-ready MCP config for OpenClaw.
+
+    Copy the printed JSON into:
+    \b
+      macOS / Linux: ~/.openclaw/openclaw.json
+      Windows:       %APPDATA%\\OpenClaw\\openclaw.json
+
+    Under the "mcpServers" key.
+    """
+    _emit_mcp_config(agent_id, data_dir, storage)
 
 
 @main.command()
@@ -325,8 +428,6 @@ def serve(ctx: click.Context, agent_id: str, host: str, port: int) -> None:
       pip install "ai-knot[server]"
       ai-knot --storage sqlite serve my-agent --port 8000
     """
-    import os
-
     try:
         import uvicorn
 
@@ -340,3 +441,7 @@ def serve(ctx: click.Context, agent_id: str, host: str, port: int) -> None:
     app = create_app(kb, token=os.environ.get("AI_KNOT_SERVER_TOKEN") or None)
     click.echo(f"ai-knot HTTP sidecar on http://{host}:{port}  (agent: {agent_id})")
     uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()

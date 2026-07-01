@@ -16,7 +16,9 @@ No LLM on the retrieval path. No cloud. No lock-in.
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 
-[**Quickstart**](#quickstart-30-seconds) · [**Why ai-knot**](#why-ai-knot) · [**Use cases**](#what-you-can-build) · [**Benchmarks**](docs/benchmarks.md) · [**Docs**](docs/usage.md)
+[**Quickstart**](#quickstart-30-seconds) · [**Open in Codespaces**](https://codespaces.new/alsoleg89/ai-knot) · [**Integrations**](docs/integrations.md) · [**Why ai-knot**](#why-ai-knot) · [**Use cases**](#what-you-can-build) · [**Benchmarks**](docs/benchmarks.md) · [**Docs**](docs/usage.md)
+
+<img src="docs/assets/hero-demo.svg" alt="ai-knot demo: store facts once, recall only what matters, with deterministic memory persisted across restarts" width="1200" />
 
 </div>
 
@@ -68,12 +70,35 @@ You don't need the transcript. You need the *knowledge* in it. ai-knot keeps the
 ## Install
 
 ```bash
-pip install ai-knot                 # core
-pip install "ai-knot[openai]"       # + LLM-based fact extraction
-pip install "ai-knot[postgres]"     # + PostgreSQL backend
-pip install "ai-knot[mcp]"          # + MCP server (Claude Desktop / Claude Code)
-npm install ai-knot                 # Node / TypeScript (needs Python 3.11+ in PATH)
+pip install ai-knot                        # core
+pip install "ai-knot[openai]"             # + learn() / LLM-based fact extraction
+pip install "ai-knot[postgres]"           # + PostgreSQL backend
+pip install "ai-knot[mcp]"                # + MCP server (Claude Desktop / Claude Code)
+pip install "ai-knot[server]"             # + HTTP sidecar
+pip install "ai-knot[crewai]"             # + CrewAI adapter
+pip install "ai-knot[autogen]"            # + AutoGen adapter
+pip install "ai-knot[agents]"             # + OpenAI Agents SDK adapter
+pip install "ai-knot[integrations]"       # + CrewAI + AutoGen + OpenAI Agents SDK
+npm install ai-knot                        # Node / TypeScript (needs Python 3.11+ in PATH)
 ```
+
+Mix extras by surface as needed, for example:
+`pip install "ai-knot[crewai,openai,postgres]"`.
+
+### Install by surface
+
+| You're already using… | Install |
+|---|---|
+| CrewAI | `pip install "ai-knot[crewai]"` |
+| AutoGen | `pip install "ai-knot[autogen]"` |
+| OpenAI Agents SDK | `pip install "ai-knot[agents]"` |
+| Claude Desktop / Claude Code / OpenClaw via MCP | `pip install "ai-knot[mcp]"` |
+| HTTP sidecar deployment | `pip install "ai-knot[server]"` |
+| `learn()` with OpenAI-backed extraction | `pip install "ai-knot[openai]"` |
+| Node / TypeScript | `npm install ai-knot` |
+
+If install or setup fails, start with `ai-knot doctor --json` and
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Quickstart (30 seconds)
 
@@ -100,6 +125,28 @@ print(kb.recall("what are the user's coding preferences?"))
 That's the whole loop: **`add`/`learn` → `recall`.** Drop the result into your system prompt
 and your agent has memory. Full API — storage backends, bi-temporal recall, tags, decay,
 multi-agent — in **[docs/usage.md](docs/usage.md)**.
+
+## Pick your starting point
+
+| You want to… | Start here |
+|---|---|
+| Try the core Python flow in under 2 minutes | [`python examples/quickstart.py`](examples/quickstart.py) |
+| Try without local setup | [Open the repo in GitHub Codespaces](https://codespaces.new/alsoleg89/ai-knot) |
+| See the Claude / MCP config flow without launching Claude | [examples/claude_mcp_setup.py](examples/claude_mcp_setup.py) |
+| See the OpenClaw / MCP flow work without the app or API keys | [examples/openclaw_integration.py](examples/openclaw_integration.py) |
+| Connect OpenClaw to persistent memory | `ai-knot setup openclaw --agent-id bot --storage sqlite` |
+| See the CrewAI memory surface work without an API key | [examples/crewai_surface_demo.py](examples/crewai_surface_demo.py) |
+| Add long-term memory to a CrewAI `Crew` or `Agent` | [examples/crewai_integration.py](examples/crewai_integration.py) |
+| Add long-term memory to an AutoGen `AssistantAgent` | [examples/autogen_integration.py](examples/autogen_integration.py) |
+| Add long-term memory to the OpenAI Agents SDK | [examples/openai_agents_integration.py](examples/openai_agents_integration.py) |
+| Use ai-knot from Node / TypeScript | [npm/README.md](npm/README.md) |
+| Give Claude Desktop / Claude Code persistent memory | [Deployment guide → MCP server](docs/deployment.md#4-run-the-mcp-server) |
+| Plug memory into LangChain / LangGraph | [examples/langchain_integration.py](examples/langchain_integration.py) |
+| Expose memory over HTTP | [Deployment guide → HTTP sidecar](docs/deployment.md#11-http-sidecar) |
+| Share memory across multiple agents | [examples/shared_pool.py](examples/shared_pool.py) |
+| Grab the maintainer launch checklist | [docs/launch-checklist.md](docs/launch-checklist.md) |
+| Record the short launch/demo clip | [examples/hero_demo.py](examples/hero_demo.py) · [demo-script.md](docs/demo-script.md) |
+| Compare all supported surfaces | [docs/integrations.md](docs/integrations.md) |
 
 ---
 
@@ -131,8 +178,12 @@ Runnable scripts for each in **[examples/](examples/)**.
   Ask "what was true as of the incident?" — `recall(now=…)` answers it; superseded facts are
   excluded, not deleted.
 - **🧩 MCP-native & framework-ready.** Ships an `ai-knot-mcp` server (Claude Desktop / Claude
-  Code, zero glue) plus thin **LangChain / LangGraph** adapters — an `AiKnotRetriever` for RAG
-  chains and an `AiKnotChatMemory` drop-in, with no hard LangChain dependency.
+  Code, zero glue), a **CrewAI** memory adapter (`AiKnotCrewAIMemory` via `Crew(memory=...)`
+  or `Agent(memory=memory.scope(...))`), an **AutoGen** memory adapter
+  (`AiKnotAutoGenMemory` via `memory=[...]`), an **OpenAI Agents SDK** adapter
+  (`AiKnotAgentsMemory` via `RunConfig`), and thin
+  **LangChain / LangGraph** adapters — an `AiKnotRetriever` for RAG chains and an
+  `AiKnotChatMemory` drop-in, with no hard LangChain dependency.
 
 ---
 
@@ -155,9 +206,13 @@ Enforced by a scored acceptance gate (scenarios S8–S26) that runs on every PR.
 
 ## Benchmarks you can actually reproduce
 
-Agent-memory benchmark numbers are in a credibility crisis — Zep's **84%** on LoCoMo became
-**58%** on an independent re-run; Mem0's cited **91.6%** reproduces at **~58–66%**. An
-LLM-judged score swings 20+ points with the reader model, the judge, and the prompts.
+Agent-memory benchmark numbers are in a credibility crisis. Zep reported **84%** on LoCoMo
+from a single run; an independent re-evaluation — restricted to the four validated categories,
+prompts aligned, ten runs averaged — put it at **58.44%** ([getzep/zep-papers#5](https://github.com/getzep/zep-papers/issues/5);
+Zep disputes it and claims 75.1%). Across the field, published LoCoMo claims span **~55% to
+>90%**, with the leading vendors openly contesting each other's methodology. An LLM-judged
+score swings 20+ points with the reader model, the judge, the prompts, and which categories
+you score.
 
 So ai-knot reports **two** numbers: the LLM-judged QA accuracy *with the reader and judge
 named* (as everyone's should be), **and** a deterministic, one-command retrieval number that
@@ -225,7 +280,7 @@ variance at scale. [Full benchmark history →](https://alsoleg89.github.io/ai-k
 
 ## Documentation
 
-📚 [Usage guide](docs/usage.md) · [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Launch post](docs/launch-post.md) · [GTM plan](docs/launch-plan.md)
+📚 [Usage guide](docs/usage.md) · [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Positioning](docs/positioning.md) · [Comparison guide](docs/comparison.md) · [Competitive analysis](docs/competitive-analysis.md) · [FAQ](docs/faq.md) · [Whitepaper](docs/whitepaper.md) · [Developer article](docs/developer-article.md) · [Launch kit](docs/README.md)
 
 ## Contributing
 

@@ -14,6 +14,8 @@ pip install ai-knot                 # core (sqlite + yaml, in-process BM25)
 pip install "ai-knot[postgres]"     # + PostgreSQL backend
 pip install "ai-knot[mcp]"          # + MCP server (Claude Desktop / Claude Code)
 pip install "ai-knot[openai]"       # + OpenAI provider for learn()/embeddings
+pip install "ai-knot[server]"       # + HTTP sidecar
+pip install "ai-knot[integrations]" # + CrewAI / AutoGen / OpenAI Agents SDK adapters
 ```
 
 ai-knot has **no heavy ML dependencies** by default — retrieval is deterministic
