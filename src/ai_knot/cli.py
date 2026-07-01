@@ -420,9 +420,9 @@ def setup_openclaw(agent_id: str, data_dir: str, storage: str) -> None:
 def serve(ctx: click.Context, agent_id: str, host: str, port: int) -> None:
     """Run the HTTP sidecar for AGENT_ID (requires the 'server' extra).
 
-    Exposes /health, /v1/recall, /v1/facts and /v1/stats over HTTP. Set the
-    AI_KNOT_SERVER_TOKEN environment variable to require ``Authorization: Bearer
-    <token>`` on the /v1/* routes.
+    Exposes /health, /v1/recall, /v1/facts, /v1/stats, and /inspect over HTTP.
+    Set the AI_KNOT_SERVER_TOKEN environment variable to require
+    ``Authorization: Bearer <token>`` on the /v1/* routes and /inspect.
 
     \b
       pip install "ai-knot[server]"
@@ -440,6 +440,7 @@ def serve(ctx: click.Context, agent_id: str, host: str, port: int) -> None:
     kb = _make_kb(ctx, agent_id)
     app = create_app(kb, token=os.environ.get("AI_KNOT_SERVER_TOKEN") or None)
     click.echo(f"ai-knot HTTP sidecar on http://{host}:{port}  (agent: {agent_id})")
+    click.echo(f"Browser inspector: http://{host}:{port}/inspect")
     uvicorn.run(app, host=host, port=port)
 
 

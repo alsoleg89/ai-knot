@@ -16,7 +16,7 @@ reference in [usage.md](usage.md).
 | MCP server | Claude Desktop / Claude Code / any MCP client | `pip install "ai-knot[mcp]"` | [deployment.md#4-run-the-mcp-server](deployment.md#4-run-the-mcp-server) |
 | Skills / coding assistants | teach Codex / Claude Code / OpenClaw-style tools ai-knot's surfaces up front | `npx skills add https://github.com/alsoleg89/ai-knot --skill ai-knot` | [../skills/README.md](../skills/README.md) |
 | TypeScript / npm | Node apps with the Python sidecar/client path | `npm install ai-knot` | [../npm/README.md](../npm/README.md) |
-| HTTP sidecar | polyglot services and remote agent runtimes | `pip install "ai-knot[server]"` | [deployment.md#11-http-sidecar](deployment.md#11-http-sidecar) |
+| HTTP sidecar | polyglot services, remote agent runtimes, and browser inspection | `pip install "ai-knot[server]"` | [deployment.md#11-http-sidecar](deployment.md#11-http-sidecar) |
 
 ---
 
@@ -170,12 +170,30 @@ docs = retriever.invoke("what language does the user use?")
 
 See also: [usage.md#langchain--langgraph](usage.md#langchain--langgraph)
 
+### HTTP sidecar and browser inspector
+
+Use the HTTP sidecar when you need a polyglot surface or a quick browser view
+of what ai-knot has stored.
+
+```bash
+pip install "ai-knot[server]"
+ai-knot --storage sqlite serve my_agent --port 8000
+```
+
+Then:
+
+- JSON API: `POST /v1/recall`, `POST /v1/facts`, `GET /v1/facts`, `GET /v1/stats`
+- browser inspector: open `http://127.0.0.1:8000/inspect`
+
+See also: [deployment.md#browser-inspector](deployment.md#browser-inspector)
+
 ---
 
 ## Status
 
 The stack-specific surfaces that matter most for a first launch are now in-repo:
 CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain / LangGraph, MCP,
-assistant skills, TypeScript, and the HTTP sidecar. The remaining gaps are less
-about adapters and more about public distribution: publishing the updated
-branch, npm parity, and turning the prepared proof assets into public posts.
+assistant skills, TypeScript, and the HTTP sidecar/browser inspector. The
+remaining gaps are less about adapters and more about public distribution:
+publishing the updated branch, npm parity, and turning the prepared proof assets
+into public posts.

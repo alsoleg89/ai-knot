@@ -7,7 +7,7 @@
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent pool, bi-temporal recall, examples. |
 | [integrations.md](integrations.md) | Fast routing by ecosystem surface: CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain/LangGraph, MCP, TS, HTTP, plus the right install path for each. |
 | [../skills/README.md](../skills/README.md) | Assistant-facing skill surface for coding tools that support the skills standard. |
-| [deployment.md](deployment.md) | Install, storage backends, configuration (env vars), the MCP server, HTTP sidecar, observability, backup, security, scaling. |
+| [deployment.md](deployment.md) | Install, storage backends, configuration (env vars), the MCP server, HTTP sidecar, browser inspector, observability, backup, security, scaling. |
 | [troubleshooting.md](troubleshooting.md) | First-run, install, MCP, and public-release troubleshooting with `ai-knot doctor` and the public launch checker. |
 | [benchmarks.md](benchmarks.md) | Reproducible benchmark methodology, deterministic retrieval suite, LoCoMo and LongMemEval results. |
 | [production-readiness.md](production-readiness.md) | Feature-by-feature readiness status across storage, retrieval, governance, observability, CI, release, integrations, benchmarks. |

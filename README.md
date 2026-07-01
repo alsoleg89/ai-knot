@@ -189,6 +189,7 @@ see [docs/integrations.md](docs/integrations.md).
 | Give Claude Desktop / Claude Code persistent memory | [Deployment guide → MCP server](docs/deployment.md#4-run-the-mcp-server) |
 | Plug memory into LangChain / LangGraph | [examples/langchain_integration.py](examples/langchain_integration.py) |
 | Expose memory over HTTP | [Deployment guide → HTTP sidecar](docs/deployment.md#11-http-sidecar) |
+| Open a read-only browser inspector over your memory store | [Deployment guide → Browser inspector](docs/deployment.md#browser-inspector) |
 | Share memory across multiple agents | [examples/shared_pool.py](examples/shared_pool.py) |
 | Teach a coding assistant how to integrate ai-knot | [skills/README.md](skills/README.md) |
 | Grab the maintainer launch checklist | [docs/launch-checklist.md](docs/launch-checklist.md) |
@@ -230,7 +231,8 @@ Runnable scripts for each in **[examples/](examples/)**.
   (`AiKnotAutoGenMemory` via `memory=[...]`), an **OpenAI Agents SDK** adapter
   (`AiKnotAgentsMemory` via `RunConfig`), and thin
   **LangChain / LangGraph** adapters — an `AiKnotRetriever` for RAG chains and an
-  `AiKnotChatMemory` drop-in, with no hard LangChain dependency.
+  `AiKnotChatMemory` drop-in, plus a **FastAPI sidecar + browser inspector** for
+  HTTP-native debugging and demos, with no hard LangChain dependency.
 
 ---
 

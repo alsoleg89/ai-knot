@@ -175,8 +175,8 @@ print(kb.recall("what does the user do?"))
 ```
 
 MIT-licensed, self-hosted, pluggable storage (SQLite / PostgreSQL / YAML), an MCP
-server for Claude Desktop and Claude Code, and an HTTP sidecar for everything
-else. The benchmark harness ships in the repo — so does the gate that keeps it
-honest.
+server for Claude Desktop and Claude Code, and an HTTP sidecar plus browser
+inspector for everything else. The benchmark harness ships in the repo — so
+does the gate that keeps it honest.
 
 *Repository: https://github.com/alsoleg89/ai-knot*

@@ -19,6 +19,7 @@ README_MARKERS = [
     "Install by surface",
     "What it looks like in your stack",
     "skills/README.md",
+    "Browser inspector",
     "examples/crewai_surface_demo.py",
     "docs/launch-checklist.md",
 ]

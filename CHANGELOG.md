@@ -55,6 +55,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
   `ai-knot setup claude` flow.
 - Repo-native assistant skill surface: `skills/ai-knot/SKILL.md` plus
   `skills/README.md` for coding assistants that support the skills standard.
+- Read-only browser inspector on top of the HTTP sidecar:
+  `GET /inspect` plus `GET /v1/facts` for debugging and demo flows without
+  adding a separate UI stack.
 
 ### Fixed
 - `add(type="procedural")` (a bare string, as shown in the docs) no longer
@@ -80,6 +83,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
   memory-project READMEs.
 - Integration docs now pair each surface with a concrete install command, mirroring
   the onboarding pattern strong competitor READMEs use.
+- The HTTP surface is now easier to demo and debug: the sidecar exposes a
+  browser inspector in addition to the JSON routes.
 - Framework error paths and examples now point users to the repo-native install
   extras first, with the raw upstream package names as fallback.
 - OpenClaw docs and launch routing now treat the MCP/app path as a first-class

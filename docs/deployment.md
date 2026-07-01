@@ -220,7 +220,34 @@ pip install "ai-knot[server]"
 AI_KNOT_SERVER_TOKEN=secret ai-knot --storage postgres --dsn "$AI_KNOT_DSN" serve svc --host 0.0.0.0 --port 8000
 ```
 
-Routes: `GET /health` (open), `POST /v1/recall` (`{query, top_k, now}` → context +
-facts), `POST /v1/facts`, `GET /v1/stats`. When `AI_KNOT_SERVER_TOKEN` is set, the
-`/v1/*` routes require `Authorization: Bearer <token>`. Front it with a TLS-
-terminating reverse proxy in production.
+Routes:
+
+- `GET /health` (open)
+- `POST /v1/recall` (`{query, top_k, now}` → context + facts)
+- `POST /v1/facts`
+- `GET /v1/facts` (read-only fact listing for debugging / inspection)
+- `GET /v1/stats`
+
+When `AI_KNOT_SERVER_TOKEN` is set, the `/v1/*` routes require
+`Authorization: Bearer <token>`. Front it with a TLS-terminating reverse proxy
+in production.
+
+### Browser inspector
+
+The same sidecar now ships a lightweight read-only HTML inspector. It is useful
+for demo flows, support, and debugging when you want to see what the store
+contains without writing a custom UI.
+
+Open:
+
+```text
+http://127.0.0.1:8000/inspect
+```
+
+Features:
+
+- recall-preview form using the same deterministic retrieval path as the agent,
+- newest-first fact table,
+- active vs inactive fact visibility,
+- optional point-in-time anchor via `now`,
+- optional bearer-token protection when `AI_KNOT_SERVER_TOKEN` is set.

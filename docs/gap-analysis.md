@@ -49,7 +49,7 @@ readiness**, not core product legitimacy.
 | Gap | Why it matters | Status |
 |---|---|---|
 | No live competitor bench-pack | would reinforce the reproducibility wedge | **Open** |
-| No lightweight web UI knowledge inspector | would make demos and debugging more shareable | **Open** |
+| No lightweight web UI knowledge inspector | would make demos and debugging more shareable | **Closed in this update** |
 | No notebook-based walkthrough | would help educational and social channels | **Open** |
 | No surface-specific proof asset prepared | concrete proof converts better than generic capability lists | **Closed in this update** (CrewAI + OpenClaw + Claude MCP case-study/post assets now in-repo; public posting still maintainer-only) |
 
@@ -80,6 +80,7 @@ readiness**, not core product legitimacy.
 21. Added an OpenClaw proof/case-study asset and surfaced the zero-network OpenClaw example more directly in docs/launch copy
 22. Added a Claude/MCP proof/case-study asset and a zero-network Claude setup demo
 23. Added a repo-native `ai-knot` skill plus a skills index for coding assistants that support the skills standard
+24. Added a lightweight browser inspector and JSON fact-listing surface on top of the existing HTTP sidecar
 
 ## Highest-value remaining work
 

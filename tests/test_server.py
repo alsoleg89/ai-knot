@@ -46,6 +46,36 @@ def test_add_then_recall(tmp_path: pathlib.Path) -> None:
     assert any("Kubernetes" in f["content"] for f in out["facts"])
 
 
+def test_list_facts_filters_by_activity_and_reports_totals(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    client.post("/v1/facts", json={"content": "Current deployment target is Kubernetes"})
+    client.post(
+        "/v1/facts",
+        json={
+            "content": "Migration is scheduled for 2099",
+            "event_time": "2099-01-01T00:00:00+00:00",
+        },
+    )
+
+    live = client.get("/v1/facts")
+    assert live.status_code == 200
+    body = live.json()
+    assert body["returned"] == 1
+    assert body["total_matching"] == 1
+    assert body["facts"][0]["content"] == "Current deployment target is Kubernetes"
+    assert body["facts"][0]["active"] is True
+
+    all_facts = client.get("/v1/facts", params={"include_inactive": "true"})
+    assert all_facts.status_code == 200
+    out = all_facts.json()
+    assert out["returned"] == 2
+    assert out["total_matching"] == 2
+    assert any(
+        f["content"] == "Migration is scheduled for 2099" and f["active"] is False
+        for f in out["facts"]
+    )
+
+
 def test_recall_threads_now_anchor(tmp_path: pathlib.Path) -> None:
     # A just-added fact (valid_from = ingest time) is not active before that time.
     client = _client(tmp_path)
@@ -84,13 +114,26 @@ def test_stats(tmp_path: pathlib.Path) -> None:
     assert isinstance(r.json(), dict)
 
 
+def test_browser_inspector_renders_fact_and_recall_preview(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    client.post("/v1/facts", json={"content": "User deploys on Kubernetes", "tags": ["ops"]})
+
+    r = client.get("/inspect", params={"q": "where does the user deploy", "top_k": 5})
+    assert r.status_code == 200
+    assert "ai-knot inspector" in r.text
+    assert "Recall Preview" in r.text
+    assert "User deploys on Kubernetes" in r.text
+
+
 def test_bearer_token_guards_v1_but_not_health(tmp_path: pathlib.Path) -> None:
     client = _client(tmp_path, token="s3cret")
     # /health stays open.
     assert client.get("/health").status_code == 200
     # /v1/* without the token is rejected.
     assert client.post("/v1/recall", json={"query": "x"}).status_code == 401
+    assert client.get("/v1/facts").status_code == 401
     assert client.get("/v1/stats").status_code == 401
+    assert client.get("/inspect").status_code == 401
     # ...and accepted with the right bearer token.
     ok = client.get("/v1/stats", headers={"Authorization": "Bearer s3cret"})
     assert ok.status_code == 200

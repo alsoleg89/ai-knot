@@ -44,7 +44,8 @@ This is why the launch is still prepared-but-not-executed rather than fully done
 1. public npm latest is still `0.9.3` instead of `0.11.0`;
 2. the public README is still missing launch-branch markers such as
    `Install by surface`, `What it looks like in your stack`, `skills/README.md`,
-   `examples/crewai_surface_demo.py`, and `docs/launch-checklist.md`;
+   `Browser inspector`, `examples/crewai_surface_demo.py`, and
+   `docs/launch-checklist.md`;
 3. the public `main` branch still does not expose:
    - `docs/crewai-case-study.md`
    - `docs/openclaw-case-study.md`
@@ -78,6 +79,8 @@ This is why the launch is still prepared-but-not-executed rather than fully done
   deterministic wedge.
 - [README.md](../README.md) now also shows framework-native and MCP-native
   surface snippets near the top, not only generic API primitives.
+- [README.md](../README.md) now also routes readers to the browser inspector as
+  a demo/debug surface, not just to SDK and MCP entry points.
 - [comparison.md](comparison.md) explains when to pick `ai-knot` versus Mem0,
   Graphiti, Letta, or LangMem.
 - [faq.md](faq.md) and [announce.md](announce.md) reduce message drift in public threads.
@@ -94,6 +97,7 @@ Prepared surfaces in-repo:
 - LangChain / LangGraph: [examples/langchain_integration.py](../examples/langchain_integration.py)
 - TypeScript / npm: [../npm/README.md](../npm/README.md)
 - Assistant skills: [../skills/README.md](../skills/README.md), [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
+- HTTP/browser inspection: [deployment.md#browser-inspector](deployment.md#browser-inspector)
 
 ### Supportability for first-wave users
 
@@ -102,6 +106,8 @@ Prepared surfaces in-repo:
   benchmark questions into actionable reports
 - [troubleshooting.md](troubleshooting.md) now centralizes first-run, MCP, npm,
   and public-release failure paths
+- the HTTP sidecar now includes both JSON inspection (`GET /v1/facts`) and a
+  read-only browser inspector (`/inspect`) for first-wave debugging
 
 ### Install paths are aligned
 
@@ -159,6 +165,8 @@ Latest targeted checks completed in this workspace:
 
 - `ruff check` on the new integration/example paths: passed
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
+- `ruff check src/ai_knot/server/app.py src/ai_knot/cli.py tests/test_server.py`: passed
+- `pytest tests/test_server.py -q --no-cov`: passed
 - `pytest tests/test_public_release_script.py -q --no-cov`: passed
 - `pytest tests/test_examples.py tests/test_integrations_crewai.py tests/test_integrations_autogen.py tests/test_integrations_openai_agents.py tests/test_integrations_openclaw.py tests/test_version_sync.py -q --no-cov`: passing in targeted batches during this branch work
 
@@ -195,4 +203,4 @@ Until those are true, the launch is **prepared** but not fully **executed**.
 4. Post the prepared follow-ups in order:
    CrewAI → OpenClaw → Claude/MCP.
 5. Validate the public Codespaces quickstart after `main` is live.
-6. Optional post-launch expansion: OpenAI Agents SDK follow-up, competitor bench-pack, web inspector.
+6. Optional post-launch expansion: OpenAI Agents SDK follow-up, competitor bench-pack, more backends.

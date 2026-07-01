@@ -233,7 +233,8 @@ The benchmark harness ships in the repo — so does the gate that keeps it hones
 >
 > If you care about local-first or air-gapped agent stacks, the interesting surfaces are:
 > MCP server for Claude, CrewAI, AutoGen, OpenAI Agents SDK, TypeScript client,
-> HTTP sidecar, and a shared multi-agent pool with trust / provenance / visibility controls.
+> HTTP sidecar + browser inspector, and a shared multi-agent pool with trust /
+> provenance / visibility controls.
 >
 > Repo: https://github.com/alsoleg89/ai-knot
 

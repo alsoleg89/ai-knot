@@ -97,7 +97,8 @@ Use `AiKnotRetriever` for retrieval flows or `AiKnotChatMemory` for conversation
 
 ### HTTP-first environments
 
-Run the FastAPI sidecar and call `/v1/recall` and `/v1/facts`.
+Run the FastAPI sidecar and call `/v1/recall` / `/v1/facts`, or open `/inspect`
+for a lightweight browser view of the same store.
 
 ## 5. The multi-agent part is where it gets interesting
 

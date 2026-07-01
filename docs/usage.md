@@ -268,7 +268,7 @@ ai-knot export  my_agent out.yaml
 ai-knot import  my_agent in.yaml
 ai-knot setup claude --agent-id bot --storage sqlite         # paste-ready MCP config
 ai-knot setup openclaw --agent-id bot --storage sqlite       # OpenClaw config
-ai-knot serve   my_agent --port 8000                         # HTTP sidecar (server extra)
+ai-knot serve   my_agent --port 8000                         # HTTP sidecar + browser inspector
 ```
 
 If CLI install or integration setup behaves unexpectedly, start with

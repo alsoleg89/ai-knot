@@ -102,7 +102,7 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 | OpenAI Agents SDK adapter | ✅ | `AiKnotAgentsMemory` via `RunConfig.call_model_input_filter`; no hard `openai-agents` dep |
 | AutoGen memory adapter | ✅ | `AiKnotAutoGenMemory` via `AssistantAgent(memory=[...])`; no hard `autogen-*` dep |
 | LangChain / LangGraph adapters | ✅ | `AiKnotRetriever` (Runnable `invoke`) + `AiKnotChatMemory` (`BaseChatMemory` shape); no hard langchain dep |
-| FastAPI HTTP sidecar | ✅ | `ai-knot serve`: `/health`, `/v1/recall`, `/v1/facts`, `/v1/stats` + optional bearer auth |
+| FastAPI HTTP sidecar + browser inspector | ✅ | `ai-knot serve`: `/health`, `POST /v1/recall`, `POST/GET /v1/facts`, `/v1/stats`, `/inspect` + optional bearer auth |
 | CLI lifecycle/audit ops | ✅ | `recall --now` (point-in-time), `lineage` (supersession audit trail), `decay`, `export`/`import` |
 | CLI pool-scoped gov ops | ⬜ | shared-pool operator commands |
 | Additional framework adapters | ⬜ | optional expansion after launch; no longer blocking the main launch |

@@ -188,15 +188,18 @@ This pass applied the market patterns directly:
 2. The integrations index now includes an assistant-facing skill surface.
 3. The repo now ships a reference skill in [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
    plus a [skills/README.md](../skills/README.md) entry point.
+4. The HTTP sidecar now includes a lightweight browser inspector, closing the
+   earlier "product shell" gap for demos and debugging.
 
 ---
 
 ## Remaining adoption gap
 
-The strongest missing surface is still a lightweight product shell or inspector.
-Mem0 has cloud + CLI, Letta has a user-facing runtime, Graphiti has graph-native
-visual story. `ai-knot` now routes well by surface, but it still lacks a simple
-inspection UI that makes stored memory easy to demo visually.
+The strongest remaining gap is not an onboarding surface anymore; it is public
+distribution state. The branch now has README routing, assistant-facing
+packaging, and a lightweight browser inspector, but the public `main` branch and
+npm latest tag still need to catch up before the launch can be considered fully
+executed.
 
 ---
 
