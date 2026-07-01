@@ -181,3 +181,18 @@ def test_example13_claude_mcp_setup_config(tmp_path: pathlib.Path) -> None:
     assert env["AI_KNOT_AGENT_ID"] == "claude-demo"
     assert env["AI_KNOT_STORAGE"] == "sqlite"
     assert env["AI_KNOT_DATA_DIR"] == str(tmp_path.resolve())
+
+
+def test_example14_browser_inspector_demo_seed(tmp_path: pathlib.Path) -> None:
+    from examples.browser_inspector_demo import build_demo_kb
+
+    kb = build_demo_kb(base_dir=tmp_path, agent_id="browser-demo")
+    facts = kb.list_facts()
+
+    assert len(facts) == 7
+    assert any("FastAPI" in fact.content for fact in facts)
+    assert any("PostgreSQL" in fact.content for fact in facts)
+    assert any(
+        "2099" in fact.content and not fact.is_active()
+        for fact in facts
+    )

@@ -244,6 +244,12 @@ Open:
 http://127.0.0.1:8000/inspect
 ```
 
+Or run the seeded zero-network demo:
+
+```bash
+python examples/browser_inspector_demo.py
+```
+
 Features:
 
 - recall-preview form using the same deterministic retrieval path as the agent,

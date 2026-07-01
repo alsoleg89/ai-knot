@@ -58,6 +58,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Read-only browser inspector on top of the HTTP sidecar:
   `GET /inspect` plus `GET /v1/facts` for debugging and demo flows without
   adding a separate UI stack.
+- Zero-network browser-inspector demo:
+  `examples/browser_inspector_demo.py` seeds sample facts and launches the
+  sidecar for a copy/paste first run.
 
 ### Fixed
 - `add(type="procedural")` (a bare string, as shown in the docs) no longer

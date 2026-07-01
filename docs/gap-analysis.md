@@ -81,6 +81,7 @@ readiness**, not core product legitimacy.
 22. Added a Claude/MCP proof/case-study asset and a zero-network Claude setup demo
 23. Added a repo-native `ai-knot` skill plus a skills index for coding assistants that support the skills standard
 24. Added a lightweight browser inspector and JSON fact-listing surface on top of the existing HTTP sidecar
+25. Added a zero-network browser-inspector demo so the new surface is trialable with one command
 
 ## Highest-value remaining work
 

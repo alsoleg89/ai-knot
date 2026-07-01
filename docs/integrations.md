@@ -184,6 +184,7 @@ Then:
 
 - JSON API: `POST /v1/recall`, `POST /v1/facts`, `GET /v1/facts`, `GET /v1/stats`
 - browser inspector: open `http://127.0.0.1:8000/inspect`
+- zero-network seeded demo: [`examples/browser_inspector_demo.py`](../examples/browser_inspector_demo.py)
 
 See also: [deployment.md#browser-inspector](deployment.md#browser-inspector)
 
