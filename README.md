@@ -191,6 +191,7 @@ see [docs/integrations.md](docs/integrations.md).
 | Expose memory over HTTP | [Deployment guide → HTTP sidecar](docs/deployment.md#11-http-sidecar) |
 | Open a read-only browser inspector over your memory store | [Deployment guide → Browser inspector](docs/deployment.md#browser-inspector) |
 | Launch the browser inspector with seeded sample data | [`python examples/browser_inspector_demo.py`](examples/browser_inspector_demo.py) |
+| Walk through the core product in a rendered notebook | [examples/notebook_walkthrough.ipynb](examples/notebook_walkthrough.ipynb) |
 | Share memory across multiple agents | [examples/shared_pool.py](examples/shared_pool.py) |
 | Teach a coding assistant how to integrate ai-knot | [skills/README.md](skills/README.md) |
 | Grab the maintainer launch checklist | [docs/launch-checklist.md](docs/launch-checklist.md) |

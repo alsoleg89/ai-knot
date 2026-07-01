@@ -80,6 +80,7 @@ field with a credibility crisis, the honest number *is* the hook.
 - OpenClaw follow-up distribution asset prepared: app/MCP case-study copy routed to the zero-network example and setup command.
 - Claude/MCP follow-up distribution asset prepared: zero-network setup demo plus channel-ready case-study copy.
 - Lightweight browser inspector added on top of the HTTP sidecar for demos and debugging.
+- Rendered zero-network notebook walkthrough added for educational and social sharing.
 
 ### P0 — blocks a credible launch (do before posting)
 1. **npm/PyPI version sync.** As of **June 30, 2026**, PyPI is on `0.11.0` while npm
@@ -102,7 +103,7 @@ field with a credibility crisis, the honest number *is* the hook.
 ### P2 — depth, post-launch
 6. Live side-by-side competitor bench-pack (Mem0) in-repo.
 7. More storage backends (Qdrant/Weaviate/Mongo) — community-PR friendly asks.
-8. Notebook-based walkthrough for educational and social channels.
+8. Public benchmark write-up and competitor scorecard refresh after launch.
 
 ---
 
@@ -185,11 +186,12 @@ gap analysis, FAQ, whitepaper, developer article), and refreshed contributor doc
 Codespaces/devcontainer support, a buyer-facing comparison guide, a demo-recording
 flow, CrewAI / AutoGen / OpenAI Agents adapters, CrewAI / OpenClaw / Claude MCP
 case-study / proof assets, and a submission pack for directory/listing distribution
-are also now in the repo.
+are also now in the repo. The same is now true for the browser inspector and the
+rendered notebook walkthrough.
 
 **Remaining, in priority order:**
 1. *(maintainer)* npm publish to `0.11.0`; merge/push the launch-ready branch to public `main`.
 2. Demo GIF or terminal capture in README.
 3. Publish the prepared CrewAI, OpenClaw, and Claude/MCP surface-specific proof posts.
 4. Validate the public Codespaces quickstart after the branch is on `main`.
-5. Live competitor bench-pack; more backends; notebook walkthrough.
+5. Live competitor bench-pack; more backends.

@@ -190,6 +190,8 @@ This pass applied the market patterns directly:
    plus a [skills/README.md](../skills/README.md) entry point.
 4. The HTTP sidecar now includes a lightweight browser inspector, closing the
    earlier "product shell" gap for demos and debugging.
+5. The repo now includes a rendered notebook walkthrough, giving social and educational
+   channels a shareable artifact beyond README prose.
 
 ---
 

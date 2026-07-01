@@ -52,6 +52,7 @@ This is why the launch is still prepared-but-not-executed rather than fully done
    - `docs/claude-mcp-case-study.md`
    - `docs/publish-ready-audit.md`
    - `docs/readme-patterns.md`
+   - `examples/notebook_walkthrough.ipynb`
    - `skills/README.md`
 
 ---
@@ -98,6 +99,7 @@ Prepared surfaces in-repo:
 - TypeScript / npm: [../npm/README.md](../npm/README.md)
 - Assistant skills: [../skills/README.md](../skills/README.md), [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
 - HTTP/browser inspection: [deployment.md#browser-inspector](deployment.md#browser-inspector)
+- Notebook walkthrough: [../examples/notebook_walkthrough.ipynb](../examples/notebook_walkthrough.ipynb)
 
 ### Supportability for first-wave users
 
@@ -166,8 +168,10 @@ Latest targeted checks completed in this workspace:
 - `ruff check` on the new integration/example paths: passed
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
 - `ruff check src/ai_knot/server/app.py src/ai_knot/cli.py tests/test_server.py`: passed
+- `ruff check examples/browser_inspector_demo.py tests/test_examples.py`: passed
 - `pytest tests/test_server.py -q --no-cov`: passed
 - `pytest tests/test_public_release_script.py -q --no-cov`: passed
+- `pytest tests/test_examples.py tests/test_server.py -q --no-cov`: passed
 - `pytest tests/test_examples.py tests/test_integrations_crewai.py tests/test_integrations_autogen.py tests/test_integrations_openai_agents.py tests/test_integrations_openclaw.py tests/test_version_sync.py -q --no-cov`: passing in targeted batches during this branch work
 
 Important practical interpretation:

@@ -1,5 +1,6 @@
 """Tests for README examples — run without LLM API keys."""
 
+import json
 import pathlib
 
 import pytest
@@ -196,3 +197,20 @@ def test_example14_browser_inspector_demo_seed(tmp_path: pathlib.Path) -> None:
         "2099" in fact.content and not fact.is_active()
         for fact in facts
     )
+
+
+def test_example15_notebook_walkthrough_exists_and_mentions_core_flow() -> None:
+    notebook_path = pathlib.Path("examples/notebook_walkthrough.ipynb")
+    notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+
+    assert notebook["nbformat"] == 4
+    cells = notebook["cells"]
+    assert len(cells) >= 6
+
+    source_text = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in cells
+    )
+    assert "Point-in-time recall" in source_text
+    assert "browser_inspector_demo.py" in source_text
+    assert "what language, framework, and database does the user use?" in source_text

@@ -61,6 +61,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Zero-network browser-inspector demo:
   `examples/browser_inspector_demo.py` seeds sample facts and launches the
   sidecar for a copy/paste first run.
+- Rendered notebook walkthrough:
+  `examples/notebook_walkthrough.ipynb` covers the zero-network `add` → `recall`
+  loop, point-in-time recall, and the path into the browser inspector.
 
 ### Fixed
 - `add(type="procedural")` (a bare string, as shown in the docs) no longer
