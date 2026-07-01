@@ -131,6 +131,7 @@ Use this when a listing asks "how is it different?":
 
 | Context | Link to use |
 |---|---|
+| Launch landing page (when GitHub Pages is enabled) | `docs/site/index.html` / the repo Pages URL |
 | First-touch developer audience | repo root / README |
 | Skeptical technical audience | `docs/benchmarks.md` |
 | Product / strategy audience | `docs/whitepaper.md` |

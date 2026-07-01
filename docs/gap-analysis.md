@@ -83,6 +83,7 @@ readiness**, not core product legitimacy.
 24. Added a lightweight browser inspector and JSON fact-listing surface on top of the existing HTTP sidecar
 25. Added a zero-network browser-inspector demo so the new surface is trialable with one command
 26. Added a rendered zero-network notebook walkthrough for educational and social sharing
+27. Added a GitHub Pages-ready landing page and deployment workflow for shareable launch links
 
 ## Highest-value remaining work
 

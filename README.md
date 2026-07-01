@@ -170,7 +170,9 @@ ai-knot doctor --json
 
 If you want an assistant to know these patterns before it edits your repo, use the
 repo-native skill in [skills/README.md](skills/README.md). For the full surface map,
-see [docs/integrations.md](docs/integrations.md).
+see [docs/integrations.md](docs/integrations.md). For a shareable landing page once
+the branch is on `main`, the repo now also ships a GitHub Pages-ready site in
+[`docs/site/index.html`](docs/site/index.html).
 
 ## Pick your starting point
 

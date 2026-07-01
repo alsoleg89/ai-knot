@@ -81,6 +81,7 @@ field with a credibility crisis, the honest number *is* the hook.
 - Claude/MCP follow-up distribution asset prepared: zero-network setup demo plus channel-ready case-study copy.
 - Lightweight browser inspector added on top of the HTTP sidecar for demos and debugging.
 - Rendered zero-network notebook walkthrough added for educational and social sharing.
+- GitHub Pages-ready landing page plus deploy workflow added for shareable non-README links.
 
 ### P0 — blocks a credible launch (do before posting)
 1. **npm/PyPI version sync.** As of **June 30, 2026**, PyPI is on `0.11.0` while npm
@@ -99,11 +100,14 @@ field with a credibility crisis, the honest number *is* the hook.
    step is to post them publicly so developers see exact workflows they can copy.
 5. **Validate and publish the install-free path.** Codespaces support is now in-repo;
    the maintainer should verify the public `codespaces.new` flow after merging to `main`.
+6. **Enable GitHub Pages after merge.** The repo now contains `docs/site/index.html`
+   and `.github/workflows/pages.yml`; once `main` is live, enable Pages so launch
+   posts can link to a cleaner landing page than raw GitHub markdown.
 
 ### P2 — depth, post-launch
-6. Live side-by-side competitor bench-pack (Mem0) in-repo.
-7. More storage backends (Qdrant/Weaviate/Mongo) — community-PR friendly asks.
-8. Public benchmark write-up and competitor scorecard refresh after launch.
+7. Live side-by-side competitor bench-pack (Mem0) in-repo.
+8. More storage backends (Qdrant/Weaviate/Mongo) — community-PR friendly asks.
+9. Public benchmark write-up and competitor scorecard refresh after launch.
 
 ---
 
@@ -192,6 +196,7 @@ rendered notebook walkthrough.
 **Remaining, in priority order:**
 1. *(maintainer)* npm publish to `0.11.0`; merge/push the launch-ready branch to public `main`.
 2. Demo GIF or terminal capture in README.
-3. Publish the prepared CrewAI, OpenClaw, and Claude/MCP surface-specific proof posts.
-4. Validate the public Codespaces quickstart after the branch is on `main`.
-5. Live competitor bench-pack; more backends.
+3. Enable the GitHub Pages landing page after `main` is updated.
+4. Publish the prepared CrewAI, OpenClaw, and Claude/MCP surface-specific proof posts.
+5. Validate the public Codespaces quickstart after the branch is on `main`.
+6. Live competitor bench-pack; more backends.

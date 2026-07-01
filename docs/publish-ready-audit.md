@@ -52,6 +52,7 @@ This is why the launch is still prepared-but-not-executed rather than fully done
    - `docs/claude-mcp-case-study.md`
    - `docs/publish-ready-audit.md`
    - `docs/readme-patterns.md`
+   - `docs/site/index.html`
    - `examples/notebook_walkthrough.ipynb`
    - `skills/README.md`
 
@@ -100,6 +101,7 @@ Prepared surfaces in-repo:
 - Assistant skills: [../skills/README.md](../skills/README.md), [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
 - HTTP/browser inspection: [deployment.md#browser-inspector](deployment.md#browser-inspector)
 - Notebook walkthrough: [../examples/notebook_walkthrough.ipynb](../examples/notebook_walkthrough.ipynb)
+- Pages-ready landing page: [site/index.html](site/index.html), [../.github/workflows/pages.yml](../.github/workflows/pages.yml)
 
 ### Supportability for first-wave users
 
@@ -110,6 +112,8 @@ Prepared surfaces in-repo:
   and public-release failure paths
 - the HTTP sidecar now includes both JSON inspection (`GET /v1/facts`) and a
   read-only browser inspector (`/inspect`) for first-wave debugging
+- the repo now includes a GitHub Pages-ready landing page so outreach can use a
+  cleaner URL after merge
 
 ### Install paths are aligned
 
@@ -169,6 +173,7 @@ Latest targeted checks completed in this workspace:
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
 - `ruff check src/ai_knot/server/app.py src/ai_knot/cli.py tests/test_server.py`: passed
 - `ruff check examples/browser_inspector_demo.py tests/test_examples.py`: passed
+- `pytest tests/test_site_artifacts.py -q --no-cov`: passed
 - `pytest tests/test_server.py -q --no-cov`: passed
 - `pytest tests/test_public_release_script.py -q --no-cov`: passed
 - `pytest tests/test_examples.py tests/test_server.py -q --no-cov`: passed

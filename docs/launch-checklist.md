@@ -16,6 +16,7 @@ Do not start the main launch until all of these are true:
 2. npm latest is `0.11.0`, matching PyPI `0.11.0`.
 3. The README hero uses the demo asset you want public visitors to see.
 4. GitHub release/discussion copy is ready to paste.
+5. If you want a cleaner launch URL than raw GitHub markdown, GitHub Pages is enabled for the repo.
 
 ---
 
@@ -117,6 +118,16 @@ Use [submission-pack.md](submission-pack.md):
 
 This should be done before GitHub release, Show HN, or Reddit so screenshots and
 repo cards already read well.
+
+### 6.5. Enable the Pages landing page if you want a clean share URL
+
+The repo now ships:
+
+- [`docs/site/index.html`](site/index.html)
+- [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)
+
+If you want to use GitHub Pages in launch posts, enable Pages after merge and
+confirm the site deploys from the workflow before posting externally.
 
 ### 7. Use the prepared posting order
 

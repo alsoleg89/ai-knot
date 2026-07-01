@@ -30,6 +30,7 @@ PUBLIC_FILE_MARKERS = [
     "docs/claude-mcp-case-study.md",
     "docs/publish-ready-audit.md",
     "docs/readme-patterns.md",
+    "docs/site/index.html",
     "examples/notebook_walkthrough.ipynb",
     "skills/README.md",
 ]

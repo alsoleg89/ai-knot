@@ -6,6 +6,7 @@
 |---|---|
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent pool, bi-temporal recall, examples. |
 | [../examples/notebook_walkthrough.ipynb](../examples/notebook_walkthrough.ipynb) | Rendered zero-network notebook walkthrough of the core `add` → `recall` loop, temporal recall, and next-step commands. |
+| [site/index.html](site/index.html) | GitHub Pages-ready landing page for shareable launch links, outreach, and non-GitHub-first audiences. |
 | [integrations.md](integrations.md) | Fast routing by ecosystem surface: CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain/LangGraph, MCP, TS, HTTP, plus the right install path for each. |
 | [../skills/README.md](../skills/README.md) | Assistant-facing skill surface for coding tools that support the skills standard. |
 | [deployment.md](deployment.md) | Install, storage backends, configuration (env vars), the MCP server, HTTP sidecar, browser inspector, observability, backup, security, scaling. |
