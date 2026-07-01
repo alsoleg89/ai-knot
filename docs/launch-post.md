@@ -171,7 +171,7 @@ npm install ai-knot          # Node / TypeScript (needs Python 3.11+ in PATH)
 from ai_knot import KnowledgeBase
 kb = KnowledgeBase(agent_id="my_agent")
 kb.add("User is a senior backend developer who prefers Python")
-print(kb.recall("what does the user do?"))
+print(kb.search("what does the user do?"))  # alias: kb.recall(...)
 ```
 
 If you want the same proof from a terminal instead of Python:

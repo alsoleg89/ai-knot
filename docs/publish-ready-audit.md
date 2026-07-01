@@ -210,11 +210,13 @@ Important practical interpretation:
 - the generated README hero GIF is repo-native and reproducible,
 - the integration surfaces have regression coverage,
 - the new PydanticAI adapter and MCP `search` / `list` / `delete` aliases are verified, not just documented,
+- the core Python API and npm client now also expose the same `search` / `list` / `delete`
+  loop the README promises,
 - version-sync protections already exist in the repo.
 - a one-command public-state verifier now exists:
   [`scripts/check_public_release.py`](../scripts/check_public_release.py)
-- the same check is runnable from GitHub Actions via the manual
-  `public-launch-audit.yml` workflow.
+- the same check is now runnable from GitHub Actions both manually and
+  automatically after `main` updates via `public-launch-audit.yml`.
 
 ---
 

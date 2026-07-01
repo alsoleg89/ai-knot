@@ -82,3 +82,10 @@ curl -s https://registry.npmjs.org/ai-knot        | python3 -c "import sys,json;
 ```bash
 ./.venv/bin/python scripts/check_public_release.py
 ```
+
+After `main` is updated, the same check also runs automatically in GitHub
+Actions via `.github/workflows/public-launch-audit.yml` on:
+
+- every push to `main`,
+- a daily schedule,
+- manual dispatch when you want an on-demand re-check.

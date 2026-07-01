@@ -72,7 +72,9 @@ That script also checks whether the public `main` branch already exposes the
 launch-ready README/docs markers.
 
 If you prefer to run the same verification from GitHub after merge/publish, use
-the manual **Public launch audit** workflow.
+the **Public launch audit** workflow. It now also auto-runs on every push to
+`main` and on a daily schedule, so launch regressions can surface without
+someone remembering to dispatch it manually.
 
 ### 4. Cut or confirm the GitHub release
 

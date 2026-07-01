@@ -30,11 +30,11 @@ kb = KnowledgeBase(agent_id="assistant")
 kb.add("User prefers Python over Java")
 kb.add("User deploys services with Docker and Kubernetes")
 
-context = kb.recall("what stack should I use?")
+context = kb.search("what stack should I use?")  # alias: kb.recall(...)
 print(context)
 ```
 
-That is the core product loop: `add` or `learn`, then `recall`.
+That is the core product loop: `add` or `learn`, then `search` / `recall`.
 
 If you want to prove the same loop without opening Python first:
 
@@ -71,7 +71,7 @@ turns = [
     ConversationTurn(role="assistant", content="Noted"),
 ]
 kb.learn(turns)
-print(kb.recall("how should I deploy this service?"))
+print(kb.search("how should I deploy this service?"))
 ```
 
 That split matters. Extraction can be probabilistic. Retrieval does not have to be.

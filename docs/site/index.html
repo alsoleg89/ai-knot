@@ -455,7 +455,7 @@ kb.add("Preferred language is Python")
 kb.add("API framework is FastAPI")
 kb.add("Primary database is PostgreSQL")
 
-print(kb.recall("what stack does the user use?"))
+print(kb.search("what stack does the user use?"))  # alias: kb.recall(...)
 # [1] Primary database is PostgreSQL
 # [2] API framework is FastAPI
 # [3] Preferred language is Python</div>
@@ -499,7 +499,7 @@ print(kb.recall("what stack does the user use?"))
       <div class="surface-grid">
         <article class="surface">
           <strong>Python core</strong>
-          <p>Start with <code>KnowledgeBase.add()</code> and <code>recall()</code>.</p>
+          <p>Start with <code>KnowledgeBase.add()</code> and <code>search()</code> / <code>recall()</code>.</p>
           <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/quickstart.py">Quickstart</a>
         </article>
         <article class="surface">

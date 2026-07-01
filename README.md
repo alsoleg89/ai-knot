@@ -37,7 +37,7 @@ kb.add("User deploys services with Docker and Kubernetes")
 kb.add("Team standup is at 10am")
 
 # At inference time, pull ONLY what this turn needs — no LLM call, ~8 ms:
-print(kb.recall("what language and tooling does the user use?"))
+print(kb.search("what language and tooling does the user use?"))  # alias: kb.recall(...)
 # [1] User writes Go and avoids Java
 # [2] User deploys services with Docker and Kubernetes
 # [3] User is a senior backend developer at Acme Corp
@@ -132,8 +132,8 @@ kb.add("User deploys everything in Docker")
 #    kb.learn([ConversationTurn(role="user", content="I deploy in Docker")],
 #             provider="openai", api_key="sk-...")
 
-# 3. Recall only what the next turn needs — recall never calls an LLM
-print(kb.recall("what are the user's coding preferences?"))
+# 3. Search only what the next turn needs — search is an alias for recall(), and the read path never calls an LLM
+print(kb.search("what are the user's coding preferences?"))
 # [1] User prefers Python, dislikes async code
 # [2] User deploys everything in Docker
 ```

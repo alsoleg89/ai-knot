@@ -89,6 +89,8 @@ readiness**, not core product legitimacy.
 30. Added a dependency-light PydanticAI adapter, runnable examples, and docs routing for a framework-native Python agent surface
 31. Added dedicated PydanticAI and Vercel AI SDK proof assets, plus a zero-network Vercel AI SDK surface demo for channel-specific follow-ups
 32. Aligned the core Python API, npm client, README, skill surface, and usage docs around the market-standard `add -> search -> list -> delete` memory loop while keeping `learn` / `recall` / `forget` aliases for agent-memory framing
+33. Moved the public launch-state verifier from manual-only use to an automatic GitHub Actions guardrail on `main`, while keeping manual dispatch for on-demand checks
+34. Raised the `search` / `recall` memory loop into the README hero snippet, Pages landing page, developer article, and launch post so first-time visitors see the market-standard loop immediately
 
 ## Highest-value remaining work
 
