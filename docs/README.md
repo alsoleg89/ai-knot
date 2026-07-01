@@ -6,6 +6,7 @@
 |---|---|
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent pool, bi-temporal recall, examples. |
 | [integrations.md](integrations.md) | Fast routing by ecosystem surface: CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain/LangGraph, MCP, TS, HTTP, plus the right install path for each. |
+| [../skills/README.md](../skills/README.md) | Assistant-facing skill surface for coding tools that support the skills standard. |
 | [deployment.md](deployment.md) | Install, storage backends, configuration (env vars), the MCP server, HTTP sidecar, observability, backup, security, scaling. |
 | [troubleshooting.md](troubleshooting.md) | First-run, install, MCP, and public-release troubleshooting with `ai-knot doctor` and the public launch checker. |
 | [benchmarks.md](benchmarks.md) | Reproducible benchmark methodology, deterministic retrieval suite, LoCoMo and LongMemEval results. |
@@ -20,6 +21,7 @@
 | [positioning.md](positioning.md) | One-liner, ICP, pain solved, why now, differentiation, message map, non-goals. |
 | [comparison.md](comparison.md) | Buyer-facing "when to choose ai-knot vs Mem0 / Graphiti / Letta / LangMem" guide. |
 | [competitive-analysis.md](competitive-analysis.md) | OSS landscape review for Mem0, Graphiti/Zep, Letta, and LangMem, with adoption takeaways for ai-knot. |
+| [readme-patterns.md](readme-patterns.md) | Narrow teardown of how leading memory projects structure README onboarding and expose integration surfaces. |
 | [gap-analysis.md](gap-analysis.md) | Prioritized product and GTM gaps, what this repo update closes, and what remains maintainer-only. |
 | [launch-post.md](launch-post.md) | Narrative launch post: market thesis, benchmark stance, and honest comparison framing. |
 | [whitepaper.md](whitepaper.md) | Research-style long-form launch piece for GitHub Pages, a PDF, Substack, or a personal site. |

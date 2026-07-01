@@ -53,6 +53,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Claude/MCP follow-up launch asset (`docs/claude-mcp-case-study.md`) tied to
   the zero-network `examples/claude_mcp_setup.py` proof and the paste-ready
   `ai-knot setup claude` flow.
+- Repo-native assistant skill surface: `skills/ai-knot/SKILL.md` plus
+  `skills/README.md` for coding assistants that support the skills standard.
 
 ### Fixed
 - `add(type="procedural")` (a bare string, as shown in the docs) no longer
@@ -73,6 +75,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
   benchmarks. The full API reference lives in `docs/usage.md`.
 - README onboarding now includes quick-start paths by surface (Python, TS, MCP,
   HTTP, AutoGen, LangChain, shared pool) so a visitor can reach a relevant trial flow faster.
+- README now includes framework-native copy/paste snippets near the top, not
+  just deeper docs links, mirroring the onboarding pattern used by the strongest
+  memory-project READMEs.
 - Integration docs now pair each surface with a concrete install command, mirroring
   the onboarding pattern strong competitor READMEs use.
 - Framework error paths and examples now point users to the repo-native install

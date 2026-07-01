@@ -37,6 +37,7 @@ readiness**, not core product legitimacy.
 | Missing FAQ / objections handling | launch threads will ask the same questions repeatedly | **Closed in this update** |
 | Launch kit was fragmented across a few files | maintainers need one repo-native place to grab assets | **Closed in this update** |
 | README onboarding did not route by surface | visitors need an immediate "start here" path | **Closed in this update** |
+| No assistant-facing skill surface | coding assistants are now part of the evaluation path for developer tools | **Closed in this update** |
 | Integrations were documented but not indexed as a first-class entry point | memory products grow when stack-specific starts are obvious | **Closed in this update** |
 | Framework adapters had no repo-native install extras | developers copy the install line before they read the deeper docs | **Closed in this update** |
 | Contributor docs used stale repo URL / release notes | small inconsistencies reduce trust | **Closed in this update** |
@@ -78,6 +79,7 @@ readiness**, not core product legitimacy.
 20. Added a zero-network CrewAI surface demo, a CrewAI proof/case-study asset, and a maintainer launch checklist
 21. Added an OpenClaw proof/case-study asset and surfaced the zero-network OpenClaw example more directly in docs/launch copy
 22. Added a Claude/MCP proof/case-study asset and a zero-network Claude setup demo
+23. Added a repo-native `ai-knot` skill plus a skills index for coding assistants that support the skills standard
 
 ## Highest-value remaining work
 

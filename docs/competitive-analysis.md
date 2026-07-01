@@ -10,6 +10,9 @@ This document answers two questions:
 All external numbers below are sourced from official GitHub repositories, official
 docs, or official product sites as of the date above.
 
+For a narrower teardown of README structure, onboarding-by-surface, and the exact
+integration-entry patterns these projects use, see [readme-patterns.md](readme-patterns.md).
+
 ---
 
 ## Snapshot
@@ -39,6 +42,9 @@ docs, or official product sites as of the date above.
 5. **They create a reason to compare.**
    Benchmarks, graph visualizations, or desktop apps provide an easy hook for people
    to discuss, debate, and link.
+6. **They package the product for assistants, not only humans.**
+   The newest winners increasingly treat coding assistants and MCP clients as
+   first-class acquisition channels, not just as downstream consumers.
 
 ---
 
@@ -71,6 +77,7 @@ enterprise availability, and "proof, not promises" benchmarking.
 - Distribution matters as much as algorithm quality
 - Developers reward wide integration surfaces
 - A benchmark claim, even contested, creates market conversation
+- assistant-native skill packaging can become its own integration pull
 
 ### What ai-knot should counter-position on
 
@@ -258,6 +265,8 @@ and the official `modelcontextprotocol/servers` repo shows **87,892 GitHub stars
 4. **Make the first run obvious.**
    The README should route by surface and pair each route with a concrete install
    command, not force everyone through one path.
+5. **Ship knowledge in assistant-native form too.**
+   A repo-native skill is now part of the modern devtool surface area.
 5. **Name the job, not just the API.**
    "CLI vs API", "hot path vs background", and "MCP vs REST" are stronger entry
    points than a flat adapter list.

@@ -61,7 +61,7 @@ def test_main_reports_failing_public_state(
     assert "PyPI latest: 0.11.0" in out
     assert "npm latest:  0.9.3" in out
     assert "[FAIL] npm matches local" in out
-    assert "[FAIL] public docs file: docs/crewai-case-study.md" in out
+    assert "[FAIL] public repo file: docs/crewai-case-study.md" in out
 
 
 def test_main_reports_green_state(
@@ -86,7 +86,7 @@ def test_main_reports_green_state(
     def fake_fetch_text(url: str) -> str:
         if url.endswith("/README.md"):
             return "\n".join(module.README_MARKERS)
-        if any(url.endswith(path) for path in module.DOC_MARKERS):
+        if any(url.endswith(path) for path in module.PUBLIC_FILE_MARKERS):
             return "ok"
         raise AssertionError(f"unexpected URL: {url}")
 

@@ -14,6 +14,7 @@ reference in [usage.md](usage.md).
 | OpenClaw | MCP-backed desktop/app memory or Python-side provider compatibility | `pip install "ai-knot[mcp]"` | [`examples/openclaw_integration.py`](../examples/openclaw_integration.py) |
 | LangChain / LangGraph | retriever or chat-memory drop-in | `pip install ai-knot` | [`examples/langchain_integration.py`](../examples/langchain_integration.py) |
 | MCP server | Claude Desktop / Claude Code / any MCP client | `pip install "ai-knot[mcp]"` | [deployment.md#4-run-the-mcp-server](deployment.md#4-run-the-mcp-server) |
+| Skills / coding assistants | teach Codex / Claude Code / OpenClaw-style tools ai-knot's surfaces up front | `npx skills add https://github.com/alsoleg89/ai-knot --skill ai-knot` | [../skills/README.md](../skills/README.md) |
 | TypeScript / npm | Node apps with the Python sidecar/client path | `npm install ai-knot` | [../npm/README.md](../npm/README.md) |
 | HTTP sidecar | polyglot services and remote agent runtimes | `pip install "ai-knot[server]"` | [deployment.md#11-http-sidecar](deployment.md#11-http-sidecar) |
 
@@ -139,6 +140,24 @@ Try one of these next:
 - Claude/MCP distribution angle: [claude-mcp-case-study.md](claude-mcp-case-study.md)
 - deployment notes: [deployment.md#4-run-the-mcp-server](deployment.md#4-run-the-mcp-server)
 
+### Skills / coding assistants
+
+If your coding tool supports the skills standard, install the repo-native
+`ai-knot` skill when you want the assistant to have ai-knot-specific setup,
+adapter, and troubleshooting patterns in context before it edits code.
+
+```bash
+npx skills add https://github.com/alsoleg89/ai-knot --skill ai-knot
+```
+
+This surface is most useful when:
+
+- you want an assistant to route between core Python, MCP, CrewAI, AutoGen, and the OpenAI Agents SDK without guessing,
+- you want the assistant to know the exact ai-knot object names (`KnowledgeBase`, `AiKnotCrewAIMemory`, `AiKnotAutoGenMemory`, `AiKnotAgentsMemory`),
+- you want first-run troubleshooting (`ai-knot doctor --json`) loaded as part of the integration path.
+
+See also: [../skills/README.md](../skills/README.md)
+
 ### LangChain / LangGraph
 
 Use `AiKnotRetriever` for RAG or graph nodes, and `AiKnotChatMemory` when you
@@ -157,6 +176,6 @@ See also: [usage.md#langchain--langgraph](usage.md#langchain--langgraph)
 
 The stack-specific surfaces that matter most for a first launch are now in-repo:
 CrewAI, AutoGen, OpenAI Agents SDK, OpenClaw, LangChain / LangGraph, MCP,
-TypeScript, and the HTTP sidecar. The remaining gaps are less about adapters
-and more about public distribution: publishing the updated branch, npm parity,
-and turning the prepared proof assets into public posts.
+assistant skills, TypeScript, and the HTTP sidecar. The remaining gaps are less
+about adapters and more about public distribution: publishing the updated
+branch, npm parity, and turning the prepared proof assets into public posts.

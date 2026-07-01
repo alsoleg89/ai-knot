@@ -43,12 +43,15 @@ This is why the launch is still prepared-but-not-executed rather than fully done
 
 1. public npm latest is still `0.9.3` instead of `0.11.0`;
 2. the public README is still missing launch-branch markers such as
-   `Install by surface`, `examples/crewai_surface_demo.py`, and `docs/launch-checklist.md`;
+   `Install by surface`, `What it looks like in your stack`, `skills/README.md`,
+   `examples/crewai_surface_demo.py`, and `docs/launch-checklist.md`;
 3. the public `main` branch still does not expose:
    - `docs/crewai-case-study.md`
    - `docs/openclaw-case-study.md`
    - `docs/claude-mcp-case-study.md`
    - `docs/publish-ready-audit.md`
+   - `docs/readme-patterns.md`
+   - `skills/README.md`
 
 ---
 
@@ -73,6 +76,8 @@ This is why the launch is still prepared-but-not-executed rather than fully done
 
 - [README.md](../README.md) leads with the problem, the 30-second loop, and the
   deterministic wedge.
+- [README.md](../README.md) now also shows framework-native and MCP-native
+  surface snippets near the top, not only generic API primitives.
 - [comparison.md](comparison.md) explains when to pick `ai-knot` versus Mem0,
   Graphiti, Letta, or LangMem.
 - [faq.md](faq.md) and [announce.md](announce.md) reduce message drift in public threads.
@@ -88,6 +93,7 @@ Prepared surfaces in-repo:
 - AutoGen: [examples/autogen_integration.py](../examples/autogen_integration.py)
 - LangChain / LangGraph: [examples/langchain_integration.py](../examples/langchain_integration.py)
 - TypeScript / npm: [../npm/README.md](../npm/README.md)
+- Assistant skills: [../skills/README.md](../skills/README.md), [../skills/ai-knot/SKILL.md](../skills/ai-knot/SKILL.md)
 
 ### Supportability for first-wave users
 
@@ -134,6 +140,7 @@ Prepared surfaces in-repo:
 Current repo-native research assets:
 
 - landscape + takeaways: [competitive-analysis.md](competitive-analysis.md)
+- README/integration teardown: [readme-patterns.md](readme-patterns.md)
 - buyer-facing comparison: [comparison.md](comparison.md)
 
 Prepared channel wedges now cover:
@@ -151,6 +158,8 @@ That is enough breadth to start distribution without inventing new positioning i
 Latest targeted checks completed in this workspace:
 
 - `ruff check` on the new integration/example paths: passed
+- `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
+- `pytest tests/test_public_release_script.py -q --no-cov`: passed
 - `pytest tests/test_examples.py tests/test_integrations_crewai.py tests/test_integrations_autogen.py tests/test_integrations_openai_agents.py tests/test_integrations_openclaw.py tests/test_version_sync.py -q --no-cov`: passing in targeted batches during this branch work
 
 Important practical interpretation:

@@ -16,7 +16,7 @@ No LLM on the retrieval path. No cloud. No lock-in.
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 
-[**Quickstart**](#quickstart-30-seconds) · [**Open in Codespaces**](https://codespaces.new/alsoleg89/ai-knot) · [**Integrations**](docs/integrations.md) · [**Why ai-knot**](#why-ai-knot) · [**Use cases**](#what-you-can-build) · [**Benchmarks**](docs/benchmarks.md) · [**Docs**](docs/usage.md)
+[**Quickstart**](#quickstart-30-seconds) · [**Open in Codespaces**](https://codespaces.new/alsoleg89/ai-knot) · [**Surface snippets**](#what-it-looks-like-in-your-stack) · [**Integrations**](docs/integrations.md) · [**Why ai-knot**](#why-ai-knot) · [**Use cases**](#what-you-can-build) · [**Benchmarks**](docs/benchmarks.md) · [**Docs**](docs/usage.md)
 
 <img src="docs/assets/hero-demo.svg" alt="ai-knot demo: store facts once, recall only what matters, with deterministic memory persisted across restarts" width="1200" />
 
@@ -126,6 +126,52 @@ That's the whole loop: **`add`/`learn` → `recall`.** Drop the result into your
 and your agent has memory. Full API — storage backends, bi-temporal recall, tags, decay,
 multi-agent — in **[docs/usage.md](docs/usage.md)**.
 
+## What it looks like in your stack
+
+The strongest memory READMEs do not stop at a low-level primitive. They also show the
+exact object or command you plug into the stack you already use. For `ai-knot`, the
+copy-pasteable versions are:
+
+### CrewAI
+
+```python
+from ai_knot.integrations.crewai import AiKnotCrewAIMemory
+
+memory = AiKnotCrewAIMemory(kb, top_k=5)
+crew = Crew(agents=[researcher, writer], tasks=[task], memory=memory)
+scoped_agent = Agent(..., memory=memory.scope("/agent/researcher"))
+```
+
+### AutoGen
+
+```python
+from ai_knot.integrations.autogen import AiKnotAutoGenMemory
+
+memory = AiKnotAutoGenMemory(kb, top_k=5)
+agent = AssistantAgent(name="assistant", model_client=model_client, memory=[memory])
+```
+
+### OpenAI Agents SDK
+
+```python
+from ai_knot.integrations.openai_agents import AiKnotAgentsMemory
+
+run_config = AiKnotAgentsMemory(kb, top_k=5).build_run_config()
+result = Runner.run_sync(agent, "Write a deployment checklist.", run_config=run_config)
+```
+
+### Claude / OpenClaw / any MCP client
+
+```bash
+ai-knot setup claude --agent-id assistant --storage sqlite
+ai-knot setup openclaw --agent-id assistant --storage sqlite
+ai-knot doctor --json
+```
+
+If you want an assistant to know these patterns before it edits your repo, use the
+repo-native skill in [skills/README.md](skills/README.md). For the full surface map,
+see [docs/integrations.md](docs/integrations.md).
+
 ## Pick your starting point
 
 | You want to… | Start here |
@@ -144,6 +190,7 @@ multi-agent — in **[docs/usage.md](docs/usage.md)**.
 | Plug memory into LangChain / LangGraph | [examples/langchain_integration.py](examples/langchain_integration.py) |
 | Expose memory over HTTP | [Deployment guide → HTTP sidecar](docs/deployment.md#11-http-sidecar) |
 | Share memory across multiple agents | [examples/shared_pool.py](examples/shared_pool.py) |
+| Teach a coding assistant how to integrate ai-knot | [skills/README.md](skills/README.md) |
 | Grab the maintainer launch checklist | [docs/launch-checklist.md](docs/launch-checklist.md) |
 | Record the short launch/demo clip | [examples/hero_demo.py](examples/hero_demo.py) · [demo-script.md](docs/demo-script.md) |
 | Compare all supported surfaces | [docs/integrations.md](docs/integrations.md) |
@@ -280,7 +327,7 @@ variance at scale. [Full benchmark history →](https://alsoleg89.github.io/ai-k
 
 ## Documentation
 
-📚 [Usage guide](docs/usage.md) · [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Positioning](docs/positioning.md) · [Comparison guide](docs/comparison.md) · [Competitive analysis](docs/competitive-analysis.md) · [FAQ](docs/faq.md) · [Whitepaper](docs/whitepaper.md) · [Developer article](docs/developer-article.md) · [Launch kit](docs/README.md)
+📚 [Usage guide](docs/usage.md) · [Benchmarks](docs/benchmarks.md) · [Deployment](docs/deployment.md) · [Production readiness](docs/production-readiness.md) · [Architecture](ARCHITECTURE.md) · [Positioning](docs/positioning.md) · [Comparison guide](docs/comparison.md) · [Competitive analysis](docs/competitive-analysis.md) · [README patterns](docs/readme-patterns.md) · [FAQ](docs/faq.md) · [Whitepaper](docs/whitepaper.md) · [Developer article](docs/developer-article.md) · [Launch kit](docs/README.md)
 
 ## Contributing
 

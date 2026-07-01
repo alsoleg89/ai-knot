@@ -17,15 +17,19 @@ NPM_URL = "https://registry.npmjs.org/ai-knot"
 
 README_MARKERS = [
     "Install by surface",
+    "What it looks like in your stack",
+    "skills/README.md",
     "examples/crewai_surface_demo.py",
     "docs/launch-checklist.md",
 ]
 
-DOC_MARKERS = [
+PUBLIC_FILE_MARKERS = [
     "docs/crewai-case-study.md",
     "docs/openclaw-case-study.md",
     "docs/claude-mcp-case-study.md",
     "docs/publish-ready-audit.md",
+    "docs/readme-patterns.md",
+    "skills/README.md",
 ]
 
 
@@ -115,7 +119,7 @@ def main() -> int:
             )
         )
 
-    for path in DOC_MARKERS:
+    for path in PUBLIC_FILE_MARKERS:
         try:
             _fetch_text(f"{RAW_BASE_URL}/{path}")
         except urllib.error.HTTPError:
@@ -124,7 +128,7 @@ def main() -> int:
             present = True
         checks.append(
             (
-                f"public docs file: {path}",
+                f"public repo file: {path}",
                 present,
                 "reachable on public main" if present else "missing on public main",
             )
