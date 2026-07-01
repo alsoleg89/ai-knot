@@ -72,7 +72,8 @@ move the whole sequence by exactly one week rather than launching half-ready.
 > self-hosted recall plus benchmark numbers you can actually rerun. I am not asking
 > for a signal boost yet; I want one honest pass on install friction or on whether the
 > benchmark docs feel convincing. If you have 10 minutes, the fastest path is the
-> README quickstart or the CrewAI / OpenClaw / OpenAI Agents examples here: <repo link>
+> README quickstart, the CLI loop (`ai-knot add/search/show/forget` or `ai-knot learn`),
+> or the CrewAI / OpenClaw / OpenAI Agents examples here: <repo link>
 
 ### Benchmark skeptic DM
 
@@ -102,7 +103,9 @@ move the whole sequence by exactly one week rather than launching half-ready.
 
 ### "What should I try first?"
 
-> Start with the README quickstart if you want the core loop. Start with
+> Start with the README quickstart or the CLI loop
+> (`ai-knot add/search/show/forget`, or `ai-knot learn` for raw text) if you want
+> the core product. Start with
 > `examples/crewai_surface_demo.py` if you want the shortest CrewAI proof, or
 > `examples/crewai_integration.py` if you are on CrewAI and want full wiring. Start with
 > `python examples/openclaw_integration.py` if you want the shortest OpenClaw proof, or
