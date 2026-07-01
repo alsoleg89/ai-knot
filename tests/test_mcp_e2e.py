@@ -130,7 +130,7 @@ class McpSession:
 @requires_mcp
 @pytest.mark.integration
 def test_mcp_lifecycle(tmp_path: Any) -> None:
-    """initialize → add → recall → list_facts → forget → stats."""
+    """initialize → add → recall/search → list/list_facts → delete/forget → stats."""
     session = McpSession(str(tmp_path))
     try:
         # initialize
@@ -144,6 +144,8 @@ def test_mcp_lifecycle(tmp_path: Any) -> None:
 
         recall_resp = session.tool_call("recall", {"query": "Python indentation"})
         assert "Python" in recall_resp
+        search_resp = session.tool_call("search", {"query": "Python indentation"})
+        assert "Python" in search_resp
 
         # list_facts
         session.tool_call("add", {"content": "Docker runs containers"})
@@ -151,10 +153,11 @@ def test_mcp_lifecycle(tmp_path: Any) -> None:
         facts = json.loads(list_resp)
         assert isinstance(facts, list)
         assert len(facts) == 2
+        assert json.loads(session.tool_call("list", {})) == facts
 
-        # forget
+        # delete / forget aliases
         fact_id = next(f["id"] for f in facts if f["content"] == "Docker runs containers")
-        session.tool_call("forget", {"fact_id": fact_id})
+        session.tool_call("delete", {"fact_id": fact_id})
         remaining = json.loads(session.tool_call("list_facts", {}))
         assert len(remaining) == 1
 

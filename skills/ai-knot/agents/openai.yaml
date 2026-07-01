@@ -1,0 +1,4 @@
+interface:
+  display_name: "ai-knot"
+  short_description: "Reference deterministic agent-memory patterns for Python, MCP, CrewAI, AutoGen, OpenAI Agents, and LangChain"
+  default_prompt: "Use ai-knot when the user wants persistent, deterministic memory for an agent, MCP client, or agent framework."

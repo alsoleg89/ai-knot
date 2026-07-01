@@ -8,10 +8,125 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- LangChain / LangGraph adapters (`ai_knot.integrations.langchain`):
+  `AiKnotRetriever` (Runnable `invoke` / `get_relevant_documents`) and
+  `AiKnotChatMemory` (`save_context` / `load_memory_variables`, the
+  `BaseChatMemory` shape). No hard `langchain` dependency — real `Document`
+  objects when `langchain_core` is present, a shim otherwise. Runnable example in
+  `examples/langchain_integration.py`.
+- Deterministic, zero-network recall — an empty `embed_url` disables the dense
+  channel before any network call (air-gapped deploys, reproducible evaluation).
+- CLI `recall --now <iso>` (point-in-time recall) and `lineage <fact_id>`
+  (supersession audit trail).
+- Documentation: reproducible benchmark page with **real LLM-judged LoCoMo (78.0%
+  cat1–4) and LongMemEval (59.6% Oracle) results** plus the deterministic retrieval
+  suite ([docs/benchmarks.md](docs/benchmarks.md)), a full API guide
+  ([docs/usage.md](docs/usage.md)), a release runbook ([docs/RELEASE.md](docs/RELEASE.md)),
+  and a launch piece ([docs/launch-post.md](docs/launch-post.md)).
+- Launch/distribution docs: positioning, competitive analysis, prioritized gap
+  analysis, FAQ + objections handling, a whitepaper, and a developer-focused
+  article. `docs/README.md` now indexes the full launch kit.
+- A Codespaces/devcontainer path for install-free trials, a deterministic
+  `examples/hero_demo.py` launch demo, a demo-recording guide, and a buyer-facing
+  comparison guide.
+- OpenAI Agents SDK adapter (`ai_knot.integrations.openai_agents`) plus a runnable
+  `examples/openai_agents_integration.py` example and docs coverage in
+  `docs/usage.md`.
+- PydanticAI adapter (`ai_knot.integrations.pydanticai`) plus runnable
+  `examples/pydanticai_integration.py` and
+  `examples/pydanticai_surface_demo.py` examples and docs coverage in
+  `README.md`, `docs/usage.md`, and `docs/integrations.md`.
+- AutoGen memory adapter (`ai_knot.integrations.autogen`) plus a runnable
+  `examples/autogen_integration.py` example, docs coverage in `docs/usage.md`,
+  and a new integration index in `docs/integrations.md`.
+- CrewAI memory adapter (`ai_knot.integrations.crewai`) plus a runnable
+  `examples/crewai_integration.py` example and docs coverage in `docs/usage.md`
+  and `docs/integrations.md`.
+- OpenClaw onboarding tightened: `ai-knot setup openclaw` now prints the
+  paste-ready MCP config, and `examples/openclaw_integration.py` demonstrates
+  both the app-config and Python-adapter paths.
+- Repo-native install extras for framework surfaces:
+  `ai-knot[crewai]`, `ai-knot[autogen]`, `ai-knot[agents]`, and
+  `ai-knot[integrations]`.
+- Zero-network CrewAI surface demo (`examples/crewai_surface_demo.py`), a
+  CrewAI case-study / follow-up launch asset, and a maintainer launch checklist.
+- OpenClaw follow-up launch asset (`docs/openclaw-case-study.md`) tied to the
+  zero-network `examples/openclaw_integration.py` proof and the paste-ready
+  `ai-knot setup openclaw` flow.
+- Claude/MCP follow-up launch asset (`docs/claude-mcp-case-study.md`) tied to
+  the zero-network `examples/claude_mcp_setup.py` proof and the paste-ready
+  `ai-knot setup claude` flow.
+- Repo-native assistant skill surface: `skills/ai-knot/SKILL.md` plus
+  `skills/README.md` for coding assistants that support the skills standard.
+- Read-only browser inspector on top of the HTTP sidecar:
+  `GET /inspect` plus `GET /v1/facts` for debugging and demo flows without
+  adding a separate UI stack.
+- HTTP sidecar CRUD/search parity with the rest of the product:
+  `POST /v1/search` as a market-standard alias for `POST /v1/recall`, plus
+  `DELETE /v1/facts/{fact_id}` for single-fact removal over HTTP.
+- Zero-network browser-inspector demo:
+  `examples/browser_inspector_demo.py` seeds sample facts and launches the
+  sidecar for a copy/paste first run.
+- Rendered notebook walkthrough:
+  `examples/notebook_walkthrough.ipynb` covers the zero-network `add` → `recall`
+  loop, point-in-time recall, and the path into the browser inspector.
+- Repo-native Vercel AI SDK demo commands:
+  `cd npm && npm run example:vercel-ai-sdk-surface` now gives a true zero-network
+  `system` / `messages` proof, and `examples/vercel-ai-sdk.ts` now uses a temporary
+  local store instead of a hand-edited placeholder path.
+- Repo-native GitHub Release renderer:
+  `scripts/render_github_release.py` now turns the release page into a deterministic
+  artifact built from `docs/announce.md` + `CHANGELOG.md`.
+
+### Fixed
+- `add(type="procedural")` (a bare string, as shown in the docs) no longer
+  crashes on the SQLite backend — `Fact` now coerces a string `type` into
+  `MemoryType` on construction, so every storage round-trip is safe.
+- The optional dense channel now degrades quietly: when the embedding endpoint
+  is unreachable the BM25-only fallback is reported **once per instance** (then
+  at debug level) instead of warning on every `add`/`recall` — a clean first-run
+  experience for installs without an embedding server.
+- Corrected the `recall()` output format shown in the README and the npm package
+  README (`[1] …`, not `[semantic] …`) so the snippets match real output.
+- Corrected stale repository URLs (`ai-knot.git`, not `ai_knot.git`) and brought
+  contributor / development docs in line with the current release workflows.
+- `npm/package-lock.json` is now version-synced with `npm/package.json`, and the
+  version guard now fails if the lockfile still advertises an older npm package version.
+
+### Changed
+- README rewritten as a developer-first landing page — a "see it work" example up
+  top, the problem stated in token math, a use-case table, then the reproducible
+  benchmarks. The full API reference lives in `docs/usage.md`.
+- README onboarding now includes quick-start paths by surface (Python, TS, MCP,
+  HTTP, AutoGen, LangChain, shared pool) so a visitor can reach a relevant trial flow faster.
+- README now includes framework-native copy/paste snippets near the top, not
+  just deeper docs links, mirroring the onboarding pattern used by the strongest
+  memory-project READMEs.
+- Integration docs now pair each surface with a concrete install command, mirroring
+  the onboarding pattern strong competitor READMEs use.
+- The HTTP surface is now easier to demo and debug: the sidecar exposes a
+  browser inspector in addition to the JSON routes.
+- The basic memory loop is now consistent across CLI, MCP, and HTTP:
+  `add` → `search` → `list` → `delete`, with `recall` / `forget` kept as
+  agent-memory aliases where appropriate.
+- Framework error paths and examples now point users to the repo-native install
+  extras first, with the raw upstream package names as fallback.
+- OpenClaw docs and launch routing now treat the MCP/app path as a first-class
+  distribution surface, not just a secondary adapter note.
+- Claude Desktop / Claude Code docs and launch routing now treat the MCP setup
+  path as a first-class distribution surface.
+- Publish workflows are now idempotent (npm skips an already-published version,
+  PyPI uses `skip-existing`); `setup-node` bumped to 22.
+- The public launch-state audit now runs automatically on pushes to `main` and
+  on a daily schedule, not only by manual dispatch.
+- The release workflow now refreshes `npm/package-lock.json` during version bumps
+  and creates or updates the GitHub Release with repo-owned notes instead of
+  generic auto-generated notes.
+
 ### Planned
 - MongoDB storage backend
 - Qdrant and Weaviate backends
-- LangChain / CrewAI integrations
 - Web UI knowledge inspector
 
 ---

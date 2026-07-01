@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Start here / choose an integration surface
+    url: https://github.com/alsoleg89/ai-knot/blob/main/docs/integrations.md
+    about: Find the fastest path for CrewAI, OpenClaw, Claude/MCP, AutoGen, OpenAI Agents SDK, LangChain, TypeScript, or HTTP.
+  - name: Benchmark methodology and reproducibility
+    url: https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md
+    about: Read the benchmark harness, deterministic suite, and named-reader QA methodology before filing a benchmark question.
+  - name: Launch / publish-ready status
+    url: https://github.com/alsoleg89/ai-knot/blob/main/docs/publish-ready-audit.md
+    about: See what is already done, what is verified, and what still requires maintainer access.

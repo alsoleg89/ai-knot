@@ -1,11 +1,19 @@
-# ai-knot
+# 🪢 ai-knot
 
 ![npm](https://img.shields.io/npm/v/ai-knot)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Agent memory for Node.js and TypeScript.** Stores facts, retrieves what's relevant, forgets the rest.
+**Long-term memory for AI agents — for Node.js and TypeScript.**
 
-TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) Python library — communicates with the `ai-knot-mcp` subprocess via JSON-RPC 2.0 over stdio.
+Your agent forgets everything between sessions. The usual fix — replaying the whole
+conversation into every prompt — is slow and expensive. ai-knot remembers *facts*, not
+transcripts: it distills conversations into a handful of structured facts and hands your
+agent only the few it needs for the next turn. No LLM on the retrieval path. Self-hosted.
+
+TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) library — it
+talks to the `ai-knot-mcp` subprocess over JSON-RPC. Same deterministic engine,
+[reproducible benchmarks](https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md)
+(LoCoMo 78.0%, deterministic ranking MRR 0.83).
 
 ---
 
@@ -26,6 +34,13 @@ The postinstall script automatically runs `pip install "ai-knot[mcp]"`. If pip i
 pip install "ai-knot[mcp]"
 ```
 
+If you want the shortest app-level TypeScript path with a mainstream runtime,
+pair it with the Vercel AI SDK:
+
+```bash
+npm install ai-knot ai @ai-sdk/openai
+```
+
 ---
 
 ## Quickstart
@@ -42,10 +57,10 @@ const kb = new KnowledgeBase({
 // Add a fact
 await kb.add('User prefers TypeScript');
 
-// Recall relevant facts for a query
-const context = await kb.recall('what language does user prefer?');
+// Search relevant facts for a query — alias: recall(), never calls an LLM
+const context = await kb.search('what language does user prefer?');
 console.log(context);
-// -> "[semantic] User prefers TypeScript"
+// -> "[1] User prefers TypeScript"
 
 // Use context in your prompt
 const response = await openai.chat.completions.create({
@@ -58,6 +73,78 @@ const response = await openai.chat.completions.create({
 
 await kb.close();
 ```
+
+---
+
+## Vercel AI SDK
+
+`AiKnotAISDKMemory` is the named adapter for AI SDK-style `system` / `messages`
+flows. It keeps ai-knot dependency-light: ai-knot does the recall, and your AI
+SDK code keeps control of the model call.
+
+If you want the shortest repo-native proof before wiring Python or a model call:
+
+```bash
+npm run example:vercel-ai-sdk-surface
+```
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { AiKnotAISDKMemory, KnowledgeBase } from 'ai-knot';
+
+const dataDir = '/absolute/path/to/tmp-or-app-data';
+const kb = new KnowledgeBase({
+  agentId: 'assistant',
+  dataDir,
+});
+
+await kb.add('User prefers TypeScript over JavaScript');
+await kb.add('User deploys services with Docker Compose');
+
+const memory = new AiKnotAISDKMemory(kb, { topK: 4 });
+const userInput = 'Write a local deployment checklist for my stack.';
+
+const system = await memory.buildSystem(userInput, {
+  baseSystem: 'You are a concise staff engineer.',
+});
+
+const { text } = await generateText({
+  model: openai('gpt-5'),
+  system,
+  prompt: userInput,
+});
+```
+
+If you already have an AI SDK `messages` array, use `buildMessages()` instead:
+
+```typescript
+const messagesWithMemory = await memory.buildMessages([
+  { role: 'system', content: 'You are a concise staff engineer.' },
+  { role: 'user', content: 'Write a deployment checklist for my stack.' },
+]);
+```
+
+Full repo-native example: [`npm/examples/vercel-ai-sdk.ts`](examples/vercel-ai-sdk.ts)
+
+Run it from this repo with:
+
+```bash
+OPENAI_API_KEY=... npm run example:vercel-ai-sdk
+```
+
+This end-to-end path requires the Python-side `ai-knot-mcp` binary. A normal
+`npm install` runs the postinstall hook that tries to install
+`ai-knot[mcp]` automatically; if that step was skipped or failed, run:
+
+```bash
+pip install "ai-knot[mcp]"
+```
+
+If you want to inspect the same memory surface before any model call,
+use the repo-native surface proof:
+
+[`npm/examples/vercel-ai-sdk-surface.ts`](examples/vercel-ai-sdk-surface.ts)
 
 ---
 
@@ -81,13 +168,36 @@ const kb = new KnowledgeBase({
 
 ```typescript
 await kb.add(content, options?)   // → Fact
+await kb.search(query, options?)  // → string (alias: recall)
 await kb.recall(query, options?)  // → string (formatted facts)
+await kb.list()                   // → Fact[] (alias: listFacts)
+await kb.delete(factId)           // → void (alias: forget)
 await kb.forget(factId)           // → void
 await kb.listFacts()              // → Fact[]
 await kb.stats()                  // → Stats
 await kb.snapshot(name)           // → void
 await kb.restore(name)            // → void
 await kb.close()                  // → void (shuts down subprocess)
+```
+
+If you prefer the familiar memory-tool loop, use `add -> search -> list -> delete`.
+If you prefer agent-memory language, keep `recall -> listFacts -> forget`.
+
+### `new AiKnotAISDKMemory(recallClient, options?)`
+
+```typescript
+const memory = new AiKnotAISDKMemory(kb, {
+  topK?: number,
+  now?: string,
+  header?: string,  // default: "Relevant long-term memory (ai-knot):"
+});
+```
+
+Methods:
+
+```typescript
+await memory.buildSystem(input, options?)    // → string | undefined
+await memory.buildMessages(messages, options?) // → messages with a prepended system message
 ```
 
 ### `add` options
@@ -152,7 +262,7 @@ Always call `kb.close()` when done:
 const kb = new KnowledgeBase({ agentId: 'bot' });
 try {
   await kb.add('...');
-  const ctx = await kb.recall('...');
+  const ctx = await kb.search('...');
 } finally {
   await kb.close();
 }

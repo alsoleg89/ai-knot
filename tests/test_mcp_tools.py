@@ -13,9 +13,11 @@ from ai_knot._mcp_tools import (
     tool_add,
     tool_add_resolved,
     tool_capabilities,
+    tool_delete,
     tool_forget,
     tool_health,
     tool_learn,
+    tool_list,
     tool_list_facts,
     tool_list_snapshots,
     tool_memory_lineage,
@@ -23,6 +25,7 @@ from ai_knot._mcp_tools import (
     tool_recall_json,
     tool_recall_with_trace,
     tool_restore,
+    tool_search,
     tool_snapshot,
     tool_stats,
 )
@@ -132,6 +135,10 @@ class TestToolRecall:
         tool_add(kb, "Caroline took up running")
         assert "Caroline" in tool_recall(kb, "Caroline running", top_k=99999)
 
+    def test_search_alias_matches_recall(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "Caroline took up running")
+        assert tool_search(kb, "Caroline running") == tool_recall(kb, "Caroline running")
+
 
 # ---- tool_forget ------------------------------------------------------------
 
@@ -145,6 +152,14 @@ class TestToolForget:
         msg = tool_forget(kb, fact_id)
         assert fact_id in msg
         assert "removed" in msg.lower()
+        assert kb.list_facts() == []
+
+    def test_delete_alias_removes_existing_fact(self, kb: KnowledgeBase) -> None:
+        msg_added = tool_add(kb, "Delete me")
+        fact_id = msg_added.split("[")[1].split("]")[0]
+
+        msg = tool_delete(kb, fact_id)
+        assert fact_id in msg
         assert kb.list_facts() == []
 
 
@@ -170,8 +185,11 @@ class TestToolCapabilities:
             "add_resolved",
             "learn",
             "recall",
+            "search",
             "recall_json",
             "forget",
+            "delete",
+            "list",
             "list_facts",
             "memory_lineage",
             "stats",
@@ -197,6 +215,10 @@ class TestToolListFacts:
         data = json.loads(tool_list_facts(kb))
         assert len(data) == 2
         assert all(set(d) >= {"id", "content", "type", "importance", "retention"} for d in data)
+
+    def test_list_alias_matches_list_facts(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "First fact")
+        assert tool_list(kb) == tool_list_facts(kb)
 
 
 # ---- tool_memory_lineage ----------------------------------------------------

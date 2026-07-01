@@ -1,0 +1,131 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="heroTitle heroDesc">
+  <title id="heroTitle">ai-knot hero demo</title>
+  <desc id="heroDesc">Launch visual for ai-knot showing a terminal demo, key product claims, and the memory flow from messages to facts to recalled context.</desc>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="60" x2="1380" y2="860" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08101C"/>
+      <stop offset="0.55" stop-color="#10223A"/>
+      <stop offset="1" stop-color="#0D1627"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#101B2B"/>
+      <stop offset="1" stop-color="#0B1321"/>
+    </linearGradient>
+    <linearGradient id="panelWarm" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#161E29"/>
+      <stop offset="1" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F4B15C"/>
+      <stop offset="1" stop-color="#F17C4A"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#15263C"/>
+      <stop offset="1" stop-color="#0E1828"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1210 140) rotate(126.993) scale(448.34 345.529)">
+      <stop stop-color="#F2A35A" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#F2A35A" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" stroke="#D6E0EE" stroke-opacity="0.055"/>
+    </pattern>
+    <filter id="shadow" x="0" y="0" width="1440" height="900" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1440" height="900" rx="36" fill="url(#bg)"/>
+  <rect width="1440" height="900" rx="36" fill="url(#grid)"/>
+  <rect x="880" y="-28" width="560" height="420" fill="url(#glow)"/>
+  <path d="M1078 70C1176 118 1218 224 1178 312C1130 420 973 446 937 553C903 652 1004 759 1158 808" stroke="#9FB3C9" stroke-opacity="0.18" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1184 122C1246 178 1252 272 1206 340C1157 414 1068 440 1032 516C994 594 1018 693 1120 782" stroke="#F2A35A" stroke-opacity="0.22" stroke-width="3" stroke-linecap="round"/>
+
+  <g>
+    <rect x="92" y="72" width="136" height="34" rx="17" fill="#12253B"/>
+    <text x="160" y="94" fill="#DCE7F5" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="15" font-weight="700" text-anchor="middle" letter-spacing="1.6">README HERO</text>
+
+    <text x="92" y="158" fill="#F6FAFF" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="56" font-weight="700">
+      <tspan x="92" dy="0">Store facts once.</tspan>
+      <tspan x="92" dy="66">Recall only what matters.</tspan>
+    </text>
+    <text x="94" y="262" fill="#B8C9DC" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="24" font-weight="500">
+      Deterministic agent memory with no LLM on the retrieval path,
+    </text>
+    <text x="94" y="294" fill="#B8C9DC" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="24" font-weight="500">
+      plus storage you can inspect, test, and self-host.
+    </text>
+  </g>
+
+  <g>
+    <rect x="92" y="326" width="158" height="42" rx="21" fill="url(#chip)" stroke="#243A59"/>
+    <text x="171" y="353" fill="#E7F0FA" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="1.3">NO LLM ON RECALL</text>
+    <rect x="264" y="326" width="136" height="42" rx="21" fill="url(#chip)" stroke="#243A59"/>
+    <text x="332" y="353" fill="#E7F0FA" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="1.3">SELF-HOSTED</text>
+    <rect x="414" y="326" width="164" height="42" rx="21" fill="url(#chip)" stroke="#243A59"/>
+    <text x="496" y="353" fill="#E7F0FA" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="1.3">MCP + SDK ADAPTERS</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="92" y="404" width="500" height="226" rx="26" fill="url(#panelWarm)" stroke="#25354E"/>
+    <text x="124" y="446" fill="#F8FBFF" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="24" font-weight="700">1. Distill signal from the transcript</text>
+    <text x="124" y="478" fill="#8FA8C4" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="17" font-weight="500">The memory layer stores durable facts, not every line of chat.</text>
+
+    <rect x="124" y="510" width="204" height="88" rx="18" fill="#0B1320" stroke="#1E304A"/>
+    <text x="146" y="542" fill="#F5B468" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">1000 messages</text>
+    <text x="146" y="570" fill="#90A4BC" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="15">raw history, mixed quality</text>
+
+    <path d="M346 554H412" stroke="#F0A45B" stroke-width="4" stroke-linecap="round"/>
+    <path d="M402 544L418 554L402 564" stroke="#F0A45B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="430" y="510" width="130" height="88" rx="18" fill="#0B1320" stroke="#1E304A"/>
+    <text x="454" y="542" fill="#F5B468" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">~12 facts</text>
+    <text x="454" y="570" fill="#90A4BC" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="15">smaller, queryable</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="92" y="656" width="500" height="150" rx="26" fill="url(#panel)" stroke="#25354E"/>
+    <text x="124" y="698" fill="#F8FBFF" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="24" font-weight="700">2. Inject only what the next turn needs</text>
+    <text x="124" y="730" fill="#8FA8C4" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="17" font-weight="500">BM25 + rank fusion + optional dense keep recall cheap, auditable, and stable.</text>
+    <rect x="124" y="754" width="150" height="34" rx="17" fill="#13243A"/>
+    <text x="199" y="776" fill="#E8F1FB" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" text-anchor="middle">3-5 facts recalled</text>
+    <rect x="288" y="754" width="128" height="34" rx="17" fill="#13243A"/>
+    <text x="352" y="776" fill="#E8F1FB" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" text-anchor="middle">same result tomorrow</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="636" y="112" width="712" height="694" rx="30" fill="url(#panel)" stroke="#2A3C58"/>
+    <rect x="636" y="112" width="712" height="58" rx="30" fill="#111A2A"/>
+    <path d="M636 140H1348" stroke="#273A55"/>
+    <circle cx="670" cy="141" r="8" fill="#F17C4A"/>
+    <circle cx="696" cy="141" r="8" fill="#F4B15C"/>
+    <circle cx="722" cy="141" r="8" fill="#59C98C"/>
+    <text x="764" y="148" fill="#D8E5F5" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="18">python examples/hero_demo.py</text>
+
+    <text x="678" y="212" fill="#F5B468" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="18">$ python examples/hero_demo.py</text>
+
+    <text x="678" y="270" fill="#EAF2FD" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700">=== ai-knot: 20-second demo ===</text>
+    <text x="678" y="308" fill="#A4BCD3" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="21">Store facts once. Recall only what the next turn needs.</text>
+
+    <text x="678" y="382" fill="#7EE1A7" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="22">Learned 3 facts into SQLite.</text>
+    <text x="678" y="432" fill="#EAF2FD" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="22">Fresh process. Same memory on disk. No transcript replay.</text>
+
+    <text x="678" y="510" fill="#A4BCD3" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="22">Query: what stack and preferences should I use?</text>
+
+    <rect x="670" y="548" width="642" height="164" rx="22" fill="#0A1220" stroke="#1E304A"/>
+    <text x="702" y="596" fill="#F9C37A" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700">[1]</text>
+    <text x="748" y="596" fill="#F6FAFF" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="22">User prefers Python and dislikes async code</text>
+    <text x="702" y="646" fill="#F9C37A" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700">[2]</text>
+    <text x="748" y="646" fill="#F6FAFF" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="22">User deploys services with Docker and Kubernetes</text>
+    <text x="702" y="690" fill="#8FA8C4" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="17">Only the relevant facts are returned. The transcript stays out of the prompt.</text>
+  </g>
+
+  <g>
+    <rect x="636" y="832" width="226" height="40" rx="20" fill="#13243A"/>
+    <text x="749" y="858" fill="#E8F1FB" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" text-anchor="middle">MRR 0.83 vs 0.18 naive</text>
+    <rect x="878" y="832" width="178" height="40" rx="20" fill="#13243A"/>
+    <text x="967" y="858" fill="#E8F1FB" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" text-anchor="middle">LoCoMo 78.0%</text>
+    <rect x="1072" y="832" width="276" height="40" rx="20" fill="url(#accent)"/>
+    <text x="1210" y="858" fill="#0A1320" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" text-anchor="middle">SQLite / Postgres / YAML</text>
+  </g>
+</svg>

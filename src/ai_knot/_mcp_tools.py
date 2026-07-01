@@ -155,6 +155,11 @@ def tool_recall(kb: KnowledgeBase, query: str, *, top_k: int = 5, now: str | Non
     return result if result else "No relevant facts found."
 
 
+def tool_search(kb: KnowledgeBase, query: str, *, top_k: int = 5, now: str | None = None) -> str:
+    """Alias for :func:`tool_recall` using the market-standard search verb."""
+    return tool_recall(kb, query, top_k=top_k, now=now)
+
+
 def tool_forget(kb: KnowledgeBase, fact_id: str) -> str:
     """Remove a fact by its ID.
 
@@ -167,6 +172,11 @@ def tool_forget(kb: KnowledgeBase, fact_id: str) -> str:
     """
     kb.forget(fact_id)
     return f"Fact {fact_id!r} removed."
+
+
+def tool_delete(kb: KnowledgeBase, fact_id: str) -> str:
+    """Alias for :func:`tool_forget` using the CRUD-style delete verb."""
+    return tool_forget(kb, fact_id)
 
 
 def tool_health() -> str:
@@ -194,8 +204,14 @@ def tool_capabilities() -> str:
         },
         {"name": "learn", "description": "Extract and store facts from a conversation"},
         {"name": "recall", "description": "Retrieve relevant facts as text"},
+        {"name": "search", "description": "Retrieve relevant facts as text (alias for recall)"},
         {"name": "recall_json", "description": "Retrieve relevant facts as JSON array"},
         {"name": "forget", "description": "Remove a fact by ID"},
+        {"name": "delete", "description": "Remove a fact by ID (alias for forget)"},
+        {
+            "name": "list",
+            "description": "List all stored facts as JSON array (alias for list_facts)",
+        },
         {"name": "list_facts", "description": "List all stored facts as JSON array"},
         {
             "name": "memory_lineage",
@@ -262,6 +278,11 @@ def tool_list_facts(kb: KnowledgeBase) -> str:
         for f in facts
     ]
     return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def tool_list(kb: KnowledgeBase) -> str:
+    """Alias for :func:`tool_list_facts` using the familiar list verb."""
+    return tool_list_facts(kb)
 
 
 def tool_memory_lineage(kb: KnowledgeBase, fact_id: str) -> str:

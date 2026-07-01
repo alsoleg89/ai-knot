@@ -34,6 +34,19 @@ class TestAdd:
         fact = kb.add("Always use type hints", type=MemoryType.PROCEDURAL)
         assert fact.type == MemoryType.PROCEDURAL
 
+    def test_add_with_string_type_sqlite_roundtrip(self, tmp_path: pathlib.Path) -> None:
+        # Regression: README/usage docs show ``add(type="procedural")`` with a
+        # bare string. On SQLite this crashed in ``_build_rows`` (``fact.type.value``
+        # on a str). Fact now coerces the string to MemoryType; verify end-to-end.
+        from ai_knot.storage import SQLiteStorage
+
+        store = SQLiteStorage(db_path=str(tmp_path / "k.db"))
+        kb = KnowledgeBase(agent_id="t", storage=store)
+        fact = kb.add("User prefers Python", type="procedural")  # type: ignore[arg-type]
+        assert fact.type is MemoryType.PROCEDURAL
+        reloaded = kb.list_facts()
+        assert reloaded[0].type is MemoryType.PROCEDURAL
+
     def test_add_with_tags(self, kb: KnowledgeBase) -> None:
         fact = kb.add("Works at Sber", tags=["profile", "work"])
         assert fact.tags == ["profile", "work"]
@@ -96,6 +109,24 @@ class TestForget:
         kb.forget("nonexistent_id")  # should not raise
         facts = kb._storage.load(kb._agent_id)
         assert len(facts) == 1
+
+
+class TestMarketAliases:
+    """CRUD-style aliases for the core memory loop."""
+
+    def test_search_alias_matches_recall(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        assert kb.search("what language?") == kb.recall("what language?")
+
+    def test_list_alias_matches_list_facts(self, kb: KnowledgeBase) -> None:
+        kb.add("User prefers Python")
+        kb.add("User deploys with Docker")
+        assert kb.list() == kb.list_facts()
+
+    def test_delete_alias_matches_forget(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("Forgettable fact")
+        kb.delete(fact.id)
+        assert kb.list_facts() == []
 
 
 class TestDecay:
@@ -598,3 +629,21 @@ class TestRecallVerificationGate:
 
         results = kb.recall_by_tag("employer")
         assert results == []
+
+
+class TestEmbedFallbackWarning:
+    """The optional dense channel must degrade quietly (warn once per instance)."""
+
+    def test_warns_once_then_debug(
+        self, kb: KnowledgeBase, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # First fallback warns at WARNING; subsequent ones drop to DEBUG so a
+        # fresh install with no embedding server doesn't spam stderr per add().
+        with caplog.at_level(logging.DEBUG, logger="ai_knot.knowledge"):
+            kb._warn_embed_fallback()
+            kb._warn_embed_fallback()
+            kb._warn_embed_fallback()
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "BM25-only" in warnings[0].getMessage()
+        assert kb._embed_fallback_warned is True

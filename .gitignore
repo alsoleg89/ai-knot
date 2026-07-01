@@ -29,6 +29,8 @@ Thumbs.db
 *~
 .ai_knot/
 .claude/
+# Local-only experimental tree (not part of the published package)
+src/ai_knot_v2/
 
 # Claude Code local settings
 .claude/settings.local.json
