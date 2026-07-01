@@ -29,6 +29,9 @@ Common pattern:
    Benchmarks, graph visuals, desktop shell, or MCP/app screenshots.
 5. **Minimize "what do I install?" ambiguity.**
    The install line follows the surface.
+6. **Use command words the market already expects.**
+   `add`, `search`, `show`, `doctor`, `onboard`, not only project-specific
+   vocabulary.
 
 That is the core reason these READMEs convert curiosity into trials.
 
@@ -90,6 +93,8 @@ Mem0 exposes many entry points directly in the README:
 - exact install lines by surface,
 - assistant-facing packaging,
 - clear "core loop" example plus ecosystem examples.
+- command words developers already recognize (`add`, `search`) alongside
+  ai-knot's own `recall` language.
 
 ---
 
@@ -246,6 +251,9 @@ This pass applied the market patterns directly:
    earlier "product shell" gap for demos and debugging.
 6. The repo now includes a rendered notebook walkthrough, giving social and educational
    channels a shareable artifact beyond README prose.
+7. The root README and CLI now expose a market-standard memory loop:
+   `add -> search -> show -> forget`, with `recall` kept as an alias for
+   agent-oriented language and `learn` surfaced for raw-text extraction.
 
 ---
 

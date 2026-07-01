@@ -9,6 +9,7 @@ import sys
 import pytest
 from click.testing import CliRunner
 
+from ai_knot import Fact, KnowledgeBase
 from ai_knot.cli import main
 
 
@@ -55,6 +56,109 @@ class TestCLIAdd:
             main, _cmd(data_dir, ["add", "myagent", "Critical fact", "--importance", "0.99"])
         )
         assert result.exit_code == 0
+
+
+class TestCLILearn:
+    """ai-knot learn <agent_id> <content>."""
+
+    def test_learn_prints_extracted_facts(
+        self,
+        runner: CliRunner,
+        data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        recorded: dict[str, object] = {}
+
+        def fake_learn(
+            self: KnowledgeBase,
+            turns: list[object],
+            *,
+            api_key: str | None = None,
+            provider: str | None = None,
+            model: str | None = None,
+            **provider_kwargs: str,
+        ) -> list[Fact]:
+            recorded["turns"] = turns
+            recorded["api_key"] = api_key
+            recorded["provider"] = provider
+            recorded["model"] = model
+            recorded["provider_kwargs"] = provider_kwargs
+            return [
+                Fact(id="abc12345", content="User deploys in Docker"),
+                Fact(id="def67890", content="User uses PostgreSQL"),
+            ]
+
+        monkeypatch.setattr(KnowledgeBase, "learn", fake_learn)
+
+        result = runner.invoke(
+            main,
+            _cmd(
+                data_dir,
+                [
+                    "learn",
+                    "myagent",
+                    "User deploys in Docker and uses PostgreSQL",
+                    "--provider",
+                    "openai",
+                ],
+            ),
+        )
+
+        assert result.exit_code == 0
+        assert "Learned 2 fact" in result.output
+        assert "User deploys in Docker" in result.output
+        assert recorded["provider"] == "openai"
+
+    def test_learn_reports_no_facts_extracted(
+        self,
+        runner: CliRunner,
+        data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def fake_learn(
+            self: KnowledgeBase,
+            turns: list[object],
+            *,
+            api_key: str | None = None,
+            provider: str | None = None,
+            model: str | None = None,
+            **provider_kwargs: str,
+        ) -> list[Fact]:
+            return []
+
+        monkeypatch.setattr(KnowledgeBase, "learn", fake_learn)
+
+        result = runner.invoke(
+            main,
+            _cmd(data_dir, ["learn", "myagent", "Nothing extractable", "--provider", "openai"]),
+        )
+
+        assert result.exit_code == 0
+        assert "No facts extracted" in result.output
+
+    def test_learn_value_error_becomes_click_exception(
+        self,
+        runner: CliRunner,
+        data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def fake_learn(
+            self: KnowledgeBase,
+            turns: list[object],
+            *,
+            api_key: str | None = None,
+            provider: str | None = None,
+            model: str | None = None,
+            **provider_kwargs: str,
+        ) -> list[Fact]:
+            raise ValueError("No API key for provider 'openai'.")
+
+        monkeypatch.setattr(KnowledgeBase, "learn", fake_learn)
+
+        result = runner.invoke(main, _cmd(data_dir, ["learn", "myagent", "raw note"]))
+
+        assert result.exit_code != 0
+        assert "No API key" in result.output
 
 
 class TestCLIRecall:

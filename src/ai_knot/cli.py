@@ -18,7 +18,7 @@ import yaml
 from ai_knot import __version__
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage import create_storage
-from ai_knot.types import Fact, MemoryType
+from ai_knot.types import ConversationTurn, Fact, MemoryType
 
 
 def _make_kb(ctx: click.Context, agent_id: str) -> KnowledgeBase:
@@ -76,6 +76,7 @@ def _doctor_payload(ctx: click.Context) -> dict[str, Any]:
         "env": {
             "AI_KNOT_DSN": bool(os.environ.get("AI_KNOT_DSN")),
             "AI_KNOT_PROVIDER": bool(os.environ.get("AI_KNOT_PROVIDER")),
+            "AI_KNOT_API_KEY": bool(os.environ.get("AI_KNOT_API_KEY")),
             "AI_KNOT_SERVER_TOKEN": bool(os.environ.get("AI_KNOT_SERVER_TOKEN")),
             "OPENAI_API_KEY": bool(os.environ.get("OPENAI_API_KEY")),
             "ANTHROPIC_API_KEY": bool(os.environ.get("ANTHROPIC_API_KEY")),
@@ -150,6 +151,75 @@ def add(ctx: click.Context, agent_id: str, content: str, importance: float, fact
     kb = _make_kb(ctx, agent_id)
     fact = kb.add(content, importance=importance, type=MemoryType(fact_type))
     click.echo(f"Added fact {fact.id}: {content}")
+
+
+@main.command()
+@click.argument("agent_id")
+@click.argument("content")
+@click.option(
+    "--provider",
+    default=None,
+    help="LLM provider for extraction. Falls back to AI_KNOT_PROVIDER or openai.",
+)
+@click.option(
+    "--api-key",
+    default=None,
+    help="LLM API key. Falls back to AI_KNOT_API_KEY or provider-specific env vars.",
+)
+@click.option("--model", default=None, help="Optional provider model override.")
+@click.option(
+    "--role",
+    default="user",
+    type=click.Choice(["user", "assistant", "system"]),
+    show_default=True,
+    help="Role of the supplied message.",
+)
+@click.option(
+    "--base-url",
+    default=None,
+    help="Optional base URL for openai-compat providers.",
+)
+@click.pass_context
+def learn(
+    ctx: click.Context,
+    agent_id: str,
+    content: str,
+    provider: str | None,
+    api_key: str | None,
+    model: str | None,
+    role: str,
+    base_url: str | None,
+) -> None:
+    """Extract facts from raw text using an LLM and store them."""
+    if not content.strip():
+        raise click.BadParameter("content must not be empty", param_hint="CONTENT")
+
+    kb = _make_kb(ctx, agent_id)
+    provider_name = provider or os.environ.get("AI_KNOT_PROVIDER")
+    resolved_api_key = api_key or os.environ.get("AI_KNOT_API_KEY")
+    provider_kwargs: dict[str, str] = {}
+    if base_url:
+        provider_kwargs["base_url"] = base_url
+
+    turns = [ConversationTurn(role=role, content=content)]
+    try:
+        facts = kb.learn(
+            turns,
+            provider=provider_name,
+            api_key=resolved_api_key,
+            model=model,
+            **provider_kwargs,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if not facts:
+        click.echo("No facts extracted.")
+        return
+
+    click.echo(f"Learned {len(facts)} fact(s):")
+    for fact in facts:
+        click.echo(f"  [{fact.type.value}] {fact.id}: {fact.content}")
 
 
 @main.command()

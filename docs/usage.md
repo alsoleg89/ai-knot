@@ -257,6 +257,7 @@ kb = KnowledgeBase("agent", rrf_weights=(5.0, 2.0, 2.0, 1.0))
 
 ```bash
 ai-knot add     my_agent "fact"
+ai-knot learn   my_agent "raw text to distill into facts"
 ai-knot search  my_agent "query"                                 # alias for recall
 ai-knot recall  my_agent "query"
 ai-knot recall  my_agent "query" --now 2025-01-01T00:00:00   # point-in-time recall
@@ -279,6 +280,19 @@ The baseline human-operated loop is `add -> search -> show -> forget`. `search`
 and `recall` are the same underlying command: `search` matches the way tools
 like Mem0 frame the operation, while `recall` matches the way agent builders
 usually talk about injecting context into the next turn.
+
+If you want the CLI to do LLM-backed extraction instead of manual `add()` calls:
+
+```bash
+export AI_KNOT_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+ai-knot learn my_agent "User writes Go, deploys in Docker, and avoids Java."
+```
+
+`learn` accepts `--provider`, `--api-key`, `--model`, `--role`, and `--base-url`
+for explicit control, but it will also honor `AI_KNOT_PROVIDER`,
+`AI_KNOT_API_KEY`, and the provider-specific env vars (`OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, and so on).
 
 If CLI install or integration setup behaves unexpectedly, start with
 `ai-knot doctor --json` and [troubleshooting.md](troubleshooting.md).

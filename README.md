@@ -156,6 +156,15 @@ agent-context terms. They are the same command surface. Use `show` to list
 stored facts and their IDs. Use `forget` / `delete` for a single fact, and
 `clear` only when you want to wipe the whole agent namespace.
 
+If you want ai-knot to **extract facts from raw text** instead of adding them one
+by one:
+
+```bash
+export AI_KNOT_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+ai-knot learn assistant "User writes Go, deploys in Docker, and avoids Java."
+```
+
 ## What it looks like in your stack
 
 The strongest memory READMEs do not stop at a low-level primitive. They also show the
@@ -214,6 +223,7 @@ the branch is on `main`, the repo now also ships a GitHub Pages-ready site in
 | See the OpenClaw / MCP flow work without the app or API keys | [examples/openclaw_integration.py](examples/openclaw_integration.py) |
 | Connect OpenClaw to persistent memory | `ai-knot setup openclaw --agent-id bot --storage sqlite` |
 | See the CrewAI memory surface work without an API key | [examples/crewai_surface_demo.py](examples/crewai_surface_demo.py) |
+| Distill a raw note into facts from the terminal | `OPENAI_API_KEY=... ai-knot learn assistant "User writes Go and deploys in Docker"` |
 | Add long-term memory to a CrewAI `Crew` or `Agent` | [examples/crewai_integration.py](examples/crewai_integration.py) |
 | Add long-term memory to an AutoGen `AssistantAgent` | [examples/autogen_integration.py](examples/autogen_integration.py) |
 | Add long-term memory to the OpenAI Agents SDK | [examples/openai_agents_integration.py](examples/openai_agents_integration.py) |

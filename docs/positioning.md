@@ -147,9 +147,10 @@ That honesty helps trust.
 ## CTA ladder
 
 1. **Primary CTA:** try the README quickstart
-2. **Secondary CTA:** inspect the benchmark command and methodology
-3. **Tertiary CTA:** choose a surface: CrewAI, MCP, TypeScript, LangChain, HTTP
-4. **Contributor CTA:** ask for the next adapter or backend
+2. **Secondary CTA:** try the CLI memory loop: `ai-knot add`, `ai-knot search`, `ai-knot show`, `ai-knot forget`
+3. **Tertiary CTA:** inspect the benchmark command and methodology
+4. **Surface CTA:** choose a surface: CrewAI, MCP, TypeScript, LangChain, HTTP
+5. **Contributor CTA:** ask for the next adapter or backend
 
 ## What to say in 30 seconds
 
