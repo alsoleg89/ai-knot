@@ -170,6 +170,9 @@ That is enough breadth to start distribution without inventing new positioning i
 
 Latest targeted checks completed in this workspace:
 
+- `npm run typecheck` in `npm/`: passed
+- `npm test` in `npm/`: passed
+- `npm run build` in `npm/`: passed
 - `ruff check` on the new integration/example paths: passed
 - `ruff check scripts/check_public_release.py tests/test_public_release_script.py`: passed
 - `ruff check src/ai_knot/server/app.py src/ai_knot/cli.py tests/test_server.py`: passed
