@@ -45,10 +45,12 @@ This is why the launch is still prepared-but-not-executed rather than fully done
 2. the public README is still missing launch-branch markers such as
    `Install by surface`, `What it looks like in your stack`, `PydanticAI`,
    `skills/README.md`, `Browser inspector`, `hero-demo.gif`,
+   `codespaces-quickstart.md`,
    `examples/crewai_surface_demo.py`, `examples/pydanticai_surface_demo.py`,
    and `docs/launch-checklist.md`;
 3. the public `main` branch still does not expose:
    - `docs/assets/hero-demo.gif`
+   - `docs/codespaces-quickstart.md`
    - `docs/crewai-case-study.md`
    - `docs/pydanticai-case-study.md`
    - `docs/vercel-ai-sdk-case-study.md`
@@ -61,6 +63,7 @@ This is why the launch is still prepared-but-not-executed rather than fully done
    - `examples/pydanticai_integration.py`
    - `examples/pydanticai_surface_demo.py`
    - `npm/examples/vercel-ai-sdk-surface.ts`
+   - `scripts/render_github_release.py`
    - `scripts/render_hero_demo_gif.py`
    - `skills/README.md`
 

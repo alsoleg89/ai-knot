@@ -24,7 +24,13 @@ def _load_module() -> ModuleType:
 def test_local_versions_are_in_sync() -> None:
     module = _load_module()
     versions = module._local_versions(_SCRIPT_PATH.parent.parent)
-    assert versions["pyproject"] == versions["init"] == versions["npm_package"] == "0.11.0"
+    assert (
+        versions["pyproject"]
+        == versions["init"]
+        == versions["npm_package"]
+        == versions["npm_lock"]
+        == "0.11.0"
+    )
 
 
 def test_main_reports_failing_public_state(
@@ -62,10 +68,12 @@ def test_main_reports_failing_public_state(
     assert "npm latest:  0.9.3" in out
     assert "[FAIL] npm matches local" in out
     assert "[FAIL] public repo file: docs/crewai-case-study.md" in out
+    assert "[FAIL] public repo file: docs/codespaces-quickstart.md" in out
     assert "[FAIL] public repo file: docs/pydanticai-case-study.md" in out
     assert "[FAIL] public repo file: docs/vercel-ai-sdk-case-study.md" in out
     assert "[FAIL] public repo file: docs/assets/hero-demo.gif" in out
     assert "[FAIL] public repo file: examples/pydanticai_surface_demo.py" in out
+    assert "[FAIL] public repo file: scripts/render_github_release.py" in out
 
 
 def test_main_reports_green_state(

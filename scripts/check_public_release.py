@@ -22,6 +22,7 @@ README_MARKERS = [
     "skills/README.md",
     "Browser inspector",
     "hero-demo.gif",
+    "codespaces-quickstart.md",
     "examples/crewai_surface_demo.py",
     "examples/pydanticai_surface_demo.py",
     "docs/launch-checklist.md",
@@ -29,6 +30,7 @@ README_MARKERS = [
 
 PUBLIC_FILE_MARKERS = [
     "docs/assets/hero-demo.gif",
+    "docs/codespaces-quickstart.md",
     "docs/crewai-case-study.md",
     "docs/pydanticai-case-study.md",
     "docs/vercel-ai-sdk-case-study.md",
@@ -41,6 +43,7 @@ PUBLIC_FILE_MARKERS = [
     "examples/pydanticai_integration.py",
     "examples/pydanticai_surface_demo.py",
     "npm/examples/vercel-ai-sdk-surface.ts",
+    "scripts/render_github_release.py",
     "scripts/render_hero_demo_gif.py",
     "skills/README.md",
 ]
@@ -59,6 +62,7 @@ def _fetch_text(url: str) -> str:
 def _local_versions(repo_root: Path) -> dict[str, str]:
     pyproject = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     npm_package = json.loads((repo_root / "npm" / "package.json").read_text(encoding="utf-8"))
+    npm_lock = json.loads((repo_root / "npm" / "package-lock.json").read_text(encoding="utf-8"))
 
     init_text = (repo_root / "src" / "ai_knot" / "__init__.py").read_text(encoding="utf-8")
     prefix = '__version__ = "'
@@ -69,6 +73,7 @@ def _local_versions(repo_root: Path) -> dict[str, str]:
         "pyproject": str(pyproject["project"]["version"]),
         "init": init_text[start:end],
         "npm_package": str(npm_package["version"]),
+        "npm_lock": str(npm_lock["version"]),
     }
 
 
@@ -103,7 +108,8 @@ def main() -> int:
             len(set(versions.values())) == 1,
             "pyproject="
             f"{versions['pyproject']} init={versions['init']} "
-            f"npm/package.json={versions['npm_package']}",
+            f"npm/package.json={versions['npm_package']} "
+            f"npm/package-lock.json={versions['npm_lock']}",
         ),
         (
             "PyPI matches local",
