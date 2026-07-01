@@ -134,6 +134,21 @@ The repo now ships:
 If you want to use GitHub Pages in launch posts, enable Pages after merge and
 confirm the site deploys from the workflow before posting externally.
 
+### 6.6. Validate the Codespaces first-run path
+
+The install-free path is now documented explicitly in:
+
+- [codespaces-quickstart.md](codespaces-quickstart.md)
+
+After `main` is updated, open the public `codespaces.new` link once and verify
+at least these commands:
+
+```bash
+python examples/quickstart.py
+python examples/browser_inspector_demo.py
+cd npm && npm run example:vercel-ai-sdk-surface
+```
+
 ### 7. Use the prepared posting order
 
 Start from:

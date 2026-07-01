@@ -269,7 +269,7 @@ the branch is on `main`, the repo now also ships a GitHub Pages-ready site in
 | You want to… | Start here |
 |---|---|
 | Try the core Python flow in under 2 minutes | [`python examples/quickstart.py`](examples/quickstart.py) |
-| Try without local setup | [Open the repo in GitHub Codespaces](https://codespaces.new/alsoleg89/ai-knot) |
+| Try without local setup | [Open the repo in GitHub Codespaces](https://codespaces.new/alsoleg89/ai-knot), then follow [docs/codespaces-quickstart.md](docs/codespaces-quickstart.md) |
 | See the Claude / MCP config flow without launching Claude | [examples/claude_mcp_setup.py](examples/claude_mcp_setup.py) |
 | See the OpenClaw / MCP flow work without the app or API keys | [examples/openclaw_integration.py](examples/openclaw_integration.py) |
 | Connect OpenClaw to persistent memory | `ai-knot setup openclaw --agent-id bot --storage sqlite` |

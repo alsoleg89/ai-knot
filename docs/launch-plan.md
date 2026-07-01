@@ -111,6 +111,7 @@ field with a credibility crisis, the honest number *is* the hook.
    step is to post them publicly so developers see exact workflows they can copy.
 4. **Validate and publish the install-free path.** Codespaces support is now in-repo;
    the maintainer should verify the public `codespaces.new` flow after merging to `main`.
+   The exact first-run commands now live in `docs/codespaces-quickstart.md`.
 5. **Enable GitHub Pages after merge.** The repo now contains `docs/site/index.html`
    and `.github/workflows/pages.yml`; once `main` is live, enable Pages so launch
    posts can link to a cleaner landing page than raw GitHub markdown.

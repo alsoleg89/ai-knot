@@ -26,7 +26,8 @@ npm ci
 ```
 
 Want a no-local-install path for a quick repo tour? Open the repo in
-GitHub Codespaces after the branch is on `main`.
+GitHub Codespaces after the branch is on `main`, then follow
+[`docs/codespaces-quickstart.md`](docs/codespaces-quickstart.md).
 
 ---
 

@@ -93,6 +93,7 @@ readiness**, not core product legitimacy.
 34. Raised the `search` / `recall` memory loop into the README hero snippet, Pages landing page, developer article, and launch post so first-time visitors see the market-standard loop immediately
 35. Tightened the Vercel AI SDK path with a true zero-network surface demo, runnable repo-native example commands, and a real example that no longer depends on a hand-edited placeholder storage path
 36. Turned GitHub release notes into a repo-owned artifact by rendering them from `docs/announce.md` + `CHANGELOG.md`, and updated the release workflow to keep `npm/package-lock.json` version-synced during release bumps
+37. Turned the Codespaces/devcontainer path into a concrete install-free onboarding flow with exact first commands and a regression test for the devcontainer contract
 
 ## Highest-value remaining work
 

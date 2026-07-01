@@ -216,6 +216,8 @@ Important practical interpretation:
   loop the README promises,
 - the Vercel AI SDK surface now has both a true zero-network adapter proof and a
   runnable repo command path, not just a static file reference,
+- the Codespaces/devcontainer path now has an exact first-run guide plus a test
+  that guards the devcontainer install contract,
 - the GitHub Release page can now be rendered from repo-owned launch copy and
   changelog content instead of generic auto-generated notes,
 - version-sync protections already exist in the repo.
