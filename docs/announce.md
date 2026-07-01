@@ -112,6 +112,52 @@ integration instead of the full product tour.
 
 ---
 
+## Surface-specific follow-up: Vercel AI SDK
+
+Use this when you want to lead with the mainstream TypeScript app path instead
+of a Python framework or MCP client.
+
+**Title options:**
+
+- Vercel AI SDK users: ai-knot now fills your `system` prompt with recalled long-term memory
+- ai-knot adds deterministic, self-hosted memory to Vercel AI SDK apps
+
+**Short post:**
+> If your app already runs on the Vercel AI SDK, `ai-knot` now has a native-feeling
+> route for long-term memory:
+>
+> `npm install ai-knot ai @ai-sdk/openai`
+>
+> Then use `AiKnotAISDKMemory` to build the `system` string or `messages` array
+> from ai-knot recall, while keeping model choice, streaming, and UI wiring in
+> your existing AI SDK code.
+>
+> Fastest proof:
+> - repo-native example: `npm/examples/vercel-ai-sdk.ts`
+> - npm package docs: `npm/README.md`
+>
+> Repo: https://github.com/alsoleg89/ai-knot
+
+**X / LinkedIn version:**
+> Vercel AI SDK path for `ai-knot` is ready:
+>
+> `npm install ai-knot ai @ai-sdk/openai`
+>
+> Use `AiKnotAISDKMemory` to build your `system` / `messages` surface from
+> deterministic recalled facts, with no LLM on the retrieval path.
+>
+> Shortest proof: `npm/examples/vercel-ai-sdk.ts`
+>
+> https://github.com/alsoleg89/ai-knot
+
+**Reply snippet:**
+> If you want the shortest TypeScript proof, start with
+> `npm/examples/vercel-ai-sdk.ts`. It shows the exact `AiKnotAISDKMemory`
+> object and `generateText()` shape without hiding the model call behind
+> framework magic.
+
+---
+
 ## Surface-specific follow-up: OpenClaw
 
 Use this when you want to lead with the app/MCP route instead of a Python

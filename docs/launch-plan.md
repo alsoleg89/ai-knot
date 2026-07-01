@@ -76,7 +76,9 @@ field with a credibility crisis, the honest number *is* the hook.
 - Codespaces/devcontainer path added for install-free trials.
 - Deterministic hero demo + recording script prepared for the README/social demo asset.
 - Buyer-facing comparison guide added.
+- Vercel AI SDK adapter and npm-side example/docs added so the mainstream TypeScript app path is explicit instead of generic.
 - CrewAI follow-up distribution assets prepared: zero-network demo, case-study copy, and a maintainer launch checklist.
+- Vercel AI SDK follow-up distribution assets prepared: named adapter, npm-side example, and channel copy for the TypeScript app path.
 - OpenClaw follow-up distribution asset prepared: app/MCP case-study copy routed to the zero-network example and setup command.
 - Claude/MCP follow-up distribution asset prepared: zero-network setup demo plus channel-ready case-study copy.
 - Lightweight browser inspector added on top of the HTTP sidecar for demos and debugging.
@@ -96,7 +98,7 @@ field with a credibility crisis, the honest number *is* the hook.
 3. **A 20-second demo GIF/asciinema** at the top of the README (add → recall →
    "it remembered"). Top dev READMEs all have one; text-only converts worse.
 4. **Publish the prepared proof posts.**
-   CrewAI, OpenClaw, and Claude/MCP now all have repo-native follow-up assets; the remaining
+   CrewAI, Vercel AI SDK, OpenClaw, and Claude/MCP now all have repo-native follow-up assets; the remaining
    step is to post them publicly so developers see exact workflows they can copy.
 5. **Validate and publish the install-free path.** Codespaces support is now in-repo;
    the maintainer should verify the public `codespaces.new` flow after merging to `main`.
@@ -156,7 +158,7 @@ is green and the demo asset is in.
 **Week 3 — credibility and ecosystem pull**
 - Post the methodology angle to r/MachineLearning.
 - Submit awesome-list PRs (agent memory, MCP, AI infra).
-- Publish the prepared CrewAI follow-up, then OpenClaw, then Claude/MCP, then rotate to LangChain or HTTP sidecar.
+- Publish the prepared CrewAI follow-up, then Vercel AI SDK, then OpenClaw, then Claude/MCP, then rotate to LangChain or HTTP sidecar.
 
 **Week 4 — retention and pull-through**
 - Ship the next framework adapter.
@@ -197,6 +199,6 @@ rendered notebook walkthrough.
 1. *(maintainer)* npm publish to `0.11.0`; merge/push the launch-ready branch to public `main`.
 2. Demo GIF or terminal capture in README.
 3. Enable the GitHub Pages landing page after `main` is updated.
-4. Publish the prepared CrewAI, OpenClaw, and Claude/MCP surface-specific proof posts.
+4. Publish the prepared CrewAI, Vercel AI SDK, OpenClaw, and Claude/MCP surface-specific proof posts.
 5. Validate the public Codespaces quickstart after the branch is on `main`.
 6. Fresh public competitor scorecard refresh; more backends only if they add a real channel.

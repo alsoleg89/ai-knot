@@ -36,8 +36,9 @@ move the whole sequence by exactly one week rather than launching half-ready.
 | 2026-07-21 | r/MachineLearning | methodology post | reproducible metrics over hype | benchmark docs | attract skeptics and researchers |
 | 2026-07-21 | Awesome-list PRs | small PRs | category inclusion | repo link | long-tail discovery |
 | 2026-07-28 | Follow-up post | X / GitHub discussion / Reddit comment | surface-specific proof: CrewAI | try the CrewAI demo or example | reactivate observers with concrete integration value |
-| 2026-08-04 | Second follow-up post | X / GitHub discussion / Reddit comment | app/MCP proof: OpenClaw | run the OpenClaw demo or setup command | widen discovery beyond Python frameworks |
-| 2026-08-11 | Third follow-up post | X / GitHub discussion / Reddit comment | Claude MCP proof | run the Claude setup demo or setup command | reach tool-first Claude users |
+| 2026-08-01 | Second follow-up post | X / GitHub discussion / Reddit comment | TypeScript app proof: Vercel AI SDK | try the npm example or npm README path | reach TS app builders who will not start from Python |
+| 2026-08-04 | Third follow-up post | X / GitHub discussion / Reddit comment | app/MCP proof: OpenClaw | run the OpenClaw demo or setup command | widen discovery beyond Python frameworks |
+| 2026-08-11 | Fourth follow-up post | X / GitHub discussion / Reddit comment | Claude MCP proof | run the Claude setup demo or setup command | reach tool-first Claude users |
 
 ## Channel cards
 
@@ -60,8 +61,9 @@ move the whole sequence by exactly one week rather than launching half-ready.
 - LinkedIn: lead with auditability, storage control, and multi-agent governance.
 - Follow-up posts: lead with one concrete surface, not the whole product.
 - Best prepared follow-up surface today: `CrewAI` via `docs/crewai-case-study.md`.
-- Second prepared follow-up surface: `OpenClaw` via `docs/openclaw-case-study.md`.
-- Third prepared follow-up surface: `Claude MCP` via `docs/claude-mcp-case-study.md`.
+- Second prepared follow-up surface: `Vercel AI SDK` via `npm/examples/vercel-ai-sdk.ts` and `npm/README.md`.
+- Third prepared follow-up surface: `OpenClaw` via `docs/openclaw-case-study.md`.
+- Fourth prepared follow-up surface: `Claude MCP` via `docs/claude-mcp-case-study.md`.
 - Next-best follow-up surfaces after that: `OpenAI Agents SDK`.
 
 ## Direct outreach templates
@@ -126,8 +128,9 @@ move the whole sequence by exactly one week rather than launching half-ready.
 
 - broken-install issues or comments
 - npm version-mismatch complaints
-- which surface gets mentioned first: CrewAI, OpenClaw, Claude MCP, OpenAI Agents, LangChain
+- which surface gets mentioned first: CrewAI, Vercel AI SDK, OpenClaw, Claude MCP, OpenAI Agents, LangChain
 - clicks or replies specifically on the CrewAI follow-up asset
+- clicks or replies specifically on the Vercel AI SDK follow-up asset
 - clicks or replies specifically on the OpenClaw follow-up asset
 - clicks or replies specifically on the Claude MCP follow-up asset
 - benchmark questions vs general "cool project" comments
