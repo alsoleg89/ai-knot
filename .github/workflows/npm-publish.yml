@@ -21,7 +21,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dev dependencies
@@ -45,7 +45,25 @@ jobs:
       - name: Build (ESM + CJS)
         run: npm run build
 
+      - name: Audit packed npm artifact
+        run: npm run package:audit
+
+      - name: Skip if this version is already published
+        id: published
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          if npm view "ai-knot@${PKG}" version >/dev/null 2>&1; then
+            echo "ai-knot@${PKG} already on npm — nothing to publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm
+        if: steps.published.outputs.skip == 'false'
         run: npm publish --access public
         env:
+          # A 404 on PUT here almost always means NODE_AUTH_TOKEN is missing,
+          # expired, or lacks publish rights for ai-knot — rotate the NPM_TOKEN
+          # secret (see docs/RELEASE.md, "npm token rotation").
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

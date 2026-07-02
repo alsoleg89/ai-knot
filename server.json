@@ -1,0 +1,61 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.alsoleg89/ai-knot",
+  "title": "ai-knot",
+  "description": "Deterministic, self-hosted persistent memory MCP server for AI agents.",
+  "repository": {
+    "url": "https://github.com/alsoleg89/ai-knot.git",
+    "source": "github"
+  },
+  "version": "0.11.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "ai-knot",
+      "version": "0.11.0",
+      "runtimeHint": "python",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AI_KNOT_AGENT_ID",
+          "description": "Agent namespace to read and write memory under.",
+          "isRequired": false
+        },
+        {
+          "name": "AI_KNOT_STORAGE",
+          "description": "Storage backend: sqlite, yaml, or postgres.",
+          "isRequired": false
+        },
+        {
+          "name": "AI_KNOT_DATA_DIR",
+          "description": "Base directory for yaml or sqlite storage.",
+          "isRequired": false
+        },
+        {
+          "name": "AI_KNOT_DSN",
+          "description": "PostgreSQL DSN when AI_KNOT_STORAGE=postgres.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "AI_KNOT_PROVIDER",
+          "description": "Optional LLM provider for learn() extraction, for example openai or anthropic.",
+          "isRequired": false
+        },
+        {
+          "name": "AI_KNOT_API_KEY",
+          "description": "Optional API key for the configured learn() provider.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "AI_KNOT_MODEL",
+          "description": "Optional model override for learn() extraction.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

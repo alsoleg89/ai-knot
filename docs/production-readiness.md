@@ -95,20 +95,29 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 
 | Item | Status | Notes |
 |---|---|---|
-| MCP server (stdio) | ✅ | Claude Desktop / Claude Code |
+| MCP server (stdio + Streamable HTTP) | ✅ | paste-ready local stdio config for Claude Desktop / Claude Code / OpenClaw, plus `ai-knot serve-mcp` for HTTP-capable MCP hosts |
 | TypeScript/npm client | ✅ | `learn` / `addResolved` / `recall(now)` / `tags` |
-| OpenClaw memory adapter | ✅ | drop-in adapter |
-| FastAPI HTTP sidecar | ✅ | `ai-knot serve`: `/health`, `/v1/recall`, `/v1/facts`, `/v1/stats` + optional bearer auth |
-| CLI pool/gov/lifecycle ops | ⬜ | operator commands |
-| Framework integrations (LangGraph / OpenAI Agents / CrewAI / AutoGen) | ⬜ | thin adapters |
+| Vercel AI SDK adapter | ✅ | `AiKnotAISDKMemory` builds AI SDK `system` / `messages` surfaces from recalled facts; no hard `ai` dependency |
+| OpenClaw memory adapter | ✅ | drop-in adapter + `ai-knot setup openclaw` MCP config flow; structured `update()` preserves lineage and active-memory listing defaults to current state |
+| CrewAI memory adapter | ✅ | `AiKnotCrewAIMemory` via `Crew(memory=...)` / `Agent(memory=memory.scope(...))`; no hard `crewai` dep |
+| LlamaIndex memory adapter | ✅ | `AiKnotLlamaIndexMemory` via the native `memory=...` seam; no hard `llama-index-core` dep at import time |
+| OpenAI Agents SDK adapter | ✅ | `AiKnotAgentsMemory` via `RunConfig.call_model_input_filter`; no hard `openai-agents` dep |
+| PydanticAI adapter | ✅ | `AiKnotPydanticAIMemory` via per-run `instructions=...`; no hard `pydantic-ai` dep |
+| AutoGen memory adapter | ✅ | `AiKnotAutoGenMemory` via `AssistantAgent(memory=[...])`; no hard `autogen-*` dep |
+| Generic Python callables + LangChain / LangGraph adapters | ✅ | `create_basic_memory_functions(...)` for plain function-calling runtimes, `create_basic_memory_tools(...)` for the explicit `add/search/list/delete` loop, `create_manage_memory_tool(...)` + `create_search_memory_tool(...)` for the compact LangMem-shaped flow, plus `AiKnotRetriever` (Runnable `invoke`) + `AiKnotChatMemory` (`BaseChatMemory` shape); no hard langchain dep |
+| FastAPI HTTP sidecar + browser inspector | ✅ | `ai-knot serve`: `/health`, `POST /v1/learn`, `POST /v1/search` / `/v1/recall`, `POST /v1/facts/resolved`, `POST/GET/DELETE /v1/facts`, `/v1/stats`, `/inspect` + optional bearer auth |
+| CLI lifecycle/audit ops | ✅ | `recall --now` (point-in-time), `lineage` (supersession audit trail), `decay`, `export`/`import` |
+| CLI pool-scoped gov ops | ⬜ | shared-pool operator commands |
+| Additional framework adapters | ⬜ | optional expansion after launch; no longer blocking the main launch |
 
 ## 10. Benchmarks & evidence
 
 | Item | Status | Notes |
 |---|---|---|
-| LOCOMO recall scenario (offline eval) | ✅ | `tests/eval/benchmark` against the public LoCoMo dataset |
-| LongMemEval point-in-time adapter | ✅ | `recall(now=question_date)` |
-| Live competitor bench-pack (Mem0, …) | ⬜ | side-by-side scorecard |
+| LoCoMo QA accuracy (LLM-judged) | ✅ | **78.0%** cat1–4 full-10, gpt-4.1/gpt-4o; per-conv 74–84% — see [benchmarks.md](benchmarks.md) |
+| LongMemEval QA accuracy (LLM-judged) | ✅ | **59.6%** Oracle, gpt-4.1/gpt-4o; single-session 95–98%, abstention 90% |
+| Reproducible deterministic suite | ✅ | zero-network, fixed seeds, one command; MRR 0.18→0.83, `evidence_recall@5` 0.15→0.26 |
+| LongMemEval point-in-time adapter | ✅ | `recall(now=question_date)`; bi-temporal correctness regression-tested |
 
 ---
 
@@ -121,5 +130,4 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 2. **Lifecycle engine** — decay / archive / consolidate jobs + lifecycle ledger.
 3. **Temporal/relation graph** — `GraphStorageCapable` edges from provenance.
 4. **Self-repair probes** — generate + run consistency probes over the KB.
-5. **Ecosystem** — CLI pool/gov ops, framework integrations,
-   competitor bench-pack + live Mem0.
+5. **Ecosystem** — CLI pool/gov ops and any post-launch framework expansion.

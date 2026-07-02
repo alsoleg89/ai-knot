@@ -18,6 +18,7 @@ from ai_knot.mcp_server import (
     tool_add,
     tool_capabilities,
     tool_forget,
+    tool_get,
     tool_health,
     tool_learn,
     tool_list_facts,
@@ -29,7 +30,7 @@ from ai_knot.mcp_server import (
     tool_stats,
 )
 from ai_knot.storage.yaml_storage import YAMLStorage
-from ai_knot.types import MemoryType
+from ai_knot.types import Fact, MemoryType
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -164,6 +165,25 @@ class TestToolForget:
 
 
 # ---------------------------------------------------------------------------
+# tool_get
+# ---------------------------------------------------------------------------
+
+
+class TestToolGet:
+    """Tests for tool_get()."""
+
+    def test_returns_one_fact_as_json(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("User deploys via Docker Compose")
+        data = json.loads(tool_get(kb, fact.id))
+        assert data["id"] == fact.id
+        assert data["content"] == "User deploys via Docker Compose"
+
+    def test_unknown_fact_raises_value_error(self, kb: KnowledgeBase) -> None:
+        with pytest.raises(ValueError, match="deadbeef"):
+            tool_get(kb, "deadbeef")
+
+
+# ---------------------------------------------------------------------------
 # tool_list_facts
 # ---------------------------------------------------------------------------
 
@@ -182,11 +202,51 @@ class TestToolListFacts:
         assert isinstance(data, list)
         assert len(data) == 1
         assert data[0]["content"] == "User works at Sber"
+        assert data[0]["active"] is True
 
     def test_json_fields_present(self, kb: KnowledgeBase) -> None:
         kb.add("Test fact", importance=0.7)
         data = json.loads(tool_list_facts(kb))
-        assert set(data[0].keys()) >= {"id", "content", "type", "importance", "retention"}
+        assert set(data[0].keys()) >= {
+            "id",
+            "content",
+            "type",
+            "importance",
+            "retention",
+            "retention_score",
+            "access_count",
+            "tags",
+            "created_at",
+            "last_accessed",
+            "valid_from",
+            "valid_until",
+            "active",
+        }
+
+    def test_filters_inactive_by_default(self, kb: KnowledgeBase) -> None:
+        kb.add_resolved(
+            [
+                Fact(
+                    content="User works at Acme",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Acme",
+                )
+            ]
+        )
+        kb.add_resolved(
+            [
+                Fact(
+                    content="User now works at Globex",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Globex",
+                )
+            ]
+        )
+        data = json.loads(tool_list_facts(kb))
+        assert len(data) == 1
+        assert data[0]["content"] == "User now works at Globex"
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +441,86 @@ class TestMakeServer:
         call_args = mock_fastmcp_cls.call_args
         assert call_args[0][0] == "ai-knot"
         assert "instructions" in call_args[1]
+        assert call_args[1]["website_url"] == "https://github.com/alsoleg89/ai-knot"
+
+    def test_make_server_passes_remote_transport_settings(self, kb: KnowledgeBase) -> None:
+        from ai_knot.mcp_server import _make_server
+
+        mock_app = MagicMock()
+        mock_fastmcp_cls = MagicMock(return_value=mock_app)
+        mock_fastmcp_module = MagicMock()
+        mock_fastmcp_module.FastMCP = mock_fastmcp_cls
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "mcp": MagicMock(),
+                "mcp.server": MagicMock(),
+                "mcp.server.fastmcp": mock_fastmcp_module,
+            },
+        ):
+            _make_server(
+                kb,
+                host="0.0.0.0",
+                port=8765,
+                streamable_http_path="/memory",
+            )
+
+        call_args = mock_fastmcp_cls.call_args
+        assert call_args[1]["host"] == "0.0.0.0"
+        assert call_args[1]["port"] == 8765
+        assert call_args[1]["streamable_http_path"] == "/memory"
+
+    def test_real_streamable_http_app_exposes_configured_route(self, kb: KnowledgeBase) -> None:
+        pytest.importorskip("mcp.server.fastmcp")
+
+        from ai_knot.mcp_server import _make_server
+
+        app = _make_server(kb, host="127.0.0.1", port=8765, streamable_http_path="/mcp")
+        http_app = app.streamable_http_app()
+        route_paths = {getattr(route, "path", None) for route in getattr(http_app, "routes", [])}
+
+        assert "/mcp" in route_paths
+
+
+class TestMCPTransportConfig:
+    def test_resolve_transport_defaults_to_stdio(self) -> None:
+        from ai_knot.mcp_server import _resolve_transport
+
+        assert _resolve_transport(None) == "stdio"
+
+    def test_resolve_transport_accepts_streamable_http(self) -> None:
+        from ai_knot.mcp_server import _resolve_transport
+
+        assert _resolve_transport("streamable-http") == "streamable-http"
+
+    def test_resolve_transport_rejects_unknown_value(self) -> None:
+        from ai_knot.mcp_server import _resolve_transport
+
+        with pytest.raises(ValueError):
+            _resolve_transport("grpc")
+
+    def test_main_runs_with_transport_from_environment(
+        self, kb: KnowledgeBase, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import ai_knot.mcp_server as module
+
+        mock_app = MagicMock()
+        monkeypatch.setenv("AI_KNOT_MCP_TRANSPORT", "streamable-http")
+        monkeypatch.setattr(module, "_build_kb", lambda: kb)
+        monkeypatch.setattr(module, "_make_server", lambda _kb: mock_app)
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "mcp": MagicMock(),
+                "mcp.server": MagicMock(),
+                "mcp.server.fastmcp": MagicMock(),
+            },
+        ):
+            module.main()
+
+        mock_app.run.assert_called_once_with("streamable-http")
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +540,7 @@ class TestToolLearn:
         data = json.loads(result)
         assert data["stored"] == 1
         assert len(data["ids"]) == 1
+        assert "verbatim" in data["note"]
         facts = kb.list_facts()
         assert any("PostgreSQL" in f.content for f in facts)
 
@@ -460,6 +601,7 @@ class TestToolHealthCapabilities:
         assert "add" in names
         assert "recall" in names
         assert "learn" in names
+        assert "get" in names
         assert "health" in names
 
     def test_capabilities_have_descriptions(self) -> None:

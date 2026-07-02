@@ -1,0 +1,76 @@
+name: Publish to MCP Registry
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify version matches tag and server manifest
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(python -c "import tomllib; d=tomllib.loads(open('pyproject.toml').read()); print(d['project']['version'])")
+          SERVER=$(python -c "import json; print(json.load(open('server.json'))['version'])")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "Version mismatch: tag=$TAG pyproject.toml=$PKG"
+            exit 1
+          fi
+          if [ "$TAG" != "$SERVER" ]; then
+            echo "Version mismatch: tag=$TAG server.json=$SERVER"
+            exit 1
+          fi
+
+      - name: Wait for PyPI release to be visible
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TARGET_VERSION: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          target = os.environ["TARGET_VERSION"].removeprefix("v")
+          url = "https://pypi.org/pypi/ai-knot/json"
+
+          for attempt in range(30):
+              with urllib.request.urlopen(url) as response:
+                  data = json.load(response)
+              if data["info"]["version"] == target:
+                  print(f"PyPI now exposes ai-knot {target}")
+                  break
+              print(
+                  f"Waiting for PyPI ai-knot {target} "
+                  f"(currently {data['info']['version']})..."
+              )
+              time.sleep(20)
+          else:
+              raise SystemExit(f"Timed out waiting for ai-knot {target} on PyPI")
+          PY
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server manifest to MCP Registry
+        run: ./mcp-publisher publish

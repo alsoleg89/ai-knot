@@ -11,12 +11,23 @@
 ## Installation
 
 ```bash
-git clone https://github.com/alsoleg89/ai_knot.git
+git clone https://github.com/alsoleg89/ai-knot.git
 cd ai-knot
 
 # Install in editable mode with all dev and optional deps
-pip install -e ".[dev,openai]"
+pip install -e ".[dev,openai,mcp,postgres,server]"
 ```
+
+If you are changing the TypeScript client:
+
+```bash
+cd npm
+npm ci
+```
+
+Want a no-local-install path for a quick repo tour? Open the repo in
+GitHub Codespaces after the branch is on `main`, then follow
+[`docs/codespaces-quickstart.md`](docs/codespaces-quickstart.md).
 
 ---
 
@@ -116,6 +127,7 @@ ai-knot decay mybot
 
 ```bash
 python examples/quickstart.py
+python examples/langchain_integration.py
 ```
 
 ### Run the OpenAI integration example
@@ -155,7 +167,9 @@ Never hardcode keys. Pass them to `kb.learn(turns, api_key=os.environ["OPENAI_AP
 ## Release process
 
 Short version:
-1. Bump `version` in `pyproject.toml`
-2. Update `CHANGELOG.md`
-3. Commit + tag: `git tag v0.2.0 && git push --tags`
-4. GitHub Actions `publish.yml` will build and publish to PyPI automatically
+1. Update `CHANGELOG.md`
+2. Run the local pre-release gate from [docs/RELEASE.md](docs/RELEASE.md)
+3. Use the GitHub Actions workflow **Create Release** with the target version
+4. Tag push fans out to **Publish to PyPI** and **Publish to npm**
+
+`docs/RELEASE.md` is the source of truth for version bumps, registry sync, and npm token rotation.

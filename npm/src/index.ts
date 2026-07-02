@@ -1,22 +1,54 @@
 import { McpClient } from "./client.js";
+import { HttpKnowledgeBase } from "./http.js";
+import {
+  AiKnotAISDKMemory,
+  type AISDKMessageLike,
+  type AiKnotAISDKBuildMessagesOptions,
+  type AiKnotAISDKBuildSystemOptions,
+  type AiKnotAISDKMemoryOptions,
+} from "./ai_sdk.js";
 import type {
   AddOptions,
   Fact,
+  HttpKnowledgeBaseListOptions,
+  HttpKnowledgeBaseOptions,
+  KnowledgeBaseListOptions,
   KnowledgeBaseOptions,
   LearnMessage,
+  LearnOptions,
   LearnResult,
+  LineageFact,
+  LineageOptions,
+  MemoryOp,
   RecallOptions,
   ResolvedFact,
   ResolvedResult,
   Stats,
 } from "./types.js";
 
+export {
+  type AISDKMessageLike,
+  type AiKnotAISDKBuildMessagesOptions,
+  type AiKnotAISDKBuildSystemOptions,
+  type AiKnotAISDKMemoryOptions,
+} from "./ai_sdk.js";
+
+export { AiKnotAISDKMemory } from "./ai_sdk.js";
+export { HttpKnowledgeBase } from "./http.js";
+
 export type {
   AddOptions,
   Fact,
+  HttpKnowledgeBaseListOptions,
+  HttpKnowledgeBaseOptions,
+  KnowledgeBaseListOptions,
   KnowledgeBaseOptions,
   LearnMessage,
+  LearnOptions,
   LearnResult,
+  LineageFact,
+  LineageOptions,
+  MemoryOp,
   MemoryType,
   RecallOptions,
   ResolvedFact,
@@ -94,14 +126,26 @@ export class KnowledgeBase {
   }
 
   /**
+   * Alias for recall() using the market-standard search verb.
+   */
+  async search(query: string, options: RecallOptions = {}): Promise<string> {
+    return this.recall(query, options);
+  }
+
+  /**
    * Extract and store facts from a conversation (the LLM-backed ingest path).
    * Mirrors the `learn` MCP tool; requires the server to have an LLM provider
    * configured, otherwise it falls back to storing the last user message.
    * Routing ingest through `learn` (rather than `add`) lets slot extraction
    * fire knowledge-update supersession on the server.
    */
-  async learn(messages: LearnMessage[]): Promise<LearnResult> {
-    const text = await this.client.call("learn", { messages });
+  async learn(messages: LearnMessage[], options: LearnOptions = {}): Promise<LearnResult> {
+    const args: Record<string, unknown> = { messages };
+    if (options.provider !== undefined) args["provider"] = options.provider;
+    if (options.apiKey !== undefined) args["api_key"] = options.apiKey;
+    if (options.model !== undefined) args["model"] = options.model;
+    if (options.eventTime !== undefined) args["event_time"] = options.eventTime;
+    const text = await this.client.call("learn", args);
     return JSON.parse(text) as LearnResult;
   }
 
@@ -117,6 +161,7 @@ export class KnowledgeBase {
       if (f.attribute !== undefined) o["attribute"] = f.attribute;
       if (f.valueText !== undefined) o["value_text"] = f.valueText;
       if (f.slotKey !== undefined) o["slot_key"] = f.slotKey;
+      if (f.op !== undefined) o["op"] = f.op;
       if (f.eventTime !== undefined) o["event_time"] = f.eventTime;
       return o;
     });
@@ -132,12 +177,47 @@ export class KnowledgeBase {
   }
 
   /**
+   * Alias for forget() using the CRUD-style delete verb.
+   */
+  async delete(factId: string): Promise<void> {
+    await this.forget(factId);
+  }
+
+  /**
    * List all stored facts as structured objects.
    */
-  async listFacts(): Promise<Fact[]> {
-    const text = await this.client.call("list_facts", {});
+  async listFacts(options: KnowledgeBaseListOptions = {}): Promise<Fact[]> {
+    const args: Record<string, unknown> = {};
+    if (options.includeInactive !== undefined) args["include_inactive"] = options.includeInactive;
+    if (options.now !== undefined) args["now"] = options.now;
+    const text = await this.client.call("list_facts", args);
     if (text === "No facts stored.") return [];
-    return JSON.parse(text) as Fact[];
+    return (JSON.parse(text) as unknown[]).map((item) => normalizeFact(item));
+  }
+
+  /**
+   * Alias for listFacts() using the familiar list verb.
+   */
+  async list(options: KnowledgeBaseListOptions = {}): Promise<Fact[]> {
+    return this.listFacts(options);
+  }
+
+  /**
+   * Inspect one stored fact by its ID.
+   */
+  async get(factId: string): Promise<Fact> {
+    const text = await this.client.call("get", { fact_id: factId });
+    return normalizeFact(JSON.parse(text) as unknown);
+  }
+
+  /**
+   * Return the supersession lineage of one fact, newest -> oldest.
+   */
+  async lineage(factId: string, options: LineageOptions = {}): Promise<LineageFact[]> {
+    const args: Record<string, unknown> = { fact_id: factId };
+    if (options.now !== undefined) args["now"] = options.now;
+    const text = await this.client.call("memory_lineage", args);
+    return (JSON.parse(text) as unknown[]).map((item) => normalizeLineageFact(item));
   }
 
   /**
@@ -201,4 +281,69 @@ export class KnowledgeBase {
   async close(): Promise<void> {
     await this.client.close();
   }
+}
+
+function normalizeFact(value: unknown): Fact {
+  const fact = (value ?? {}) as Record<string, unknown>;
+  const createdAt = asString(fact["created_at"]) ?? new Date().toISOString();
+  return {
+    id: asString(fact["id"]) ?? "",
+    content: asString(fact["content"]) ?? "",
+    type: asMemoryType(fact["type"]),
+    importance: asNumber(fact["importance"]) ?? 0.8,
+    retention_score: asNumber(fact["retention_score"]) ?? asNumber(fact["retention"]) ?? 1.0,
+    access_count: asNumber(fact["access_count"]) ?? 0,
+    tags: asStringArray(fact["tags"]),
+    created_at: createdAt,
+    last_accessed: asString(fact["last_accessed"]) ?? createdAt,
+    event_time: asNullableString(fact["event_time"]),
+    valid_from: asNullableString(fact["valid_from"]),
+    valid_until: asNullableString(fact["valid_until"]),
+    active: asBoolean(fact["active"]),
+  };
+}
+
+function normalizeLineageFact(value: unknown): LineageFact {
+  const fact = normalizeFact(value);
+  const raw = (value ?? {}) as Record<string, unknown>;
+  return {
+    ...fact,
+    slot_key: asNullableString(raw["slot_key"]),
+    entity: asNullableString(raw["entity"]),
+    attribute: asNullableString(raw["attribute"]),
+    value_text: asNullableString(raw["value_text"]),
+    version: asNumber(raw["version"]) ?? 0,
+    supersedes_id: asNullableString(raw["supersedes_id"]),
+    published_by: asNullableString(raw["published_by"]),
+  };
+}
+
+function asMemoryType(value: unknown): Fact["type"] {
+  if (value === "procedural" || value === "episodic") {
+    return value;
+  }
+  return "semantic";
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function asNullableString(value: unknown): string | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  return typeof value === "string" ? value : undefined;
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }

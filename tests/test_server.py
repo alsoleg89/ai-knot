@@ -38,12 +38,294 @@ def test_add_then_recall(tmp_path: pathlib.Path) -> None:
     assert body["content"] == "User deploys on Kubernetes"
     assert body["type"] == "semantic"
     assert "ops" in body["tags"]
+    assert "retention_score" in body
+    assert "access_count" in body
+    assert "last_accessed" in body
 
     rec = client.post("/v1/recall", json={"query": "where does the user deploy", "top_k": 5})
     assert rec.status_code == 200
     out = rec.json()
     assert "Kubernetes" in out["context"]
     assert any("Kubernetes" in f["content"] for f in out["facts"])
+
+    search = client.post("/v1/search", json={"query": "where does the user deploy", "top_k": 5})
+    assert search.status_code == 200
+    search_body = search.json()
+    assert search_body["context"] == out["context"]
+    assert [fact["id"] for fact in search_body["facts"]] == [fact["id"] for fact in out["facts"]]
+    assert [fact["content"] for fact in search_body["facts"]] == [
+        fact["content"] for fact in out["facts"]
+    ]
+
+
+def test_learn_endpoint_degrades_without_provider_and_preserves_event_time(
+    tmp_path: pathlib.Path,
+) -> None:
+    client = _client(tmp_path)
+
+    learned = client.post(
+        "/v1/learn",
+        json={
+            "messages": [
+                {"role": "assistant", "content": "Hello"},
+                {"role": "user", "content": "I deploy APIs with Docker Compose"},
+            ],
+            "event_time": "2023-05-08T00:00:00+00:00",
+        },
+    )
+    assert learned.status_code == 200
+    body = learned.json()
+    assert body["stored"] == 1
+    assert body["ids"]
+    assert "verbatim" in body["note"]
+
+    listed = client.get("/v1/facts")
+    assert listed.status_code == 200
+    facts = listed.json()["facts"]
+    assert len(facts) == 1
+    assert facts[0]["content"] == "I deploy APIs with Docker Compose"
+    assert facts[0]["event_time"] == "2023-05-08T00:00:00+00:00"
+
+
+def test_add_resolved_endpoint_inserts_structured_facts(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+
+    inserted = client.post(
+        "/v1/facts/resolved",
+        json={
+            "facts": [
+                {
+                    "content": "Alex earns 120k",
+                    "entity": "Alex",
+                    "attribute": "salary",
+                    "value_text": "120k",
+                    "slot_key": "alex::salary",
+                    "event_time": "2023-05-08T00:00:00+00:00",
+                }
+            ]
+        },
+    )
+    assert inserted.status_code == 201
+    rows = inserted.json()
+    assert rows == [
+        {
+            "id": rows[0]["id"],
+            "content": "Alex earns 120k",
+            "slot_key": "alex::salary",
+            "version": 0,
+        }
+    ]
+
+    listed = client.get("/v1/facts")
+    facts = listed.json()["facts"]
+    assert len(facts) == 1
+    assert facts[0]["content"] == "Alex earns 120k"
+    assert facts[0]["event_time"] == "2023-05-08T00:00:00+00:00"
+
+
+def test_add_resolved_endpoint_honours_update_and_delete_ops(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+
+    created = client.post(
+        "/v1/facts/resolved",
+        json={
+            "facts": [
+                {
+                    "content": "Alex earns 120k",
+                    "entity": "Alex",
+                    "attribute": "salary",
+                    "value_text": "120k",
+                    "slot_key": "alex::salary",
+                }
+            ]
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()[0]["version"] == 0
+
+    updated = client.post(
+        "/v1/facts/resolved",
+        json={
+            "facts": [
+                {
+                    "content": "Alex earns 120k base salary",
+                    "entity": "Alex",
+                    "attribute": "salary",
+                    "value_text": "120k",
+                    "slot_key": "alex::salary",
+                    "op": "update",
+                }
+            ]
+        },
+    )
+    assert updated.status_code == 201
+    rows = updated.json()
+    assert rows[0]["version"] == 1
+
+    listed = client.get("/v1/facts", params={"include_inactive": "true"})
+    facts = listed.json()["facts"]
+    assert len(facts) == 2
+    assert sum(1 for fact in facts if fact["active"]) == 1
+    assert any(
+        fact["content"] == "Alex earns 120k base salary" and fact["active"] for fact in facts
+    )
+
+    deleted = client.post(
+        "/v1/facts/resolved",
+        json={
+            "facts": [
+                {
+                    "content": "Alex no longer shares salary information",
+                    "entity": "Alex",
+                    "attribute": "salary",
+                    "slot_key": "alex::salary",
+                    "op": "delete",
+                }
+            ]
+        },
+    )
+    assert deleted.status_code == 201
+    assert deleted.json() == []
+
+    live = client.get("/v1/facts")
+    assert live.status_code == 200
+    assert live.json()["facts"] == []
+
+
+def test_add_resolved_endpoint_rejects_invalid_op(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    inserted = client.post(
+        "/v1/facts/resolved",
+        json={
+            "facts": [
+                {
+                    "content": "Alex earns 120k",
+                    "entity": "Alex",
+                    "attribute": "salary",
+                    "op": "replace",
+                }
+            ]
+        },
+    )
+    assert inserted.status_code == 422
+    assert "invalid memory op" in inserted.json()["detail"]
+
+
+def test_delete_fact_endpoint_removes_single_fact(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    added = client.post("/v1/facts", json={"content": "User deploys on Kubernetes"})
+    fact_id = added.json()["id"]
+
+    deleted = client.delete(f"/v1/facts/{fact_id}")
+    assert deleted.status_code == 204
+    assert deleted.text == ""
+
+    listed = client.get("/v1/facts")
+    assert listed.status_code == 200
+    assert listed.json()["facts"] == []
+
+
+def test_get_fact_endpoint_returns_one_fact(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    added = client.post("/v1/facts", json={"content": "User deploys on Kubernetes"})
+    fact_id = added.json()["id"]
+
+    fetched = client.get(f"/v1/facts/{fact_id}")
+    assert fetched.status_code == 200
+    body = fetched.json()
+    assert body["id"] == fact_id
+    assert body["content"] == "User deploys on Kubernetes"
+    assert body["active"] is True
+
+
+def test_get_fact_lineage_endpoint_returns_newest_to_oldest_chain(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    created = client.post(
+        "/v1/facts/resolved",
+        json={
+            "facts": [
+                {
+                    "content": "User works at Acme",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "value_text": "Acme",
+                }
+            ]
+        },
+    )
+    first_id = created.json()[0]["id"]
+    updated = client.post(
+        "/v1/facts/resolved",
+        json={
+            "facts": [
+                {
+                    "content": "User now works at Globex",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "value_text": "Globex",
+                    "op": "update",
+                }
+            ]
+        },
+    )
+    current_id = updated.json()[0]["id"]
+
+    fetched = client.get(f"/v1/facts/{current_id}/lineage")
+    assert fetched.status_code == 200
+    chain = fetched.json()
+    assert [row["id"] for row in chain] == [current_id, first_id]
+    assert chain[0]["supersedes_id"] == first_id
+    assert chain[0]["slot_key"] == "user::employer"
+    assert chain[0]["version"] == 1
+    assert chain[0]["active"] is True
+    assert chain[1]["active"] is False
+
+
+def test_get_fact_lineage_endpoint_returns_404_for_missing_id(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    fetched = client.get("/v1/facts/deadbeef/lineage")
+    assert fetched.status_code == 404
+    assert "deadbeef" in fetched.json()["detail"]
+
+
+def test_get_fact_endpoint_returns_404_for_missing_id(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    fetched = client.get("/v1/facts/deadbeef")
+    assert fetched.status_code == 404
+    assert "deadbeef" in fetched.json()["detail"]
+
+
+def test_list_facts_filters_by_activity_and_reports_totals(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    client.post("/v1/facts", json={"content": "Current deployment target is Kubernetes"})
+    client.post(
+        "/v1/facts",
+        json={
+            "content": "Migration is scheduled for 2099",
+            "event_time": "2099-01-01T00:00:00+00:00",
+        },
+    )
+
+    live = client.get("/v1/facts")
+    assert live.status_code == 200
+    body = live.json()
+    assert body["returned"] == 1
+    assert body["total_matching"] == 1
+    assert body["facts"][0]["content"] == "Current deployment target is Kubernetes"
+    assert body["facts"][0]["active"] is True
+    assert "retention_score" in body["facts"][0]
+    assert "access_count" in body["facts"][0]
+    assert "last_accessed" in body["facts"][0]
+
+    all_facts = client.get("/v1/facts", params={"include_inactive": "true"})
+    assert all_facts.status_code == 200
+    out = all_facts.json()
+    assert out["returned"] == 2
+    assert out["total_matching"] == 2
+    assert any(
+        f["content"] == "Migration is scheduled for 2099" and f["active"] is False
+        for f in out["facts"]
+    )
 
 
 def test_recall_threads_now_anchor(tmp_path: pathlib.Path) -> None:
@@ -84,13 +366,29 @@ def test_stats(tmp_path: pathlib.Path) -> None:
     assert isinstance(r.json(), dict)
 
 
+def test_browser_inspector_renders_fact_and_recall_preview(tmp_path: pathlib.Path) -> None:
+    client = _client(tmp_path)
+    client.post("/v1/facts", json={"content": "User deploys on Kubernetes", "tags": ["ops"]})
+
+    r = client.get("/inspect", params={"q": "where does the user deploy", "top_k": 5})
+    assert r.status_code == 200
+    assert "ai-knot inspector" in r.text
+    assert "Recall Preview" in r.text
+    assert "User deploys on Kubernetes" in r.text
+
+
 def test_bearer_token_guards_v1_but_not_health(tmp_path: pathlib.Path) -> None:
     client = _client(tmp_path, token="s3cret")
     # /health stays open.
     assert client.get("/health").status_code == 200
     # /v1/* without the token is rejected.
     assert client.post("/v1/recall", json={"query": "x"}).status_code == 401
+    assert client.post("/v1/search", json={"query": "x"}).status_code == 401
+    assert client.get("/v1/facts").status_code == 401
+    assert client.get("/v1/facts/abcd1234").status_code == 401
+    assert client.delete("/v1/facts/abcd1234").status_code == 401
     assert client.get("/v1/stats").status_code == 401
+    assert client.get("/inspect").status_code == 401
     # ...and accepted with the right bearer token.
     ok = client.get("/v1/stats", headers={"Authorization": "Bearer s3cret"})
     assert ok.status_code == 200

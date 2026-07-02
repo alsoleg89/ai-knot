@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ai-knot Developer Guide | Add deterministic memory in under 30 minutes</title>
+  <meta name="application-name" content="ai-knot">
+  <meta name="theme-color" content="#9f4020">
+  <link rel="canonical" href="https://alsoleg89.github.io/ai-knot/developer-article.html">
+  <meta name="description" content="Practical developer guide for ai-knot: add deterministic, self-hosted long-term memory to an agent without replaying the whole transcript.">
+  <meta name="keywords" content="agent-memory, ai-memory, long-term-memory, mcp, model-context-protocol, langgraph, llamaindex, crewai, openclaw, openai-agents, pydanticai, vercel-ai-sdk">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="ai-knot">
+  <meta property="og:title" content="ai-knot Developer Guide | Add deterministic memory in under 30 minutes">
+  <meta property="og:description" content="A practical walkthrough for adding deterministic, self-hosted memory to agents across Python, MCP, TypeScript, CrewAI, LlamaIndex, LangGraph, PydanticAI, and more.">
+  <meta property="og:url" content="https://alsoleg89.github.io/ai-knot/developer-article.html">
+  <meta property="og:image" content="https://alsoleg89.github.io/ai-knot/assets/hero-demo-poster.png">
+  <meta property="og:image:alt" content="ai-knot poster showing deterministic long-term memory for AI agents">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ai-knot Developer Guide | Add deterministic memory in under 30 minutes">
+  <meta name="twitter:description" content="Stop replaying the whole transcript. Store facts, recall the right few, and keep the read path deterministic.">
+  <meta name="twitter:image" content="https://alsoleg89.github.io/ai-knot/assets/hero-demo-poster.png">
+  <meta name="twitter:image:alt" content="ai-knot poster showing deterministic long-term memory for AI agents">
+  <style>
+:root {
+  color-scheme: light;
+  --bg: #f6f1e8;
+  --page: radial-gradient(circle at top left, #fff9f0 0%, #f7f1e7 40%, #efe5d7 100%);
+  --panel: rgba(255, 251, 245, 0.94);
+  --panel-strong: #fffdfa;
+  --ink: #1d1b18;
+  --muted: #62584e;
+  --line: rgba(95, 78, 59, 0.18);
+  --accent: #9f4020;
+  --accent-2: #155b52;
+  --accent-soft: #efe2d8;
+  --accent-2-soft: #dfeeea;
+  --shadow: 0 20px 60px rgba(29, 27, 24, 0.08);
+  --hero: linear-gradient(135deg, rgba(255, 248, 239, 0.96), rgba(245, 233, 218, 0.92));
+  --mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --sans: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.68;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: rgba(159, 64, 32, 0.42);
+  text-underline-offset: 0.18em;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.12em 0.32em;
+  border-radius: 0.35em;
+}
+
+pre {
+  margin: 20px 0;
+  padding: 18px 20px;
+  overflow: auto;
+  border-radius: 20px;
+  border: 1px solid rgba(95, 78, 59, 0.14);
+  background: #fffdf9;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  display: block;
+  line-height: 1.52;
+}
+
+.shell {
+  width: min(1080px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 72px;
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 20px;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+}
+
+.nav__brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.nav__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+}
+
+.hero,
+.prose,
+.footer {
+  padding: 34px;
+  border-radius: 30px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.hero {
+  background: var(--hero);
+  margin-bottom: 18px;
+}
+
+.prose {
+  background: rgba(255, 253, 250, 0.96);
+}
+
+.footer {
+  margin-top: 18px;
+  background: rgba(255, 253, 250, 0.9);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(95, 78, 59, 0.14);
+  font-family: var(--sans);
+  font-size: 0.84rem;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: clamp(2.5rem, 5.4vw, 4.8rem);
+  max-width: 12ch;
+  margin-bottom: 16px;
+}
+
+.prose h2 {
+  font-size: clamp(1.7rem, 2.7vw, 2.7rem);
+  margin: 42px 0 14px;
+  scroll-margin-top: 16px;
+}
+
+.prose h2:first-child {
+  margin-top: 0;
+}
+
+.prose h3 {
+  font-size: 1.18rem;
+  margin: 28px 0 10px;
+}
+
+p,
+li {
+  color: var(--muted);
+  font-size: 1.06rem;
+}
+
+.lede {
+  max-width: 66ch;
+  font-size: 1.12rem;
+  color: var(--muted);
+}
+
+.hero__cta,
+.toc,
+.footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(29, 27, 24, 0.12);
+}
+
+.button--primary {
+  background: var(--accent);
+  color: #fff9f4;
+}
+
+.button--secondary {
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(95, 78, 59, 0.14);
+}
+
+.metrics {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 18px 0 22px;
+}
+
+.metric {
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(95, 78, 59, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.metric strong {
+  display: block;
+  font-family: var(--sans);
+  font-size: 1.48rem;
+  color: var(--accent);
+}
+
+.metric span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 0.95rem;
+}
+
+.prose ul,
+.prose ol {
+  margin: 18px 0 0;
+  padding-left: 22px;
+}
+
+.prose li + li {
+  margin-top: 10px;
+}
+
+.prose p + p {
+  margin-top: 16px;
+}
+
+.prose blockquote {
+  margin: 24px 0;
+  padding: 18px 20px;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 18px;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 30px 0;
+}
+
+.footer p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .shell {
+    width: min(100%, calc(100% - 20px));
+  }
+
+  .hero,
+  .prose,
+  .footer {
+    padding: 22px;
+  }
+
+  .nav {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="nav" aria-label="Primary">
+      <a class="nav__brand" href="./index.html">ai-knot</a>
+      <div class="nav__links">
+        <a href="./index.html">Landing</a>
+        <a href="./whitepaper.html">Whitepaper</a>
+        <a href="https://github.com/alsoleg89/ai-knot">GitHub</a>
+        <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/README.md">Examples</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="eyebrow">Developer article · July 2, 2026</div>
+      <h1>Stop replaying the whole transcript.</h1>
+      <p class="lede">Most agent memory systems still start from the chat log. ai-knot takes a simpler view: <strong>store facts, not transcripts</strong>, recall the right few, and keep the read path deterministic so memory stays cheap, self-hosted, and testable.</p>
+      <div class="hero__cta">
+        <a class="button button--primary" href="https://github.com/alsoleg89/ai-knot">Open the repo</a>
+        <a class="button button--secondary" href="https://github.com/alsoleg89/ai-knot/blob/main/examples/README.md">Browse examples</a>
+        <a class="button button--secondary" href="../developer-article.md">Read the markdown source</a>
+      </div>
+      <div class="metrics" aria-label="Page highlights">
+        <div class="metric"><strong>0 LLM</strong><span>Calls on the hot retrieval path by default</span></div>
+        <div class="metric"><strong>3 stores</strong><span>YAML, SQLite, PostgreSQL</span></div>
+        <div class="metric"><strong>8+ surfaces</strong><span>MCP, Python, TS, frameworks, HTTP</span></div>
+        <div class="metric"><strong>30 min</strong><span>to get deterministic memory into an agent</span></div>
+      </div>
+      <div class="toc">
+        <a class="button button--secondary" href="#what-you-get">What you get</a>
+        <a class="button button--secondary" href="#start-with-the-smallest-possible-loop">Start with the smallest possible loop</a>
+        <a class="button button--secondary" href="#why-this-is-better-than-replaying-history">Why this is better than replaying history</a>
+        <a class="button button--secondary" href="#use-llms-where-they-help-not-everywhere">Use LLMs where they help, not everywhere</a>
+        <a class="button button--secondary" href="#pick-the-surface-that-matches-your-stack">Pick the surface that matches your stack</a>
+      </div>
+    </header>
+
+    <article class="prose">
+<p>Most agent memory systems still start from the transcript. The conversation grows,
+the prompt grows with it, and sooner or later you are paying to re-send months of
+history so the model can recover three facts it actually needs.</p>
+<p>ai-knot takes a simpler view: memory should look more like a knowledge base than a
+chat log. Store facts. Recall the right few. Keep the read path deterministic so it
+is cheap and testable.</p>
+<h2 id="what-you-get">What you get</h2>
+<ul>
+<li>no LLM on the retrieval path</li>
+<li>self-hosted storage: SQLite, PostgreSQL, or YAML</li>
+<li>MCP server for Claude Desktop / Claude Code / OpenClaw plus remote Streamable HTTP MCP</li>
+<li>TypeScript client for Node apps over MCP or the HTTP sidecar</li>
+<li>HTTP sidecar + browser inspector</li>
+<li>Vercel AI SDK adapter</li>
+<li>CrewAI adapter</li>
+<li>LlamaIndex adapter</li>
+<li>AutoGen adapter</li>
+<li>OpenAI Agents SDK adapter</li>
+<li>PydanticAI adapter</li>
+<li>LangChain / LangGraph adapters</li>
+<li>multi-agent shared memory with trust and provenance controls</li>
+</ul>
+<h2 id="start-with-the-smallest-possible-loop">1. Start with the smallest possible loop</h2>
+<pre><code class="language-python">from ai_knot import KnowledgeBase
+
+kb = KnowledgeBase(agent_id=&quot;assistant&quot;)
+kb.add(&quot;User prefers Python over Java&quot;)
+kb.add(&quot;User deploys services with Docker and Kubernetes&quot;)
+
+context = kb.search(&quot;what stack should I use?&quot;)  # alias: kb.recall(...)
+print(context)
+</code></pre>
+<p>That is the hot path: <code>add</code> or <code>learn</code>, then <code>search</code> / <code>recall</code>. For persistent
+memory, the full first-run loop should stay just as obvious: <code>add → search → list → delete</code>.</p>
+<p>If you want to prove the same loop without opening Python first:</p>
+<pre><code class="language-bash">ai-knot add    assistant &quot;User prefers Python over Java&quot;
+ai-knot learn  assistant &quot;User deploys in Docker and uses PostgreSQL&quot;
+ai-knot search assistant &quot;what language does the user prefer?&quot;
+ai-knot list   assistant
+ai-knot delete assistant &lt;fact_id&gt;
+</code></pre>
+<p>If you want that same loop mapped across Python, TypeScript, CLI, MCP, and HTTP,
+use <a href="../memory-commands.md">memory-commands.md</a>.</p>
+<h2 id="why-this-is-better-than-replaying-history">2. Why this is better than replaying history</h2>
+<p>The goal of memory is not to preserve every sentence. The goal is to preserve the
+few facts that matter later:</p>
+<ul>
+<li>preferences,</li>
+<li>durable user facts,</li>
+<li>prior decisions,</li>
+<li>operational context.</li>
+</ul>
+<p>Everything else is often noise.</p>
+<h2 id="use-llms-where-they-help-not-everywhere">3. Use LLMs where they help, not everywhere</h2>
+<p>If you want ai-knot to extract facts from a conversation, give it a provider during
+<code>learn()</code>. If you only need recall, no LLM is required.</p>
+<pre><code class="language-python">from ai_knot import ConversationTurn, KnowledgeBase
+
+kb = KnowledgeBase(agent_id=&quot;assistant&quot;, provider=&quot;openai&quot;, api_key=&quot;sk-...&quot;)
+turns = [
+    ConversationTurn(role=&quot;user&quot;, content=&quot;I deploy everything in Docker&quot;),
+    ConversationTurn(role=&quot;assistant&quot;, content=&quot;Noted&quot;),
+]
+kb.learn(turns)
+print(kb.search(&quot;how should I deploy this service?&quot;))
+</code></pre>
+<p>That split matters. Extraction can be probabilistic. Retrieval does not have to be.</p>
+<h2 id="pick-the-surface-that-matches-your-stack">4. Pick the surface that matches your stack</h2>
+<h3 id="python-agent">Python agent</h3>
+<p>Start with the direct <code>KnowledgeBase</code> API.</p>
+<h3 id="claude-desktop-claude-code-openclaw">Claude Desktop / Claude Code / OpenClaw</h3>
+<p>Use <code>ai-knot-mcp</code> for stdio MCP clients, or <code>ai-knot serve-mcp assistant --port 8765</code>
+when the host supports remote Streamable HTTP MCP. The same memory loop inside
+the client stays <code>add/search/list/delete</code>.</p>
+<p>On supported platforms, the shortest stdio setup path is now one command:</p>
+<pre><code class="language-bash">ai-knot setup claude --agent-id assistant --storage sqlite --write-default-config
+ai-knot setup openclaw --agent-id assistant --storage sqlite --write-default-config
+ai-knot doctor --json
+</code></pre>
+<h3 id="node-typescript">Node / TypeScript</h3>
+<p>Install <code>npm install ai-knot</code> and use the TypeScript client over the same MCP tools.
+If the local Python bridge is unclear, start with <code>npx ai-knot-doctor --json</code>.
+If a sidecar is already running, use <code>HttpKnowledgeBase({ baseUrl, token })</code>
+instead of the local MCP subprocess path.
+That sidecar path now also keeps <code>learn([...])</code> and <code>addResolved([...])</code>, so
+the no-spawn Node route still has extract-on-write and structured supersession.</p>
+<h3 id="vercel-ai-sdk">Vercel AI SDK</h3>
+<p>Use <code>AiKnotAISDKMemory</code> when you want deterministic recalled facts to fill the
+same <code>system</code> / <code>messages</code> surface your app already uses.</p>
+<h3 id="crewai">CrewAI</h3>
+<p>Use <code>AiKnotCrewAIMemory</code> when you want a native <code>Crew(memory=...)</code> or
+<code>Agent(memory=memory.scope(...))</code> path with ai-knot behind it.</p>
+<h3 id="llamaindex">LlamaIndex</h3>
+<p>Use <code>AiKnotLlamaIndexMemory</code> when you want the familiar <code>memory=...</code> seam for
+<code>SimpleChatEngine</code>, <code>FunctionAgent</code>, or <code>ReActAgent</code>, but with deterministic
+long-term memory under that seam.</p>
+<h3 id="openai-agents-sdk">OpenAI Agents SDK</h3>
+<p>Use <code>AiKnotAgentsMemory</code> to inject recalled long-term facts into <code>RunConfig</code>
+without replacing the SDK's own session history.</p>
+<h3 id="langchain-langgraph">LangChain / LangGraph</h3>
+<p>Use <code>create_basic_memory_tools(...)</code> when you want the clearest
+<code>add/search/list/delete</code> tool flow, <code>create_manage_memory_tool(...)</code> /
+<code>create_search_memory_tool(...)</code> when you want the compact LangMem-shaped
+surface, <code>AiKnotRetriever</code> for retrieval flows, or <code>AiKnotChatMemory</code> for
+conversational memory. When an agent already has a <code>fact_id</code> from a list/debug
+step, add <code>create_get_memory_tool(...)</code> or use
+<code>create_basic_memory_tools(..., include_get=True)</code> for targeted inspection.
+If your runtime accepts plain Python callables directly, step down one layer and
+start with <code>create_basic_memory_functions(...)</code> instead of wrapping everything
+as LangChain-style tools.</p>
+<h3 id="pydanticai">PydanticAI</h3>
+<p>Use <code>AiKnotPydanticAIMemory</code> when you want per-run <code>instructions=...</code> memory
+injection without replacing the host <code>Agent</code>.</p>
+<h3 id="autogen">AutoGen</h3>
+<p>Use <code>AiKnotAutoGenMemory</code> when you want to keep <code>AssistantAgent(memory=[...])</code>
+and add deterministic long-term memory underneath.</p>
+<h3 id="http-first-environments">HTTP-first environments</h3>
+<p>Run the FastAPI sidecar and call <code>/v1/learn</code>, <code>/v1/search</code>, <code>/v1/facts</code>, or
+<code>/v1/facts/resolved</code>, or open <code>/inspect</code> for a lightweight browser view of the
+same store. From Node / TypeScript, the same sidecar now also maps directly to
+<code>HttpKnowledgeBase</code>, including <code>learn([...])</code> and structured <code>addResolved([...])</code>
+writes.
+Fastest repo-native proof of that JSON surface:
+<code>python examples/http_sidecar_surface_demo.py</code>. It exercises <code>/health</code>,
+<code>/v1/facts</code>, <code>/v1/search</code>, <code>GET /v1/facts/{fact_id}</code>, and delete without
+binding a real port.</p>
+<h2 id="the-multi-agent-part-is-where-it-gets-interesting">5. The multi-agent part is where it gets interesting</h2>
+<p>Single-agent memory is already useful, but the harder problem is shared state across
+agents. ai-knot's <code>SharedMemoryPool</code> adds:</p>
+<ul>
+<li>fan-in recall across agents,</li>
+<li>evidence-aware publishing,</li>
+<li>visibility scopes,</li>
+<li>trust penalties for bad publishers.</li>
+</ul>
+<p>That makes it more than &quot;one database table several agents can write to.&quot;</p>
+<h2 id="why-the-benchmark-stance-matters">6. Why the benchmark stance matters</h2>
+<p>Agent-memory benchmarks are noisy because the reader model, judge model, prompts,
+and category filters can all move the number. ai-knot therefore publishes:</p>
+<ul>
+<li>named-reader QA results for standard benchmarks, and</li>
+<li>a deterministic retrieval suite that you can rerun locally.</li>
+</ul>
+<p>The second number is the faster credibility test. If a memory project cannot show
+you a stable retrieval gain without a model in the loop, it is harder to know what
+the product itself is contributing.</p>
+<h2 id="when-to-use-ai-knot">7. When to use ai-knot</h2>
+<p>Use it if you want:</p>
+<ul>
+<li>self-hosted memory,</li>
+<li>deterministic recall,</li>
+<li>a smaller context pack than a full transcript,</li>
+<li>a shared memory layer for several agents,</li>
+<li>storage you can inspect and control.</li>
+</ul>
+<p>Do not use it if your main requirement is a managed cloud memory platform or a
+full agent runtime.</p>
+<h2 id="what-to-try-next">8. What to try next</h2>
+<ol>
+<li>Run <code>ai-knot demo</code>
+If you want the raw Python API immediately after that, run <code>python examples/quickstart.py</code>.</li>
+<li>Try the zero-network surface that matches your stack:
+<code>examples/crewai_surface_demo.py</code>, <code>examples/pydanticai_surface_demo.py</code>,
+<code>examples/langgraph_surface_demo.py</code>, <code>examples/llamaindex_surface_demo.py</code>,
+<code>examples/openai_agents_surface_demo.py</code>, or <code>examples/autogen_surface_demo.py</code>
+If you're evaluating the npm path first, use <code>cd npm &amp;&amp; npm run doctor</code>.</li>
+<li>Try the real integration example for that surface
+If a sidecar is already running, use <code>cd npm &amp;&amp; npm run example:http-sidecar</code>.</li>
+<li>Wire the stdio or remote MCP path into Claude or OpenClaw</li>
+<li>Re-run the deterministic benchmark command in <code>docs/benchmarks.md</code></li>
+</ol>
+<p>The practical takeaway is simple: the next generation of agent memory should not be
+&quot;more transcript.&quot; It should be <strong>better selected knowledge</strong>.</p>
+    </article>
+
+    <footer class="footer">
+      <p>
+        These Pages-ready long-form articles are generated from the repo-owned markdown sources so share links and public docs stay aligned.
+      </p>
+      <div class="footer__links">
+        <a class="button button--secondary" href="https://github.com/alsoleg89/ai-knot/blob/main/examples/quickstart.py">Open quickstart</a>
+        <a class="button button--secondary" href="https://github.com/alsoleg89/ai-knot/blob/main/examples/README.md">Browse examples</a>
+        <a class="button button--secondary" href="../benchmarks.md">Inspect benchmarks</a>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

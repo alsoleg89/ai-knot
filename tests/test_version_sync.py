@@ -1,13 +1,16 @@
-"""Release guard: the version string must be identical in all three sources.
+"""Release guard: the version string must be identical in all shipped sources.
 
-The package version lives in three files that ship independently:
+The package version lives in four files that ship independently or guide release
+machinery:
   - ``pyproject.toml``            (the Python distribution)
   - ``src/ai_knot/__init__.py``  (``__version__``, the runtime/API surface)
   - ``npm/package.json``         (the TypeScript client)
+  - ``npm/package-lock.json``    (the npm release/install lockfile)
 
-A release bumps all three; drift between them ships a client that disagrees with
-the server it talks to, or a wheel whose ``__version__`` lies. This test fails
-the moment they diverge, so the mismatch is caught in CI, not after publish.
+A release bumps them together; drift between them ships a client that disagrees
+with the server it talks to, a wheel whose ``__version__`` lies, or a lockfile
+that still advertises an older package version. This test fails the moment they
+diverge, so the mismatch is caught in CI, not after publish.
 """
 
 from __future__ import annotations
@@ -37,13 +40,19 @@ def _npm_version() -> str:
     return str(data["version"])
 
 
-def test_version_is_synced_across_pyproject_init_and_npm() -> None:
+def _npm_lock_version() -> str:
+    data = json.loads((_REPO_ROOT / "npm" / "package-lock.json").read_text(encoding="utf-8"))
+    return str(data["version"])
+
+
+def test_version_is_synced_across_pyproject_init_npm_and_lockfile() -> None:
     py = _pyproject_version()
     init = _init_version()
     npm = _npm_version()
-    assert py == init == npm, (
-        f"version drift: pyproject={py!r} __init__={init!r} npm={npm!r}; "
-        "bump all three together (see reference_version_files)."
+    npm_lock = _npm_lock_version()
+    assert py == init == npm == npm_lock, (
+        f"version drift: pyproject={py!r} __init__={init!r} npm={npm!r} "
+        f"npm-lock={npm_lock!r}; bump them together."
     )
 
 

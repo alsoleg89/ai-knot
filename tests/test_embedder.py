@@ -40,6 +40,18 @@ class TestEmbedTextsErrorPaths:
     def test_empty_input_returns_empty_immediately(self) -> None:
         assert asyncio.run(embed_texts([])) == []
 
+    def test_empty_base_url_disables_dense_channel_without_network(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # An empty base_url must short-circuit to [] *before* any HTTP client is
+        # constructed — this is the documented air-gapped / deterministic-eval
+        # switch, so it must never touch the network.
+        def _boom(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("embed_texts must not build an HTTP client when base_url is empty")
+
+        monkeypatch.setattr("ai_knot.embedder.httpx.AsyncClient", _boom)
+        assert asyncio.run(embed_texts(["some text"], base_url="")) == []
+
     def test_connect_error_returns_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Point at a definitely-unreachable address; httpx raises ConnectError
         # which the embedder catches and converts to [].

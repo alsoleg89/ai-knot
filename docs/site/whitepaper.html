@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ai-knot Whitepaper | Agent memory as a knowledge layer</title>
+  <meta name="application-name" content="ai-knot">
+  <meta name="theme-color" content="#9f4020">
+  <link rel="canonical" href="https://alsoleg89.github.io/ai-knot/whitepaper.html">
+  <meta name="description" content="Research-style paper for ai-knot: why agent memory should store facts instead of transcripts, and why deterministic, self-hosted recall is a real product wedge.">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="ai-knot">
+  <meta property="og:title" content="ai-knot Whitepaper | Agent memory as a knowledge layer">
+  <meta property="og:description" content="Why agent memory should be treated as a deterministic, self-hosted knowledge layer instead of a growing prompt log.">
+  <meta property="og:url" content="https://alsoleg89.github.io/ai-knot/whitepaper.html">
+  <meta property="og:image" content="https://alsoleg89.github.io/ai-knot/assets/hero-demo-poster.png">
+  <meta property="og:image:alt" content="ai-knot poster showing deterministic long-term memory for AI agents">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ai-knot Whitepaper | Agent memory as a knowledge layer">
+  <meta name="twitter:description" content="Why deterministic, self-hosted recall is a defensible agent-memory wedge.">
+  <meta name="twitter:image" content="https://alsoleg89.github.io/ai-knot/assets/hero-demo-poster.png">
+  <meta name="twitter:image:alt" content="ai-knot poster showing deterministic long-term memory for AI agents">
+  <style>
+:root {
+  color-scheme: light;
+  --bg: #f6f1e8;
+  --page: radial-gradient(circle at top left, #fff9f0 0%, #f7f1e7 40%, #efe5d7 100%);
+  --panel: rgba(255, 251, 245, 0.94);
+  --panel-strong: #fffdfa;
+  --ink: #1d1b18;
+  --muted: #62584e;
+  --line: rgba(95, 78, 59, 0.18);
+  --accent: #9f4020;
+  --accent-2: #155b52;
+  --accent-soft: #efe2d8;
+  --accent-2-soft: #dfeeea;
+  --shadow: 0 20px 60px rgba(29, 27, 24, 0.08);
+  --hero: linear-gradient(135deg, rgba(255, 248, 239, 0.96), rgba(245, 233, 218, 0.92));
+  --mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --sans: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.68;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: rgba(159, 64, 32, 0.42);
+  text-underline-offset: 0.18em;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.12em 0.32em;
+  border-radius: 0.35em;
+}
+
+pre {
+  margin: 20px 0;
+  padding: 18px 20px;
+  overflow: auto;
+  border-radius: 20px;
+  border: 1px solid rgba(95, 78, 59, 0.14);
+  background: #fffdf9;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  display: block;
+  line-height: 1.52;
+}
+
+.shell {
+  width: min(1080px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 72px;
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 20px;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+}
+
+.nav__brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.nav__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+}
+
+.hero,
+.prose,
+.footer {
+  padding: 34px;
+  border-radius: 30px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.hero {
+  background: var(--hero);
+  margin-bottom: 18px;
+}
+
+.prose {
+  background: rgba(255, 253, 250, 0.96);
+}
+
+.footer {
+  margin-top: 18px;
+  background: rgba(255, 253, 250, 0.9);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(95, 78, 59, 0.14);
+  font-family: var(--sans);
+  font-size: 0.84rem;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: clamp(2.5rem, 5.4vw, 4.8rem);
+  max-width: 12ch;
+  margin-bottom: 16px;
+}
+
+.prose h2 {
+  font-size: clamp(1.7rem, 2.7vw, 2.7rem);
+  margin: 42px 0 14px;
+  scroll-margin-top: 16px;
+}
+
+.prose h2:first-child {
+  margin-top: 0;
+}
+
+.prose h3 {
+  font-size: 1.18rem;
+  margin: 28px 0 10px;
+}
+
+p,
+li {
+  color: var(--muted);
+  font-size: 1.06rem;
+}
+
+.lede {
+  max-width: 66ch;
+  font-size: 1.12rem;
+  color: var(--muted);
+}
+
+.hero__cta,
+.toc,
+.footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(29, 27, 24, 0.12);
+}
+
+.button--primary {
+  background: var(--accent);
+  color: #fff9f4;
+}
+
+.button--secondary {
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(95, 78, 59, 0.14);
+}
+
+.metrics {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 18px 0 22px;
+}
+
+.metric {
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(95, 78, 59, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.metric strong {
+  display: block;
+  font-family: var(--sans);
+  font-size: 1.48rem;
+  color: var(--accent);
+}
+
+.metric span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 0.95rem;
+}
+
+.prose ul,
+.prose ol {
+  margin: 18px 0 0;
+  padding-left: 22px;
+}
+
+.prose li + li {
+  margin-top: 10px;
+}
+
+.prose p + p {
+  margin-top: 16px;
+}
+
+.prose blockquote {
+  margin: 24px 0;
+  padding: 18px 20px;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 18px;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 30px 0;
+}
+
+.footer p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .shell {
+    width: min(100%, calc(100% - 20px));
+  }
+
+  .hero,
+  .prose,
+  .footer {
+    padding: 22px;
+  }
+
+  .nav {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="nav" aria-label="Primary">
+      <a class="nav__brand" href="./index.html">ai-knot</a>
+      <div class="nav__links">
+        <a href="./index.html">Landing</a>
+        <a href="https://github.com/alsoleg89/ai-knot">GitHub</a>
+        <a href="../benchmarks.md">Benchmarks</a>
+        <a href="../comparison.md">Comparison</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="eyebrow">Whitepaper · July 1, 2026</div>
+      <h1>Agent memory should be a knowledge layer, not a log.</h1>
+      <p class="lede">Most AI-agent stacks still store every message, then replay a growing slice of that transcript into future prompts. ai-knot takes the opposite position: <strong>store facts instead of transcripts</strong>, retrieve only what matters, and keep the read path deterministic, self-hosted, and testable.</p>
+      <div class="hero__cta">
+        <a class="button button--primary" href="https://github.com/alsoleg89/ai-knot">Open the repo</a>
+        <a class="button button--secondary" href="../whitepaper.md">Read the markdown source</a>
+      </div>
+      <div class="metrics" aria-label="Page highlights">
+        <div class="metric"><strong>78.0%</strong><span>LoCoMo QA accuracy</span></div>
+        <div class="metric"><strong>59.6%</strong><span>LongMemEval QA accuracy</span></div>
+        <div class="metric"><strong>0.83</strong><span>Deterministic MRR</span></div>
+        <div class="metric"><strong>0.26</strong><span>LoCoMo evidence_recall@5</span></div>
+      </div>
+      <div class="toc">
+        <a class="button button--secondary" href="#abstract">Abstract</a>
+        <a class="button button--secondary" href="#the-problem-transcript-replay-does-not-scale">The problem: transcript replay does not scale</a>
+        <a class="button button--secondary" href="#the-ai-knot-thesis">The ai-knot thesis</a>
+        <a class="button button--secondary" href="#system-design">System design</a>
+        <a class="button button--secondary" href="#why-determinism-is-strategically-important">Why determinism is strategically important</a>
+      </div>
+    </header>
+
+    <article class="prose">
+<h2 id="abstract">Abstract</h2>
+<p>Most AI-agent stacks still treat memory as an append-only transcript: save every
+message, then replay a large slice of that history back into future prompts. This
+works early and fails late. Cost rises, context quality degrades, and memory
+behavior becomes hard to audit or reproduce. ai-knot takes a different approach:
+it stores <strong>facts instead of transcripts</strong>, retrieves only the facts relevant to
+the next turn, and keeps the retrieval path deterministic. This paper argues that
+the right wedge in agent memory is not &quot;more context&quot; but <strong>more reliable context</strong>:
+smaller, self-hosted, testable, and benchmarked in ways that a skeptic can re-run.</p>
+<h2 id="the-problem-transcript-replay-does-not-scale">1. The problem: transcript replay does not scale</h2>
+<p>The default memory strategy for many agents is operationally simple:</p>
+<ol>
+<li>save messages,</li>
+<li>summarize occasionally,</li>
+<li>stuff a lot of history back into the prompt.</li>
+</ol>
+<p>That approach creates three predictable failures:</p>
+<h3 id="cost">Cost</h3>
+<p>The same background knowledge is paid for repeatedly because every future request
+retransmits it.</p>
+<h3 id="context-rot">Context rot</h3>
+<p>As more history accumulates, irrelevant text competes with relevant facts. The
+agent receives more context but often less signal.</p>
+<h3 id="non-determinism-without-auditability">Non-determinism without auditability</h3>
+<p>When memory quality depends on a chain of summaries, embeddings, rerankers, and
+LLM choices, it becomes difficult to explain why one fact appeared and another did
+not.</p>
+<h2 id="the-ai-knot-thesis">2. The ai-knot thesis</h2>
+<p>A conversation is evidence. Memory is the structured knowledge that survives it.</p>
+<p>ai-knot therefore treats memory as:</p>
+<ul>
+<li><strong>fact extraction</strong> or direct fact insertion,</li>
+<li><strong>structured storage</strong> in a self-hosted backend,</li>
+<li><strong>deterministic retrieval</strong> for the read path,</li>
+<li><strong>forgetting and supersession</strong> so stale knowledge does not pollute future context.</li>
+</ul>
+<p>The result is a memory layer that can answer &quot;what should the agent know right
+now?&quot; without replaying the entire interaction archive.</p>
+<h2 id="system-design">3. System design</h2>
+<h3 id="facts-not-messages">3.1 Facts, not messages</h3>
+<p>The core unit is a fact. Facts can be semantic, procedural, or episodic. They can
+carry importance, tags, event times, provenance, and validity windows.</p>
+<h3 id="deterministic-recall">3.2 Deterministic recall</h3>
+<p>Recall uses deterministic retrieval and rank fusion. The key product property is
+that the same stored state and the same query produce the same recall result.</p>
+<h3 id="bi-temporal-memory">3.3 Bi-temporal memory</h3>
+<p>Facts distinguish between when knowledge was learned and when the underlying event
+happened. That makes point-in-time queries possible: <code>recall(now=...)</code> can answer
+&quot;what was true then?&quot; instead of only &quot;what is true now?&quot;</p>
+<h3 id="multi-agent-governance">3.4 Multi-agent governance</h3>
+<p>When memory is shared, ai-knot adds:</p>
+<ul>
+<li>trust weighting,</li>
+<li>provenance-aware publishing,</li>
+<li>evidence-before-belief gating,</li>
+<li>visibility scopes,</li>
+<li>fan-in recall across agents.</li>
+</ul>
+<p>This is important because multi-agent memory fails differently from single-agent
+memory: the problem becomes not only retrieval but governance.</p>
+<h2 id="why-determinism-is-strategically-important">4. Why determinism is strategically important</h2>
+<p>Determinism is not simply an implementation preference. It produces four product
+advantages:</p>
+<h3 id="reproducibility">Reproducibility</h3>
+<p>Developers can write regression tests against memory behavior.</p>
+<h3 id="cost-control">Cost control</h3>
+<p>The read path does not require an LLM call.</p>
+<h3 id="auditability">Auditability</h3>
+<p>Supersession and lineage can be inspected directly.</p>
+<h3 id="deployment-flexibility">Deployment flexibility</h3>
+<p>Teams can run memory in self-hosted, privacy-sensitive, or latency-sensitive
+environments more easily.</p>
+<h2 id="the-benchmark-problem-in-agent-memory">5. The benchmark problem in agent memory</h2>
+<p>The current memory category has a methodology problem. QA benchmark claims move
+substantially with:</p>
+<ul>
+<li>the reader model,</li>
+<li>the judge model,</li>
+<li>prompt wording,</li>
+<li>run count,</li>
+<li>category inclusion rules.</li>
+</ul>
+<p>That is why ai-knot ships <strong>two</strong> benchmark layers:</p>
+<ol>
+<li>named-reader QA accuracy, aligned with the way the field currently talks; and</li>
+<li>a deterministic retrieval suite that does not drift with model choice.</li>
+</ol>
+<p>The second number is strategically important because it gives developers a fast,
+skeptical way to verify that the memory system itself is adding value.</p>
+<p>As of <strong>July 1, 2026</strong>, the current repo-native proof points are:</p>
+<ul>
+<li><strong>78.0%</strong> LoCoMo QA accuracy (cat1-4, gpt-4.1 reader / gpt-4o judge),</li>
+<li><strong>59.6%</strong> LongMemEval QA accuracy (Oracle),</li>
+<li><strong>0.83</strong> deterministic retrieval MRR vs <strong>0.18</strong> naive,</li>
+<li><strong>0.26</strong> LoCoMo <code>evidence_recall@5</code> vs <strong>0.15</strong> naive.</li>
+</ul>
+<p>That mix matters. The named-reader QA numbers keep ai-knot legible inside the
+existing memory-benchmark conversation, while the deterministic retrieval suite
+gives a skeptic a number that can be re-run without model drift.</p>
+<h2 id="market-positioning">6. Market positioning</h2>
+<p>The broader market already has strong entrants:</p>
+<ul>
+<li>Mem0 owns the &quot;memory layer&quot; phrase at large scale.</li>
+<li>Graphiti owns the knowledge-graph narrative.</li>
+<li>Letta owns the stateful-agent platform story.</li>
+<li>LangMem benefits from framework-native distribution.</li>
+</ul>
+<p>ai-knot should not out-Mem0 Mem0 or out-Letta Letta. Its defensible wedge is:</p>
+<blockquote>
+<p><strong>self-hosted deterministic memory with reproducible benchmarks and real
+multi-agent governance</strong></p>
+</blockquote>
+<p>That wedge is narrower, but it is also clearer and easier to defend.</p>
+<h2 id="best-fit-use-cases">7. Best-fit use cases</h2>
+<p>ai-knot is strongest where one or more of these constraints are true:</p>
+<ul>
+<li>prompt replay cost is already painful,</li>
+<li>memory behavior needs to be testable,</li>
+<li>storage must stay self-hosted,</li>
+<li>more than one agent publishes into shared memory,</li>
+<li>provenance or auditability matters.</li>
+</ul>
+<h2 id="honest-limitations">8. Honest limitations</h2>
+<p>ai-knot is not the best fit when:</p>
+<ul>
+<li>a team wants a fully managed hosted memory service,</li>
+<li>graph-shaped reasoning is the dominant requirement,</li>
+<li>an organization wants a full agent runtime rather than a memory layer,</li>
+<li>the easiest path is a framework-native tool and portability is not important.</li>
+</ul>
+<p>Those are not weaknesses to hide; they are boundaries that improve trust.</p>
+<h2 id="distribution-implication">9. Distribution implication</h2>
+<p>Because the category is crowded, the launch cannot rely on &quot;another memory repo.&quot;
+The distribution message has to lead with a sharper claim:</p>
+<ol>
+<li>deterministic memory,</li>
+<li>reproducible benchmarks,</li>
+<li>self-hosted surfaces,</li>
+<li>shared-memory governance.</li>
+</ol>
+<p>Those surfaces are now concrete in the repo: MCP over stdio or Streamable HTTP
+for Claude / OpenClaw / HTTP-capable hosts, framework adapters for CrewAI, the
+OpenAI Agents SDK, PydanticAI, and LangGraph-style tool flows, plus a
+TypeScript client and Vercel AI SDK path.</p>
+<p>That is also why the repo needs more than code: it needs a message house, FAQ,
+comparison docs, channel-specific copy, and a benchmark stance that is easy to
+repeat.</p>
+<h2 id="conclusion">10. Conclusion</h2>
+<p>The next wave of agent-memory tools will not win on bigger context alone. They will
+win on <strong>which context they keep, how reliably they retrieve it, and how credibly
+they prove it</strong>. ai-knot's contribution is to treat memory as a deterministic,
+self-hosted knowledge layer rather than a growing prompt appendix. In a market that
+is starting to distrust benchmark claims, that combination of product shape and
+measurement philosophy is a legitimate wedge.</p>
+    </article>
+
+    <footer class="footer">
+      <p>
+        These Pages-ready long-form articles are generated from the repo-owned markdown sources so share links and public docs stay aligned.
+      </p>
+      <div class="footer__links">
+        <a class="button button--secondary" href="../benchmarks.md">Inspect benchmarks</a>
+        <a class="button button--secondary" href="https://github.com/alsoleg89/ai-knot/blob/main/examples/README.md">Browse examples</a>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

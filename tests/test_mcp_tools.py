@@ -13,9 +13,12 @@ from ai_knot._mcp_tools import (
     tool_add,
     tool_add_resolved,
     tool_capabilities,
+    tool_delete,
     tool_forget,
+    tool_get,
     tool_health,
     tool_learn,
+    tool_list,
     tool_list_facts,
     tool_list_snapshots,
     tool_memory_lineage,
@@ -23,6 +26,7 @@ from ai_knot._mcp_tools import (
     tool_recall_json,
     tool_recall_with_trace,
     tool_restore,
+    tool_search,
     tool_snapshot,
     tool_stats,
 )
@@ -132,6 +136,10 @@ class TestToolRecall:
         tool_add(kb, "Caroline took up running")
         assert "Caroline" in tool_recall(kb, "Caroline running", top_k=99999)
 
+    def test_search_alias_matches_recall(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "Caroline took up running")
+        assert tool_search(kb, "Caroline running") == tool_recall(kb, "Caroline running")
+
 
 # ---- tool_forget ------------------------------------------------------------
 
@@ -146,6 +154,27 @@ class TestToolForget:
         assert fact_id in msg
         assert "removed" in msg.lower()
         assert kb.list_facts() == []
+
+    def test_delete_alias_removes_existing_fact(self, kb: KnowledgeBase) -> None:
+        msg_added = tool_add(kb, "Delete me")
+        fact_id = msg_added.split("[")[1].split("]")[0]
+
+        msg = tool_delete(kb, fact_id)
+        assert fact_id in msg
+        assert kb.list_facts() == []
+
+
+class TestToolGet:
+    def test_returns_one_fact_as_json(self, kb: KnowledgeBase) -> None:
+        fact = kb.add("Targeted inspection fact")
+        data = json.loads(tool_get(kb, fact.id))
+        assert data["id"] == fact.id
+        assert data["content"] == "Targeted inspection fact"
+        assert data["active"] is True
+
+    def test_unknown_fact_raises_value_error(self, kb: KnowledgeBase) -> None:
+        with pytest.raises(ValueError, match="deadbeef"):
+            tool_get(kb, "deadbeef")
 
 
 # ---- tool_health ------------------------------------------------------------
@@ -170,8 +199,12 @@ class TestToolCapabilities:
             "add_resolved",
             "learn",
             "recall",
+            "search",
             "recall_json",
+            "get",
             "forget",
+            "delete",
+            "list",
             "list_facts",
             "memory_lineage",
             "stats",
@@ -196,7 +229,81 @@ class TestToolListFacts:
         tool_add(kb, "Second very different fact")
         data = json.loads(tool_list_facts(kb))
         assert len(data) == 2
-        assert all(set(d) >= {"id", "content", "type", "importance", "retention"} for d in data)
+        assert all(
+            set(d)
+            >= {
+                "id",
+                "content",
+                "type",
+                "importance",
+                "retention",
+                "retention_score",
+                "access_count",
+                "tags",
+                "created_at",
+                "last_accessed",
+                "valid_from",
+                "valid_until",
+                "active",
+            }
+            for d in data
+        )
+
+    def test_list_alias_matches_list_facts(self, kb: KnowledgeBase) -> None:
+        tool_add(kb, "First fact")
+        assert tool_list(kb) == tool_list_facts(kb)
+
+    def test_filters_inactive_by_default(self, kb: KnowledgeBase) -> None:
+        kb.add_resolved(
+            [
+                Fact(
+                    content="User works at Acme",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Acme",
+                )
+            ]
+        )
+        kb.add_resolved(
+            [
+                Fact(
+                    content="User now works at Globex",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Globex",
+                )
+            ]
+        )
+        data = json.loads(tool_list_facts(kb))
+        assert len(data) == 1
+        assert data[0]["content"] == "User now works at Globex"
+        assert data[0]["active"] is True
+
+    def test_include_inactive_returns_history(self, kb: KnowledgeBase) -> None:
+        old = kb.add_resolved(
+            [
+                Fact(
+                    content="User works at Acme",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Acme",
+                )
+            ]
+        )[0]
+        kb.add_resolved(
+            [
+                Fact(
+                    content="User now works at Globex",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Globex",
+                )
+            ]
+        )
+        data = json.loads(tool_list_facts(kb, include_inactive=True))
+        assert len(data) == 2
+        old_row = next(row for row in data if row["id"] == old.id)
+        assert old_row["active"] is False
 
 
 # ---- tool_memory_lineage ----------------------------------------------------
@@ -221,6 +328,9 @@ class TestToolMemoryLineage:
         assert [row["id"] for row in data] == [new.id, mid.id, old.id]
         assert data[0]["value_text"] == "120k"
         assert data[0]["supersedes_id"] == mid.id
+        assert data[0]["entity"] == "Alex"
+        assert data[0]["attribute"] == "salary"
+        assert data[0]["slot_key"] == "Alex::salary"
         assert data[0]["active"] is True
         assert data[-1]["active"] is False  # the oldest was superseded
 
@@ -231,7 +341,13 @@ class TestToolMemoryLineage:
         only = kb.add_resolved([self._slot_fact("80k")])[0]
         data = json.loads(tool_memory_lineage(kb, only.id))
         assert [row["id"] for row in data] == [only.id]
-        assert data[0]["supersedes_id"] == ""
+        assert data[0]["supersedes_id"] is None
+
+    def test_now_anchor_controls_active_flags(self, kb: KnowledgeBase) -> None:
+        current = kb.add_resolved([self._slot_fact("80k")])[0]
+        data = json.loads(tool_memory_lineage(kb, current.id, now="2000-01-01T00:00:00+00:00"))
+        assert [row["id"] for row in data] == [current.id]
+        assert data[0]["active"] is False
 
 
 # ---- tool_stats -------------------------------------------------------------
@@ -283,6 +399,7 @@ class TestToolLearnDegraded:
         data = json.loads(result)
         assert data["stored"] == 1
         assert len(data["ids"]) == 1
+        assert "verbatim" in data["note"]
 
         facts = kb.list_facts()
         assert any("dark mode" in f.content for f in facts)
@@ -297,6 +414,24 @@ class TestToolLearnDegraded:
         data = json.loads(result)
         assert data["stored"] == 0
         assert data["ids"] == []
+
+    def test_event_time_is_applied_in_degraded_mode(
+        self, kb: KnowledgeBase, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("AI_KNOT_PROVIDER", raising=False)
+        monkeypatch.delenv("AI_KNOT_API_KEY", raising=False)
+
+        result = tool_learn(
+            kb,
+            messages=[{"role": "user", "content": "I deploy APIs with Docker Compose"}],
+            event_time="2023-05-08T00:00:00+00:00",
+        )
+        data = json.loads(result)
+        assert data["stored"] == 1
+        assert "verbatim" in data["note"]
+        stored = kb.list_facts()
+        assert len(stored) == 1
+        assert stored[0].event_time is not None
 
 
 # ---- snapshot / restore / list_snapshots ------------------------------------
@@ -401,6 +536,73 @@ class TestToolAddResolved:
         assert len(active) == 1
         assert active[0].value_text == "Globex"
 
+    def test_update_op_forces_new_version_even_with_same_value(self, kb: KnowledgeBase) -> None:
+        first = json.loads(
+            tool_add_resolved(
+                kb,
+                [
+                    {
+                        "content": "Alex earns 120k",
+                        "entity": "Alex",
+                        "attribute": "salary",
+                        "value_text": "120k",
+                        "slot_key": "alex::salary",
+                    }
+                ],
+            )
+        )
+        updated = json.loads(
+            tool_add_resolved(
+                kb,
+                [
+                    {
+                        "content": "Alex earns 120k base salary",
+                        "entity": "Alex",
+                        "attribute": "salary",
+                        "value_text": "120k",
+                        "slot_key": "alex::salary",
+                        "op": "update",
+                    }
+                ],
+            )
+        )
+        assert first[0]["version"] == 0
+        assert updated[0]["version"] == 1
+        facts = [f for f in kb.list_facts() if f.slot_key == "alex::salary"]
+        assert len(facts) == 2
+        active = [f for f in facts if f.is_active()]
+        assert len(active) == 1
+        assert active[0].content == "Alex earns 120k base salary"
+
+    def test_delete_op_closes_matching_slot_without_replacement(self, kb: KnowledgeBase) -> None:
+        tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User works at Acme",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "value_text": "Acme",
+                    "slot_key": "user::employer",
+                }
+            ],
+        )
+        out = tool_add_resolved(
+            kb,
+            [
+                {
+                    "content": "User no longer works at Acme",
+                    "entity": "user",
+                    "attribute": "employer",
+                    "slot_key": "user::employer",
+                    "op": "delete",
+                }
+            ],
+        )
+        assert json.loads(out) == []
+        active = [f for f in kb.list_facts() if f.is_active() and f.slot_key == "user::employer"]
+        assert active == []
+
     def test_empty_content_rejected(self, kb: KnowledgeBase) -> None:
         with pytest.raises(ValueError, match="non-empty 'content'"):
             tool_add_resolved(kb, [{"entity": "user", "attribute": "employer"}])
@@ -422,6 +624,24 @@ class TestToolAddResolved:
         fact = next(f for f in kb.list_facts() if f.id == rows[0]["id"])
         assert fact.event_time is not None
 
+    def test_invalid_op_rejected(self, kb: KnowledgeBase) -> None:
+        with pytest.raises(ValueError, match="invalid op"):
+            tool_add_resolved(
+                kb,
+                [
+                    {
+                        "content": "User works at Globex",
+                        "entity": "user",
+                        "attribute": "employer",
+                        "op": "replace",
+                    }
+                ],
+            )
+
     def test_capabilities_lists_add_resolved(self) -> None:
         caps = json.loads(tool_capabilities())
         assert any(c["name"] == "add_resolved" for c in caps)
+
+    def test_capabilities_lists_get(self) -> None:
+        caps = json.loads(tool_capabilities())
+        assert any(c["name"] == "get" for c in caps)

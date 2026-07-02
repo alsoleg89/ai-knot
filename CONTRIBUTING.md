@@ -7,9 +7,9 @@ Thank you for your interest in contributing! This document describes how to set 
 ## Quick setup
 
 ```bash
-git clone https://github.com/alsoleg89/ai_knot.git
+git clone https://github.com/alsoleg89/ai-knot.git
 cd ai-knot
-pip install -e ".[dev,openai]"
+pip install -e ".[dev,openai,mcp,server]"
 ```
 
 Run the test suite:
@@ -25,6 +25,38 @@ ruff check src/ tests/
 ruff format --check src/ tests/
 mypy src/ai_knot/
 ```
+
+If you touch the TypeScript client in `npm/`, also run:
+
+```bash
+cd npm
+npm ci
+npm run build
+npm run package:audit
+npm run typecheck
+npm test
+```
+
+If you touch release-facing docs, site generators, or public metadata checks,
+also run:
+
+```bash
+./.venv/bin/python scripts/check_local_launch_ready.py
+./.venv/bin/python scripts/check_public_release.py
+```
+
+For quick review or docs work without local setup, the repo also includes a
+`.devcontainer/devcontainer.json` for GitHub Codespaces.
+
+If you are debugging an install or integration problem before opening an issue,
+capture:
+
+```bash
+ai-knot doctor --json
+```
+
+The output avoids printing secret values and is designed to be pasted into the
+install bug template.
 
 ---
 
@@ -43,6 +75,12 @@ mypy src/ai_knot/
 3. Update `CHANGELOG.md` under `[Unreleased]`
 4. Fill in the PR template (checklist must be ticked)
 5. A maintainer will review the PR against the checklist in the PR template
+
+If your change affects the developer journey, update the relevant docs in `README.md`,
+`docs/`, `DEVELOPMENT.md`, or `npm/README.md` in the same PR.
+
+If your change affects a publish surface, keep `docs/RELEASE.md` updated in the
+same PR too.
 
 ---
 

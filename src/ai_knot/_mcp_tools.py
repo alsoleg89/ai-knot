@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ai_knot.knowledge import KnowledgeBase
-from ai_knot.types import ConversationTurn, Fact, MemoryType
+from ai_knot.types import ConversationTurn, Fact, MemoryOp, MemoryType
 
 # Upper bound on top_k accepted from MCP clients. An unbounded top_k would let a
 # malformed or hostile call pull the entire store into one recall (latency and
@@ -43,6 +43,20 @@ def _parse_event_time(event_time: str | None) -> datetime | None:
     # validity bounds — otherwise recall(now=…) → is_active raises "can't compare
     # offset-naive and offset-aware datetimes" and the whole recall fails.
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _listed_facts(
+    kb: KnowledgeBase,
+    *,
+    include_inactive: bool,
+    now: str | None,
+) -> tuple[list[Fact], datetime]:
+    """Return facts for listing plus the anchor used for activity checks."""
+    anchor = _parse_event_time(now) or datetime.now(UTC)
+    facts = kb.list_facts()
+    if not include_inactive:
+        facts = [fact for fact in facts if fact.is_active(anchor)]
+    return facts, anchor
 
 
 def tool_add(
@@ -92,12 +106,16 @@ def tool_add_resolved(kb: KnowledgeBase, facts: list[dict[str, Any]]) -> str:
     """Insert pre-structured facts through the supersession pipeline (no LLM).
 
     Each entry in *facts* is a dict with a required ``content`` and optional
-    ``entity``, ``attribute``, ``value_text``, ``slot_key`` and ``event_time``
-    (ISO-8601). A fact addressing an existing active slot with a *different* value
-    supersedes it (knowledge-update), exactly as inside ``learn()``; a fact with no
-    slot and no ``entity`` + ``attribute`` is inserted as-is. This is the clean,
-    dependency-free structured-knowledge seam — the multi-agent path for ingesting
-    already-resolved facts (e.g. from another agent) without an LLM extraction call.
+    ``entity``, ``attribute``, ``value_text``, ``slot_key``, ``op`` and
+    ``event_time`` (ISO-8601). A fact addressing an existing active slot with a
+    *different* value supersedes it (knowledge-update), exactly as inside
+    ``learn()``; ``op="update"`` forces supersession, ``op="delete"`` closes the
+    matched memory without inserting a replacement, and ``op="noop"`` skips
+    insertion/mutation entirely. A fact with no slot and no ``entity`` +
+    ``attribute`` is inserted as-is. This is the clean, dependency-free
+    structured-knowledge seam — the multi-agent path for ingesting
+    already-resolved facts (e.g. from another agent) without an LLM extraction
+    call.
 
     Args:
         kb: The knowledge base instance.
@@ -119,6 +137,13 @@ def tool_add_resolved(kb: KnowledgeBase, facts: list[dict[str, Any]]) -> str:
             value_text=str(spec.get("value_text", "")),
             slot_key=str(spec.get("slot_key", "")),
         )
+        raw_op = str(spec.get("op", MemoryOp.ADD.value)).strip().lower() or MemoryOp.ADD.value
+        try:
+            fact.op = MemoryOp(raw_op)
+        except ValueError:
+            raise ValueError(
+                f"invalid op {raw_op!r}; expected one of {[op.value for op in MemoryOp]}"
+            ) from None
         event_time = _parse_event_time(spec.get("event_time"))
         if event_time is not None:
             fact.event_time = event_time
@@ -155,6 +180,11 @@ def tool_recall(kb: KnowledgeBase, query: str, *, top_k: int = 5, now: str | Non
     return result if result else "No relevant facts found."
 
 
+def tool_search(kb: KnowledgeBase, query: str, *, top_k: int = 5, now: str | None = None) -> str:
+    """Alias for :func:`tool_recall` using the market-standard search verb."""
+    return tool_recall(kb, query, top_k=top_k, now=now)
+
+
 def tool_forget(kb: KnowledgeBase, fact_id: str) -> str:
     """Remove a fact by its ID.
 
@@ -167,6 +197,49 @@ def tool_forget(kb: KnowledgeBase, fact_id: str) -> str:
     """
     kb.forget(fact_id)
     return f"Fact {fact_id!r} removed."
+
+
+def tool_delete(kb: KnowledgeBase, fact_id: str) -> str:
+    """Alias for :func:`tool_forget` using the CRUD-style delete verb."""
+    return tool_forget(kb, fact_id)
+
+
+def tool_get(kb: KnowledgeBase, fact_id: str) -> str:
+    """Return one stored fact by ID as JSON.
+
+    Args:
+        kb: The knowledge base instance.
+        fact_id: The 8-char hex ID of the fact.
+
+    Returns:
+        JSON object describing the stored fact.
+
+    Raises:
+        ValueError: If the fact ID is unknown.
+    """
+    try:
+        fact = kb.get(fact_id)
+    except KeyError as exc:
+        raise ValueError(f"No fact found with id {fact_id}.") from exc
+
+    return json.dumps(
+        {
+            "id": fact.id,
+            "content": fact.content,
+            "type": fact.type.value,
+            "importance": fact.importance,
+            "retention_score": fact.retention_score,
+            "access_count": fact.access_count,
+            "tags": list(fact.tags),
+            "created_at": fact.created_at.isoformat(),
+            "last_accessed": fact.last_accessed.isoformat(),
+            "event_time": fact.event_time.isoformat() if fact.event_time else None,
+            "valid_from": fact.valid_from.isoformat() if fact.valid_from else None,
+            "valid_until": fact.valid_until.isoformat() if fact.valid_until else None,
+            "active": fact.is_active(),
+        },
+        ensure_ascii=False,
+    )
 
 
 def tool_health() -> str:
@@ -194,8 +267,15 @@ def tool_capabilities() -> str:
         },
         {"name": "learn", "description": "Extract and store facts from a conversation"},
         {"name": "recall", "description": "Retrieve relevant facts as text"},
+        {"name": "search", "description": "Retrieve relevant facts as text (alias for recall)"},
         {"name": "recall_json", "description": "Retrieve relevant facts as JSON array"},
+        {"name": "get", "description": "Return one stored fact as JSON by fact_id"},
         {"name": "forget", "description": "Remove a fact by ID"},
+        {"name": "delete", "description": "Remove a fact by ID (alias for forget)"},
+        {
+            "name": "list",
+            "description": "List all stored facts as JSON array (alias for list_facts)",
+        },
         {"name": "list_facts", "description": "List all stored facts as JSON array"},
         {
             "name": "memory_lineage",
@@ -239,16 +319,23 @@ def tool_recall_with_trace(
     )
 
 
-def tool_list_facts(kb: KnowledgeBase) -> str:
-    """List all stored facts.
+def tool_list_facts(
+    kb: KnowledgeBase,
+    *,
+    include_inactive: bool = False,
+    now: str | None = None,
+) -> str:
+    """List stored facts.
 
     Args:
         kb: The knowledge base instance.
+        include_inactive: When True, include superseded / inactive facts too.
+        now: Optional ISO-8601 activity anchor used for active filtering.
 
     Returns:
         JSON array of facts (empty array ``[]`` when nothing is stored).
     """
-    facts = kb.list_facts()
+    facts, anchor = _listed_facts(kb, include_inactive=include_inactive, now=now)
     if not facts:
         return "[]"
     data = [
@@ -257,34 +344,68 @@ def tool_list_facts(kb: KnowledgeBase) -> str:
             "content": f.content,
             "type": f.type.value,
             "importance": f.importance,
+            "retention_score": round(f.retention_score, 3),
             "retention": round(f.retention_score, 3),
+            "access_count": f.access_count,
+            "tags": list(f.tags),
+            "created_at": f.created_at.isoformat(),
+            "last_accessed": f.last_accessed.isoformat(),
+            "event_time": f.event_time.isoformat() if f.event_time else None,
+            "valid_from": f.valid_from.isoformat() if f.valid_from else None,
+            "valid_until": f.valid_until.isoformat() if f.valid_until else None,
+            "active": f.is_active(anchor),
         }
         for f in facts
     ]
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def tool_memory_lineage(kb: KnowledgeBase, fact_id: str) -> str:
+def tool_list(
+    kb: KnowledgeBase,
+    *,
+    include_inactive: bool = False,
+    now: str | None = None,
+) -> str:
+    """Alias for :func:`tool_list_facts` using the familiar list verb."""
+    return tool_list_facts(kb, include_inactive=include_inactive, now=now)
+
+
+def tool_memory_lineage(kb: KnowledgeBase, fact_id: str, *, now: str | None = None) -> str:
     """Return the supersession lineage of a fact as JSON (newest → oldest).
 
     Args:
         kb: The knowledge base instance.
         fact_id: The 8-char hex ID to trace.
+        now: Optional ISO-8601 activity anchor used for active/inactive status.
 
     Returns:
-        JSON array of ``{"id", "content", "value_text", "supersedes_id",
-        "published_by", "active"}`` from the given fact back to the original
-        it replaced; ``"[]"`` when the fact is unknown.
+        JSON array of lineage rows from the given fact back to the original it
+        replaced; ``"[]"`` when the fact is unknown.
     """
     chain = kb.lineage(fact_id)
+    anchor = _parse_event_time(now) or datetime.now(UTC)
     data = [
         {
             "id": f.id,
             "content": f.content,
-            "value_text": f.value_text,
-            "supersedes_id": f.provenance.supersedes_id,
-            "published_by": f.provenance.published_by,
-            "active": f.is_active(),
+            "type": f.type.value,
+            "importance": f.importance,
+            "retention_score": f.retention_score,
+            "access_count": f.access_count,
+            "tags": list(f.tags),
+            "created_at": f.created_at.isoformat(),
+            "last_accessed": f.last_accessed.isoformat(),
+            "event_time": f.event_time.isoformat() if f.event_time else None,
+            "valid_from": f.valid_from.isoformat() if f.valid_from else None,
+            "valid_until": f.valid_until.isoformat() if f.valid_until else None,
+            "slot_key": f.slot_key or None,
+            "entity": f.entity or None,
+            "attribute": f.attribute or None,
+            "value_text": f.value_text or None,
+            "version": f.version,
+            "supersedes_id": f.provenance.supersedes_id or None,
+            "published_by": f.provenance.published_by or None,
+            "active": f.is_active(anchor),
         }
         for f in chain
     ]
@@ -338,6 +459,7 @@ def tool_learn(
     provider: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
+    event_time: str | None = None,
 ) -> str:
     """Extract and store knowledge from a multi-turn conversation.
 
@@ -351,6 +473,7 @@ def tool_learn(
         provider: LLM provider (overrides ``AI_KNOT_PROVIDER`` env var).
         api_key: API key (overrides ``AI_KNOT_API_KEY`` env var).
         model: Model name override (overrides ``AI_KNOT_MODEL`` env var).
+        event_time: ISO-8601 real-world anchor for the whole conversation.
 
     Returns:
         JSON summary with ``{"stored": n, "ids": [...]}`` or an error message.
@@ -358,6 +481,7 @@ def tool_learn(
     effective_provider = provider or os.environ.get("AI_KNOT_PROVIDER")
     effective_key = api_key or os.environ.get("AI_KNOT_API_KEY")
     effective_model = model or os.environ.get("AI_KNOT_MODEL")
+    parsed_event_time = _parse_event_time(event_time)
 
     turns = [
         ConversationTurn(role=m.get("role", "user"), content=m.get("content", "")) for m in messages
@@ -370,6 +494,7 @@ def tool_learn(
                 api_key=effective_key,
                 provider=effective_provider,
                 model=effective_model,
+                event_time=parsed_event_time,
             )
         else:
             # Degraded mode: store last user message without LLM extraction.
@@ -379,10 +504,12 @@ def tool_learn(
             )
             if not last_user:
                 return json.dumps({"stored": 0, "ids": [], "note": "no user message found"})
-            fact = kb.add(last_user)
+            fact = kb.add(last_user, event_time=parsed_event_time)
             facts = [fact]
-
-        return json.dumps({"stored": len(facts), "ids": [f.id for f in facts]}, ensure_ascii=False)
+        payload = {"stored": len(facts), "ids": [f.id for f in facts]}
+        if not (effective_provider and effective_key):
+            payload["note"] = "provider not configured; stored the last user message verbatim"
+        return json.dumps(payload, ensure_ascii=False)
     except (ValueError, RuntimeError, OSError) as exc:
         return json.dumps({"error": str(exc)}, ensure_ascii=False)
 

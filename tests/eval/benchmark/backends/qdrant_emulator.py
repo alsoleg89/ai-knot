@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import os
 import time
 from collections import Counter
 
@@ -24,6 +25,17 @@ EMBED_URL = "http://localhost:11434/v1/embeddings"
 EMBED_MODEL = "qwen2.5:7b"
 _SEM = asyncio.Semaphore(1)  # serialize embed calls — qwen2.5:7b fills GPU, no benefit to parallel
 _HTTP = httpx.AsyncClient(timeout=120.0)  # reuse connection pool across all embed calls
+
+
+def _embeddings_disabled_via_env() -> bool:
+    """Return True when the benchmark harness should stay fully offline.
+
+    This is intentionally benchmark-specific, so it does not affect product code.
+    It lets the competitor bench-pack guarantee a no-network control run even if
+    a local Ollama server happens to be running.
+    """
+    value = os.getenv("AI_KNOT_BENCH_DISABLE_EMBED", "").strip().lower()
+    return value not in {"", "0", "false", "no"}
 
 
 def _tfidf_cosine(query: str, texts: list[str], top_k: int) -> list[tuple[str, float]]:
@@ -107,7 +119,7 @@ class QdrantEmulator(MemoryBackend):
     def __init__(self) -> None:
         # List of (original_text, embedding_or_empty)
         self._store: list[tuple[str, list[float]]] = []
-        self._ollama_ok: bool = True
+        self._ollama_ok: bool = not _embeddings_disabled_via_env()
 
     @property
     def name(self) -> str:
@@ -115,7 +127,7 @@ class QdrantEmulator(MemoryBackend):
 
     async def reset(self) -> None:
         self._store.clear()
-        self._ollama_ok = True
+        self._ollama_ok = not _embeddings_disabled_via_env()
 
     async def insert(self, text: str) -> InsertResult:
         t0 = time.perf_counter()

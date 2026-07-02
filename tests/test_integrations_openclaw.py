@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import pathlib
+from datetime import UTC, datetime
 
 import pytest
 
 from ai_knot.integrations.openclaw import OpenClawMemoryAdapter, generate_mcp_config
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage.yaml_storage import YAMLStorage
+from ai_knot.types import Fact
 
 
 @pytest.fixture
@@ -69,6 +71,13 @@ class TestOpenClawMemoryAdapter:
     def test_search_empty_kb(self, adapter: OpenClawMemoryAdapter) -> None:
         assert adapter.search("anything") == []
 
+    def test_recall_alias_matches_search(
+        self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
+    ) -> None:
+        kb.add("User deploys on Fridays")
+
+        assert adapter.recall("deployment schedule") == adapter.search("deployment schedule")
+
     def test_get_known_id(self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase) -> None:
         fact = kb.add("User lives in Berlin")
         item = adapter.get(fact.id)
@@ -91,6 +100,41 @@ class TestOpenClawMemoryAdapter:
         memories = {i["memory"] for i in items}
         assert memories == {"Fact one", "Fact two", "Fact three"}
 
+    def test_get_all_can_include_inactive(
+        self,
+        adapter: OpenClawMemoryAdapter,
+        kb: KnowledgeBase,
+    ) -> None:
+        old = kb.add_resolved(
+            [
+                Fact(
+                    content="User works at Acme",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Acme",
+                )
+            ]
+        )[0]
+        kb.add_resolved(
+            [
+                Fact(
+                    content="User now works at Globex",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Globex",
+                )
+            ]
+        )
+
+        active_items = adapter.get_all()
+        history_items = adapter.get_all(include_inactive=True)
+
+        assert len(active_items) == 1
+        assert active_items[0]["memory"] == "User now works at Globex"
+        assert len(history_items) == 2
+        old_item = next(item for item in history_items if item["id"] == old.id)
+        assert old_item["metadata"]["active"] is False
+
     def test_get_all_accepts_user_id(
         self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
     ) -> None:
@@ -99,11 +143,38 @@ class TestOpenClawMemoryAdapter:
         items = adapter.get_all(user_id="any_user")
         assert len(items) == 1
 
+    def test_list_alias_matches_get_all(
+        self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
+    ) -> None:
+        kb.add("Some fact")
+
+        assert adapter.list() == adapter.get_all()
+
+    def test_get_accepts_now_anchor_for_active_status(
+        self,
+        adapter: OpenClawMemoryAdapter,
+        kb: KnowledgeBase,
+    ) -> None:
+        fact = kb.add("Future migration is scheduled", event_time=datetime(2099, 1, 1, tzinfo=UTC))
+
+        item = adapter.get(fact.id, now="2000-01-01T00:00:00+00:00")
+
+        assert item["metadata"]["active"] is False
+
     def test_delete_removes_fact(self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase) -> None:
         fact = kb.add("Temporary fact")
         assert len(adapter.get_all()) == 1
 
         adapter.delete(fact.id)
+
+        assert adapter.get_all() == []
+
+    def test_forget_alias_removes_fact(
+        self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
+    ) -> None:
+        fact = kb.add("Temporary fact")
+
+        adapter.forget(fact.id)
 
         assert adapter.get_all() == []
 
@@ -140,6 +211,7 @@ class TestOpenClawMemoryAdapter:
         assert item["memory"] == "Replacement text"
         assert "id" in item
         assert "metadata" in item
+        assert item["metadata"]["active"] is True
 
     def test_update_returned_id_differs_from_input(
         self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
@@ -148,7 +220,7 @@ class TestOpenClawMemoryAdapter:
         result = adapter.update(fact.id, "New content")
         assert result["id"] != fact.id
 
-    def test_update_old_id_no_longer_accessible(
+    def test_update_old_id_no_longer_accessible_for_unstructured_facts(
         self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
     ) -> None:
         fact = kb.add("Old content")
@@ -156,6 +228,86 @@ class TestOpenClawMemoryAdapter:
         with pytest.raises(KeyError):
             adapter.get(fact.id)
         assert adapter.get(new_item["id"])["memory"] == "New content"
+
+    def test_update_structured_fact_preserves_lineage(
+        self, adapter: OpenClawMemoryAdapter, kb: KnowledgeBase
+    ) -> None:
+        fact = kb.add_resolved(
+            [
+                Fact(
+                    content="User works at Acme",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Acme",
+                )
+            ]
+        )[0]
+
+        new_item = adapter.update(fact.id, "User now works at Globex")
+
+        assert new_item["id"] != fact.id
+        assert new_item["memory"] == "User now works at Globex"
+        assert new_item["metadata"]["slot_key"] == "user::employer"
+        assert new_item["metadata"]["version"] == 1
+        assert adapter.get(fact.id)["metadata"]["active"] is False
+        assert adapter.list() == [adapter.get(new_item["id"])]
+        history = adapter.get_all(include_inactive=True)
+        assert len(history) == 2
+
+    def test_lineage_returns_newest_to_oldest_chain(
+        self,
+        adapter: OpenClawMemoryAdapter,
+        kb: KnowledgeBase,
+    ) -> None:
+        original = kb.add_resolved(
+            [
+                Fact(
+                    content="User works at Acme",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Acme",
+                )
+            ]
+        )[0]
+        current = adapter.update(original.id, "User now works at Globex")
+
+        chain = adapter.lineage(current["id"])
+
+        assert [item["id"] for item in chain] == [current["id"], original.id]
+        assert chain[0]["metadata"]["active"] is True
+        assert chain[1]["metadata"]["active"] is False
+        assert chain[0]["metadata"]["slot_key"] == "user::employer"
+        assert chain[0]["metadata"]["version"] == 1
+
+    def test_lineage_returns_empty_for_unknown_id(self, adapter: OpenClawMemoryAdapter) -> None:
+        assert adapter.lineage("deadbeef") == []
+
+    def test_lineage_accepts_now_anchor_for_active_flags(
+        self,
+        adapter: OpenClawMemoryAdapter,
+        kb: KnowledgeBase,
+    ) -> None:
+        current = kb.add_resolved(
+            [
+                Fact(
+                    content="User works at Acme",
+                    entity="user",
+                    attribute="employer",
+                    value_text="Acme",
+                )
+            ]
+        )[0]
+
+        chain = adapter.lineage(current.id, now="2000-01-01T00:00:00+00:00")
+
+        assert [item["id"] for item in chain] == [current.id]
+        assert chain[0]["metadata"]["active"] is False
+
+    def test_update_missing_id_raises(
+        self, adapter: OpenClawMemoryAdapter
+    ) -> None:
+        with pytest.raises(KeyError):
+            adapter.update("deadbeef", "Replacement text")
 
 
 class TestGenerateMcpConfig:

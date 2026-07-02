@@ -12,8 +12,10 @@ see [production-readiness.md](production-readiness.md).
 ```bash
 pip install ai-knot                 # core (sqlite + yaml, in-process BM25)
 pip install "ai-knot[postgres]"     # + PostgreSQL backend
-pip install "ai-knot[mcp]"          # + MCP server (Claude Desktop / Claude Code)
+pip install "ai-knot[mcp]"          # + MCP server (Claude Desktop / Claude Code / OpenClaw / Streamable HTTP MCP)
 pip install "ai-knot[openai]"       # + OpenAI provider for learn()/embeddings
+pip install "ai-knot[server]"       # + HTTP sidecar
+pip install "ai-knot[integrations]" # + CrewAI / LangChain / LangGraph / AutoGen / OpenAI Agents SDK / PydanticAI adapters
 ```
 
 ai-knot has **no heavy ML dependencies** by default — retrieval is deterministic
@@ -98,13 +100,13 @@ keys, DSN) are read but never logged.
 
 ## 4. Run the MCP server
 
-ai-knot speaks the Model Context Protocol over stdio.
+ai-knot speaks the Model Context Protocol over stdio or Streamable HTTP.
 
 ```bash
 AI_KNOT_STORAGE=postgres AI_KNOT_DSN=postgresql://... ai-knot-mcp
 ```
 
-**Claude Desktop / Claude Code** — register it in the MCP config:
+**Claude Desktop / Claude Code / OpenClaw** — register it in the MCP config:
 
 ```json
 {
@@ -125,6 +127,34 @@ The server exposes tools for `add`, `learn`, `recall` (incl. point-in-time
 `recall(now=…)`), `add_resolved`, snapshots, stats, and (when wired) the
 multi-agent pool. The TypeScript client (`npm i ai-knot`) is a thin wrapper over
 the same tools.
+
+### Streamable HTTP MCP
+
+If your MCP host supports remote HTTP transports, `ai-knot` can also serve MCP
+over Streamable HTTP:
+
+```bash
+pip install "ai-knot[mcp]"
+ai-knot --storage sqlite serve-mcp assistant --host 127.0.0.1 --port 8765 --path /mcp
+```
+
+Default endpoint:
+
+```text
+http://127.0.0.1:8765/mcp
+```
+
+This is the right surface for HTTP-capable MCP clients and for MCP Registry
+packaging. The stdio path remains the default for Claude Desktop / Claude Code /
+OpenClaw style local configs.
+
+If you prefer running the `ai-knot-mcp` entrypoint directly, the server also
+honors:
+
+- `AI_KNOT_MCP_TRANSPORT=streamable-http`
+- `FASTMCP_HOST`
+- `FASTMCP_PORT`
+- `FASTMCP_STREAMABLE_HTTP_PATH`
 
 ---
 
@@ -218,7 +248,71 @@ pip install "ai-knot[server]"
 AI_KNOT_SERVER_TOKEN=secret ai-knot --storage postgres --dsn "$AI_KNOT_DSN" serve svc --host 0.0.0.0 --port 8000
 ```
 
-Routes: `GET /health` (open), `POST /v1/recall` (`{query, top_k, now}` → context +
-facts), `POST /v1/facts`, `GET /v1/stats`. When `AI_KNOT_SERVER_TOKEN` is set, the
-`/v1/*` routes require `Authorization: Bearer <token>`. Front it with a TLS-
-terminating reverse proxy in production.
+Routes:
+
+- `GET /health` (open)
+- `POST /v1/learn` (`{messages, provider?, api_key?, model?, event_time?}` → stored ids; degrades to the last user turn when no provider is configured)
+- `POST /v1/search` (`{query, top_k, now}` → context + facts; alias for `/v1/recall`)
+- `POST /v1/recall` (`{query, top_k, now}` → context + facts)
+- `POST /v1/facts`
+- `POST /v1/facts/resolved` (`{facts:[{..., op?}]}` → structured supersession / no-LLM ingest)
+- `GET /v1/facts` (read-only fact listing for debugging / inspection)
+- `DELETE /v1/facts/{fact_id}`
+- `GET /v1/stats`
+
+Across CLI, MCP, and HTTP, the familiar memory loop is now the same:
+`add` → `search` → `list` → `delete`, with `recall` / `forget` kept as
+agent-memory aliases.
+If you want a repo-native proof of that exact JSON loop before binding a real
+port, run [`examples/http_sidecar_surface_demo.py`](../examples/http_sidecar_surface_demo.py).
+
+If your application is in Node / TypeScript, you can point the npm package at a
+running sidecar instead of spawning `ai-knot-mcp` locally:
+
+```typescript
+import { HttpKnowledgeBase } from "ai-knot";
+
+const kb = new HttpKnowledgeBase({
+  baseUrl: "http://127.0.0.1:8000",
+  token: process.env.AI_KNOT_SERVER_TOKEN,
+});
+
+await kb.add("User deploys APIs with Docker Compose");
+console.log(await kb.search("what does the user deploy with?"));
+console.log(await kb.list());
+```
+
+If you want the same sidecar path to do extract-on-write or structured
+supersession, `HttpKnowledgeBase` now also supports `learn([...], options?)`
+and `addResolved([...])`, including `op: "update" | "delete" | "noop"` on
+structured facts.
+
+When `AI_KNOT_SERVER_TOKEN` is set, the `/v1/*` routes require
+`Authorization: Bearer <token>`. Front it with a TLS-terminating reverse proxy
+in production.
+
+### Browser inspector
+
+The same sidecar now ships a lightweight read-only HTML inspector. It is useful
+for demo flows, support, and debugging when you want to see what the store
+contains without writing a custom UI.
+
+Open:
+
+```text
+http://127.0.0.1:8000/inspect
+```
+
+Or run the seeded zero-network demo:
+
+```bash
+python examples/browser_inspector_demo.py
+```
+
+Features:
+
+- recall-preview form using the same deterministic retrieval path as the agent,
+- newest-first fact table,
+- active vs inactive fact visibility,
+- optional point-in-time anchor via `now`,
+- optional bearer-token protection when `AI_KNOT_SERVER_TOKEN` is set.

@@ -221,7 +221,8 @@ export class McpClient extends EventEmitter {
     this.state = "crashed";
     const wrapped = new Error(
       `Failed to spawn ai-knot-mcp: ${err.message}. ` +
-        `Make sure it is installed: pip install "ai-knot[mcp]"`
+        `Make sure it is installed: pip install "ai-knot[mcp]". ` +
+        `Then run npx ai-knot-doctor (or npm run doctor in this repo) to verify the bridge.`
     );
     for (const { reject } of this.inflight.values()) reject(wrapped);
     this.inflight.clear();

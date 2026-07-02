@@ -40,6 +40,8 @@ console.warn(`
 ║                                                          ║
 ║  Install it manually:                                    ║
 ║    pip install "ai-knot[mcp]"                          ║
+║  Then verify the bridge:                                 ║
+║    npx ai-knot-doctor                                    ║
 ║                                                          ║
 ║  Python 3.11+ and pip must be in PATH.                   ║
 ╚══════════════════════════════════════════════════════════╝

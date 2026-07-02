@@ -11,6 +11,7 @@ M5 Pro optimizations:
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -60,7 +61,13 @@ class AiKnotBackend(MemoryBackend):
         _conn.close()
 
         storage = SQLiteStorage(db_path)
-        self._kb = KnowledgeBase("bench", storage=storage, provider=self._provider)
+        # Honour AI_KNOT_EMBED_URL so the suite can target a real embedding
+        # endpoint (Ollama/OpenAI) or disable the dense channel entirely with
+        # AI_KNOT_EMBED_URL="" for a fully offline, deterministic, zero-network run.
+        kb_kwargs: dict[str, object] = {}
+        if "AI_KNOT_EMBED_URL" in os.environ:
+            kb_kwargs["embed_url"] = os.environ["AI_KNOT_EMBED_URL"]
+        self._kb = KnowledgeBase("bench", storage=storage, provider=self._provider, **kb_kwargs)
         self._session_seen = set()
 
     async def insert(self, text: str) -> InsertResult:

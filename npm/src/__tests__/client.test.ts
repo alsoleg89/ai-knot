@@ -188,6 +188,7 @@ describe("McpClient", () => {
     capturedProc!.emit("error", new Error("ENOENT: ai-knot-mcp not found"));
 
     await expect(connectPromise).rejects.toThrow(/Failed to spawn/);
+    await expect(connectPromise).rejects.toThrow(/ai-knot-doctor/);
   });
 
   it("close() causes subsequent spawn on next call", async () => {

@@ -1,0 +1,70 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="socialTitle socialDesc">
+  <title id="socialTitle">ai-knot social card</title>
+  <desc id="socialDesc">Social launch card for ai-knot with a terminal recall demo and product proof points.</desc>
+  <defs>
+    <linearGradient id="socialBg" x1="72" y1="54" x2="1116" y2="594" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08101C"/>
+      <stop offset="0.62" stop-color="#122642"/>
+      <stop offset="1" stop-color="#0C1525"/>
+    </linearGradient>
+    <linearGradient id="socialPanel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#101B2B"/>
+      <stop offset="1" stop-color="#0A1220"/>
+    </linearGradient>
+    <linearGradient id="socialAccent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F4B15C"/>
+      <stop offset="1" stop-color="#F17C4A"/>
+    </linearGradient>
+    <radialGradient id="socialGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1028 118) rotate(128.334) scale(342.662 271.26)">
+      <stop stop-color="#F2A35A" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#F2A35A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" rx="30" fill="url(#socialBg)"/>
+  <rect x="846" y="-24" width="372" height="280" fill="url(#socialGlow)"/>
+  <path d="M972 58C1050 94 1086 168 1060 228C1032 296 922 320 896 396C870 468 930 544 1046 584" stroke="#A0B5CA" stroke-opacity="0.18" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1028 96C1082 138 1092 208 1056 258C1018 312 944 336 914 390C884 446 900 512 980 576" stroke="#F2A35A" stroke-opacity="0.2" stroke-width="3" stroke-linecap="round"/>
+
+  <rect x="62" y="58" width="170" height="34" rx="17" fill="#12253B"/>
+  <text x="147" y="80" fill="#DCE7F5" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="15" font-weight="700" text-anchor="middle" letter-spacing="1.4">DETERMINISTIC MEMORY</text>
+
+  <text x="62" y="150" fill="#F7FBFF" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="54" font-weight="700">
+    <tspan x="62" dy="0">ai-knot keeps the facts,</tspan>
+    <tspan x="62" dy="62">not the whole transcript.</tspan>
+  </text>
+  <text x="64" y="264" fill="#B8C9DC" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="23" font-weight="500">Self-hosted agent memory with no LLM on the retrieval path.</text>
+
+  <rect x="62" y="314" width="220" height="40" rx="20" fill="#13243A"/>
+  <text x="172" y="340" fill="#E8F1FB" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" text-anchor="middle">MRR 0.83 vs 0.18 naive</text>
+  <rect x="296" y="314" width="152" height="40" rx="20" fill="#13243A"/>
+  <text x="372" y="340" fill="#E8F1FB" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" text-anchor="middle">LoCoMo 78.0%</text>
+  <rect x="462" y="314" width="160" height="40" rx="20" fill="url(#socialAccent)"/>
+  <text x="542" y="340" fill="#0B1220" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" text-anchor="middle">OpenClaw + MCP + SDKs</text>
+
+  <rect x="620" y="92" width="516" height="446" rx="28" fill="url(#socialPanel)" stroke="#2A3C58"/>
+  <rect x="620" y="92" width="516" height="52" rx="28" fill="#111A2A"/>
+  <path d="M620 118H1136" stroke="#273A55"/>
+  <circle cx="650" cy="118" r="7" fill="#F17C4A"/>
+  <circle cx="674" cy="118" r="7" fill="#F4B15C"/>
+  <circle cx="698" cy="118" r="7" fill="#59C98C"/>
+  <text x="736" y="125" fill="#D8E5F5" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="16">python examples/hero_demo.py</text>
+
+  <text x="654" y="180" fill="#F5B468" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="18">$ python examples/hero_demo.py</text>
+  <text x="654" y="228" fill="#EAF2FD" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="21" font-weight="700">=== ai-knot: 20-second demo ===</text>
+  <text x="654" y="266" fill="#A4BCD3" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="18">Store facts once. Recall only what the next turn needs.</text>
+  <text x="654" y="330" fill="#7EE1A7" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="19">Learned 3 facts into SQLite.</text>
+  <text x="654" y="372" fill="#EAF2FD" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="19">Fresh process. Same memory on disk. No transcript replay.</text>
+  <text x="654" y="432" fill="#A4BCD3" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="18">Query: what stack and preferences should I use?</text>
+  <text x="654" y="486" fill="#F9C37A" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="19" font-weight="700">[1]</text>
+  <text x="696" y="486" fill="#F6FAFF" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="19">User prefers Python and dislikes async code</text>
+  <text x="654" y="522" fill="#F9C37A" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="19" font-weight="700">[2]</text>
+  <text x="696" y="522" fill="#F6FAFF" font-family="IBM Plex Mono, SFMono-Regular, Menlo, monospace" font-size="19">User deploys services with Docker and Kubernetes</text>
+
+  <text x="62" y="434" fill="#F5B468" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="24" font-weight="700">What people should feel in 10 seconds</text>
+  <text x="62" y="470" fill="#D6E1EE" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="20">1. It remembers across restarts.</text>
+  <text x="62" y="502" fill="#D6E1EE" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="20">2. It returns only the relevant facts.</text>
+  <text x="62" y="534" fill="#D6E1EE" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="20">3. The read path stays deterministic.</text>
+
+  <text x="62" y="586" fill="#9BB0C6" font-family="IBM Plex Sans, Avenir Next, Segoe UI, sans-serif" font-size="16">Use this SVG as the source for README, release art, and exported PNG social cards.</text>
+</svg>
