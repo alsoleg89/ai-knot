@@ -3,17 +3,21 @@
 ![npm](https://img.shields.io/npm/v/ai-knot)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Long-term memory for AI agents — for Node.js and TypeScript.**
+**Self-hosted memory for AI agents — for Node.js and TypeScript.**
 
-Your agent forgets everything between sessions. The usual fix — replaying the whole
-conversation into every prompt — is slow and expensive. ai-knot remembers *facts*, not
-transcripts: it distills conversations into a handful of structured facts and hands your
-agent only the few it needs for the next turn. No LLM on the retrieval path. Self-hosted.
+Your agent forgets everything between sessions, and replaying the whole conversation into
+every prompt is slow and expensive. ai-knot remembers *facts*, not transcripts: it recalls
+only the few your agent needs for the next turn — with **no LLM on the read path or the
+write path**, so recall is cheap, deterministic, and testable.
 
-TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) library — it
-talks to the `ai-knot-mcp` subprocess over JSON-RPC. Same deterministic engine,
-[reproducible benchmarks](https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md)
-(LoCoMo 78.0%, deterministic ranking MRR 0.83).
+```bash
+npm install ai-knot && npx ai-knot-demo   # 30-second proof, no signup
+```
+
+TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) engine — it talks
+to the `ai-knot-mcp` subprocess over JSON-RPC. Same deterministic core, and the same
+[benchmark you can re-run yourself](https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md)
+(a retrieval number that can't drift, plus LoCoMo 78.0% with every knob named).
 
 ---
 

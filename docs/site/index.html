@@ -447,9 +447,9 @@
         <div class="eyebrow">Deterministic memory for AI agents</div>
         <h1>Store facts. Not transcripts.</h1>
         <p class="lede">
-          ai-knot is a self-hosted memory layer for agents. It keeps structured knowledge in
-          SQLite, PostgreSQL, or YAML, recalls only what the next turn needs, and ships with
-          benchmark numbers you can actually re-run.
+          ai-knot is a self-hosted memory layer for agents — with no LLM on the read path or
+          the write path. It keeps structured knowledge in SQLite, PostgreSQL, or YAML, recalls
+          only what the next turn needs, and ships a retrieval benchmark you can re-run yourself.
         </p>
         <div class="hero__cta">
           <a class="button button--primary" href="https://github.com/alsoleg89/ai-knot">Open the repo</a>
@@ -457,7 +457,7 @@
           <a class="button button--secondary" href="./whitepaper.html">Read the whitepaper</a>
         </div>
         <div class="pill-row">
-          <span class="pill">No LLM on recall</span>
+          <span class="pill">No LLM on read or write</span>
           <span class="pill pill--green">MCP + frameworks + HTTP</span>
           <span class="pill">Self-hosted by default</span>
         </div>
@@ -477,16 +477,16 @@
 
     <section id="proof" class="metric-grid">
       <div class="metric">
-        <strong>78.0%</strong>
-        <span>LoCoMo QA accuracy, cat1-4, with named reader and judge</span>
+        <strong>0 LLM</strong>
+        <span>Calls needed on the read or write path — run it fully air-gapped</span>
       </div>
       <div class="metric">
         <strong>0.83</strong>
-        <span>Deterministic retrieval MRR vs 0.18 naive baseline</span>
+        <span>Deterministic retrieval MRR (vs 0.18 naive) — a number that can't drift</span>
       </div>
       <div class="metric">
-        <strong>0 LLM</strong>
-        <span>Calls on the hot retrieval path by default</span>
+        <strong>78.0%</strong>
+        <span>LoCoMo QA accuracy, cat1-4, with every knob named</span>
       </div>
     </section>
 
