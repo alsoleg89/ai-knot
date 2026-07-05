@@ -24,6 +24,14 @@
 | [benchmarks.md](benchmarks.md) | Reproducible benchmark methodology, deterministic retrieval suite, LoCoMo, and LongMemEval. |
 | [production-readiness.md](production-readiness.md) | Current readiness across storage, retrieval, integrations, observability, CI, and release. |
 
+## Launch & distribution
+
+| Guide | What it covers |
+|---|---|
+| [launch-post.md](launch-post.md) | Canonical launch announcement — seeds the GitHub Release, the pinned Discussion, and the Dev.to article. |
+| [launch-plan.md](launch-plan.md) | Channel strategy, a dated 4-week calendar, and paste-ready copy for Show HN, r/LocalLLaMA, X, LinkedIn, and Product Hunt. |
+| [gtm-readiness.md](gtm-readiness.md) | Launch-readiness audit, prioritized gap register, and remaining work in order. |
+
 ## Long-form and Pages
 
 | Guide | What it covers |

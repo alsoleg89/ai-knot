@@ -57,14 +57,24 @@ ai-knot solves the replay-tax problem by keeping **knowledge**, not the raw log.
 
 ## Why ai-knot is different
 
-### 1. No LLM on the retrieval path
+### 1. No LLM required — on read *or* write
 
-Recall is deterministic. That means:
+Recall is deterministic. That means lower latency and cost, reproducible outputs, auditable
+behavior, and testable regressions.
 
-- lower latency and cost,
-- reproducible outputs,
-- auditable behavior,
-- testable regressions.
+But the sharper, rarer claim is about the **write** path. Several competitors already keep
+the LLM off *recall* (Zep/Graphiti, LangMem, Memori). What almost none of them do is let you
+populate memory without an LLM: Mem0, Zep/Graphiti, Letta, Cognee, LangMem, and Memori all
+use a model to extract facts or build a graph on ingestion. In `ai-knot`, direct fact
+insertion (`add` / `add_resolved`) needs **no model call**, and `learn()` extraction is
+opt-in — so the *entire pipeline* can run with zero LLM calls. That is what makes a truly
+air-gapped, fully-reproducible deployment possible.
+
+> **Message discipline / honesty guardrail.** Do **not** claim ai-knot is the *only*
+> no-LLM-on-recall system — it isn't, and a developer audience will catch it. Lead with
+> **"no LLM on read *or* write,"** **reproducibility**, and **multi-agent governance** — the
+> combination that is genuinely defensible. See [comparison.md](comparison.md) for the
+> checked, per-competitor claims.
 
 ### 2. It stores facts, not just embeddings or logs
 

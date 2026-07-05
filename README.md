@@ -324,19 +324,23 @@ Full methodology, caveats, and per-conversation tables: [docs/benchmarks.md](doc
 
 ## How it compares
 
-`ai-knot` is not trying to be every product shape in the 2026 memory/category landscape.
+`ai-knot` is the newcomer in a crowded 2026 memory landscape, not the incumbent. Several projects are far more adopted — Mem0 (~60k★), Graphiti (~28k★), Cognee (~27k★), Letta (~24k★), Memori (~15.5k★). `ai-knot`'s wedge is narrow on purpose.
 
 | If you want… | Best fit |
 |---|---|
-| self-hosted deterministic fact memory with no LLM on recall | **ai-knot** |
-| a filesystem-style context database with heavier layered retrieval | **OpenViking-style systems** |
-| verbatim transcript memory with semantic search | **MemPalace-style systems** |
-| a single-binary coding-agent memory server | **Engram-style systems** |
-| codebase graph intelligence more than user/agent memory | **codebase-memory-mcp-style systems** |
+| memory that needs no LLM on read **or** write (air-gapped, reproducible) | **ai-knot** |
+| the largest, most-adopted general memory layer | **Mem0** |
+| an LLM-built temporal knowledge graph | **Zep / Graphiti** |
+| the LLM to manage its own memory inside the agent loop | **Letta** (ex-MemGPT) |
+| an ontology + knowledge-graph memory pipeline | **Cognee** |
+| the most native memory for a LangGraph-only stack | **LangMem** |
+| SQL-native structured memory with no vector DB | **Memori** |
 
-The honest wedge is simple: **self-hosted deterministic memory with real multi-agent governance and reproducible benchmarks**.
+Several of these also keep the LLM off *recall* (Graphiti, LangMem, Memori). What's rarer: `ai-knot` needs no LLM on the **write** path either — direct fact insertion is the default and `learn()` extraction is optional — so the whole pipeline can run with zero model calls.
 
-If you want the buyer-facing comparison in more detail, use [docs/comparison.md](docs/comparison.md).
+The honest wedge: **self-hosted deterministic memory with no LLM required on read or write, a benchmark you can re-run, and real multi-agent governance.**
+
+For the full, checked feature matrix versus each project, use [docs/comparison.md](docs/comparison.md).
 
 ## Performance
 
@@ -348,7 +352,7 @@ In-process BM25 recall, measured with `pytest-benchmark`:
 | 1,000 | ~8 ms | ~25 ms |
 | 10,000 | ~80 ms | ~200 ms |
 
-MCP tool round-trip over stdio is roughly `add` ~15 ms / `recall` ~20 ms p50. For the fuller picture, use [docs/benchmarks.md](docs/benchmarks.md) and the published history at <https://alsoleg89.github.io/ai-knot/dev/bench/>.
+MCP tool round-trip over stdio is roughly `add` ~15 ms / `recall` ~20 ms p50. For the fuller picture — methodology, per-conversation tables, and the deterministic suite you can re-run — use [docs/benchmarks.md](docs/benchmarks.md). Continuous `pytest-benchmark` history is published to GitHub Pages once Pages is enabled (see [docs/RELEASE.md](docs/RELEASE.md)).
 
 ## Documentation
 

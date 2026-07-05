@@ -30,6 +30,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - A Codespaces/devcontainer path for install-free trials, a deterministic
   `examples/hero_demo.py` launch demo, a demo-recording guide, and a buyer-facing
   comparison guide.
+- GTM launch kit: `docs/launch-plan.md` (channel strategy, a dated 4-week calendar,
+  and paste-ready Show HN / r/LocalLLaMA / X / LinkedIn / Product Hunt / Release copy)
+  and `docs/gtm-readiness.md` (launch-readiness audit + prioritized gap register).
+  The comparison guide and README "How it compares" now name real competitors
+  (Mem0, Zep/Graphiti, Letta, Cognee, LangMem, Memori) with per-capability-checked
+  claims, and `docs/positioning.md` is sharpened to "no LLM on read *or* write" with
+  an anti-overclaim guardrail.
 - OpenAI Agents SDK adapter (`ai_knot.integrations.openai_agents`) plus a runnable
   `examples/openai_agents_integration.py` example and docs coverage in
   `docs/usage.md`.
