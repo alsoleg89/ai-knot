@@ -29,9 +29,11 @@
 
 > **Why another memory library?** Every agent-memory benchmark is unreproducible — the same
 > system has been publicly reported at **84%, 58%, and 75%** on LoCoMo, and claims across the
-> field span ~58–92%. ai-knot ships a retrieval number that **can't drift** (fixed seeds, no
-> network, no LLM) and runs the whole pipeline — read *and* write — with zero model calls.
-> [Re-run it yourself →](docs/benchmarks.md)
+> field span ~58–92%. ai-knot ships a retrieval number that **can't drift** — deterministic
+> ranking **MRR 0.83 vs 0.18** for naive BM25, same fixed seeds, no network, no LLM — and runs
+> the whole pipeline, read *and* write, with zero model calls. [Re-run it yourself →](docs/benchmarks.md)
+
+*Self-hosted OSS — no cloud tier, no signup, no API key. New and pre-1.0: if the reproducibility-first approach resonates, a ⭐ helps others find it, and questions are welcome in [Discussions](https://github.com/alsoleg89/ai-knot/discussions).*
 
 ---
 
@@ -150,8 +152,7 @@ Once the MCP server is live, use the same `add` / `search` / `list` / `delete` l
 
 ## Start here
 
-The strongest memory READMEs in 2026 usually do this in one place: tell you what
-to install and what to run first. `ai-knot` should do the same.
+Find your stack, install it, and run one command to see the full memory loop:
 
 | If you're starting from… | Install | Run this first | What it proves |
 |---|---|---|---|
@@ -310,26 +311,6 @@ If multi-agent memory is part of the product, not a future nice-to-have, this is
 | A regulated or air-gapped system | self-hosted storage and no LLM on recall |
 | A product that must be testable | deterministic retrieval you can lock into regression tests |
 
-## Benchmarks you can rerun
-
-Memory claims in this category swing hard depending on the reader model, judge model, prompts, and scoring rules. `ai-knot` publishes both named-reader QA numbers and deterministic retrieval metrics.
-
-| Benchmark | Metric | ai-knot |
-|---|---|---:|
-| LoCoMo | QA accuracy, cat1-4, `gpt-4.1` reader / `gpt-4o` judge | **78.0%** |
-| LongMemEval | QA accuracy, Oracle, `gpt-4.1` / `gpt-4o` | **59.6%** |
-| LoCoMo | `evidence_recall@5`, deterministic, no LLM | **0.26** vs 0.15 naive |
-| Golden suite | ranking MRR, deterministic, no LLM | **0.83** vs 0.18 naive |
-
-Re-run the deterministic path yourself:
-
-```bash
-AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
-  --mock-judge --skip-multi-agent --backends baseline,ai_knot_no_llm
-```
-
-Full methodology, caveats, and per-conversation tables: [docs/benchmarks.md](docs/benchmarks.md).
-
 ## How it compares
 
 `ai-knot` is the newcomer in a crowded 2026 memory landscape, not the incumbent. Several projects are far more adopted — Mem0 (~60k★), Graphiti (~28k★), Cognee (~27k★), Letta (~24k★), Memori (~15.5k★). `ai-knot`'s wedge is narrow on purpose.
@@ -349,6 +330,26 @@ Several of these also keep the LLM off *recall* (Graphiti, LangMem, Memori). Wha
 The honest wedge: **self-hosted deterministic memory with no LLM required on read or write, a benchmark you can re-run, and real multi-agent governance.**
 
 For the full, checked feature matrix versus each project, use [docs/comparison.md](docs/comparison.md).
+
+## Benchmarks you can rerun
+
+Memory claims in this category swing hard depending on the reader model, judge model, prompts, and scoring rules. `ai-knot` publishes both named-reader QA numbers and deterministic retrieval metrics.
+
+| Benchmark | Metric | ai-knot |
+|---|---|---:|
+| Golden suite | ranking MRR, deterministic, no LLM | **0.83** vs 0.18 naive |
+| LoCoMo | `evidence_recall@5`, deterministic, no LLM | **0.26** vs 0.15 naive |
+| LoCoMo | QA accuracy, cat1-4, `gpt-4.1` reader / `gpt-4o` judge | **78.0%** |
+| LongMemEval | QA accuracy, Oracle, `gpt-4.1` / `gpt-4o` | **59.6%** |
+
+The first two rows are the anchor: deterministic, no LLM, fixed seeds — re-run and you get the same numbers. The QA rows are LLM-judged (reader + judge named), so they move with the models; the deterministic rows don't.
+
+```bash
+AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
+  --mock-judge --skip-multi-agent --backends baseline,ai_knot_no_llm
+```
+
+Full methodology, caveats, and per-conversation tables: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Performance
 
