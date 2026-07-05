@@ -3,7 +3,7 @@
 ![npm](https://img.shields.io/npm/v/ai-knot)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Self-hosted memory for AI agents — for Node.js and TypeScript.**
+**The deterministic memory layer for AI agents — for Node.js and TypeScript.**
 
 Your agent forgets everything between sessions, and replaying the whole conversation into
 every prompt is slow and expensive. ai-knot remembers *facts*, not transcripts: it recalls

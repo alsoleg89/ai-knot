@@ -3,9 +3,9 @@
 
 # 🪢 ai-knot
 
-### Self-hosted memory for AI agents — with no LLM on the read path *or* the write path.
+### The deterministic memory layer for AI agents.
 
-**Stop replaying the whole chat log to recover three facts.** ai-knot stores facts, recalls only what the next turn needs, and keeps recall deterministic — so it's cheap, reproducible, and testable.
+**No LLM on the read path _or_ the write path.** ai-knot keeps a self-hosted, MCP-native knowledge store, recalls only the few facts each turn needs, and does it deterministically — cheap, reproducible, and testable. Temporal, multi-agent, and air-gappable by default.
 
 [![CI](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml/badge.svg)](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/ai-knot)](https://pypi.org/project/ai-knot/)
@@ -52,25 +52,18 @@ conversation / tool output -> add or learn -> ai-knot -> SQLite | PostgreSQL | Y
 next question              -> search / recall -> 3-5 relevant facts -> next prompt
 ```
 
-## Why chat history is not memory
+## The 2026 memory problem
 
-Most agents still treat memory as a transcript problem:
+First-generation memory layers (2023–2024) fixed transcript replay by throwing *more* LLM at it — a model to extract facts on write, a model to pick what to retrieve, sometimes a model to build a graph. That trades one problem for three: cost on every call, non-determinism you can't test, and benchmark numbers nobody can reproduce.
 
-```text
-❌ replay the log                          ✅ keep the knowledge
-   every successful chat makes               write facts once
-   the next prompt bigger                    recall only what this turn needs
-   latency and cost grow                     no LLM on the read path
-   hard to inspect or correct                add / search / list / delete everywhere
-```
+| ❌ First-gen (2023–2024) | ✅ ai-knot (2026) |
+|---|---|
+| LLM on extraction, retrieval, and ranking | no LLM on the read path *or* the write path |
+| token + latency cost on every turn | recall is cheap and testable in CI |
+| benchmark scores nobody can re-run | one deterministic number that can't drift |
+| a black box you overwrite blindly | lineage, supersession, and audit built in |
 
-`ai-knot` turns memory into a product a developer can actually debug:
-
-- deterministic recall instead of a hidden model call on the hot path
-- facts instead of transcript replay
-- SQLite, PostgreSQL, or YAML under one API
-- the same memory loop across Python, TypeScript, CLI, MCP, and HTTP
-- direct paths for Claude, OpenClaw, CrewAI, LangGraph, LlamaIndex, AutoGen, OpenAI Agents SDK, and PydanticAI
+`ai-knot` is the 2026 take: memory as a **deterministic, self-hosted, MCP-native layer** you can inspect, test, and run air-gapped — the same `add / search / list / delete` loop across Python, TypeScript, CLI, MCP, and HTTP, with direct paths for Claude, OpenClaw, CrewAI, LangGraph, LlamaIndex, AutoGen, OpenAI Agents SDK, and PydanticAI.
 
 ## Fastest proof (30 seconds)
 
