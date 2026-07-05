@@ -337,6 +337,14 @@ Memory claims in this category swing hard depending on the reader model, judge m
 
 The first two rows are the anchor: deterministic, no LLM, fixed seeds — re-run and you get the same numbers. The QA rows are LLM-judged (reader + judge named), so they move with the models; the deterministic rows don't.
 
+**LoCoMo by category — nothing cherry-picked.** Reader `gpt-4.1`, judge `gpt-4o`; categories 1–4 scored (category 5 is adversarial and excluded per the dataset authors — the exact step the field's headline benchmark dispute got wrong):
+
+| cat1 single-hop | cat2 multi-hop | cat3 temporal | cat4 open-ended | overall |
+|:---:|:---:|:---:|:---:|:---:|
+| 60.6% | 67.6% | 63.5% | **89.4%** | **78.0%** |
+
+Strong on open-ended synthesis, honestly mid on single-hop and temporal — and 74–84% on every one of the 10 conversations, not one lucky run.
+
 ```bash
 AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
   --mock-judge --skip-multi-agent --backends baseline,ai_knot_no_llm
