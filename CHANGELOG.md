@@ -9,6 +9,11 @@ Versioning: [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Real GigaChat (Sber) provider (`ai_knot.providers.gigachat`): OAuth2 authorization-key
+  exchange with automatic access-token caching, configurable scope
+  (`GIGACHAT_SCOPE`), and a TLS control (`GIGACHAT_VERIFY_SSL`) for the Russian
+  Ministry of Digital Development root CA. Replaces the previous bearer-token-only
+  OpenAI-compat shim, which could not authenticate with a durable GigaChat credential.
 - LangChain / LangGraph adapters (`ai_knot.integrations.langchain`):
   `AiKnotRetriever` (Runnable `invoke` / `get_relevant_documents`) and
   `AiKnotChatMemory` (`save_context` / `load_memory_variables`, the

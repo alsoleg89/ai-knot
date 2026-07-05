@@ -141,12 +141,18 @@ Zep/Graphiti or Cognee are the natural fits — that *is* their product. `ai-kno
 does not build a graph; it trades graph reasoning for determinism and a smaller operational
 surface (no Neo4j/FalkorDB/Neptune to run).
 
-### "I already use LangGraph / LlamaIndex / CrewAI."
+### "I already use LangGraph or CrewAI."
 
 Those are host ecosystems, not competitors. `ai-knot` ships adapters for each
 ([integrations.md](integrations.md)); use it when you want deterministic, self-hosted
 long-term memory *under* the runtime you already have. LangMem is the most native choice if
 you never leave LangGraph and don't need portability, MCP, or a graph-free deterministic store.
+
+### "I already use LlamaIndex."
+
+LlamaIndex is the host runtime here, not the competitor. `ai-knot` fits the same
+`memory=...` seam through `AiKnotLlamaIndexMemory`, so you keep the LlamaIndex runtime and
+swap only the long-term memory layer for a deterministic, self-hosted one.
 
 ### "The benchmark numbers confuse me — who's actually best?"
 

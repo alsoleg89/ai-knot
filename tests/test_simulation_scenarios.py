@@ -390,6 +390,7 @@ class TestProviderScenarios:
     def test_22_provider_factory_all_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """create_provider() creates correct class for each supported provider."""
         from ai_knot.providers.anthropic import AnthropicProvider
+        from ai_knot.providers.gigachat import GigaChatProvider
         from ai_knot.providers.openai_compat import OpenAICompatProvider
 
         provider = create_provider("openai", "sk-fake")
@@ -399,7 +400,7 @@ class TestProviderScenarios:
         assert isinstance(provider, AnthropicProvider)
 
         provider = create_provider("gigachat", "fake-token")
-        assert isinstance(provider, OpenAICompatProvider)
+        assert isinstance(provider, GigaChatProvider)
 
         provider = create_provider("qwen", "fake-qwen-key")
         assert isinstance(provider, OpenAICompatProvider)

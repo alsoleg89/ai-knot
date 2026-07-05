@@ -287,6 +287,27 @@ Six providers for fact extraction:
 | Qwen | `qwen` | `QWEN_API_KEY` |
 | Any OpenAI-compatible | `openai-compat` | `LLM_API_KEY` |
 
+### GigaChat (Sber)
+
+GigaChat is not a plain bearer-token API. Set `GIGACHAT_API_KEY` to your **authorization
+key** (the base64 `client_id:client_secret` from the developer cabinet) — the provider
+exchanges it for a short-lived access token over OAuth2 and caches it automatically.
+
+- `GIGACHAT_SCOPE` — `GIGACHAT_API_PERS` (default, individuals), `GIGACHAT_API_B2B`, or
+  `GIGACHAT_API_CORP`.
+- `GIGACHAT_VERIFY_SSL` — GigaChat serves certificates from the Russian Ministry of Digital
+  Development root CA, which is not in most default trust stores. Point this at that CA
+  bundle, or set it to `false` to disable verification (only if you accept the risk).
+  Defaults to secure verification.
+- Models: `GigaChat` (default), `GigaChat-Pro`, `GigaChat-Max`.
+
+```python
+kb = KnowledgeBase("agent", provider="gigachat", api_key="<authorization-key>")
+# or, for full control:
+from ai_knot.providers.gigachat import GigaChatProvider
+provider = GigaChatProvider("<authorization-key>", scope="GIGACHAT_API_CORP", verify_ssl="/path/to/russian_ca.pem")
+```
+
 ---
 
 ## LLM-enhanced features

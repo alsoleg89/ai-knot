@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -96,8 +97,18 @@ class TestCreateProvider:
 
     def test_gigachat_provider(self) -> None:
         p = create_provider("gigachat", "test-key")
-        assert p.name == "openai-compat"
+        assert p.name == "gigachat"
         assert p.default_model == "GigaChat"
+
+    def test_gigachat_scope_and_verify_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from ai_knot.providers.gigachat import GigaChatProvider
+
+        monkeypatch.setenv("GIGACHAT_SCOPE", "GIGACHAT_API_CORP")
+        monkeypatch.setenv("GIGACHAT_VERIFY_SSL", "false")
+        p = create_provider("gigachat", "auth-key")
+        assert isinstance(p, GigaChatProvider)
+        assert p._scope == "GIGACHAT_API_CORP"
+        assert p._verify_ssl is False
 
     def test_qwen_provider(self) -> None:
         p = create_provider("qwen", "test-key")
@@ -228,3 +239,55 @@ class TestYandexProviderCall:
         with patch("httpx.post", return_value=mock_resp):
             result = p.call("system prompt", "user message", "yandexgpt-lite")
         assert result == "extracted facts"
+
+
+class TestGigaChatProviderCall:
+    """GigaChatProvider.call(): OAuth2 token exchange + chat completion, both mocked."""
+
+    def _token_resp(self) -> MagicMock:
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {
+            "access_token": "tok-abc",
+            "expires_at": int((time.time() + 3600) * 1000),  # epoch ms, far in the future
+        }
+        return resp
+
+    def _chat_resp(self, content: str = "extracted facts") -> MagicMock:
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"choices": [{"message": {"content": content}}]}
+        return resp
+
+    def test_fetches_token_then_completes(self) -> None:
+        p = create_provider("gigachat", "auth-key")
+        with patch("httpx.post", side_effect=[self._token_resp(), self._chat_resp()]) as mock_post:
+            result = p.call("system prompt", "user message", "GigaChat")
+        assert result == "extracted facts"
+        assert mock_post.call_count == 2
+        # First request is the OAuth token exchange with the authorization key.
+        token_call = mock_post.call_args_list[0]
+        assert token_call.args[0].endswith("/oauth")
+        assert token_call.kwargs["data"] == {"scope": "GIGACHAT_API_PERS"}
+        assert token_call.kwargs["headers"]["Authorization"] == "Basic auth-key"
+        # Second request is the chat completion using the fetched bearer token.
+        chat_call = mock_post.call_args_list[1]
+        assert chat_call.args[0].endswith("/chat/completions")
+        assert chat_call.kwargs["headers"]["Authorization"] == "Bearer tok-abc"
+
+    def test_token_cached_across_calls(self) -> None:
+        p = create_provider("gigachat", "auth-key")
+        responses = [self._token_resp(), self._chat_resp("a"), self._chat_resp("b")]
+        with patch("httpx.post", side_effect=responses) as mock_post:
+            assert p.call("s", "u", "GigaChat") == "a"
+            assert p.call("s", "u", "GigaChat") == "b"
+        # 1 token fetch + 2 completions — the token is reused, not re-fetched.
+        assert mock_post.call_count == 3
+
+    def test_verify_ssl_disabled_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("GIGACHAT_VERIFY_SSL", "false")
+        p = create_provider("gigachat", "auth-key")
+        with patch("httpx.post", side_effect=[self._token_resp(), self._chat_resp()]) as mock_post:
+            p.call("s", "u", "GigaChat")
+        for call in mock_post.call_args_list:
+            assert call.kwargs["verify"] is False

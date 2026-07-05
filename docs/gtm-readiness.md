@@ -20,15 +20,15 @@ playbook) and [positioning.md](positioning.md) (the message house).
 | GitHub Release | **v0.9.3 (stale)** ⚠️ | 0.10.0 / 0.11.0 never got a Release; page misrepresents the project |
 | `main` branch | **old orphan `41366ca`** ⚠️ | All hardening work sits unreleased on `feat/production-hardening` |
 | GitHub Pages | **not enabled (404)** ⚠️ | Landing page, whitepaper, and benchmark history are dark |
-| Repo description/topics | **Fixed ✅** | Was `antrophic` typo + `gigachat` noise; now clean + 20 discoverable topics |
+| Repo description/topics | **Fixed ✅** | Fixed `antrophic` typo; description now matches positioning; 20 discoverable topics (incl. real providers like `gigachat`) |
 | Comparison page | **Fixed ✅** | Was fictional competitor names; now real, checked (Mem0/Zep/Letta/Cognee/LangMem/Memori) |
 
 ## Done in this pass (by hand)
 
 1. **Repo metadata cleaned and applied live** (`gh api`): description now
    "Deterministic, self-hosted long-term memory for AI agents…"; topics replaced with 20
-   relevant, discoverable tags (removed the `antrophic` typo and misleading `gigachat`);
-   widened `RECOMMENDED_GITHUB_TOPICS` in `scripts/check_public_release.py` to match.
+   relevant, discoverable tags (removed the `antrophic` typo; kept `gigachat`, which is a
+   real provider); widened `RECOMMENDED_GITHUB_TOPICS` in `scripts/check_public_release.py`.
 2. **Rewrote `docs/comparison.md`** with real, per-capability-checked competitors and an
    honest maturity/star disclosure. Removed the fictional OpenViking/MemPalace/Engram names.
 3. **Rewrote the README "How it compares" section** to match (real names, honest wedge).

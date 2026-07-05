@@ -27,7 +27,6 @@ RECOMMENDED_GITHUB_TOPICS = [
     "agent-memory",
     "ai-memory",
     "long-term-memory",
-    "llm-memory",
     "memory",
     "ai-agents",
     "llm",
@@ -44,6 +43,7 @@ RECOMMENDED_GITHUB_TOPICS = [
     "python",
     "typescript",
     "openai",
+    "gigachat",
 ]
 NPM_README_MARKERS = [
     "npx ai-knot-demo",
