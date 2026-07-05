@@ -37,7 +37,7 @@ the deterministic path:
 | Component | When it connects | How to stay offline |
 |---|---|---|
 | **LLM providers** (`ai_knot.providers.*`) | only the opt-in `learn()` extraction and the optional semantic conflict resolver | use `add` / `add_resolved` (direct insertion, no model), or point `learn()` at a **local** model (Ollama / vLLM) |
-| **Dense embedder** (`ai_knot.embedder`) | only when you set `embed_url` | leave it unset or pass `embed_url=""` → deterministic BM25 recall, no embeddings; or point `embed_url` at a **local** embeddings server |
+| **Dense embedder** (`ai_knot.embedder`) | on recall, unless disabled — it targets `AI_KNOT_EMBED_URL` (default `localhost:11434`) | set `AI_KNOT_EMBED_URL=""` (the container's default) → deterministic BM25 recall, no connection; or point it at a **local** embeddings server |
 | **PostgreSQL driver** | only if you choose the Postgres backend | it connects to **your** database; or use SQLite (a local file) or YAML |
 
 SQLite and YAML are local file I/O and open no socket. There is no fourth thing.
@@ -53,7 +53,9 @@ SQLite and YAML are local file I/O and open no socket. There is no fourth thing.
 - **Container:** build the image from the repo [`Dockerfile`](../Dockerfile) on a
   connected box, then move it in with `docker save ai-knot | ...` / `docker load`.
   The image runs the HTTP sidecar locally so non-Python hosts (Node/TS, other
-  services) can use the same deterministic core over `localhost` with no egress.
+  services) can use the same deterministic core over `localhost` with no egress. It
+  defaults to `AI_KNOT_EMBED_URL=""` — BM25-only recall, no outbound connection at
+  all; set it to a reachable endpoint only if you want the dense channel.
 
 ## Storage under your control
 

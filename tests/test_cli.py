@@ -1054,3 +1054,25 @@ class TestAuditExport:
         assert result.exit_code == 0
         assert '"trust_events": []' in result.output
         assert '"usage_events": []' in result.output
+
+
+class TestEmbedUrlEnv:
+    """The CLI honours AI_KNOT_EMBED_URL so serve / the container can go BM25-only."""
+
+    def test_create_kb_disables_dense_when_env_empty(
+        self, monkeypatch: pytest.MonkeyPatch, data_dir: str
+    ) -> None:
+        from ai_knot.cli import _create_kb
+
+        monkeypatch.setenv("AI_KNOT_EMBED_URL", "")
+        kb = _create_kb(storage_backend="yaml", data_dir=data_dir, dsn=None, agent_id="a")
+        assert kb._embed_url == ""
+
+    def test_create_kb_defaults_when_env_unset(
+        self, monkeypatch: pytest.MonkeyPatch, data_dir: str
+    ) -> None:
+        from ai_knot.cli import _create_kb
+
+        monkeypatch.delenv("AI_KNOT_EMBED_URL", raising=False)
+        kb = _create_kb(storage_backend="yaml", data_dir=data_dir, dsn=None, agent_id="a")
+        assert kb._embed_url == "http://localhost:11434"

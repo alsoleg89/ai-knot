@@ -29,6 +29,11 @@ Versioning: [Semantic Versioning](https://semver.org/).
   blocks all outbound sockets and runs the full write + read + pool + audit loop),
   the complete network surface, offline install (wheelhouse / container), and
   offline audit export.
+- Fix: the CLI — and therefore `ai-knot serve` and the container — now honours the
+  `AI_KNOT_EMBED_URL` environment variable, so recall can be made deterministic
+  BM25-only (`AI_KNOT_EMBED_URL=""`, now the container default) or pointed at a
+  local embeddings endpoint. Previously the CLI always used the `localhost:11434`
+  default and ignored the variable.
 - Container image (`Dockerfile` + `.dockerignore`) that runs the HTTP sidecar, plus
   an HTTP-first reposition of the npm package: TypeScript/Node users can now reach
   the deterministic core over HTTP with **no Python on their machine** (`docker run`),

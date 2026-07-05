@@ -17,7 +17,13 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    AI_KNOT_AGENT_ID=assistant
+    AI_KNOT_AGENT_ID=assistant \
+    AI_KNOT_EMBED_URL=""
+
+# Deterministic BM25-only recall by default — the sidecar makes no outbound
+# connection (matching the air-gap guarantee). To enable the optional dense
+# channel, set AI_KNOT_EMBED_URL to a reachable embeddings endpoint:
+#   docker run -e AI_KNOT_EMBED_URL=http://host.docker.internal:11434 ...
 
 WORKDIR /app
 

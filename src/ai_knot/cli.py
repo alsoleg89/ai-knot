@@ -84,7 +84,11 @@ def _create_kb(
         base_dir=data_dir,
         dsn=dsn,
     )
-    return KnowledgeBase(agent_id=agent_id, storage=storage)
+    # Honour AI_KNOT_EMBED_URL so `serve` / the container can run BM25-only
+    # (set it to "") or point the dense channel at a reachable endpoint. Without
+    # this the CLI always used the localhost:11434 default and ignored the env var.
+    embed_url = os.environ.get("AI_KNOT_EMBED_URL", "http://localhost:11434")
+    return KnowledgeBase(agent_id=agent_id, storage=storage, embed_url=embed_url)
 
 
 def _make_kb(ctx: click.Context, agent_id: str) -> KnowledgeBase:
