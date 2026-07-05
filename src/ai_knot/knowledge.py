@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import logging
 import os
 import re
@@ -1291,7 +1292,7 @@ class KnowledgeBase(_LearningMixin):
                 return fact
         raise KeyError(fact_id)
 
-    def lineage(self, fact_id: str) -> list[Fact]:
+    def lineage(self, fact_id: str) -> builtins.list[Fact]:
         """Return the supersession chain for *fact_id*, newest → oldest.
 
         Walks ``qualifiers["supersedes_id"]`` (written at CAS-supersession time)
@@ -1325,7 +1326,7 @@ class KnowledgeBase(_LearningMixin):
         now: datetime | None = None,
         excluded_ids: set[str] | None = None,
         include_unsupported: bool = False,
-    ) -> list[Fact]:
+    ) -> builtins.list[Fact]:
         """Structured alternative to recall() — returns Fact objects.
 
         Use when you need IDs, types, importance scores, or other metadata.
@@ -1360,7 +1361,7 @@ class KnowledgeBase(_LearningMixin):
         now: datetime | None = None,
         excluded_ids: set[str] | None = None,
         include_unsupported: bool = False,
-    ) -> list[tuple[Fact, float]]:
+    ) -> builtins.list[tuple[Fact, float]]:
         """Like recall_facts() but also returns the relevance score for each fact.
 
         The score is a hybrid value (TF-IDF + retention + importance). Use it
@@ -1392,7 +1393,7 @@ class KnowledgeBase(_LearningMixin):
         top_k: int = 5,
         now: datetime | None = None,
         include_unsupported: bool = False,
-    ) -> tuple[list[tuple[Fact, float]], dict[str, Any]]:
+    ) -> tuple[builtins.list[tuple[Fact, float]], dict[str, Any]]:
         """Diagnostic variant — returns (results, per-stage trace dict).
 
         The trace dict has keys: stage1_candidates, stage3_rrf,
@@ -1409,7 +1410,7 @@ class KnowledgeBase(_LearningMixin):
         )
         return pairs, trace
 
-    def recall_by_tag(self, tag: str, *, include_unsupported: bool = False) -> list[Fact]:
+    def recall_by_tag(self, tag: str, *, include_unsupported: bool = False) -> builtins.list[Fact]:
         """Return all facts that carry the given tag.
 
         Tags are assigned at add() time via the ``tags=`` parameter.
@@ -1427,7 +1428,7 @@ class KnowledgeBase(_LearningMixin):
             if tag in f.tags and (include_unsupported or f.supported is not False)
         ]
 
-    def replace_facts(self, facts: list[Fact]) -> None:
+    def replace_facts(self, facts: builtins.list[Fact]) -> None:
         """Replace all stored facts with the given list (used for import).
 
         Args:
@@ -1482,7 +1483,7 @@ class KnowledgeBase(_LearningMixin):
         self._storage.save_snapshot(self._agent_id, name, facts)
         logger.info("Snapshot '%s' saved for agent '%s'", name, self._agent_id)
 
-    def list_snapshots(self) -> list[str]:
+    def list_snapshots(self) -> builtins.list[str]:
         """Return names of all saved snapshots for this agent.
 
         Returns:

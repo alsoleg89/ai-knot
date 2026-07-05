@@ -718,7 +718,7 @@ def learn(
     kb = _make_kb(ctx, agent_id)
     provider_name = provider or os.environ.get("AI_KNOT_PROVIDER")
     resolved_api_key = api_key or os.environ.get("AI_KNOT_API_KEY")
-    provider_kwargs: dict[str, str] = {}
+    provider_kwargs: dict[str, Any] = {}
     if base_url:
         provider_kwargs["base_url"] = base_url
 

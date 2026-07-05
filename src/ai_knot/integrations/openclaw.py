@@ -47,6 +47,7 @@ Python-native example::
 
 from __future__ import annotations
 
+import builtins
 import warnings
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -232,7 +233,7 @@ class OpenClawMemoryAdapter:
             **kwargs,
         )
 
-    def lineage(self, memory_id: str, *, now: str | None = None) -> list[dict[str, Any]]:
+    def lineage(self, memory_id: str, *, now: str | None = None) -> builtins.list[dict[str, Any]]:
         """Return the supersession chain for one memory, newest -> oldest.
 
         Args:
