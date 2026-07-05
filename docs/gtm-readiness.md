@@ -50,6 +50,13 @@ playbook) and [positioning.md](positioning.md) (the message house).
     that could not authenticate. Restored `gigachat` as a repo topic (it is a real provider).
 11. **Verified DX and link health:** the core `pip install` example entry points and the
     CLI loop run clean offline, and all relative links across 35 markdown files resolve.
+12. **Benchmarked the README against real competitors** (Mem0, Letta, Zep/Graphiti, Cognee,
+    Memori, LangMem, Supermemory). Finding: ai-knot's README is already top-tier structurally
+    (hero, GIF, badges, nav bar, honest comparison). Applied the honest wins — front-loaded the
+    reproducible deterministic number, moved the comparison above the benchmark section, removed
+    leaked meta-copy, added a non-fake community line — while explicitly avoiding the traps the
+    incumbents use (fake social-proof badges, cloud-signup CTA) that would clash with a pure-OSS,
+    reproducibility-first positioning.
 
 ## Prioritized gap list
 
@@ -74,6 +81,12 @@ playbook) and [positioning.md](positioning.md) (the message house).
 8. **Publish the Dev.to deep-dive + whitepaper PDF** (canonical URL on your own Pages).
 9. **Open `awesome-*` list PRs** (awesome-llm, awesome-ai-agents, awesome-mcp-servers,
    awesome-langchain) — slow but compounding distribution.
+10. **Add a benchmark visual** (a simple bar chart of MRR 0.83 vs 0.18 / recall@5 0.26 vs 0.15)
+    near the README benchmark section — every high-star competitor shows a benchmark image;
+    ai-knot only has text tables. On-brand because it's the reproducible number, not the QA one.
+11. **Optional README de-duplication:** "At a glance", "Why teams pick", and "What you can
+    build" overlap. Length is fine; redundancy is the only remaining structural nit — a
+    subjective cut left to the maintainer, not done here to avoid over-editing.
 
 ### P2 — sustained growth (post-launch)
 
