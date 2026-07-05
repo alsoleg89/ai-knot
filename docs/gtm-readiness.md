@@ -58,6 +58,27 @@ playbook) and [positioning.md](positioning.md) (the message house).
     incumbents use (fake social-proof badges, cloud-signup CTA) that would clash with a pure-OSS,
     reproducibility-first positioning.
 
+### Follow-up pass (product-move research → implementation)
+
+Three product moves were each researched with a structured multi-perspective pass, then the
+top recommendation of each was implemented:
+
+13. **Surfaced the multi-agent governance moat** — `docs/multi-agent-governance.md` maps the
+    governed-shared-memory surface (access control, supersession, provenance, trust, audit) to
+    code line-by-line and to the 2026 fleet-memory literature. This closes the sharpest gap
+    found: ten framework case studies existed and **zero** for the actual differentiator. The
+    doc is wired into the README, the docs index, and the examples index.
+14. **Made the governance edge visceral and testable** — `examples/poisoned_pool.py` runs an
+    attacker against a shared pool and shows trust collapse, monotonic-CAS stale-replay
+    rejection, and poison suppression, all computed at runtime with no LLM. Backed by a
+    regression test. This is the un-fakeable, "watch-it-defend-itself" demo an infra tool needs.
+15. **Opened the Node/TS audience** — a `Dockerfile` runs the HTTP sidecar and the npm README
+    now leads with the HTTP client, so TypeScript users reach the deterministic core with **no
+    Python on their machine**. This targets the single biggest reach ceiling (the prior
+    Python-on-PATH requirement). A native pure-TS port was deliberately **not** started: it
+    would fork the reproducibility wedge into per-SDK behaviour and add a permanent maintenance
+    tax; gate it behind real adoption/edge-runtime demand.
+
 ## Prioritized gap list
 
 ### P0 — blocks a credible launch (maintainer action; needs merge/publish rights)

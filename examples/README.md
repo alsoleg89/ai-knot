@@ -50,6 +50,7 @@ paths for launch threads, issue replies, and first-time evaluators.
 | Claude MCP | [`claude_mcp_setup.py`](claude_mcp_setup.py) | exact MCP config block for Claude |
 | HTTP sidecar | [`http_sidecar_surface_demo.py`](http_sidecar_surface_demo.py) | the JSON `add/search/list/get/delete` loop over the same routes exposed by `ai-knot serve` |
 | Browser inspector | [`browser_inspector_demo.py`](browser_inspector_demo.py) | seeded `/inspect` flow over a local store |
+| Multi-agent governance | [`poisoned_pool.py`](poisoned_pool.py) | an attacker floods and poisons a shared pool; trust collapses, a stale replay is rejected by monotonic CAS, and the poisoned endpoint is suppressed — all with no LLM |
 
 ## Real integration examples
 

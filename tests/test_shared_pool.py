@@ -1327,3 +1327,39 @@ class TestPersistTrust:
 
         pool2 = SharedMemoryPool(storage=YAMLStorage(base_dir=str(tmp_path)), persist_stats=True)
         assert pool2._publish_count.get("agent_a", 0) == 1
+
+
+class TestUsageEventLedger:
+    """recall() must write durable fact-usage events when persist_stats is on."""
+
+    def _seed(self, storage: SQLiteStorage, *, persist_stats: bool) -> tuple[SharedMemoryPool, str]:
+        pool = SharedMemoryPool(storage=storage, persist_stats=persist_stats)
+        pool.register("author")
+        pool.register("reader")
+        kb = KnowledgeBase("author", storage=storage, embed_url="")
+        fact = Fact(
+            content="Prod DB is PostgreSQL 16",
+            entity="prod",
+            attribute="db",
+            slot_key="prod::db",
+            value_text="pg16",
+            topic_channel="arch",
+        )
+        kb.replace_facts([fact])
+        pool.publish("author", [fact.id], kb=kb)
+        return pool, fact.id
+
+    def test_recall_logs_usage_events_when_persist_stats(self, sqlite_db: SQLiteStorage) -> None:
+        pool, fact_id = self._seed(sqlite_db, persist_stats=True)
+        pool.recall("what database?", "reader", top_k=3, topic_channel="arch")
+
+        events = sqlite_db.load_usage_events()
+        assert any(e["fact_id"] == fact_id and e["agent_id"] == "reader" for e in events)
+
+    def test_recall_logs_no_usage_events_without_persist_stats(
+        self, sqlite_db: SQLiteStorage
+    ) -> None:
+        pool, _ = self._seed(sqlite_db, persist_stats=False)
+        pool.recall("what database?", "reader", top_k=3, topic_channel="arch")
+
+        assert sqlite_db.load_usage_events() == []

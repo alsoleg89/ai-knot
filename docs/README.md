@@ -6,9 +6,11 @@
 |---|---|
 | [../README.md](../README.md) | Product overview, quickstart, install-by-surface, integration snippets, and examples. |
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent memory, and bi-temporal recall. |
+| [multi-agent-governance.md](multi-agent-governance.md) | The governed-shared-memory surface: access control, supersession, provenance, trust, and audit — mapped to code and to the 2026 literature. |
 | [memory-commands.md](memory-commands.md) | Cross-surface command map for `add`, `search`, `list`, `get`, `delete`, `learn`, and structured correction. |
 | [integrations.md](integrations.md) | Fast routing by ecosystem surface: CrewAI, LangGraph, LangChain, LlamaIndex, AutoGen, OpenAI Agents SDK, PydanticAI, MCP, HTTP, and TypeScript. |
 | [deployment.md](deployment.md) | Install, storage backends, MCP server, HTTP sidecar, browser inspector, observability, security, and scaling. |
+| [air-gapped-deployment.md](air-gapped-deployment.md) | Zero-network guarantee (with a test that enforces it), the complete network surface, offline install, and offline audit export for regulated / air-gapped environments. |
 | [troubleshooting.md](troubleshooting.md) | First-run, install, MCP, npm bridge, and Pages troubleshooting. |
 | [codespaces-quickstart.md](codespaces-quickstart.md) | Install-free first-run flow for GitHub Codespaces. |
 | [../examples/README.md](../examples/README.md) | Runnable example index across the core loop, integrations, MCP, HTTP, browser, and TypeScript paths. |

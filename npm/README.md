@@ -14,8 +14,9 @@ write path**, so recall is cheap, deterministic, and testable.
 npm install ai-knot && npx ai-knot-demo   # 30-second proof, no signup
 ```
 
-TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) engine — it talks
-to the `ai-knot-mcp` subprocess over JSON-RPC. Same deterministic core, and the same
+TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) engine. Reach it
+two ways: over HTTP to a server you run (**no Python on your machine** — just `docker run`), or
+via a local `ai-knot-mcp` subprocess. Same deterministic core either way, and the same
 [benchmark you can re-run yourself](https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md)
 (a retrieval number that can't drift, plus LoCoMo 78.0% with every knob named).
 
@@ -23,8 +24,14 @@ to the `ai-knot-mcp` subprocess over JSON-RPC. Same deterministic core, and the 
 
 ## Requirements
 
-- Node.js 18+
-- Python 3.11+ with `pip`
+Pick the path that fits your host:
+
+- **HTTP client — no Python on your machine.** Node.js 18+ and a running ai-knot
+  server (start one with Docker, below, or point at any host running `ai-knot serve`).
+  This is the lower-friction path for serverless, `node:slim` images, and CI. See
+  [HTTP sidecar client](#http-sidecar-client).
+- **In-process subprocess client.** Node.js 18+ **and** Python 3.11+ with `pip` — the
+  npm package spawns the `ai-knot-mcp` binary on your machine.
 
 ## Install
 
@@ -125,7 +132,15 @@ console.log(await kb.get(fact.id));
 console.log(await kb.lineage(fact.id));
 ```
 
-Start the sidecar first:
+Start the sidecar first — with Docker, so **no Python touches your machine**:
+
+```bash
+# from a clone of the ai-knot repo
+docker build -t ai-knot .
+docker run -p 8000:8000 -v ai-knot-data:/data ai-knot
+```
+
+…or with pip, if you already have Python:
 
 ```bash
 pip install "ai-knot[server]"

@@ -568,11 +568,7 @@ class TestCLIDoctor:
         monkeypatch.setattr(cli_module.Path, "home", lambda: tmp_path)
 
         claude_path = (
-            tmp_path
-            / "Library"
-            / "Application Support"
-            / "Claude"
-            / "claude_desktop_config.json"
+            tmp_path / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
         )
         claude_path.parent.mkdir(parents=True, exist_ok=True)
         claude_path.write_text(
@@ -896,11 +892,7 @@ class TestCLISetup:
         assert "restart Claude" in result.output
         assert "mcp_clients.claude.ai_knot_registered" in result.output
         config_path = (
-            tmp_path
-            / "Library"
-            / "Application Support"
-            / "Claude"
-            / "claude_desktop_config.json"
+            tmp_path / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
         )
         written = json.loads(config_path.read_text(encoding="utf-8"))
         assert written["mcpServers"]["ai-knot"]["env"]["AI_KNOT_AGENT_ID"] == "bot"
@@ -1012,3 +1004,53 @@ class TestCLIServeMCP:
 
         assert result.exit_code != 0
         assert "path must start with '/'" in result.output
+
+
+class TestAuditExport:
+    """ai-knot audit-export dumps the governance ledger as JSON."""
+
+    def test_audit_export_emits_trust_usage_and_grants(
+        self, runner: CliRunner, data_dir: str
+    ) -> None:
+        from ai_knot.knowledge import SharedMemoryPool
+
+        storage = create_storage("sqlite", base_dir=data_dir, dsn=None)
+        pool = SharedMemoryPool(storage=storage, persist_stats=True)
+        pool.register("planner")
+        pool.register("coder")
+        kb = KnowledgeBase("planner", storage=storage, embed_url="")
+        fact = Fact(
+            content="Deploy target is GKE",
+            entity="prod",
+            attribute="deploy",
+            slot_key="prod::deploy",
+            value_text="gke",
+            topic_channel="arch",
+        )
+        kb.replace_facts([fact])
+        pool.publish("planner", [fact.id], kb=kb)
+        pool.grant_read("coder", "team:secops")
+        pool.recall("deploy target?", "coder", top_k=3, topic_channel="arch")
+        pool.flush_stats()
+
+        result = runner.invoke(
+            main, ["--storage", "sqlite", "--data-dir", data_dir, "audit-export"]
+        )
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert any(
+            e["event_type"] == "publish" and e["agent_id"] == "planner"
+            for e in payload["trust_events"]
+        )
+        assert any(e["agent_id"] == "coder" for e in payload["usage_events"])
+        assert payload["grants"]["coder"] == ["team:secops"]
+
+    def test_audit_export_empty_ledger_is_valid_json(
+        self, runner: CliRunner, data_dir: str
+    ) -> None:
+        result = runner.invoke(
+            main, ["--storage", "sqlite", "--data-dir", data_dir, "audit-export"]
+        )
+        assert result.exit_code == 0
+        assert '"trust_events": []' in result.output
+        assert '"usage_events": []' in result.output

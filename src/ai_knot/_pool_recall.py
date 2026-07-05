@@ -117,6 +117,11 @@ class _PoolRecallMixin:
     def get_trust(self, agent_id: str) -> float:  # provided by SharedMemoryPool
         raise NotImplementedError
 
+    def _log_usage_event(  # provided by SharedMemoryPool
+        self, fact_id: str, agent_id: str, recall_session: str = ""
+    ) -> None:
+        raise NotImplementedError
+
     def recall(
         self,
         query: str,
@@ -211,6 +216,7 @@ class _PoolRecallMixin:
                     )
                 consumers = self._fact_consumers.setdefault(fact.id, set())
                 consumers.add(requesting_agent_id)
+                self._log_usage_event(fact.id, requesting_agent_id)
             facet_coverage = 1.0 if facet_result else 0.0
             facet_risk, facet_abstain = _abstention(facet_result, facet_coverage)
             self._last_recall_meta = _RecallMeta(
@@ -411,6 +417,7 @@ class _PoolRecallMixin:
             # Track per-fact consumer agents for auto-promotion.
             consumers = self._fact_consumers.setdefault(fact.id, set())
             consumers.add(requesting_agent_id)
+            self._log_usage_event(fact.id, requesting_agent_id)
             if fact.memory_tier == "pool" and len(consumers) >= self._AUTO_PROMOTE_THRESHOLD:
                 auto_promote_ids.append(fact.id)
 

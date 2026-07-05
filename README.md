@@ -292,7 +292,7 @@ The single-agent path is the easy part. The harder problem is shared memory that
 - deterministic conflict handling
 - trust penalties that survive flooding or laundering attempts
 
-If multi-agent memory is part of the product, not a future nice-to-have, this is one of `ai-knot`'s sharpest edges. Details live in [docs/usage.md](docs/usage.md#multi-agent).
+If multi-agent memory is part of the product, not a future nice-to-have, this is one of `ai-knot`'s sharpest edges. See [docs/multi-agent-governance.md](docs/multi-agent-governance.md) for how it maps to the 2026 governed-shared-memory problem, and watch it defend itself under attack in [`examples/poisoned_pool.py`](examples/poisoned_pool.py) (`python examples/poisoned_pool.py`). Full API: [docs/usage.md](docs/usage.md#multi-agent).
 
 ## What you can build
 

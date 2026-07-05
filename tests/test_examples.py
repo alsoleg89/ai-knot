@@ -199,10 +199,7 @@ def test_example14_browser_inspector_demo_seed(tmp_path: pathlib.Path) -> None:
     assert len(facts) == 7
     assert any("FastAPI" in fact.content for fact in facts)
     assert any("PostgreSQL" in fact.content for fact in facts)
-    assert any(
-        "2099" in fact.content and not fact.is_active()
-        for fact in facts
-    )
+    assert any("2099" in fact.content and not fact.is_active() for fact in facts)
 
 
 def test_example15_notebook_walkthrough_exists_and_mentions_core_flow() -> None:
@@ -213,10 +210,7 @@ def test_example15_notebook_walkthrough_exists_and_mentions_core_flow() -> None:
     cells = notebook["cells"]
     assert len(cells) >= 6
 
-    source_text = "\n".join(
-        "".join(cell.get("source", []))
-        for cell in cells
-    )
+    source_text = "\n".join("".join(cell.get("source", [])) for cell in cells)
     assert "Point-in-time recall" in source_text
     assert "browser_inspector_demo.py" in source_text
     assert "what language, framework, and database does the user use?" in source_text
@@ -359,11 +353,11 @@ def test_example27_npm_http_sidecar_exposes_http_knowledge_base() -> None:
     script = pathlib.Path("npm/examples/http-sidecar.ts").read_text(encoding="utf-8")
 
     assert "HttpKnowledgeBase" in script
-    assert 'AI_KNOT_BASE_URL' in script
+    assert "AI_KNOT_BASE_URL" in script
     assert "await kb.health()" in script
     assert "await kb.search(" in script
     assert "await kb.list()" in script
-    assert 'includeInactive: true' in script
+    assert "includeInactive: true" in script
     assert 'op: "update"' in script
 
 
@@ -406,6 +400,21 @@ def test_example29_function_calling_surface_demo_exposes_plain_callables() -> No
     assert "Python" in result.simulated_answer or "Docker Compose" in result.simulated_answer
 
 
+def test_example30_poisoned_pool_governance_defends_shared_state() -> None:
+    from examples.poisoned_pool import build_demo_result
+
+    result = build_demo_result()
+
+    # The honest agent earns trust by being recalled; the attacker cannot.
+    assert result.honest_trust_after_use > result.attacker_trust_final
+    assert result.attacker_trust_final < result.honest_trust_final
+    # The stale replay of the poisoned fact is rejected by the monotonic CAS guard.
+    assert result.stale_replay_rejected is True
+    # The honest value wins recall and the poisoned endpoint is suppressed.
+    assert "AWS Secrets Manager" in result.winner_content
+    assert result.poison_in_results is False
+
+
 @pytest.mark.parametrize(
     ("module_name", "callable_name"),
     [
@@ -431,6 +440,5 @@ def test_zero_network_surface_demos_do_not_warn_about_missing_embeddings(
         entrypoint()
 
     assert not any(
-        "Embedding endpoint unreachable" in record.getMessage()
-        for record in caplog.records
+        "Embedding endpoint unreachable" in record.getMessage() for record in caplog.records
     )

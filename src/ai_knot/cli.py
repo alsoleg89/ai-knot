@@ -19,6 +19,7 @@ import yaml
 from ai_knot import __version__
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage import create_storage
+from ai_knot.storage.base import ACLStoreCapable, EventLedgerCapable
 from ai_knot.types import ConversationTurn, Fact, MemoryOp, MemoryType
 
 
@@ -45,6 +46,7 @@ class AiKnotGroup(click.Group):
         "lineage": 130,
         "export": 140,
         "import": 150,
+        "audit-export": 155,
         "clear": 160,
         "decay": 170,
     }
@@ -315,8 +317,7 @@ def _emit_or_write_mcp_config(
     client_name = "Claude" if client == "claude" else "OpenClaw"
     click.echo(f"Next: restart {client_name} if it was already running.")
     click.echo(
-        "Then run `ai-knot doctor --json` and check "
-        f"`mcp_clients.{client}.ai_knot_registered`."
+        f"Then run `ai-knot doctor --json` and check `mcp_clients.{client}.ai_knot_registered`."
     )
     click.echo("Inside the client, the memory loop stays `add -> search -> list -> delete`.")
 
@@ -657,9 +658,8 @@ def add_resolved(
         click.echo(f"slot_key={resolved_slot}  version={stored.version}  op={fact.op.value}")
         return
 
-    target = (
-        fact.slot_key
-        or (f"{fact.entity}::{fact.attribute}" if fact.entity and fact.attribute else fact.content)
+    target = fact.slot_key or (
+        f"{fact.entity}::{fact.attribute}" if fact.entity and fact.attribute else fact.content
     )
     if fact.op == MemoryOp.DELETE:
         click.echo(f"Closed matching memory for {target}. No replacement inserted.")
@@ -965,6 +965,54 @@ def import_cmd(ctx: click.Context, agent_id: str, input_file: str) -> None:
     kb = _make_kb(ctx, agent_id)
     kb.replace_facts(facts)
     click.echo(f"Imported {len(facts)} facts for agent '{agent_id}'.")
+
+
+@main.command("audit-export")
+@click.option(
+    "-o", "--output", type=click.Path(), default="", help="Write JSON here (default: stdout)."
+)
+@click.option(
+    "--agent", "agent_filter", default="", help="Only include trust events for this agent."
+)
+@click.pass_context
+def audit_export(ctx: click.Context, output: str, agent_filter: str) -> None:
+    """Export the multi-agent governance audit ledger as JSON.
+
+    Emits the durable trust-change events, fact-usage events, and access-control
+    grants a ``SharedMemoryPool`` records when created with
+    ``persist_stats=True`` — the "who published or recalled what, when, and why
+    trust changed" stream an audit needs, without writing any code. Requires a
+    SQLite or PostgreSQL backend.
+    """
+    storage = create_storage(
+        ctx.obj["storage"], base_dir=ctx.obj["data_dir"], dsn=ctx.obj.get("dsn")
+    )
+    if not isinstance(storage, EventLedgerCapable):
+        raise click.ClickException(
+            f"The {type(storage).__name__} backend does not expose an audit ledger."
+        )
+    trust_events = storage.load_trust_events(agent_filter or None)
+    usage_events = storage.load_usage_events()
+    grants: dict[str, list[str]] = {}
+    if isinstance(storage, ACLStoreCapable):
+        grants = {aid: sorted(scopes) for aid, scopes in storage.load_grants().items()}
+
+    payload = {"trust_events": trust_events, "usage_events": usage_events, "grants": grants}
+    text = json.dumps(payload, indent=2, sort_keys=False)
+    if output:
+        Path(output).write_text(text + "\n", encoding="utf-8")
+        click.echo(
+            f"Wrote {len(trust_events)} trust event(s), {len(usage_events)} usage "
+            f"event(s), and {len(grants)} grant(s) to {output}"
+        )
+    else:
+        click.echo(text)
+    if not trust_events and not usage_events and not grants:
+        click.echo(
+            "Note: the ledger is empty. A SharedMemoryPool records events only when "
+            "created with persist_stats=True.",
+            err=True,
+        )
 
 
 @main.group()

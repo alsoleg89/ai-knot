@@ -9,6 +9,30 @@ Versioning: [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Multi-agent governance guide ([docs/multi-agent-governance.md](docs/multi-agent-governance.md)):
+  the governed-shared-memory surface (access control, temporal supersession,
+  provenance, trust, audit) mapped to code line-by-line and to the 2026 literature
+  on the fleet-memory problem. Surfaces the deterministic multi-agent moat that
+  previously had no showcase doc.
+- Adversarial governance demo (`examples/poisoned_pool.py`): an attacker floods and
+  poisons a shared pool; trust collapses, a stale replay is rejected by monotonic
+  CAS, and the poisoned endpoint is suppressed from recall — every number computed
+  by the library, no LLM. Covered by a regression test.
+- `ai-knot audit-export` CLI: dump the multi-agent governance audit ledger — trust
+  changes, fact-usage events, and access-control grants — as JSON for an auditor,
+  no code required. Includes a fix so pool recall now writes the durable
+  fact-usage stream (`usage_events`) that was defined and documented but never
+  populated; opt-in via `SharedMemoryPool(persist_stats=True)`, so default callers
+  see no change.
+- Air-gapped / regulated deployment guide ([docs/air-gapped-deployment.md](docs/air-gapped-deployment.md))
+  with a **zero-network guarantee enforced by a test** (`tests/test_air_gapped.py`
+  blocks all outbound sockets and runs the full write + read + pool + audit loop),
+  the complete network surface, offline install (wheelhouse / container), and
+  offline audit export.
+- Container image (`Dockerfile` + `.dockerignore`) that runs the HTTP sidecar, plus
+  an HTTP-first reposition of the npm package: TypeScript/Node users can now reach
+  the deterministic core over HTTP with **no Python on their machine** (`docker run`),
+  with the local `ai-knot-mcp` subprocess reframed as the opt-in in-process path.
 - Real GigaChat (Sber) provider (`ai_knot.providers.gigachat`): OAuth2 authorization-key
   exchange with automatic access-token caching, configurable scope
   (`GIGACHAT_SCOPE`), and a TLS control (`GIGACHAT_VERIFY_SSL`) for the Russian
