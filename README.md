@@ -328,6 +328,8 @@ For the full, checked feature matrix versus each project, use [docs/comparison.m
 
 Memory claims in this category swing hard depending on the reader model, judge model, prompts, and scoring rules. `ai-knot` publishes both named-reader QA numbers and deterministic retrieval metrics.
 
+<img src="docs/assets/benchmark.svg" alt="Deterministic retrieval: ai-knot vs naive baseline — ranking MRR 0.83 vs 0.18, precision@5 1.00 vs 0.40, LoCoMo recall@5 0.26 vs 0.15" width="720">
+
 | Benchmark | Metric | ai-knot |
 |---|---|---:|
 | Golden suite | ranking MRR, deterministic, no LLM | **0.83** vs 0.18 naive |
