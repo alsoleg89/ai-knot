@@ -41,6 +41,15 @@ playbook) and [positioning.md](positioning.md) (the message house).
 7. **Sharpened `docs/positioning.md`** — the differentiator is now "no LLM on read *or*
    write" (the defensible claim) with an explicit anti-overclaim guardrail.
 8. **Fixed the dead GitHub Pages benchmark-history link** in the README.
+9. **Reworked the README hero** to lead with the wedge + a pain hook + a one-line
+   no-signup try command + the reproducibility callout, instead of the mid-pack LoCoMo
+   number. Applied the same sharpening to the **npm package README** and the **GitHub
+   Pages landing hero** so all three front doors are consistent.
+10. **Added a real GigaChat (Sber) provider** (`ai_knot.providers.gigachat`) with OAuth2
+    token exchange, caching, scope, and TLS control — replacing a bearer-token-only shim
+    that could not authenticate. Restored `gigachat` as a repo topic (it is a real provider).
+11. **Verified DX and link health:** the core `pip install` example entry points and the
+    CLI loop run clean offline, and all relative links across 35 markdown files resolve.
 
 ## Prioritized gap list
 

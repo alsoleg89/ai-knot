@@ -191,6 +191,6 @@ assistants, and multi-agent systems that need shared state.
 ## Short answers for public threads
 
 - **What is it?** Self-hosted deterministic memory for AI agents.
-- **Why is it different?** No LLM on recall, reproducible benchmarks, multi-agent governance.
+- **Why is it different?** No LLM on the read path *or* the write path, a reproducible benchmark that can't drift, and multi-agent governance.
 - **Why now?** Agent usage is up and memory benchmarks are in a credibility crisis.
 - **What should I try first?** `ai-knot demo` (or `npx ai-knot-demo` for the npm bridge), then the deterministic benchmark command. If you are evaluating a custom tool-calling runtime, use `python examples/function_calling_surface_demo.py`.
