@@ -56,18 +56,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Documentation: reproducible benchmark page with **real LLM-judged LoCoMo (78.0%
   cat1–4) and LongMemEval (59.6% Oracle) results** plus the deterministic retrieval
   suite ([docs/benchmarks.md](docs/benchmarks.md)), a full API guide
-  ([docs/usage.md](docs/usage.md)), a release runbook ([docs/RELEASE.md](docs/RELEASE.md)),
-  and a launch piece ([docs/launch-post.md](docs/launch-post.md)).
-- Launch/distribution docs: positioning, competitive analysis, prioritized gap
-  analysis, FAQ + objections handling, a whitepaper, and a developer-focused
-  article. `docs/README.md` now indexes the full launch kit.
+  ([docs/usage.md](docs/usage.md)), and a release runbook
+  ([docs/RELEASE.md](docs/RELEASE.md)).
+- Launch/distribution docs: positioning, competitive analysis, FAQ + objections
+  handling, a whitepaper, and a developer-focused article.
 - A Codespaces/devcontainer path for install-free trials, a deterministic
-  `examples/hero_demo.py` launch demo, a demo-recording guide, and a buyer-facing
-  comparison guide.
-- GTM launch kit: `docs/launch-plan.md` (channel strategy, a dated 4-week calendar,
-  and paste-ready Show HN / r/LocalLLaMA / X / LinkedIn / Product Hunt / Release copy)
-  and `docs/gtm-readiness.md` (launch-readiness audit + prioritized gap register).
-  The comparison guide and README "How it compares" now name real competitors
+  `examples/hero_demo.py` launch demo, and a buyer-facing comparison guide.
+- The comparison guide and README "How it compares" now name real competitors
   (Mem0, Zep/Graphiti, Letta, Cognee, LangMem, Memori) with per-capability-checked
   claims, and `docs/positioning.md` is sharpened to "no LLM on read *or* write" with
   an anti-overclaim guardrail.

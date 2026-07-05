@@ -43,6 +43,10 @@ def test_docs_index_lists_only_public_product_and_maintainer_docs() -> None:
     assert "launch-handoff.md" not in text
     assert "launch-day-runbook.md" not in text
     assert "output/launch-bundle-v0.11.0" not in text
+    assert "launch-post.md" not in text
+    assert "launch-plan.md" not in text
+    assert "gtm-readiness.md" not in text
+    assert "demo-script.md" not in text
 
 
 def test_buyer_docs_keep_llamaindex_and_public_positioning() -> None:
