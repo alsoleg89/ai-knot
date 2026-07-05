@@ -3,9 +3,9 @@
 
 # 🪢 ai-knot
 
-### Deterministic memory for AI agents.
+### Self-hosted memory for AI agents — with no LLM on the read path *or* the write path.
 
-Store facts instead of transcripts. Recall only what matters. Self-hosted, inspectable, and fast.
+**Stop replaying the whole chat log to recover three facts.** ai-knot stores facts, recalls only what the next turn needs, and keeps recall deterministic — so it's cheap, reproducible, and testable.
 
 [![CI](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml/badge.svg)](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/ai-knot)](https://pypi.org/project/ai-knot/)
@@ -15,7 +15,9 @@ Store facts instead of transcripts. Recall only what matters. Self-hosted, inspe
 
 [**Fastest proof**](#fastest-proof-30-seconds) · [**Basic memory commands**](#basic-memory-commands) · [**Integrations**](docs/integrations.md) · [**Examples**](examples/README.md) · [**Benchmarks**](docs/benchmarks.md) · [**Comparison**](docs/comparison.md) · [**Open in Codespaces**](https://codespaces.new/alsoleg89/ai-knot)
 
-**LoCoMo 78.0% QA · deterministic ranking MRR 0.83 · Python + TypeScript + MCP + HTTP + framework adapters**
+**No LLM on recall · no LLM on write · a benchmark you can re-run · Python · TypeScript · MCP · HTTP**
+
+`pip install ai-knot && ai-knot demo` — 30 seconds, no signup, no API key
 
 **Works with:** Claude · OpenClaw · CrewAI · LangGraph · LlamaIndex · AutoGen · OpenAI Agents SDK · PydanticAI · Vercel AI SDK
 
@@ -24,6 +26,12 @@ Store facts instead of transcripts. Recall only what matters. Self-hosted, inspe
 <img src="docs/assets/hero-demo.gif" alt="ai-knot demo: store facts once, recall only what matters, with deterministic memory persisted across restarts" width="1200" />
 
 </div>
+
+> **Why another memory library?** Every agent-memory benchmark is unreproducible — the same
+> system has been publicly reported at **84%, 58%, and 75%** on LoCoMo, and claims across the
+> field span ~58–92%. ai-knot ships a retrieval number that **can't drift** (fixed seeds, no
+> network, no LLM) and runs the whole pipeline — read *and* write — with zero model calls.
+> [Re-run it yourself →](docs/benchmarks.md)
 
 ---
 
