@@ -84,10 +84,11 @@ def _create_kb(
         base_dir=data_dir,
         dsn=dsn,
     )
-    # Honour AI_KNOT_EMBED_URL so `serve` / the container can run BM25-only
-    # (set it to "") or point the dense channel at a reachable endpoint. Without
-    # this the CLI always used the localhost:11434 default and ignored the env var.
-    embed_url = os.environ.get("AI_KNOT_EMBED_URL", "http://localhost:11434")
+    # Offline by default: with no AI_KNOT_EMBED_URL set the CLI runs BM25-only, so a
+    # fresh `pip install` needs no embedding server and makes no network call on any
+    # command. Point AI_KNOT_EMBED_URL at a reachable endpoint (Ollama/OpenAI) to opt
+    # into the dense channel.
+    embed_url = os.environ.get("AI_KNOT_EMBED_URL", "")
     return KnowledgeBase(agent_id=agent_id, storage=storage, embed_url=embed_url)
 
 

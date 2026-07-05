@@ -1068,11 +1068,12 @@ class TestEmbedUrlEnv:
         kb = _create_kb(storage_backend="yaml", data_dir=data_dir, dsn=None, agent_id="a")
         assert kb._embed_url == ""
 
-    def test_create_kb_defaults_when_env_unset(
+    def test_create_kb_is_offline_by_default_when_env_unset(
         self, monkeypatch: pytest.MonkeyPatch, data_dir: str
     ) -> None:
         from ai_knot.cli import _create_kb
 
+        # No AI_KNOT_EMBED_URL -> BM25-only: no embedding server, no network call.
         monkeypatch.delenv("AI_KNOT_EMBED_URL", raising=False)
         kb = _create_kb(storage_backend="yaml", data_dir=data_dir, dsn=None, agent_id="a")
-        assert kb._embed_url == "http://localhost:11434"
+        assert kb._embed_url == ""

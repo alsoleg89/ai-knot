@@ -495,8 +495,8 @@ class TestCLIScenarios:
         assert "Docker" in r.output
         assert "2 facts total" in r.output
 
-        # Recall
-        r = runner.invoke(main, ["--data-dir", data_dir, "recall", "cli_agent", "what language?"])
+        # Recall (CLI is offline-by-default = BM25-only, so the query shares a lexical term)
+        r = runner.invoke(main, ["--data-dir", data_dir, "recall", "cli_agent", "Python"])
         assert r.exit_code == 0
         assert "Python" in r.output
 

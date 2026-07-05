@@ -466,6 +466,25 @@ class TestLLMFeatures:
         # call_with_retry should never be invoked for query expansion
         provider.call.assert_not_called()
 
+    def test_recall_default_is_llm_free_even_with_provider(self, tmp_path: pathlib.Path) -> None:
+        """Default (llm_recall unset) never expands via the provider, even when one is
+        configured — the provider is for learn()-style writes, so recall stays LLM-free."""
+        provider = MagicMock()
+        provider.name = "mock"
+        provider.default_model = "gpt-4o"
+
+        storage = YAMLStorage(base_dir=str(tmp_path))
+        kb = KnowledgeBase(
+            agent_id="agent",
+            storage=storage,
+            provider=provider,
+            # llm_recall intentionally not passed -> honest default is OFF
+        )
+        kb.add("Some fact")
+        kb.recall("query")
+
+        provider.call.assert_not_called()
+
     def test_expand_query_no_provider_warns(
         self, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
     ) -> None:

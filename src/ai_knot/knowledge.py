@@ -218,7 +218,11 @@ class KnowledgeBase(_LearningMixin):
         self._default_api_key = api_key
         self._default_model = model
         self._decay_config = decay_config
-        self._llm_recall = llm_recall if llm_recall is not None else (provider is not None)
+        # Default OFF even when a provider is configured: recall stays LLM-free (no
+        # query-expansion call) unless the caller explicitly opts in. This keeps the
+        # "no LLM on the read path" guarantee true by default; the provider is for
+        # learn()-style writes, not recall.
+        self._llm_recall = bool(llm_recall)
         self._expansion_weight = expansion_weight
         self._query_expander: LLMQueryExpander | None = None
         self._default_provider_kwargs: dict[str, str] = dict(provider_kwargs)

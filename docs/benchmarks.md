@@ -71,11 +71,12 @@ claimed → 58.4% corrected → 75.1% Zep's rebuttal; Mem0 high-60s (own paper) 
 point — none of these is comparable to another without the same reader, judge,
 prompts, and category set.
 
-> **Reproduce it.** From the `aiknotbench` harness with an OpenAI key:
-> `run -r locomo --model gpt-4.1 --judge gpt-4o --types 1,2,3,4 --top-k 30`.
-> The number depends on the reader/judge you choose — that is true of every number
-> in the landscape above, which is exactly why the [deterministic suite](#deterministic-retrieval-suite)
-> exists.
+> **What you can re-run — and what you can't.** The QA score above depends on the
+> reader, judge, and retrieval config named at the top of this section, so reproducing
+> it means bringing your own reader/judge LLM and an embedding endpoint — exactly like
+> every number in the landscape above. What *is* one command from a fresh clone, with
+> no LLM and no network, is the [deterministic retrieval suite](#deterministic-retrieval-suite)
+> below — the number ai-knot actually leads on.
 
 ---
 
