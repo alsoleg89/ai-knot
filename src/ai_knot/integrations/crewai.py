@@ -93,8 +93,10 @@ def _scope_matches(scope: str, prefix: str | None) -> bool:
         return True
     norm_scope = _normalise_scope(scope)
     norm_prefix = _normalise_scope(prefix)
-    return norm_prefix == "/" or norm_scope == norm_prefix or norm_scope.startswith(
-        norm_prefix.rstrip("/") + "/"
+    return (
+        norm_prefix == "/"
+        or norm_scope == norm_prefix
+        or norm_scope.startswith(norm_prefix.rstrip("/") + "/")
     )
 
 
@@ -152,9 +154,7 @@ def _fallback_extract_memories(content: str) -> list[str]:
         return lines
 
     sentences = [
-        part.strip()
-        for part in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text)
-        if part.strip()
+        part.strip() for part in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text) if part.strip()
     ]
     if 1 < len(sentences) <= 6:
         return sentences
@@ -590,9 +590,7 @@ class AiKnotCrewAIMemory(_CrewAIMemoryBase):
                 if fact_metadata.get(key) != value:
                     return False
         return not (
-            self._fact_private(fact)
-            and not include_private
-            and self._fact_source(fact) != source
+            self._fact_private(fact) and not include_private and self._fact_source(fact) != source
         )
 
     def _record_from_fact(self, fact: Fact, *, score: float | None = None) -> Any:

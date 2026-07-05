@@ -303,9 +303,7 @@ class TestOpenClawMemoryAdapter:
         assert [item["id"] for item in chain] == [current.id]
         assert chain[0]["metadata"]["active"] is False
 
-    def test_update_missing_id_raises(
-        self, adapter: OpenClawMemoryAdapter
-    ) -> None:
+    def test_update_missing_id_raises(self, adapter: OpenClawMemoryAdapter) -> None:
         with pytest.raises(KeyError):
             adapter.update("deadbeef", "Replacement text")
 

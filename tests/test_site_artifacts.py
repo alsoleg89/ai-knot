@@ -75,8 +75,7 @@ def test_developer_article_page_exists_and_is_pages_ready() -> None:
         in html
     )
     assert (
-        'rel="canonical" href="https://alsoleg89.github.io/ai-knot/developer-article.html"'
-        in html
+        'rel="canonical" href="https://alsoleg89.github.io/ai-knot/developer-article.html"' in html
     )
     assert 'property="og:type" content="article"' in html
     assert 'name="keywords"' in html

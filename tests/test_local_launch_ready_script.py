@@ -92,7 +92,9 @@ def test_main_reports_site_article_drift(
     out = capsys.readouterr().out
 
     assert code == 1
-    assert "[FAIL] site article render: drift in ['whitepaper.html', 'developer-article.html']" in out
+    assert (
+        "[FAIL] site article render: drift in ['whitepaper.html', 'developer-article.html']" in out
+    )
 
 
 def test_main_reports_npm_package_audit_failure(
@@ -126,22 +128,32 @@ def test_npm_package_audit_builds_missing_dist_before_audit(
     (npm_dir / "dist" / "cjs").mkdir(parents=True)
     (npm_dir / "dist" / "cjs" / "index.js").write_text("", encoding="utf-8")
 
-    monkeypatch.setattr(module.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+    monkeypatch.setattr(
+        module.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None
+    )
 
     calls: list[list[str]] = []
 
     def fake_run(cmd: list[str], **_: object):
         calls.append(cmd)
         if cmd == ["npm", "run", "build"]:
-            (npm_dir / "dist" / "cjs" / "package.json").write_text('{"type":"commonjs"}', encoding="utf-8")
-            return type("Result", (), {"returncode": 0, "stdout": "> ai-knot@0.11.0 build\n", "stderr": ""})()
+            (npm_dir / "dist" / "cjs" / "package.json").write_text(
+                '{"type":"commonjs"}', encoding="utf-8"
+            )
+            return type(
+                "Result", (), {"returncode": 0, "stdout": "> ai-knot@0.11.0 build\n", "stderr": ""}
+            )()
         if cmd == ["npm", "run", "package:audit"]:
             return type(
                 "Result",
                 (),
                 {
                     "returncode": 0,
-                    "stdout": "Tarball: ai-knot-0.11.0.tgz\nEntries: 46\nNo compiled test files in tarball.\n",
+                    "stdout": (
+                        "Tarball: ai-knot-0.11.0.tgz\n"
+                        "Entries: 46\n"
+                        "No compiled test files in tarball.\n"
+                    ),
                     "stderr": "",
                 },
             )()

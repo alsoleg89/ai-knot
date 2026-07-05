@@ -52,6 +52,4 @@ def test_checked_in_site_articles_match_renderer(tmp_path: Path) -> None:
     generated_article = (tmp_path / "developer-article.html").read_text(encoding="utf-8")
 
     assert generated_whitepaper == Path("docs/site/whitepaper.html").read_text(encoding="utf-8")
-    assert generated_article == Path("docs/site/developer-article.html").read_text(
-        encoding="utf-8"
-    )
+    assert generated_article == Path("docs/site/developer-article.html").read_text(encoding="utf-8")

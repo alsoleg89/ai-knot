@@ -354,9 +354,7 @@ def _resolve_transport(value: str | None) -> str:
     """Normalize and validate the MCP transport selector."""
     transport = (value or "stdio").strip().lower()
     if transport not in _MCP_TRANSPORTS:
-        raise ValueError(
-            "AI_KNOT_MCP_TRANSPORT must be one of: stdio, sse, streamable-http"
-        )
+        raise ValueError("AI_KNOT_MCP_TRANSPORT must be one of: stdio, sse, streamable-http")
     return transport
 
 

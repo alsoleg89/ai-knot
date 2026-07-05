@@ -159,11 +159,20 @@ def test_main_writes_json_and_summary_reports(
             return {
                 "dist-tags": {"latest": "0.9.3"},
                 "description": "Old npm description",
-                "repository": {"type": "git", "url": "git+https://github.com/alsoleg89/ai_knot.git", "directory": "npm"},
+                "repository": {
+                    "type": "git",
+                    "url": "git+https://github.com/alsoleg89/ai_knot.git",
+                    "directory": "npm",
+                },
                 "readme": "# stale",
             }
         if url == module.API_REPO_URL:
-            return {"description": "Old repo description", "homepage": "", "has_pages": False, "topics": []}
+            return {
+                "description": "Old repo description",
+                "homepage": "",
+                "has_pages": False,
+                "topics": [],
+            }
         raise AssertionError(f"unexpected URL: {url}")
 
     def fake_fetch_text(url: str) -> str:

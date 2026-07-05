@@ -179,9 +179,7 @@ class TestLangGraphToolHelpers:
             "get_memory",
         }
 
-    def test_basic_memory_tools_expose_add_search_list_delete_loop(
-        self, kb: KnowledgeBase
-    ) -> None:
+    def test_basic_memory_tools_expose_add_search_list_delete_loop(self, kb: KnowledgeBase) -> None:
         tools = create_basic_memory_tools(kb, top_k=3)
         by_name = {tool.name: tool for tool in tools}
 

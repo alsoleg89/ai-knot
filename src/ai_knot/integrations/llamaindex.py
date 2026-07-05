@@ -69,8 +69,8 @@ class _InMemoryChatHistory:
 
 
 def _role_name(message: object) -> str:
-    role: object | None = message.get("role") if isinstance(message, dict) else getattr(
-        message, "role", None
+    role: object | None = (
+        message.get("role") if isinstance(message, dict) else getattr(message, "role", None)
     )
     if hasattr(role, "value"):
         role = role.value
@@ -294,6 +294,7 @@ class _AiKnotLlamaIndexMemoryMixin:
 
 
 if _LLAMAINDEX_AVAILABLE:  # pragma: no cover - exercised when the extra is installed
+
     class AiKnotLlamaIndexMemory(_AiKnotLlamaIndexMemoryMixin, _LlamaBaseMemory):
         """LlamaIndex-compatible long-term memory backed by ``KnowledgeBase``.
 
@@ -422,6 +423,7 @@ if _LLAMAINDEX_AVAILABLE:  # pragma: no cover - exercised when the extra is inst
             )
 
 else:
+
     class AiKnotLlamaIndexMemory(_AiKnotLlamaIndexMemoryMixin):
         """Import-safe fallback with the same public methods as the real adapter."""
 

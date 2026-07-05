@@ -107,9 +107,9 @@ def test_mcp_registry_manifest_and_repo_audit_metadata_are_in_sync() -> None:
 
 
 def test_public_release_audit_workflow_requires_live_pages() -> None:
-    workflow = (
-        REPO_ROOT / ".github" / "workflows" / "public-launch-audit.yml"
-    ).read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / ".github" / "workflows" / "public-launch-audit.yml").read_text(
+        encoding="utf-8"
+    )
 
     assert "scripts/check_public_release.py" in workflow
     assert "--require-pages" in workflow

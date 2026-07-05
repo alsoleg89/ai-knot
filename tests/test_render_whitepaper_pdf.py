@@ -6,7 +6,11 @@ import importlib.util
 from pathlib import Path
 from types import ModuleType
 
-from pypdf import PdfReader
+import pytest
+
+# pypdf is only needed to read back and verify the generated PDF; the renderer
+# itself has no PDF dependency. Skip in environments (e.g. CI) without pypdf.
+PdfReader = pytest.importorskip("pypdf").PdfReader
 
 _SCRIPT_PATH = Path(__file__).resolve().parent.parent / "scripts" / "render_whitepaper_pdf.py"
 
