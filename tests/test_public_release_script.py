@@ -30,7 +30,7 @@ def test_local_versions_are_in_sync() -> None:
         == versions["init"]
         == versions["npm_package"]
         == versions["npm_lock"]
-        == "0.11.0"
+        == "0.12.0"
     )
 
 
@@ -42,7 +42,7 @@ def test_main_reports_failing_public_state(
 
     def fake_fetch_json(url: str) -> dict[str, Any]:
         if url == module.PYPI_URL:
-            return {"info": {"version": "0.11.0"}}
+            return {"info": {"version": "0.12.0"}}
         if url == module.NPM_URL:
             return {
                 "dist-tags": {"latest": "0.9.3"},
@@ -96,10 +96,10 @@ def test_main_reports_green_state(
 
     def fake_fetch_json(url: str) -> dict[str, Any]:
         if url == module.PYPI_URL:
-            return {"info": {"version": "0.11.0"}}
+            return {"info": {"version": "0.12.0"}}
         if url == module.NPM_URL:
             return {
-                "dist-tags": {"latest": "0.11.0"},
+                "dist-tags": {"latest": "0.12.0"},
                 "description": json.loads(
                     (SCRIPT_PATH.parent.parent / "npm" / "package.json").read_text(encoding="utf-8")
                 )["description"],
@@ -154,7 +154,7 @@ def test_main_writes_json_and_summary_reports(
 
     def fake_fetch_json(url: str) -> dict[str, Any]:
         if url == module.PYPI_URL:
-            return {"info": {"version": "0.11.0"}}
+            return {"info": {"version": "0.12.0"}}
         if url == module.NPM_URL:
             return {
                 "dist-tags": {"latest": "0.9.3"},
@@ -190,6 +190,6 @@ def test_main_writes_json_and_summary_reports(
     assert code == 1
     report = json.loads(json_out.read_text(encoding="utf-8"))
     summary = summary_out.read_text(encoding="utf-8")
-    assert report["local_version"] == "0.11.0"
+    assert report["local_version"] == "0.12.0"
     assert "npm matches local" in report["failures"]
     assert "Likely next actions:" in summary

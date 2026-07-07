@@ -548,7 +548,7 @@ class TestCLIDoctor:
         import json
 
         payload = json.loads(result.output)
-        assert payload["ai_knot_version"] == "0.11.0"
+        assert payload["ai_knot_version"] == "0.12.0"
         assert payload["cli"]["storage_backend"] == "sqlite"
         assert payload["cli"]["data_dir"] == str(pathlib.Path(data_dir).resolve())
         assert "mcp_clients" in payload
