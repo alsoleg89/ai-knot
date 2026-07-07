@@ -5,7 +5,7 @@
 
 ### The deterministic memory layer for AI agents.
 
-**No LLM on the read path _or_ the write path.** ai-knot keeps a self-hosted, MCP-native knowledge store, recalls only the few facts each turn needs, and does it deterministically — cheap, reproducible, and testable. Temporal, multi-agent, and air-gappable by default.
+**No LLM on the read path _or_ the write path.** ai-knot keeps a self-hosted, MCP-native knowledge store, recalls only the few facts each turn needs, and does it deterministically — cheap, fast, and testable. Multi-agent, temporal, and air-gappable by default.
 
 [![CI](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml/badge.svg)](https://github.com/alsoleg89/ai-knot/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/ai-knot)](https://pypi.org/project/ai-knot/)
@@ -15,7 +15,7 @@
 
 [**Fastest proof**](#fastest-proof-30-seconds) · [**Basic memory commands**](#basic-memory-commands) · [**Integrations**](docs/integrations.md) · [**Examples**](examples/README.md) · [**Benchmarks**](docs/benchmarks.md) · [**Comparison**](docs/comparison.md) · [**Open in Codespaces**](https://codespaces.new/alsoleg89/ai-knot)
 
-**No LLM on recall · no LLM on write · a benchmark you can re-run · Python · TypeScript · MCP · HTTP**
+**No LLM on read or write · shared memory for teams of agents · one-line integration · Python · TypeScript · MCP · HTTP**
 
 `pip install ai-knot && ai-knot demo` — 30 seconds, no signup, no API key
 
@@ -27,13 +27,15 @@
 
 </div>
 
-> **Why another memory library?** Every agent-memory benchmark is unreproducible — the same
-> system has been publicly reported at **84%, 58%, and 75%** on LoCoMo, and claims across the
-> field span ~58–92%. ai-knot ships a retrieval number that **can't drift** — deterministic
-> ranking **MRR 0.83 vs 0.18** for naive BM25, same fixed seeds, no network, no LLM — and runs
-> the whole pipeline, read *and* write, with zero model calls. [Re-run it yourself →](docs/benchmarks.md)
+> **Why another memory library?** Most memory layers put an LLM in the loop — a model to extract
+> on write, a model to rank on read — so every turn costs tokens and latency. ai-knot doesn't:
+> recall is **pure retrieval — $0 per call, milliseconds, fully offline, deterministic**. It's
+> **built for teams of agents** — shared memory with trust, provenance, and visibility, not one
+> bag of vectors everyone writes to and poisons — and **drops into your stack in one line**: MCP,
+> HTTP, or native adapters for Claude, LangGraph, CrewAI, LlamaIndex, AutoGen, OpenAI Agents, and
+> PydanticAI. Quality holds up: **78% on LoCoMo** with the optional embedding dial. [See the benchmarks →](docs/benchmarks.md)
 
-*Self-hosted OSS — no cloud tier, no signup, no API key. New and pre-1.0: if the reproducibility-first approach resonates, a ⭐ helps others find it, and questions are welcome in [Discussions](https://github.com/alsoleg89/ai-knot/discussions).*
+*Self-hosted OSS — no cloud tier, no signup, no API key. New and pre-1.0: if the no-LLM, self-hosted approach resonates, a ⭐ helps others find it, and questions are welcome in [Discussions](https://github.com/alsoleg89/ai-knot/discussions).*
 
 ---
 
@@ -60,7 +62,7 @@ First-generation memory layers (2023–2024) fixed transcript replay by throwing
 |---|---|
 | LLM on extraction, retrieval, and ranking | no LLM on the read path *or* the write path |
 | token + latency cost on every turn | recall is cheap and testable in CI |
-| benchmark scores nobody can re-run | one deterministic number that can't drift |
+| one shared bag of vectors, no governance | shared memory with trust, provenance, and visibility |
 | a black box you overwrite blindly | lineage, supersession, and audit built in |
 
 `ai-knot` is the 2026 take: memory as a **deterministic, self-hosted, MCP-native layer** you can inspect, test, and run air-gapped — the same `add / search / list / delete` loop across Python, TypeScript, CLI, MCP, and HTTP, with direct paths for Claude, OpenClaw, CrewAI, LangGraph, LlamaIndex, AutoGen, OpenAI Agents SDK, and PydanticAI.
@@ -320,7 +322,7 @@ If multi-agent memory is part of the product, not a future nice-to-have, this is
 
 Several of these also keep the LLM off *recall* (Graphiti, LangMem, Memori). What's rarer: `ai-knot` needs no LLM on the **write** path either — direct fact insertion is the default and `learn()` extraction is optional — so the whole pipeline can run with zero model calls.
 
-The honest wedge: **self-hosted deterministic memory with no LLM required on read or write, a benchmark you can re-run, and real multi-agent governance.**
+The honest wedge: **self-hosted deterministic memory with no LLM required on read or write, one-line integration across your stack, and real multi-agent governance.**
 
 For the full, checked feature matrix versus each project, use [docs/comparison.md](docs/comparison.md).
 

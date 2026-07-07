@@ -9,8 +9,9 @@ posts disagree with this page, this page wins.
 
 ## One-liner
 
-**Deterministic long-term memory for AI agents: store facts instead of transcripts,
-retrieve only what matters, and ship with benchmark numbers a skeptic can re-run.**
+**Long-term memory for AI agents — no LLM on read or write. Store facts, not transcripts;
+recall only what matters, in milliseconds; for one agent or a whole team; drop it into your
+stack in one line.**
 
 ## Short pitch
 
@@ -72,7 +73,7 @@ air-gapped, fully-reproducible deployment possible.
 
 > **Message discipline / honesty guardrail.** Do **not** claim ai-knot is the *only*
 > no-LLM-on-recall system — it isn't, and a developer audience will catch it. Lead with
-> **"no LLM on read *or* write,"** **reproducibility**, and **multi-agent governance** — the
+> **"no LLM on read *or* write,"** **multi-agent governance**, and **one-line integration** — the
 > combination that is genuinely defensible. See [comparison.md](comparison.md) for the
 > checked, per-competitor claims.
 

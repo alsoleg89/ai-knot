@@ -16,9 +16,10 @@ npm install ai-knot && npx ai-knot-demo   # 30-second proof, no signup
 
 TypeScript client for the [ai-knot](https://github.com/alsoleg89/ai-knot) engine. Reach it
 two ways: over HTTP to a server you run (**no Python on your machine** — just `docker run`), or
-via a local `ai-knot-mcp` subprocess. Same deterministic core either way, and the same
-[benchmark you can re-run yourself](https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md)
-(a retrieval number that can't drift, plus LoCoMo 78.0% with every knob named).
+via a local `ai-knot-mcp` subprocess. Same deterministic core either way — recall with **no LLM,
+no network, $0 per call** — plus **shared memory for teams of agents** and one-line hooks for MCP,
+HTTP, and the Vercel AI SDK. Quality holds up: **LoCoMo 78.0%** with the optional embedding dial
+([benchmarks](https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md)).
 
 ---
 

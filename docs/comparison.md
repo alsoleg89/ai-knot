@@ -50,7 +50,7 @@ worth more than a flattering one, and the whole category has a
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Self-hosted OSS core path | ✅ | ✅ | ✅¹ | ✅ | ✅ | ✅ | ✅ |
 | **No LLM required on recall** | ✅ | ❌ | ✅ | ❌ | ◑ | ✅ | ✅ |
-| **No LLM required on write / ingest** | ✅² | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **No LLM required on write / ingest** | ✅² | ◑ | ❌ | ◑ | ❌ | ❌ | ❌ |
 | No knowledge graph / graph DB required | ✅ | ◑ | ❌ | ✅ | ❌ | ✅ | ✅ |
 | Human-readable, git-trackable store (YAML) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ◑³ |
 | Deterministic, reproducible recall | ✅ | ❌ | ◑⁴ | ❌ | ❌ | ◑ | ✅ |
@@ -66,8 +66,10 @@ Legend: ✅ first-class · ◑ partial / not the center of the product · ❌ no
    hosted service built on top of it.
 2. `ai-knot`'s default `add` / `add_resolved` writes are direct fact insertion with **no
    model call**. LLM extraction (`learn`) is an *optional* convenience, not a requirement —
-   so the entire pipeline, write and read, can run with zero LLM calls. Every other project
-   in this table uses an LLM to populate its store.
+   so the entire pipeline, write and read, can run with zero LLM calls. Most of the others use an
+   LLM to populate the store by default; a couple expose a raw-insert escape hatch (e.g. Mem0's
+   `add(infer=False)`, Letta archival inserts), but it bypasses their own extraction — zero-model
+   *structured* writes are ai-knot's default path, not a fallback.
 3. Memori is SQL-native and exportable to SQLite (queryable/auditable), but has no
    human-first YAML store.
 4. Graphiti's *retrieval* is deterministic hybrid search, but the graph it queries is

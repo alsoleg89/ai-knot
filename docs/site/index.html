@@ -449,7 +449,7 @@
         <p class="lede">
           ai-knot is a self-hosted memory layer for agents — with no LLM on the read path or
           the write path. It keeps structured knowledge in SQLite, PostgreSQL, or YAML, recalls
-          only what the next turn needs, and ships a retrieval benchmark you can re-run yourself.
+          only what the next turn needs — for one agent or a whole team — and drops into your stack in one line: MCP, HTTP, or native framework adapters.
         </p>
         <div class="hero__cta">
           <a class="button button--primary" href="https://github.com/alsoleg89/ai-knot">Open the repo</a>
@@ -459,7 +459,7 @@
         <div class="pill-row">
           <span class="pill">No LLM on read or write</span>
           <span class="pill pill--green">MCP + frameworks + HTTP</span>
-          <span class="pill">Self-hosted by default</span>
+          <span class="pill">Shared memory for teams of agents</span>
         </div>
       </div>
       <aside class="hero__panel">
@@ -481,8 +481,8 @@
         <span>Calls needed on the read or write path — run it fully air-gapped</span>
       </div>
       <div class="metric">
-        <strong>0.83</strong>
-        <span>Deterministic retrieval MRR (vs 0.18 naive) — a number that can't drift</span>
+        <strong>$0</strong>
+        <span>Per memory op — no tokens, no API keys, milliseconds on the read path</span>
       </div>
       <div class="metric">
         <strong>78.0%</strong>
