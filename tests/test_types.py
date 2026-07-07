@@ -50,6 +50,20 @@ class TestFact:
         assert fact.importance == 0.5
         assert fact.tags == ["test"]
 
+    def test_string_type_is_coerced_to_enum(self) -> None:
+        # Regression: passing a bare string for ``type`` (as the public
+        # ``KnowledgeBase.add(type="procedural")`` ergonomic and docs do) must
+        # become a MemoryType, or storage round-trips fail on ``fact.type.value``.
+        for raw, expected in (
+            ("semantic", MemoryType.SEMANTIC),
+            ("procedural", MemoryType.PROCEDURAL),
+            ("episodic", MemoryType.EPISODIC),
+        ):
+            fact = Fact(content="x", type=raw)  # type: ignore[arg-type]
+            assert fact.type is expected
+            # The bug surfaced here: a bare str has no ``.value``.
+            assert fact.type.value == raw
+
     def test_unique_ids(self) -> None:
         facts = [Fact(content=f"fact {i}") for i in range(100)]
         ids = {f.id for f in facts}

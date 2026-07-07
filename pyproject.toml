@@ -5,16 +5,31 @@ build-backend = "hatchling.build"
 [project]
 name = "ai-knot"
 version = "0.11.0"
-description = "Agent Knowledge Layer. Extract. Store. Retrieve. Any backend."
+description = "Deterministic, self-hosted long-term memory for AI agents."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Oleg"}]
 requires-python = ">=3.11"
-keywords = ["ai", "agents", "memory", "knowledge", "llm", "rag"]
+keywords = [
+    "ai",
+    "agents",
+    "agent-memory",
+    "ai-memory",
+    "long-term-memory",
+    "context-engineering",
+    "mcp",
+    "langgraph",
+    "llamaindex",
+    "crewai",
+    "autogen",
+    "openai-agents",
+    "pydanticai",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -27,10 +42,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.0"]
+mcp = ["mcp>=1.0,<2"]
 openai = ["openai>=1.0"]
 postgres = ["psycopg[binary]>=3.1"]
 server = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+crewai = ["crewai"]
+autogen = ["autogen-agentchat", "autogen-ext[openai]"]
+agents = ["openai-agents"]
+pydanticai = ["pydantic-ai"]
+langchain = ["langchain-core>=0.3"]
+langgraph = ["langchain-core>=0.3", "langgraph>=0.2"]
+llamaindex = ["llama-index-core>=0.14"]
+integrations = ["crewai", "autogen-agentchat", "autogen-ext[openai]", "openai-agents", "pydantic-ai", "langchain-core>=0.3", "langgraph>=0.2", "llama-index-core>=0.14"]
 benchmark = ["qdrant-client>=1.8", "mem0ai>=0.1", "chromadb>=0.5", "ollama>=0.3"]
 dev = [
     "pytest>=8.0",
@@ -40,6 +63,7 @@ dev = [
     "pytest-timeout>=2.3",
     "ruff>=0.4",
     "mypy>=1.10",
+    "markdown-it-py>=3.0",
     "types-PyYAML>=6.0",
     # HTTP sidecar (server extra) + TestClient — kept in dev so the server tests
     # run in the standard test job without a dedicated CI install step.
@@ -56,6 +80,9 @@ Homepage = "https://github.com/alsoleg89/ai-knot"
 Repository = "https://github.com/alsoleg89/ai-knot"
 Issues = "https://github.com/alsoleg89/ai-knot/issues"
 Documentation = "https://github.com/alsoleg89/ai-knot#readme"
+Benchmarks = "https://github.com/alsoleg89/ai-knot/blob/main/docs/benchmarks.md"
+Integrations = "https://github.com/alsoleg89/ai-knot/blob/main/docs/integrations.md"
+Changelog = "https://github.com/alsoleg89/ai-knot/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_knot"]
@@ -97,8 +124,20 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["httpx", "httpx.*", "click", "click.*", "yaml", "psycopg", "psycopg.*", "mcp", "mcp.*", "sentence_transformers", "sentence_transformers.*", "uvicorn", "uvicorn.*"]
+module = ["httpx", "httpx.*", "click", "click.*", "yaml", "psycopg", "psycopg.*", "mcp", "mcp.*", "sentence_transformers", "sentence_transformers.*", "uvicorn", "uvicorn.*", "crewai", "crewai.*", "agents", "agents.*", "autogen_core", "autogen_core.*", "autogen_agentchat", "autogen_agentchat.*", "autogen_ext", "autogen_ext.*", "llama_index", "llama_index.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Integration adapters bridge optional, untyped third-party libraries: they
+# subclass Any-typed bases, return values from Any APIs, and provide import-safe
+# fallbacks under an if/else import guard. Relax the strict checks that only fire
+# because those libraries are untyped or absent from the type-check environment.
+module = [
+    "ai_knot.integrations.crewai",
+    "ai_knot.integrations.autogen",
+    "ai_knot.integrations.llamaindex",
+]
+disable_error_code = ["misc", "no-any-return", "arg-type", "no-redef"]
 
 [[tool.mypy.overrides]]
 module = ["ai_knot.cli", "ai_knot.mcp_server"]

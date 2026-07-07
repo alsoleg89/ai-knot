@@ -13,11 +13,11 @@ kb = KnowledgeBase(agent_id="demo")
 kb.add("User is a senior backend developer at Acme Corp", importance=0.95)
 kb.add("User prefers Python, dislikes async code", type=MemoryType.PROCEDURAL, importance=0.85)
 kb.add("User deploys everything in Docker", importance=0.80)
-kb.add("Deploy failed last Tuesday", type=MemoryType.EPISODIC, importance=0.40)
+incident_fact = kb.add("Deploy failed last Tuesday", type=MemoryType.EPISODIC, importance=0.40)
 
-# Recall relevant facts for a query.
+# Search relevant facts for a query (alias: recall()).
 print("=== Query: 'how should I write this deployment script?' ===")
-context = kb.recall("how should I write this deployment script?")
+context = kb.search("how should I write this deployment script?")
 print(context)
 
 print()
@@ -25,6 +25,17 @@ print()
 print("=== Query: 'where does the user work?' ===")
 context = kb.recall("where does the user work?")
 print(context)
+
+print()
+
+print("=== Stored facts ===")
+for fact in kb.list():
+    print(f"- {fact.id} [{fact.type.value}] {fact.content}")
+
+print()
+print("=== Delete one noisy fact ===")
+kb.delete(incident_fact.id)
+print(f"Deleted {incident_fact.id}")
 
 print()
 

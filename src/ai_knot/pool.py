@@ -276,6 +276,24 @@ class SharedMemoryPool(_PoolRecallMixin):
                 reason=reason,
             )
 
+    def _log_usage_event(self, fact_id: str, agent_id: str, recall_session: str = "") -> None:
+        """Append a fact-usage event to the durable audit ledger.
+
+        Records that a recall surfaced *fact_id* to *agent_id* — the read-path
+        complement to the trust-change events logged on publish, and the
+        "which recall used which fact" stream an audit needs.  No-op unless the
+        pool was created with ``persist_stats=True`` and the backend implements
+        :class:`EventLedgerCapable`.  Timestamps come from the injectable clock,
+        so audited runs stay deterministic.
+        """
+        if self._persist_stats and isinstance(self._storage, EventLedgerCapable):
+            self._storage.append_usage_event(
+                ts=self._clock().isoformat(),
+                fact_id=fact_id,
+                agent_id=agent_id,
+                recall_session=recall_session,
+            )
+
     def get_trust(self, agent_id: str) -> float:
         """Return the current auto-computed trust score for an agent.
 

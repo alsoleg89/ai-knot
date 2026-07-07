@@ -45,6 +45,10 @@ python -m tests.eval.benchmark.runner --mock-judge
 # Offline, only non-LLM backends (guaranteed zero network calls)
 python -m tests.eval.benchmark.runner --mock-judge --backends baseline,ai_knot_no_llm
 
+# Publish-ready competitor scorecard wrapper
+AI_KNOT_EMBED_URL="" python -m tests.eval.benchmark.runner \
+  --mock-judge --skip-multi-agent --backends baseline,ai_knot_no_llm
+
 # Specific scenarios only
 python -m tests.eval.benchmark.runner --scenarios s1,s3,s5 --mock-judge
 

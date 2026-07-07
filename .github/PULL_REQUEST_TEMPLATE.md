@@ -31,12 +31,16 @@
 - [ ] Storage tests include round-trip + multi-agent isolation
 - [ ] `pytest --cov-fail-under=80` passes
 - [ ] Both YAML and SQLite backends tested (if storage-related)
+- [ ] `npm run build` + `npm run package:audit` pass (if `npm/` changed)
+- [ ] `python scripts/check_local_launch_ready.py` passes (if release-facing docs / scripts / metadata changed)
 
 ## Documentation
 
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`
 - [ ] Docstrings updated for changed public API
 - [ ] `ARCHITECTURE.md` updated if new layer or extension point added
+- [ ] README / `docs/` / `npm/README.md` updated if the developer journey changed
+- [ ] `docs/RELEASE.md` updated too if the maintainer publish path changed
 
 ## Screenshots / output (if applicable)
 

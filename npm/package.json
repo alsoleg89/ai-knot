@@ -1,13 +1,13 @@
 {
   "name": "ai-knot",
   "version": "0.11.0",
-  "description": "TypeScript client for ai-knot — agent memory via MCP stdio bridge",
+  "description": "Deterministic, self-hosted AI agent memory for TypeScript apps via MCP, HTTP sidecars, and the Vercel AI SDK",
   "license": "MIT",
   "author": "Oleg",
   "homepage": "https://github.com/alsoleg89/ai-knot#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alsoleg89/ai_knot.git",
+    "url": "https://github.com/alsoleg89/ai-knot.git",
     "directory": "npm"
   },
   "bugs": {
@@ -16,10 +16,16 @@
   "keywords": [
     "ai",
     "agents",
-    "memory",
-    "knowledge",
-    "llm",
-    "mcp"
+    "agent-memory",
+    "ai-memory",
+    "long-term-memory",
+    "mcp",
+    "model-context-protocol",
+    "typescript",
+    "javascript",
+    "vercel-ai-sdk",
+    "ai-sdk",
+    "openclaw"
   ],
   "engines": {
     "node": ">=18.0.0"
@@ -40,15 +46,27 @@
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
+  "bin": {
+    "ai-knot-demo": "./scripts/demo.mjs",
+    "ai-knot-doctor": "./scripts/doctor.mjs"
+  },
   "files": [
     "dist/",
+    "scripts/demo.mjs",
+    "scripts/doctor.mjs",
     "scripts/postinstall.js",
     "README.md"
   ],
   "scripts": {
-    "build": "npm run build:esm && npm run build:cjs",
+    "build": "npm run clean && npm run build:esm && npm run build:cjs",
     "build:esm": "tsc -p tsconfig.build.json --outDir dist/esm",
     "build:cjs": "tsc -p tsconfig.build.json --outDir dist/cjs --module commonjs --moduleResolution node && node --input-type=module -e \"import{writeFileSync}from'node:fs';writeFileSync('dist/cjs/package.json',JSON.stringify({type:'commonjs'}))\"",
+    "example:basic-memory-loop": "node --import tsx examples/basic-memory-loop.ts",
+    "example:http-sidecar": "node --import tsx examples/http-sidecar.ts",
+    "example:vercel-ai-sdk": "node --import tsx examples/vercel-ai-sdk.ts",
+    "example:vercel-ai-sdk-surface": "node --import tsx examples/vercel-ai-sdk-surface.ts",
+    "doctor": "node scripts/doctor.mjs",
+    "package:audit": "node scripts/package-audit.mjs",
     "typecheck": "tsc --noEmit",
     "clean": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('dist',{recursive:true,force:true})\"",
     "test": "vitest run",
@@ -56,7 +74,10 @@
     "postinstall": "node scripts/postinstall.js"
   },
   "devDependencies": {
+    "@ai-sdk/openai": "^4.0.4",
     "@types/node": "^25.5.0",
+    "ai": "^7.0.9",
+    "tsx": "^4.20.6",
     "typescript": "^5.4.0",
     "vitest": "^2.1.9"
   }

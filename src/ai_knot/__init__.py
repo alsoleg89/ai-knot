@@ -1,4 +1,4 @@
-"""ai-knot — Agent Knowledge Layer. Extract. Store. Retrieve. Any backend."""
+"""ai-knot — deterministic, self-hosted long-term memory for AI agents."""
 
 from __future__ import annotations
 

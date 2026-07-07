@@ -1,0 +1,31 @@
+<svg viewBox="0 0 760 402" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Deterministic retrieval: ai-knot vs naive baseline — ranking MRR 0.83 vs 0.18, precision@5 1.00 vs 0.40, LoCoMo recall@5 0.26 vs 0.15">
+  <rect x="0" y="0" width="760" height="402" rx="14" fill="#faf7f5"/>
+  <text x="34" y="46" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="23" font-weight="700" fill="#2a2320">Deterministic retrieval — a number that can't drift</text>
+  <text x="34" y="72" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13" fill="#6b5d55">no LLM · fixed seeds · no network — re-run and you get the same numbers</text>
+
+  <rect x="512" y="35" width="14" height="14" rx="3" fill="#cabfb8"/>
+  <text x="532" y="47" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="12" fill="#6b5d55">naive log</text>
+  <rect x="628" y="35" width="14" height="14" rx="3" fill="#9f4020"/>
+  <text x="648" y="47" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="12" fill="#6b5d55">ai-knot</text>
+
+  <!-- Ranking MRR -->
+  <text x="34" y="120" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#2a2320">Ranking MRR</text>
+  <rect x="210" y="128" width="86" height="24" rx="4" fill="#cabfb8"/>
+  <text x="304" y="145" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13" fill="#6b5d55">0.18</text>
+  <rect x="210" y="156" width="398" height="24" rx="4" fill="#9f4020"/>
+  <text x="616" y="173" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#9f4020">0.83</text>
+
+  <!-- Precision@5 -->
+  <text x="34" y="220" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#2a2320">Precision@5</text>
+  <rect x="210" y="228" width="192" height="24" rx="4" fill="#cabfb8"/>
+  <text x="410" y="245" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13" fill="#6b5d55">0.40</text>
+  <rect x="210" y="256" width="480" height="24" rx="4" fill="#9f4020"/>
+  <text x="698" y="273" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#9f4020">1.00</text>
+
+  <!-- LoCoMo recall@5 -->
+  <text x="34" y="320" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#2a2320">LoCoMo recall@5</text>
+  <rect x="210" y="328" width="72" height="24" rx="4" fill="#cabfb8"/>
+  <text x="290" y="345" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13" fill="#6b5d55">0.15</text>
+  <rect x="210" y="356" width="125" height="24" rx="4" fill="#9f4020"/>
+  <text x="343" y="373" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#9f4020">0.26</text>
+</svg>

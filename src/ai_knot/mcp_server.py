@@ -21,15 +21,20 @@ Configuration is via environment variables:
 
 from __future__ import annotations
 
+import builtins
+import os
 from typing import Any
 
 from ai_knot._mcp_tools import (
     tool_add,
     tool_add_resolved,
     tool_capabilities,
+    tool_delete,
     tool_forget,
+    tool_get,
     tool_health,
     tool_learn,
+    tool_list,
     tool_list_facts,
     tool_list_snapshots,
     tool_memory_lineage,
@@ -37,12 +42,15 @@ from ai_knot._mcp_tools import (
     tool_recall_json,
     tool_recall_with_trace,
     tool_restore,
+    tool_search,
     tool_snapshot,
     tool_stats,
 )
 from ai_knot.config import AIKnotConfig
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage import create_storage
+
+_MCP_TRANSPORTS = {"stdio", "sse", "streamable-http"}
 
 
 def _build_kb() -> KnowledgeBase:
@@ -80,7 +88,16 @@ def _build_kb() -> KnowledgeBase:
 # ---------------------------------------------------------------------------
 
 
-def _make_server(kb: KnowledgeBase) -> Any:
+def _make_server(
+    kb: KnowledgeBase,
+    *,
+    host: str | None = None,
+    port: int | None = None,
+    mount_path: str | None = None,
+    sse_path: str | None = None,
+    message_path: str | None = None,
+    streamable_http_path: str | None = None,
+) -> Any:
     """Build and return the FastMCP application.
 
     Args:
@@ -99,19 +116,36 @@ def _make_server(kb: KnowledgeBase) -> Any:
             "mcp package is required. Install with: pip install 'ai-knot[mcp]'"
         ) from exc
 
-    app = FastMCP(
-        "ai-knot",
-        instructions=(
+    app_kwargs: dict[str, Any] = {
+        "instructions": (
             "Use these tools to manage persistent agent memory. "
             "learn: extract and store knowledge from a conversation (preferred). "
-            "add: store a single fact directly. recall: retrieve relevant context as text. "
+            "add: store a single fact directly. "
+            "search/recall: retrieve relevant context as text. "
             "recall_json: retrieve relevant context as structured JSON. "
-            "forget: remove a fact by ID. list_facts: view all stored facts as JSON. "
+            "get: inspect one stored fact by ID as JSON. "
+            "delete/forget: remove a fact by ID. "
+            "list/list_facts: view all stored facts as JSON. "
             "stats: memory statistics. snapshot/restore: version the memory state. "
             "list_snapshots: see available snapshots. "
             "health: check server status. capabilities: list all available tools."
         ),
-    )
+        "website_url": "https://github.com/alsoleg89/ai-knot",
+    }
+    if host is not None:
+        app_kwargs["host"] = host
+    if port is not None:
+        app_kwargs["port"] = port
+    if mount_path is not None:
+        app_kwargs["mount_path"] = mount_path
+    if sse_path is not None:
+        app_kwargs["sse_path"] = sse_path
+    if message_path is not None:
+        app_kwargs["message_path"] = message_path
+    if streamable_http_path is not None:
+        app_kwargs["streamable_http_path"] = streamable_http_path
+
+    app = FastMCP("ai-knot", **app_kwargs)
 
     @app.tool()
     def add(
@@ -167,6 +201,20 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_recall(kb, query, top_k=top_k, now=now)
 
     @app.tool()
+    def search(query: str, top_k: int = 5, now: str | None = None) -> str:
+        """Alias for recall() using the market-standard search verb."""
+        return tool_search(kb, query, top_k=top_k, now=now)
+
+    @app.tool()
+    def get(fact_id: str) -> str:
+        """Return one stored fact by ID as JSON.
+
+        Args:
+            fact_id: The 8-char hex ID to inspect.
+        """
+        return tool_get(kb, fact_id)
+
+    @app.tool()
     def forget(fact_id: str) -> str:
         """Remove a specific fact by its ID.
 
@@ -176,12 +224,22 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_forget(kb, fact_id)
 
     @app.tool()
-    def list_facts() -> str:
-        """List all facts stored in memory (JSON format)."""
-        return tool_list_facts(kb)
+    def delete(fact_id: str) -> str:
+        """Alias for forget() using the CRUD-style delete verb."""
+        return tool_delete(kb, fact_id)
 
     @app.tool()
-    def memory_lineage(fact_id: str) -> str:
+    def list(include_inactive: bool = False, now: str | None = None) -> str:
+        """Alias for list_facts() using the familiar list verb."""
+        return tool_list(kb, include_inactive=include_inactive, now=now)
+
+    @app.tool()
+    def list_facts(include_inactive: bool = False, now: str | None = None) -> str:
+        """List active facts by default; pass include_inactive for full history."""
+        return tool_list_facts(kb, include_inactive=include_inactive, now=now)
+
+    @app.tool()
+    def memory_lineage(fact_id: str, now: str | None = None) -> str:
         """Trace a fact's supersession lineage (newest → oldest) as JSON.
 
         The audit trail of how a slot's value evolved: each entry's
@@ -189,8 +247,9 @@ def _make_server(kb: KnowledgeBase) -> Any:
 
         Args:
             fact_id: The 8-char hex ID to trace (from list_facts/recall_json).
+            now: Optional ISO-8601 activity anchor for active/inactive status.
         """
-        return tool_memory_lineage(kb, fact_id)
+        return tool_memory_lineage(kb, fact_id, now=now)
 
     @app.tool()
     def stats() -> str:
@@ -229,7 +288,13 @@ def _make_server(kb: KnowledgeBase) -> Any:
         return tool_recall_json(kb, query, top_k=top_k, now=now)
 
     @app.tool()
-    def learn(messages: list[dict[str, str]]) -> str:
+    def learn(
+        messages: builtins.list[dict[str, str]],
+        provider: str | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        event_time: str | None = None,
+    ) -> str:
         """Extract and store knowledge from a conversation.
 
         Preferred over add() for multi-turn conversations — the LLM identifies
@@ -238,8 +303,19 @@ def _make_server(kb: KnowledgeBase) -> Any:
 
         Args:
             messages: Conversation as [{"role": "user"|"assistant", "content": "..."}].
+            provider: Optional provider override for extraction.
+            api_key: Optional API key override for extraction.
+            model: Optional model override for extraction.
+            event_time: Optional ISO-8601 real-world anchor for the conversation.
         """
-        return tool_learn(kb, messages)
+        return tool_learn(
+            kb,
+            messages,
+            provider=provider,
+            api_key=api_key,
+            model=model,
+            event_time=event_time,
+        )
 
     @app.tool()
     def recall_with_trace(query: str, top_k: int = 5, now: str | None = None) -> str:
@@ -274,6 +350,14 @@ def _make_server(kb: KnowledgeBase) -> Any:
     return app
 
 
+def _resolve_transport(value: str | None) -> str:
+    """Normalize and validate the MCP transport selector."""
+    transport = (value or "stdio").strip().lower()
+    if transport not in _MCP_TRANSPORTS:
+        raise ValueError("AI_KNOT_MCP_TRANSPORT must be one of: stdio, sse, streamable-http")
+    return transport
+
+
 def main() -> None:
     """Entry point for the ai-knot MCP server."""
     try:
@@ -286,9 +370,16 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+    try:
+        transport = _resolve_transport(os.environ.get("AI_KNOT_MCP_TRANSPORT"))
+    except ValueError as exc:
+        import sys
+
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
     kb = _build_kb()
     app = _make_server(kb)
-    app.run()
+    app.run(transport)
 
 
 if __name__ == "__main__":

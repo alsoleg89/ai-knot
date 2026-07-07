@@ -76,3 +76,21 @@ def test_multiplier_one_is_identity(kb: KnowledgeBase, monkeypatch: pytest.Monke
     w1 = _capture_weights(kb, monkeypatch, 1.0)
     w1b = _capture_weights(kb, monkeypatch, 1.0)
     assert w1 == w1b  # deterministic, no drift
+
+
+def test_empty_embed_url_disables_dense_channel(tmp_path: pathlib.Path) -> None:
+    """An empty ``embed_url`` makes recall BM25-only and deterministic.
+
+    The dense channel is skipped *before* any embedding call, so recall does no
+    network I/O and emits no per-batch fallback warnings — the documented switch
+    for air-gapped deploys and reproducible offline evaluation.
+    """
+    storage = YAMLStorage(base_dir=str(tmp_path))
+    kb = KnowledgeBase(agent_id="no_dense", storage=storage, embed_url="")
+    kb.add("Alice works on the deployment pipeline", tags=["infra"])
+
+    # Internal guard: no query vector is produced when the dense channel is off.
+    assert kb._embed_for_recall(list(kb._storage.load("no_dense")), "deployment") is None
+    # Recall still works (lexical-only) and finds the relevant fact.
+    rendered = kb.recall("deployment pipeline", top_k=5)
+    assert "deployment pipeline" in rendered

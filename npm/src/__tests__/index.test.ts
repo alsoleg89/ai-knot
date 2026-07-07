@@ -13,7 +13,7 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 
 import { spawn } from "node:child_process";
 import { KnowledgeBase } from "../index.js";
-import type { Fact } from "../index.js";
+import type { Fact, LineageFact } from "../index.js";
 
 // ---------------------------------------------------------------------------
 // Shared fake subprocess (same pattern as client.test.ts)
@@ -69,6 +69,9 @@ let lastAddArguments: Record<string, unknown> | undefined;
 let lastRecallArguments: Record<string, unknown> | undefined;
 let lastLearnArguments: Record<string, unknown> | undefined;
 let lastAddResolvedArguments: Record<string, unknown> | undefined;
+let lastGetArguments: Record<string, unknown> | undefined;
+let lastListArguments: Record<string, unknown> | undefined;
+let lastLineageArguments: Record<string, unknown> | undefined;
 
 function kbHandler(req: JsonRpcRequest): object | null {
   if (req.method === "initialize") {
@@ -95,6 +98,7 @@ function kbHandler(req: JsonRpcRequest): object | null {
       lastAddArguments = callArgs;
       text = "Added fact [abcd1234]: TypeScript is great";
     } else if (name === "list_facts") {
+      lastListArguments = callArgs;
       text = JSON.stringify([FAKE_FACT]);
     } else if (name === "recall") {
       lastRecallArguments = callArgs;
@@ -104,7 +108,33 @@ function kbHandler(req: JsonRpcRequest): object | null {
       text = JSON.stringify({ stored: 1, ids: ["abcd1234"] });
     } else if (name === "add_resolved") {
       lastAddResolvedArguments = callArgs;
-      text = JSON.stringify([{ id: "abcd1234", slot_key: "alex::salary", version: 1 }]);
+      text = JSON.stringify([{ id: "abcd1234", slot_key: "alex::salary", version: 0 }]);
+    } else if (name === "get") {
+      lastGetArguments = callArgs;
+      text = JSON.stringify(FAKE_FACT);
+    } else if (name === "memory_lineage") {
+      lastLineageArguments = callArgs;
+      text = JSON.stringify([
+        {
+          id: "abcd1234",
+          content: "Alex now works at Globex",
+          type: "semantic",
+          importance: 0.8,
+          retention_score: 1,
+          access_count: 0,
+          tags: [],
+          created_at: "2026-01-01T00:00:00.000Z",
+          last_accessed: "2026-01-01T00:00:00.000Z",
+          active: true,
+          slot_key: "alex::employer",
+          entity: "Alex",
+          attribute: "employer",
+          value_text: "Globex",
+          version: 1,
+          supersedes_id: "deadbeef",
+          published_by: null,
+        },
+      ]);
     } else if (name === "forget") {
       text = "Fact abcd1234 deleted.";
     } else if (name === "stats") {
@@ -195,6 +225,13 @@ describe("KnowledgeBase", () => {
     await kb.close();
   });
 
+  it("search() matches recall()", async () => {
+    setup();
+    const kb = new KnowledgeBase();
+    await expect(kb.search("TypeScript")).resolves.toEqual(await kb.recall("TypeScript"));
+    await kb.close();
+  });
+
   it("add() forwards tags as the tags MCP argument", async () => {
     setup();
     lastAddArguments = undefined;
@@ -227,21 +264,80 @@ describe("KnowledgeBase", () => {
     await kb.close();
   });
 
-  it("learn() sends the conversation and parses the result", async () => {
+  it("learn() sends the conversation, options, and parses the result", async () => {
     setup();
     lastLearnArguments = undefined;
     const kb = new KnowledgeBase();
     const res = await kb.learn([
       { role: "user", content: "I prefer dark mode" },
       { role: "assistant", content: "Noted" },
-    ]);
+    ], {
+      provider: "openai",
+      apiKey: "sk-test",
+      model: "gpt-5-mini",
+      eventTime: "2023-05-08T00:00:00+00:00",
+    });
     expect(lastLearnArguments).toMatchObject({
       messages: [
         { role: "user", content: "I prefer dark mode" },
         { role: "assistant", content: "Noted" },
       ],
+      provider: "openai",
+      api_key: "sk-test",
+      model: "gpt-5-mini",
+      event_time: "2023-05-08T00:00:00+00:00",
     });
     expect(res).toEqual({ stored: 1, ids: ["abcd1234"] });
+    await kb.close();
+  });
+
+  it("listFacts() normalizes the compact MCP payload into the public Fact shape", async () => {
+    vi.mocked(spawn).mockReturnValue(
+      new FakeProcess((req) => {
+        if (req.method === "initialize") {
+          return {
+            jsonrpc: "2.0",
+            id: req.id,
+            result: { protocolVersion: "2024-11-05", capabilities: {}, serverInfo: {} },
+          };
+        }
+        if (req.method === "notifications/initialized") return null;
+        return {
+          jsonrpc: "2.0",
+          id: req.id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify([
+                  {
+                    id: "abcd1234",
+                    content: "Compact MCP fact",
+                    type: "semantic",
+                    importance: 0.7,
+                    retention: 0.91,
+                  },
+                ]),
+              },
+            ],
+          },
+        };
+      }) as unknown as ChildProcess,
+    );
+
+    const kb = new KnowledgeBase();
+    const facts = await kb.listFacts();
+    expect(facts).toEqual([
+      expect.objectContaining({
+        id: "abcd1234",
+        content: "Compact MCP fact",
+        type: "semantic",
+        importance: 0.7,
+        retention_score: 0.91,
+        access_count: 0,
+        tags: [],
+      }),
+    ]);
     await kb.close();
   });
 
@@ -256,6 +352,7 @@ describe("KnowledgeBase", () => {
         attribute: "salary",
         valueText: "120k",
         slotKey: "alex::salary",
+        op: "update",
         eventTime: "2023-05-08",
       },
     ]);
@@ -267,11 +364,12 @@ describe("KnowledgeBase", () => {
           attribute: "salary",
           value_text: "120k",
           slot_key: "alex::salary",
+          op: "update",
           event_time: "2023-05-08",
         },
       ],
     });
-    expect(res).toEqual([{ id: "abcd1234", slot_key: "alex::salary", version: 1 }]);
+    expect(res).toEqual([{ id: "abcd1234", slot_key: "alex::salary", version: 0 }]);
     await kb.close();
   });
 
@@ -282,6 +380,41 @@ describe("KnowledgeBase", () => {
     expect(Array.isArray(facts)).toBe(true);
     expect(facts).toHaveLength(1);
     expect(facts[0]).toMatchObject({ id: "abcd1234" });
+    await kb.close();
+  });
+
+  it("lineage() calls memory_lineage and normalizes the result", async () => {
+    setup();
+    lastLineageArguments = undefined;
+    const kb = new KnowledgeBase();
+    const lineage = await kb.lineage("abcd1234", { now: "2026-01-02T00:00:00+00:00" });
+    expect(lastLineageArguments).toMatchObject({
+      fact_id: "abcd1234",
+      now: "2026-01-02T00:00:00+00:00",
+    });
+    expect(lineage).toEqual([
+      expect.objectContaining<Partial<LineageFact>>({
+        id: "abcd1234",
+        content: "Alex now works at Globex",
+        slot_key: "alex::employer",
+        value_text: "Globex",
+        version: 1,
+        supersedes_id: "deadbeef",
+        active: true,
+      }),
+    ]);
+    await kb.close();
+  });
+
+  it("listFacts() forwards includeInactive and now to MCP", async () => {
+    setup();
+    lastListArguments = undefined;
+    const kb = new KnowledgeBase();
+    await kb.listFacts({ includeInactive: true, now: "2023-05-08T00:00:00+00:00" });
+    expect(lastListArguments).toMatchObject({
+      include_inactive: true,
+      now: "2023-05-08T00:00:00+00:00",
+    });
     await kb.close();
   });
 
@@ -309,6 +442,23 @@ describe("KnowledgeBase", () => {
     await kb.close();
   });
 
+  it("list() matches listFacts()", async () => {
+    setup();
+    const kb = new KnowledgeBase();
+    await expect(kb.list()).resolves.toEqual(await kb.listFacts());
+    await kb.close();
+  });
+
+  it("get() fetches one fact by id", async () => {
+    setup();
+    lastGetArguments = undefined;
+    const kb = new KnowledgeBase();
+    const fact = await kb.get("abcd1234");
+    expect(lastGetArguments).toMatchObject({ fact_id: "abcd1234" });
+    expect(fact).toMatchObject({ id: "abcd1234", content: "TypeScript is great" });
+    await kb.close();
+  });
+
   it("stats() returns a Stats object", async () => {
     setup();
     const kb = new KnowledgeBase();
@@ -321,6 +471,13 @@ describe("KnowledgeBase", () => {
     setup();
     const kb = new KnowledgeBase();
     await expect(kb.forget("abcd1234")).resolves.toBeUndefined();
+    await kb.close();
+  });
+
+  it("delete() resolves without error", async () => {
+    setup();
+    const kb = new KnowledgeBase();
+    await expect(kb.delete("abcd1234")).resolves.toBeUndefined();
     await kb.close();
   });
 

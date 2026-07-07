@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ai-knot | Deterministic memory for AI agents</title>
+  <meta name="application-name" content="ai-knot">
+  <meta name="theme-color" content="#9f4020">
+  <link rel="canonical" href="https://alsoleg89.github.io/ai-knot/">
+  <meta
+    name="description"
+    content="Deterministic, self-hosted long-term memory for AI agents: store facts instead of transcripts, recall only what matters, and verify the benchmarks yourself."
+  >
+  <meta
+    name="keywords"
+    content="agent-memory, ai-memory, long-term-memory, mcp, model-context-protocol, langgraph, llamaindex, crewai, openai-agents, pydanticai, openclaw, vercel-ai-sdk"
+  >
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ai-knot">
+  <meta property="og:title" content="ai-knot | Deterministic memory for AI agents">
+  <meta
+    property="og:description"
+    content="Deterministic, self-hosted long-term memory for AI agents: store facts instead of transcripts, recall only what matters, and verify the benchmarks yourself."
+  >
+  <meta property="og:url" content="https://alsoleg89.github.io/ai-knot/">
+  <meta
+    property="og:image"
+    content="https://alsoleg89.github.io/ai-knot/assets/hero-demo-poster.png"
+  >
+  <meta
+    property="og:image:alt"
+    content="ai-knot poster showing deterministic memory for AI agents"
+  >
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ai-knot | Deterministic memory for AI agents">
+  <meta
+    name="twitter:description"
+    content="Deterministic, self-hosted long-term memory for AI agents: store facts instead of transcripts, recall only what matters, and verify the benchmarks yourself."
+  >
+  <meta
+    name="twitter:image"
+    content="https://alsoleg89.github.io/ai-knot/assets/hero-demo-poster.png"
+  >
+  <meta
+    name="twitter:image:alt"
+    content="ai-knot poster showing deterministic long-term memory for AI agents"
+  >
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareSourceCode",
+      "name": "ai-knot",
+      "description": "Deterministic, self-hosted long-term memory for AI agents.",
+      "codeRepository": "https://github.com/alsoleg89/ai-knot",
+      "license": "https://github.com/alsoleg89/ai-knot/blob/main/LICENSE",
+      "url": "https://alsoleg89.github.io/ai-knot/",
+      "programmingLanguage": ["Python", "TypeScript"],
+      "runtimePlatform": "Python 3.11+, Node.js 18+",
+      "keywords": "agent-memory, ai-memory, long-term-memory, mcp, langgraph, llamaindex, crewai, openclaw, openai-agents, pydanticai, vercel-ai-sdk",
+      "sameAs": [
+        "https://github.com/alsoleg89/ai-knot",
+        "https://pypi.org/project/ai-knot/",
+        "https://www.npmjs.com/package/ai-knot"
+      ]
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f1e8;
+      --panel: rgba(255, 251, 245, 0.92);
+      --panel-strong: #fffdfa;
+      --ink: #1d1b18;
+      --muted: #62584e;
+      --line: rgba(95, 78, 59, 0.18);
+      --accent: #9f4020;
+      --accent-2: #155b52;
+      --accent-soft: #efe2d8;
+      --accent-2-soft: #dfeeea;
+      --shadow: 0 20px 60px rgba(29, 27, 24, 0.08);
+      --hero: linear-gradient(135deg, rgba(255, 248, 239, 0.96), rgba(245, 233, 218, 0.92));
+      --page: radial-gradient(circle at top left, #fff9f0 0%, #f7f1e7 40%, #efe5d7 100%);
+      --mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+      --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --sans: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: var(--serif);
+      line-height: 1.55;
+    }
+
+    a {
+      color: inherit;
+      text-decoration-color: rgba(159, 64, 32, 0.45);
+      text-underline-offset: 0.18em;
+    }
+
+    img { max-width: 100%; display: block; }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 80px;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+      font-family: var(--sans);
+      font-size: 0.95rem;
+    }
+
+    .nav__brand {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .nav__links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      color: var(--muted);
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+      gap: 28px;
+      align-items: center;
+      padding: 30px;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: var(--hero);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -120px -140px auto;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(21, 91, 82, 0.16) 0%, rgba(21, 91, 82, 0) 72%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(95, 78, 59, 0.14);
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.04;
+      letter-spacing: -0.04em;
+    }
+
+    h1 {
+      font-size: clamp(2.6rem, 6vw, 5.2rem);
+      max-width: 12ch;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      font-size: clamp(1.9rem, 3vw, 3rem);
+      margin-bottom: 12px;
+    }
+
+    h3 {
+      font-size: 1.2rem;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .lede {
+      font-size: 1.12rem;
+      max-width: 60ch;
+    }
+
+    .hero__cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 13px 18px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      text-decoration: none;
+      font-family: var(--sans);
+      font-size: 0.95rem;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 28px rgba(29, 27, 24, 0.12);
+    }
+
+    .button--primary {
+      background: var(--accent);
+      color: #fff9f4;
+    }
+
+    .button--secondary {
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--ink);
+      border-color: rgba(95, 78, 59, 0.14);
+    }
+
+    .hero__panel {
+      display: grid;
+      gap: 14px;
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.68);
+      border: 1px solid rgba(95, 78, 59, 0.14);
+      backdrop-filter: blur(14px);
+    }
+
+    .metric-grid,
+    .card-grid,
+    .surface-grid,
+    .doc-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .metric-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .surface-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .doc-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .metric,
+    .card,
+    .surface,
+    .doc,
+    .band {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .metric,
+    .card,
+    .surface,
+    .doc {
+      padding: 18px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.9rem;
+      color: var(--accent);
+      letter-spacing: -0.05em;
+      margin-bottom: 4px;
+    }
+
+    .metric span,
+    .card p,
+    .surface p,
+    .doc p,
+    .micro {
+      font-size: 0.97rem;
+      color: var(--muted);
+    }
+
+    section {
+      margin-top: 28px;
+    }
+
+    .band {
+      padding: 24px;
+      background: linear-gradient(135deg, rgba(255, 253, 250, 0.96), rgba(236, 245, 241, 0.94));
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .code-block {
+      margin: 16px 0 0;
+      padding: 16px;
+      border-radius: 20px;
+      background: #201b17;
+      color: #fff8ef;
+      border: 1px solid rgba(95, 78, 59, 0.24);
+      font-family: var(--mono);
+      font-size: 0.92rem;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-family: var(--sans);
+      font-size: 0.86rem;
+    }
+
+    .pill--green {
+      background: var(--accent-2-soft);
+      color: var(--accent-2);
+    }
+
+    .surface strong,
+    .doc strong {
+      display: block;
+      font-family: var(--sans);
+      font-size: 1rem;
+      margin-bottom: 6px;
+    }
+
+    .surface code,
+    .doc code,
+    .micro code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: rgba(95, 78, 59, 0.08);
+      border-radius: 8px;
+      padding: 0.18em 0.4em;
+    }
+
+    .footer {
+      margin-top: 34px;
+      padding: 24px;
+      border-top: 1px solid rgba(95, 78, 59, 0.14);
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 0.94rem;
+    }
+
+    @media (max-width: 1040px) {
+      .hero,
+      .split,
+      .card-grid,
+      .surface-grid,
+      .doc-grid,
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .shell {
+        width: min(100% - 22px, 1180px);
+        padding-top: 18px;
+      }
+
+      .hero,
+      .band,
+      .metric,
+      .card,
+      .surface,
+      .doc {
+        padding: 18px;
+        border-radius: 24px;
+      }
+
+      h1 {
+        max-width: 100%;
+      }
+
+      .nav {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="nav" aria-label="Primary">
+      <div class="nav__brand">ai-knot</div>
+      <div class="nav__links">
+        <a href="#proof">Proof</a>
+        <a href="#surfaces">Surfaces</a>
+        <a href="#start">Start</a>
+        <a href="#docs">Docs</a>
+        <a href="https://github.com/alsoleg89/ai-knot">GitHub</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Deterministic memory for AI agents</div>
+        <h1>Store facts. Not transcripts.</h1>
+        <p class="lede">
+          ai-knot is a self-hosted memory layer for agents — with no LLM on the read path or
+          the write path. It keeps structured knowledge in SQLite, PostgreSQL, or YAML, recalls
+          only what the next turn needs — for one agent or a whole team — and drops into your stack in one line: MCP, HTTP, or native framework adapters.
+        </p>
+        <div class="hero__cta">
+          <a class="button button--primary" href="https://github.com/alsoleg89/ai-knot">Open the repo</a>
+          <a class="button button--secondary" href="../benchmarks.md">Inspect the benchmarks</a>
+          <a class="button button--secondary" href="./whitepaper.html">Read the whitepaper</a>
+        </div>
+        <div class="pill-row">
+          <span class="pill">No LLM on read or write</span>
+          <span class="pill pill--green">MCP + frameworks + HTTP</span>
+          <span class="pill">Shared memory for teams of agents</span>
+        </div>
+      </div>
+      <aside class="hero__panel">
+        <img
+          src="../assets/hero-demo.gif"
+          alt="ai-knot demo showing structured facts recalled instead of replaying full chat logs"
+        >
+        <div class="micro">
+          Reuse the same memory from Python, plain function-calling runtimes,
+          CrewAI, LlamaIndex, LangGraph, OpenAI Agents SDK, MCP clients, or the
+          built-in browser inspector.
+        </div>
+      </aside>
+    </header>
+
+    <section id="proof" class="metric-grid">
+      <div class="metric">
+        <strong>0 LLM</strong>
+        <span>Calls needed on the read or write path — run it fully air-gapped</span>
+      </div>
+      <div class="metric">
+        <strong>$0</strong>
+        <span>Per memory op — no tokens, no API keys, milliseconds on the read path</span>
+      </div>
+      <div class="metric">
+        <strong>78.0%</strong>
+        <span>LoCoMo QA accuracy, cat1-4, with every knob named</span>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="split">
+        <div>
+          <h2>The wedge is reliability, not more context.</h2>
+          <p>
+            Most agents still treat memory as a growing transcript. ai-knot treats memory as a
+            knowledge layer: extract or add facts, store them in your own backend, and recall only
+            the few facts the next turn needs.
+          </p>
+          <div class="pill-row">
+            <span class="pill">Regression-testable recall</span>
+            <span class="pill">Bi-temporal memory</span>
+            <span class="pill">Multi-agent governance</span>
+          </div>
+        </div>
+        <div class="code-block">from ai_knot import KnowledgeBase
+
+kb = KnowledgeBase(agent_id="assistant")
+kb.add("Preferred language is Python")
+kb.add("API framework is FastAPI")
+kb.add("Primary database is PostgreSQL")
+
+print(kb.search("what stack does the user use?"))  # alias: kb.recall(...)
+# [1] Primary database is PostgreSQL
+# [2] API framework is FastAPI
+# [3] Preferred language is Python</div>
+      </div>
+      <div class="micro" style="margin-top: 14px; font-family: var(--mono);">
+        Terminal loop: <code>ai-knot add</code> / <code>learn</code> →
+        <code>ai-knot search</code> → <code>ai-knot list</code> →
+        <code>ai-knot delete</code>
+      </div>
+    </section>
+
+    <section>
+      <h2>Why developers try it</h2>
+      <div class="card-grid">
+        <article class="card">
+          <h3>Deterministic by design</h3>
+          <p>
+            Recall is cheap, auditable, and consistent. You can write tests against it instead of
+            treating memory as an opaque side effect.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Self-hosted with no lock-in</h3>
+          <p>
+            Keep the same API while switching between YAML, SQLite, and PostgreSQL. The store
+            stays inspectable and under your control.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Multiple adoption surfaces</h3>
+          <p>
+            Start from the environment you already use: plain Python callables,
+            MCP, CrewAI, LlamaIndex, LangGraph, AutoGen, OpenAI Agents SDK,
+            PydanticAI, HTTP, TypeScript, notebook, or browser inspector.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="surfaces">
+      <h2>Pick the surface that matches your stack</h2>
+      <div class="surface-grid">
+        <article class="surface">
+          <strong>Python core</strong>
+          <p>Start with <code>ai-knot demo</code> for the installed proof, then drop to <code>KnowledgeBase.add()</code> and <code>search()</code> / <code>recall()</code> when you want the raw API.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/quickstart.py">Quickstart</a>
+        </article>
+        <article class="surface">
+          <strong>MCP clients</strong>
+          <p>One-command default-config setup for Claude Desktop, Claude Code, and OpenClaw on supported platforms. Try <code>ai-knot setup openclaw --agent-id assistant --storage sqlite --write-default-config</code>, then <code>ai-knot doctor --json</code>. Use <code>serve-mcp</code> for remote Streamable HTTP hosts.</p>
+          <a href="../deployment.md#4-run-the-mcp-server">MCP guide</a>
+        </article>
+        <article class="surface">
+          <strong>Browser inspector</strong>
+          <p>Read-only memory viewer for demos, debugging, and trust-building.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/browser_inspector_demo.py">Seeded demo</a>
+        </article>
+        <article class="surface">
+          <strong>Notebook walkthrough</strong>
+          <p>Rendered zero-network tutorial with outputs already visible on GitHub.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/notebook_walkthrough.ipynb">Open notebook</a>
+        </article>
+        <article class="surface">
+          <strong>CrewAI</strong>
+          <p>Use <code>Crew(memory=...)</code> or <code>memory.scope(...)</code>.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/crewai_surface_demo.py">CrewAI proof</a>
+        </article>
+        <article class="surface">
+          <strong>Function-calling runtimes</strong>
+          <p>Use <code>create_basic_memory_functions(...)</code> when your runtime wants plain Python callables instead of LangChain tool objects.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/function_calling_surface_demo.py">Callable proof</a>
+        </article>
+        <article class="surface">
+          <strong>LangGraph</strong>
+          <p>Use <code>create_basic_memory_tools(...)</code> for the explicit <code>add/search/list/delete</code> loop, add <code>create_get_memory_tool(...)</code> or <code>include_get=True</code> for targeted by-id inspection, or keep <code>create_manage_memory_tool(...)</code> plus <code>create_search_memory_tool(...)</code>.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/langgraph_surface_demo.py">LangGraph proof</a>
+        </article>
+        <article class="surface">
+          <strong>LlamaIndex</strong>
+          <p>Use <code>AiKnotLlamaIndexMemory</code> through the native <code>memory=...</code> seam.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/llamaindex_surface_demo.py">LlamaIndex proof</a>
+        </article>
+        <article class="surface">
+          <strong>PydanticAI</strong>
+          <p>Append recalled facts through runtime <code>instructions=...</code>.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/pydanticai_surface_demo.py">PydanticAI proof</a>
+        </article>
+        <article class="surface">
+          <strong>AutoGen</strong>
+          <p>Attach <code>AiKnotAutoGenMemory</code> to <code>AssistantAgent</code>.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/autogen_surface_demo.py">AutoGen proof</a>
+        </article>
+        <article class="surface">
+          <strong>OpenAI Agents SDK</strong>
+          <p>Inject long-term memory through <code>RunConfig</code>.</p>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/openai_agents_surface_demo.py">OpenAI Agents proof</a>
+        </article>
+        <article class="surface">
+          <strong>HTTP + TypeScript</strong>
+          <p>Use <code>HttpKnowledgeBase</code> over the HTTP sidecar when your runtime should not spawn the local MCP subprocess, and use <code>npx ai-knot-doctor</code> when you do want the npm bridge path. The sidecar path also keeps <code>learn([...])</code> and <code>addResolved([...])</code>, including explicit <code>op</code> values for update/delete/noop memory correction.</p>
+          <a href="../deployment.md#11-http-sidecar">HTTP guide</a>
+          <a href="https://github.com/alsoleg89/ai-knot/blob/main/examples/http_sidecar_surface_demo.py">HTTP proof</a>
+        </article>
+      </div>
+    </section>
+
+    <section id="start" class="band">
+      <div class="split">
+        <div>
+          <h2>Fastest ways to try it</h2>
+          <p>
+            The repo already includes multiple no-surprises entry points. Use the one that matches
+            how you evaluate developer tools.
+          </p>
+        </div>
+        <div class="card-grid" style="grid-template-columns: 1fr;">
+          <article class="card">
+            <h3>Zero local setup</h3>
+            <p>Open the repo in Codespaces, then run the install-free first commands from <code>docs/codespaces-quickstart.md</code>.</p>
+          </article>
+          <article class="card">
+            <h3>One-command visual proof</h3>
+            <p>Run <code>python examples/browser_inspector_demo.py</code> and open <code>/inspect</code>.</p>
+          </article>
+          <article class="card">
+            <h3>Examples by surface</h3>
+            <p>Open <code>examples/README.md</code> for the quickest zero-network or real wiring proof by stack.</p>
+          </article>
+          <article class="card">
+            <h3>CLI-first proof</h3>
+            <p>Run <code>ai-knot demo</code> for the built-in <code>add</code> / <code>search</code> / <code>list</code> / <code>get</code> / <code>delete</code> proof, then switch to <code>learn</code> when you want LLM-based extraction.</p>
+          </article>
+          <article class="card">
+            <h3>Installed npm proof</h3>
+            <p>Run <code>npm install ai-knot</code> then <code>npx ai-knot-demo</code> when you want to verify the packaged Node bridge before writing TypeScript app code.</p>
+          </article>
+          <article class="card">
+            <h3>Remote MCP proof</h3>
+            <p>Run <code>ai-knot serve-mcp assistant --port 8765</code> when your host supports HTTP MCP instead of stdio.</p>
+          </article>
+          <article class="card">
+            <h3>Skeptical path</h3>
+            <p>Inspect <code>docs/benchmarks.md</code> and re-run the deterministic suite.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="docs">
+      <h2>Docs and research</h2>
+      <div class="doc-grid">
+        <article class="doc">
+          <strong>Memory commands</strong>
+          <p>One cross-surface command map for <code>add</code>, <code>search</code>, <code>list</code>, and <code>delete</code>.</p>
+          <a href="../memory-commands.md">Open the guide</a>
+        </article>
+        <article class="doc">
+          <strong>Whitepaper</strong>
+          <p>Why agent memory should be treated as a knowledge layer, not a log.</p>
+          <a href="./whitepaper.html">Read it</a>
+        </article>
+        <article class="doc">
+          <strong>Developer guide</strong>
+          <p>Practical guide for adding deterministic memory to an agent in under 30 minutes.</p>
+          <a href="./developer-article.html">Read it</a>
+        </article>
+        <article class="doc">
+          <strong>Benchmark methodology</strong>
+          <p>Named-reader QA numbers plus deterministic retrieval numbers.</p>
+          <a href="../benchmarks.md">Inspect the numbers</a>
+        </article>
+        <article class="doc">
+          <strong>Comparison guide</strong>
+          <p>When to choose ai-knot vs Mem0, Graphiti, Letta, or LangMem.</p>
+          <a href="../comparison.md">Compare trade-offs</a>
+        </article>
+        <article class="doc">
+          <strong>FAQ</strong>
+          <p>Short answers for evaluation questions, objections, and skeptical readers.</p>
+          <a href="../faq.md">Open FAQ</a>
+        </article>
+        <article class="doc">
+          <strong>Integrations guide</strong>
+          <p>Find the right install path and surface for CrewAI, LangGraph, LlamaIndex, MCP, HTTP, and TypeScript.</p>
+          <a href="../integrations.md">Browse integrations</a>
+        </article>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div>
+        ai-knot is MIT-licensed and self-hosted. For the full docs set, open the repository
+        docs index or jump straight into the examples by surface.
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

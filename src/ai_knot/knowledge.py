@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import logging
 import os
 import re
@@ -209,11 +210,19 @@ class KnowledgeBase(_LearningMixin):
         self._embed_model = embed_model
         self._embed_api_key = embed_api_key
         self._embedded_ids: set[str] = set()
+        # Dense channel is optional. If the embed endpoint is unreachable we fall
+        # back to BM25-only — warn once per instance, then stay quiet so a fresh
+        # install with no embedding server doesn't spam stderr on every add().
+        self._embed_fallback_warned = False
         self._default_provider = provider
         self._default_api_key = api_key
         self._default_model = model
         self._decay_config = decay_config
-        self._llm_recall = llm_recall if llm_recall is not None else (provider is not None)
+        # Default OFF even when a provider is configured: recall stays LLM-free (no
+        # query-expansion call) unless the caller explicitly opts in. This keeps the
+        # "no LLM on the read path" guarantee true by default; the provider is for
+        # learn()-style writes, not recall.
+        self._llm_recall = bool(llm_recall)
         self._expansion_weight = expansion_weight
         self._query_expander: LLMQueryExpander | None = None
         self._default_provider_kwargs: dict[str, str] = dict(provider_kwargs)
@@ -528,6 +537,23 @@ class KnowledgeBase(_LearningMixin):
     # Embedding batch size — avoids Ollama timeout on large fact sets.
     _EMBED_BATCH: int = 256
 
+    def _warn_embed_fallback(self) -> None:
+        """Log the BM25-only fallback once per instance, then stay at debug.
+
+        The dense channel is optional; on a fresh install with no embedding
+        server reachable this would otherwise fire on every ``add``/``recall``.
+        """
+        if self._embed_fallback_warned:
+            logger.debug("Embedding unavailable — using BM25-only (already reported)")
+            return
+        self._embed_fallback_warned = True
+        logger.warning(
+            "Embedding endpoint unreachable (%s) — using BM25-only retrieval. "
+            "This is a supported mode; set embed_url to a running endpoint to "
+            "enable the dense channel. (Reported once per instance.)",
+            self._embed_url or "<disabled>",
+        )
+
     def _embed_for_recall(
         self,
         facts: list[Fact],
@@ -543,6 +569,11 @@ class KnowledgeBase(_LearningMixin):
         (Ollama down, timeout, etc.) — callers fall back to BM25-only.
         """
         from ai_knot.embedder import embed_texts
+
+        if not self._embed_url:
+            # Dense channel disabled — deterministic, BM25-only recall with no
+            # network calls (and no per-batch "fallback" warnings).
+            return None
 
         new_facts = [f for f in facts if f.id not in self._embedded_ids]
         fact_texts = [f.content for f in new_facts]
@@ -579,10 +610,7 @@ class KnowledgeBase(_LearningMixin):
                             ),
                         ).result(timeout=120)
                         if not vecs:
-                            logger.warning(
-                                "Embedding batch failed (%d texts) — falling back to BM25-only",
-                                len(batch),
-                            )
+                            self._warn_embed_fallback()
                             return None
                         all_vectors.extend(vecs)
             else:
@@ -596,14 +624,11 @@ class KnowledgeBase(_LearningMixin):
                         )
                     )
                     if not vecs:
-                        logger.warning(
-                            "Embedding batch failed (%d texts) — falling back to BM25-only",
-                            len(batch),
-                        )
+                        self._warn_embed_fallback()
                         return None
                     all_vectors.extend(vecs)
         except Exception:
-            logger.warning("Embedding unavailable — falling back to BM25-only")
+            self._warn_embed_fallback()
             return None
 
         if not all_vectors:
@@ -1226,6 +1251,22 @@ class KnowledgeBase(_LearningMixin):
                 lines.append(f"[{len(lines) + 1}] {text}")
         return "\n".join(lines)
 
+    def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        include_unsupported: bool = False,
+    ) -> str:
+        """Alias for recall() using the market-standard search verb."""
+        return self.recall(
+            query,
+            top_k=top_k,
+            now=now,
+            include_unsupported=include_unsupported,
+        )
+
     def list_facts(self) -> list[Fact]:
         """Return all stored facts for this agent.
 
@@ -1234,7 +1275,28 @@ class KnowledgeBase(_LearningMixin):
         """
         return self._storage.load(self._agent_id)
 
-    def lineage(self, fact_id: str) -> list[Fact]:
+    def list(self) -> list[Fact]:
+        """Alias for list_facts() using the familiar list verb."""
+        return self.list_facts()
+
+    def get(self, fact_id: str) -> Fact:
+        """Return one stored fact by ID.
+
+        Args:
+            fact_id: The 8-char hex ID of the fact to retrieve.
+
+        Returns:
+            The matching Fact.
+
+        Raises:
+            KeyError: If no fact with that ID exists for this agent.
+        """
+        for fact in self._storage.load(self._agent_id):
+            if fact.id == fact_id:
+                return fact
+        raise KeyError(fact_id)
+
+    def lineage(self, fact_id: str) -> builtins.list[Fact]:
         """Return the supersession chain for *fact_id*, newest → oldest.
 
         Walks ``qualifiers["supersedes_id"]`` (written at CAS-supersession time)
@@ -1268,7 +1330,7 @@ class KnowledgeBase(_LearningMixin):
         now: datetime | None = None,
         excluded_ids: set[str] | None = None,
         include_unsupported: bool = False,
-    ) -> list[Fact]:
+    ) -> builtins.list[Fact]:
         """Structured alternative to recall() — returns Fact objects.
 
         Use when you need IDs, types, importance scores, or other metadata.
@@ -1303,7 +1365,7 @@ class KnowledgeBase(_LearningMixin):
         now: datetime | None = None,
         excluded_ids: set[str] | None = None,
         include_unsupported: bool = False,
-    ) -> list[tuple[Fact, float]]:
+    ) -> builtins.list[tuple[Fact, float]]:
         """Like recall_facts() but also returns the relevance score for each fact.
 
         The score is a hybrid value (TF-IDF + retention + importance). Use it
@@ -1335,7 +1397,7 @@ class KnowledgeBase(_LearningMixin):
         top_k: int = 5,
         now: datetime | None = None,
         include_unsupported: bool = False,
-    ) -> tuple[list[tuple[Fact, float]], dict[str, Any]]:
+    ) -> tuple[builtins.list[tuple[Fact, float]], dict[str, Any]]:
         """Diagnostic variant — returns (results, per-stage trace dict).
 
         The trace dict has keys: stage1_candidates, stage3_rrf,
@@ -1352,7 +1414,7 @@ class KnowledgeBase(_LearningMixin):
         )
         return pairs, trace
 
-    def recall_by_tag(self, tag: str, *, include_unsupported: bool = False) -> list[Fact]:
+    def recall_by_tag(self, tag: str, *, include_unsupported: bool = False) -> builtins.list[Fact]:
         """Return all facts that carry the given tag.
 
         Tags are assigned at add() time via the ``tags=`` parameter.
@@ -1370,7 +1432,7 @@ class KnowledgeBase(_LearningMixin):
             if tag in f.tags and (include_unsupported or f.supported is not False)
         ]
 
-    def replace_facts(self, facts: list[Fact]) -> None:
+    def replace_facts(self, facts: builtins.list[Fact]) -> None:
         """Replace all stored facts with the given list (used for import).
 
         Args:
@@ -1387,6 +1449,10 @@ class KnowledgeBase(_LearningMixin):
         """
         self._storage.delete(self._agent_id, fact_id)
         logger.info("Forgot fact '%s' from agent '%s'", fact_id, self._agent_id)
+
+    def delete(self, fact_id: str) -> None:
+        """Alias for forget() using the CRUD-style delete verb."""
+        self.forget(fact_id)
 
     def decay(self, *, now: datetime | None = None) -> None:
         """Apply Ebbinghaus forgetting curve to all stored facts.
@@ -1421,7 +1487,7 @@ class KnowledgeBase(_LearningMixin):
         self._storage.save_snapshot(self._agent_id, name, facts)
         logger.info("Snapshot '%s' saved for agent '%s'", name, self._agent_id)
 
-    def list_snapshots(self) -> list[str]:
+    def list_snapshots(self) -> builtins.list[str]:
         """Return names of all saved snapshots for this agent.
 
         Returns:

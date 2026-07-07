@@ -53,8 +53,10 @@ def create_provider(
             f"Pass api_key= or set {env_name} environment variable."
         )
 
-    if provider in ("openai", "gigachat", "qwen", "openai-compat"):
+    if provider in ("openai", "qwen", "openai-compat"):
         return _create_openai_compat(provider, resolved_key, model=model, base_url=base_url)
+    if provider == "gigachat":
+        return _create_gigachat(resolved_key, model=model, base_url=base_url, **kwargs)
     if provider == "anthropic":
         return _create_anthropic(resolved_key, model=model)
     if provider == "yandex":
@@ -88,10 +90,6 @@ def _create_openai_compat(
             "base_url": "https://api.openai.com/v1",
             "default_model": "gpt-4o-mini",
         },
-        "gigachat": {
-            "base_url": "https://gigachat.devices.sberbank.ru/api/v1",
-            "default_model": "GigaChat",
-        },
         "qwen": {
             "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "default_model": "qwen-turbo",
@@ -121,6 +119,45 @@ def _create_ollama(*, model: str | None) -> LLMProvider:
     from ai_knot.providers.ollama import OLLAMA_DEFAULT_MODEL, OllamaProvider
 
     return OllamaProvider(model=model or OLLAMA_DEFAULT_MODEL)
+
+
+def _resolve_gigachat_verify() -> bool | str:
+    """Resolve the GigaChat TLS setting from ``GIGACHAT_VERIFY_SSL``.
+
+    ``false``/``0``/``no``/``off`` disable verification, the truthy words enable it, and
+    any other value is treated as a path to a CA bundle. Defaults to ``True`` (secure).
+    """
+    raw = os.environ.get("GIGACHAT_VERIFY_SSL")
+    if raw is None:
+        return True
+    low = raw.strip().lower()
+    if low in {"false", "0", "no", "off"}:
+        return False
+    if low in {"true", "1", "yes", "on"}:
+        return True
+    return raw  # treat as a CA-bundle path
+
+
+def _create_gigachat(
+    api_key: str, *, model: str | None, base_url: str | None, **kwargs: str
+) -> LLMProvider:
+    from ai_knot.providers.gigachat import (
+        GIGACHAT_BASE_URL,
+        GIGACHAT_DEFAULT_MODEL,
+        GIGACHAT_DEFAULT_SCOPE,
+        GIGACHAT_OAUTH_URL,
+        GigaChatProvider,
+    )
+
+    scope = kwargs.get("scope") or os.environ.get("GIGACHAT_SCOPE") or GIGACHAT_DEFAULT_SCOPE
+    return GigaChatProvider(
+        api_key,
+        scope=scope,
+        default_model=model or GIGACHAT_DEFAULT_MODEL,
+        oauth_url=os.environ.get("GIGACHAT_OAUTH_URL") or GIGACHAT_OAUTH_URL,
+        base_url=base_url or os.environ.get("GIGACHAT_BASE_URL") or GIGACHAT_BASE_URL,
+        verify_ssl=_resolve_gigachat_verify(),
+    )
 
 
 def _create_yandex(api_key: str, *, model: str | None, **kwargs: str) -> LLMProvider:

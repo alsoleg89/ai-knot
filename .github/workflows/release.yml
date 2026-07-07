@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Bump version in pyproject.toml
         run: |
@@ -55,11 +55,16 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
+      - name: Refresh npm/package-lock.json
+        run: |
+          cd npm
+          AI_KNOT_SKIP_PYTHON_INSTALL=1 npm install --package-lock-only --ignore-scripts
+
       - name: Commit version bump (skip if already at target version)
         run: |
           git config user.name "alsoleg89"
           git config user.email "155813332+alsoleg89@users.noreply.github.com"
-          git add pyproject.toml src/ai_knot/__init__.py npm/package.json
+          git add pyproject.toml src/ai_knot/__init__.py npm/package.json npm/package-lock.json
           if git diff --cached --quiet; then
             echo "Version already at ${{ inputs.version }} — nothing to commit"
           else
@@ -76,10 +81,22 @@ jobs:
             git push origin "v${{ inputs.version }}"
           fi
 
-      - name: Create GitHub Release
+      - name: Render repo-owned GitHub release notes
+        run: |
+          python scripts/render_github_release.py \
+            --version "${{ inputs.version }}" \
+            --output /tmp/ai-knot-release-notes.md
+
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ inputs.version }}" \
-            --title "v${{ inputs.version }}" \
-            --generate-notes
+          if gh release view "v${{ inputs.version }}" >/dev/null 2>&1; then
+            gh release edit "v${{ inputs.version }}" \
+              --title "v${{ inputs.version }}" \
+              --notes-file /tmp/ai-knot-release-notes.md
+          else
+            gh release create "v${{ inputs.version }}" \
+              --title "v${{ inputs.version }}" \
+              --notes-file /tmp/ai-knot-release-notes.md
+          fi
