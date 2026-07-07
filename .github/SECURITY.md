@@ -2,9 +2,13 @@
 
 ## Supported Versions
 
+ai-knot is pre-1.0. Security fixes land on the **latest release only** — upgrade to
+the current version before reporting.
+
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| Latest release | ✅ |
+| Older releases | ❌ (upgrade first) |
 
 ## Reporting a Vulnerability
 

@@ -32,6 +32,12 @@ by default (see `AI_KNOT_RERANK` below).
 | `sqlite` | single-server production, edge | file (WAL) | single-writer |
 | `postgres` | multi-process / HA production | server | multi-writer |
 
+> **Multi-writer caveat.** Writes serialize correctly within a single writer
+> process. The `SharedMemoryPool`'s monotonic-CAS supersession is guaranteed *within*
+> one process; for concurrent pool publishes across multiple processes on Postgres,
+> wrap publish in an external lock (e.g. a Postgres advisory lock) — see
+> [ARCHITECTURE.md](../ARCHITECTURE.md).
+
 ```python
 from ai_knot import KnowledgeBase
 from ai_knot.storage import create_storage
@@ -147,6 +153,12 @@ http://127.0.0.1:8765/mcp
 This is the right surface for HTTP-capable MCP clients and for MCP Registry
 packaging. The stdio path remains the default for Claude Desktop / Claude Code /
 OpenClaw style local configs.
+
+**Auth:** the MCP HTTP transport has no built-in authentication — it binds
+`127.0.0.1` by default and is meant for a trusted host boundary. If you expose it
+beyond localhost, put it behind an authenticating reverse proxy or keep it on a
+trusted network. (The `/v1/*` HTTP sidecar supports `AI_KNOT_SERVER_TOKEN` for
+bearer auth.)
 
 If you prefer running the `ai-knot-mcp` entrypoint directly, the server also
 honors:
