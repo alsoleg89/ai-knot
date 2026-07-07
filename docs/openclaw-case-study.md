@@ -2,10 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that does
-not start from Python framework code. Right now OpenClaw is the best prepared
-**app/MCP** follow-up surface: the integration path is one config block, the
-repo already has a zero-network proof, and the user story is easy to repeat.
+One concrete `ai-knot` integration story that doesn't start from Python framework code. OpenClaw is the best-prepared app/MCP follow-up surface: the integration path is one config block, and the repo already has a zero-network proof.
 
 Official references:
 
@@ -21,7 +18,7 @@ top-of-funnel surfaces than a Python adapter alone.
 
 ## The angle
 
-Do not pitch this as "another MCP server." Pitch it as:
+Not "another MCP server" — instead:
 
 > **Add persistent memory to OpenClaw with one config block.**
 
@@ -31,8 +28,7 @@ That means:
 - the config drops into `~/.openclaw/openclaw.json`,
 - ai-knot provides self-hosted, deterministic recall underneath.
 
-The hook is not "infrastructure." The hook is that the user can try memory in an
-app-shaped surface without adopting a new runtime.
+Not "infrastructure" — the user can try memory in an app-shaped surface without adopting a new runtime.
 
 ---
 
@@ -94,8 +90,7 @@ want the same memory server over HTTP rather than a local config file.
 
 ### Problem
 
-App-first agent users want persistent memory without wiring a full backend stack
-or adopting a hosted memory platform.
+App-first agent users want persistent memory without wiring a full backend stack or adopting a hosted memory platform.
 
 ### What ai-knot adds
 
@@ -106,9 +101,9 @@ or adopting a hosted memory platform.
 
 ### What not to claim
 
-- Do not say OpenClaw requires ai-knot.
-- Do not blur the path with every MCP client at once; keep the post focused.
-- Do not turn this into a generic MCP explainer first.
+- Don't say OpenClaw requires ai-knot.
+- Don't blur the path with every MCP client at once; keep the post focused.
+- Don't turn this into a generic MCP explainer first.
 
 ---
 
@@ -155,4 +150,4 @@ Lead with one of these, in order:
 3. `ai-knot serve-mcp assistant --port 8765` for HTTP-capable MCP hosts
 4. [docs/integrations.md](integrations.md)
 
-Do not send people to the benchmark page first. Send them to the config flow.
+Don't send people to the benchmark page first. Send them to the config flow.

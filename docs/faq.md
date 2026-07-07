@@ -22,7 +22,7 @@ or optional semantic helpers, but recall itself does not require an LLM call.
 
 ### Why is that important?
 
-It makes recall cheaper, lower-latency, reproducible, auditable, and easier to
+It makes recall cheaper, lower-latency, auditable, and easier to
 regression-test.
 
 ### Is this only for Python?
@@ -138,8 +138,7 @@ tail cases instead of making the whole read path probabilistic.
 ### "Why would I trust your benchmark if the whole field is noisy?"
 
 Because ai-knot does not ask you to trust a single headline. It publishes the
-reader and judge for QA metrics **and** ships a deterministic retrieval suite you
-can rerun locally.
+reader and judge for QA metrics and ships a deterministic retrieval suite alongside them.
 
 ### "This feels niche compared with Mem0 or Letta."
 
@@ -151,7 +150,7 @@ multi-agent governance.
 
 You could build parts of it. The point is the productized combination: structured
 facts, forgetting, conflict handling, bi-temporal recall, shared-pool trust, MCP,
-TypeScript, docs, and reproducible benchmarks.
+TypeScript, docs, and benchmarks.
 
 ### "Why do I care about multi-agent governance?"
 

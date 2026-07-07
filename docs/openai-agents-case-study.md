@@ -2,11 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that
-starts from a modern Python agent runtime rather than from MCP or a full app
-stack. The OpenAI Agents SDK is a strong follow-up surface because the host
-framework is active, its `RunConfig` seam is explicit, and `ai-knot` can add
-long-term memory without replacing sessions, tracing, tools, or handoffs.
+One concrete `ai-knot` integration story that starts from a modern Python agent runtime rather than MCP or a full app stack. The OpenAI Agents SDK is a strong follow-up surface: the host framework is active, its `RunConfig` seam is explicit, and `ai-knot` adds long-term memory without replacing sessions, tracing, tools, or handoffs.
 
 Official references:
 
@@ -22,7 +18,7 @@ the runtime.
 
 ## The angle
 
-Do not pitch this as "another wrapper." Pitch it as:
+Not "another wrapper" — instead:
 
 > **Keep the OpenAI Agents SDK flow, add deterministic long-term memory.**
 
@@ -33,8 +29,7 @@ That means:
 - ai-knot appends only the recalled fact block through `RunConfig`,
 - SDK sessions and tracing stay responsible for short-term history and run visibility.
 
-The hook is not generic "memory." The hook is that the developer does **not**
-have to replace the SDK or move to a hosted memory platform to get durable facts.
+Not generic "memory" — the developer does not have to replace the SDK or move to a hosted memory platform to get durable facts.
 
 ---
 
@@ -73,8 +68,7 @@ What it proves:
 
 ### Problem
 
-OpenAI Agents SDK users often want durable memory without turning sessions into
-full transcript replay and without giving up the SDK's own runtime primitives.
+OpenAI Agents SDK users often want durable memory without turning sessions into full transcript replay or giving up the SDK's own runtime primitives.
 
 ### What ai-knot adds
 
@@ -86,9 +80,9 @@ full transcript replay and without giving up the SDK's own runtime primitives.
 
 ### What not to claim
 
-- Do not say it replaces the OpenAI Agents SDK.
-- Do not frame it as "better than sessions"; it complements sessions.
-- Do not lead with MCP or benchmarks when talking to SDK-native users.
+- Don't say it replaces the OpenAI Agents SDK.
+- Don't frame it as "better than sessions"; it complements sessions.
+- Don't lead with MCP or benchmarks when talking to SDK-native users.
 
 ---
 
@@ -136,4 +130,4 @@ Lead with one of these, in order:
 2. `examples/openai_agents_integration.py`
 3. [integrations.md](integrations.md)
 
-Do not send SDK users to the whitepaper first. Send them to the shortest proof.
+Don't send SDK users to the whitepaper first. Send them to the shortest proof.

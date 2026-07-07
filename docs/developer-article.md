@@ -46,7 +46,7 @@ print(context)
 That is the hot path: `add` or `learn`, then `search` / `recall`. For persistent
 memory, the full first-run loop should stay just as obvious: `add -> search -> list -> delete`.
 
-If you want to prove the same loop without opening Python first:
+To try the same loop without opening Python first:
 
 ```bash
 ai-knot add    assistant "User prefers Python over Java"
@@ -56,8 +56,7 @@ ai-knot list   assistant
 ai-knot delete assistant <fact_id>
 ```
 
-If you want that same loop mapped across Python, TypeScript, CLI, MCP, and HTTP,
-use [memory-commands.md](memory-commands.md).
+For that same loop mapped across Python, TypeScript, CLI, MCP, and HTTP, see [memory-commands.md](memory-commands.md).
 
 ## 2. Why this is better than replaying history
 
@@ -73,7 +72,7 @@ Everything else is often noise.
 
 ## 3. Use LLMs where they help, not everywhere
 
-If you want ai-knot to extract facts from a conversation, give it a provider during
+To extract facts from a conversation, give ai-knot a provider during
 `learn()`. If you only need recall, no LLM is required.
 
 ```python
@@ -102,7 +101,7 @@ Use `ai-knot-mcp` for stdio MCP clients, or `ai-knot serve-mcp assistant --port 
 when the host supports remote Streamable HTTP MCP. The same memory loop inside
 the client stays `add/search/list/delete`.
 
-On supported platforms, the shortest stdio setup path is now one command:
+On supported platforms, the shortest stdio setup path is one command:
 
 ```bash
 ai-knot setup claude --agent-id assistant --storage sqlite --write-default-config
@@ -116,7 +115,7 @@ Install `npm install ai-knot` and use the TypeScript client over the same MCP to
 If the local Python bridge is unclear, start with `npx ai-knot-doctor --json`.
 If a sidecar is already running, use `HttpKnowledgeBase({ baseUrl, token })`
 instead of the local MCP subprocess path.
-That sidecar path now also keeps `learn([...])` and `addResolved([...])`, so
+The sidecar path also keeps `learn([...])` and `addResolved([...])`, so
 the no-spawn Node route still has extract-on-write and structured supersession.
 
 ### Vercel AI SDK
@@ -215,16 +214,16 @@ full agent runtime.
 ## 8. What to try next
 
 1. Run `ai-knot demo`
-   If you want the raw Python API immediately after that, run `python examples/quickstart.py`.
+   For the raw Python API immediately after that, run `python examples/quickstart.py`.
 2. Try the zero-network surface that matches your stack:
    `examples/crewai_surface_demo.py`, `examples/pydanticai_surface_demo.py`,
    `examples/langgraph_surface_demo.py`, `examples/llamaindex_surface_demo.py`,
    `examples/openai_agents_surface_demo.py`, or `examples/autogen_surface_demo.py`
-   If you're evaluating the npm path first, use `cd npm && npm run doctor`.
+   For the npm path, use `cd npm && npm run doctor`.
 3. Try the real integration example for that surface
    If a sidecar is already running, use `cd npm && npm run example:http-sidecar`.
 4. Wire the stdio or remote MCP path into Claude or OpenClaw
 5. Re-run the deterministic benchmark command in `docs/benchmarks.md`
 
-The practical takeaway is simple: the next generation of agent memory should not be
+The next generation of agent memory should not be
 "more transcript." It should be **better selected knowledge**.

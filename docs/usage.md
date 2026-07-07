@@ -79,8 +79,7 @@ kb.delete(fact.id)                              # alias: kb.forget(...)
 
 Use `recall()` when you want next-turn memory language in your app code. Use
 `search()` when you want the familiar market-standard `add -> search -> list ->
-delete` loop. The point of `list()` and `delete()` being first-class aliases is
-simple: persistent memory must be easy to inspect and correct, not only query.
+delete` loop. `list()` and `delete()` are first-class aliases because persistent memory must be easy to inspect and correct, not only query.
 
 ### Pluggable storage backends
 
@@ -173,7 +172,7 @@ The same `op` values are available over the public transports:
 - MCP: `add_resolved` with `facts[].op`
 - HTTP sidecar: `POST /v1/facts/resolved` with `facts[].op`
 
-If you only need the human-operated command loop, keep
+For the human-operated command loop, keep
 `add -> search -> list -> delete` for first-run evaluation and reach for
 structured correction only when a fact's lifecycle actually changes.
 
@@ -383,7 +382,7 @@ surface, and `delete` / `forget` both remove a single fact by ID. `list` /
 `show` now default to active facts; pass `--include-inactive` when you want the
 full supersession history in the terminal.
 
-If you want the CLI to do LLM-backed extraction instead of manual `add()` calls:
+For LLM-backed extraction instead of manual `add()` calls:
 
 ```bash
 export AI_KNOT_PROVIDER=openai
@@ -396,7 +395,7 @@ for explicit control, but it will also honor `AI_KNOT_PROVIDER`,
 `AI_KNOT_API_KEY`, and the provider-specific env vars (`OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, and so on).
 
-If CLI install or integration setup behaves unexpectedly, start with
+If CLI install or integration setup behaves unexpectedly, run
 `ai-knot doctor --json` and [troubleshooting.md](troubleshooting.md).
 
 ---

@@ -2,11 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that starts
-from a modern Python agent framework rather than from MCP or a TypeScript app.
-PydanticAI is a strong follow-up surface because the framework is already large,
-its runtime `instructions=...` seam maps cleanly onto ai-knot's recall model,
-and the repo now has both a zero-network proof and a real wiring example.
+One concrete `ai-knot` integration story that starts from a modern Python agent framework rather than MCP or a TypeScript app. PydanticAI is a strong follow-up surface: the framework is already large, and its runtime `instructions=...` seam maps cleanly onto ai-knot's recall model.
 
 Official references:
 
@@ -22,7 +18,7 @@ integration seam is explicit and already familiar to Python agent developers.
 
 ## The angle
 
-Do not pitch this as "another wrapper." Pitch it as:
+Not "another wrapper" — instead:
 
 > **Keep PydanticAI's runtime ergonomics, add deterministic long-term memory.**
 
@@ -32,8 +28,7 @@ That means:
 - ai-knot appends only the query-relevant memory block per run,
 - PydanticAI keeps short-term history while ai-knot handles durable facts.
 
-The hook is not generic "memory." The hook is that the developer does **not**
-have to replace PydanticAI or move to a hosted memory layer to get persistence.
+Not generic "memory" — the developer does not have to replace PydanticAI or move to a hosted memory layer to get persistence.
 
 ---
 
@@ -72,8 +67,7 @@ What it proves:
 
 ### Problem
 
-PydanticAI users want a durable memory layer without replaying transcripts into
-every run and without replacing the framework they already chose.
+PydanticAI users want a durable memory layer without replaying transcripts into every run or replacing the framework they already chose.
 
 ### What ai-knot adds
 
@@ -85,9 +79,9 @@ every run and without replacing the framework they already chose.
 
 ### What not to claim
 
-- Do not say it replaces PydanticAI.
-- Do not pitch it as a hosted platform alternative first.
-- Do not overcomplicate the story with every Python framework at once.
+- Don't say it replaces PydanticAI.
+- Don't pitch it as a hosted platform alternative first.
+- Don't overcomplicate the story with every Python framework at once.
 
 ---
 
@@ -134,4 +128,4 @@ Lead with one of these, in order:
 2. `examples/pydanticai_integration.py`
 3. [docs/integrations.md](integrations.md)
 
-Do not send people to the whitepaper first. Send them to the shortest proof.
+Don't send people to the whitepaper first. Send them to the shortest proof.

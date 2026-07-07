@@ -2,10 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that starts
-from **Claude Desktop / Claude Code** rather than from a Python framework. The
-integration path is short, the underlying MCP surface is already in the product,
-and the proof can start from a zero-network setup demo.
+One concrete `ai-knot` integration story that starts from Claude Desktop / Claude Code rather than a Python framework: short integration path, MCP surface already in the product, proof starts from a zero-network setup demo.
 
 Related official ecosystem references:
 
@@ -21,7 +18,7 @@ by a few hundred.
 
 ## The angle
 
-Do not pitch this as "an SDK." Pitch it as:
+Not "an SDK" — instead:
 
 > **Give Claude persistent memory through one MCP server config.**
 
@@ -31,8 +28,7 @@ That means:
 - the config drops into Claude's MCP config,
 - ai-knot provides self-hosted, deterministic recall underneath.
 
-The hook is not "memory research." The hook is that Claude users can try it with
-copy/paste setup and no custom runtime adoption.
+Not "memory research" — Claude users can try it with copy/paste setup and no custom runtime adoption.
 
 ---
 
@@ -89,8 +85,7 @@ hosts that want the same memory server over HTTP.
 
 ### Problem
 
-Claude users want persistent memory without stuffing transcripts into every turn
-and without standing up a hosted memory service first.
+Claude users want persistent memory without stuffing transcripts into every turn or standing up a hosted memory service first.
 
 ### What ai-knot adds
 
@@ -101,9 +96,9 @@ and without standing up a hosted memory service first.
 
 ### What not to claim
 
-- Do not say Claude requires ai-knot.
-- Do not make the post about every MCP client at once.
-- Do not lead with architecture when the config path is the sharper hook.
+- Don't say Claude requires ai-knot.
+- Don't make the post about every MCP client at once.
+- Don't lead with architecture when the config path is the sharper hook.
 
 ---
 
@@ -149,4 +144,4 @@ Lead with one of these, in order:
 3. `ai-knot serve-mcp assistant --port 8765` for HTTP-capable MCP hosts
 4. [docs/integrations.md](integrations.md)
 
-Do not send people to the whitepaper first. Send them to the setup path.
+Don't send people to the whitepaper first. Send them to the setup path.

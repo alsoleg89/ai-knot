@@ -2,9 +2,9 @@
 
 The fastest way to pick the right `ai-knot` entry point for your stack.
 
-If you're evaluating the project, start here first, then jump into the full API
-reference in [usage.md](usage.md). If you want the same `add -> search -> list -> delete`
-loop mapped across every surface first, use [memory-commands.md](memory-commands.md).
+If you're evaluating the project, start here, then jump into the full API
+reference in [usage.md](usage.md). For the same `add -> search -> list -> delete`
+loop mapped across every surface, use [memory-commands.md](memory-commands.md).
 
 Across surfaces, the recognizable memory loop stays the same: store with
 `add`/`learn`, retrieve with `search`/`recall`, inspect with `list`, and remove
@@ -16,8 +16,8 @@ Keep one first-run loop in mind across every surface:
 
 `add -> search -> list -> delete`
 
-If you prefer agent-memory wording, use `learn`, `recall`, and `forget`. If
-you're onboarding Claude, Claude Code, OpenClaw, or another MCP client, keep
+For agent-memory wording, use `learn`, `recall`, and `forget`. When
+onboarding Claude, Claude Code, OpenClaw, or another MCP client, keep
 the operator verbs separate: `setup` and `doctor` connect the client, while the
 memory loop inside the client stays `add/search/list/delete`.
 
@@ -45,7 +45,7 @@ or `memory.lineage(...)` on the OpenClaw Python adapter.
 
 ## Structured correction surfaces
 
-If your integration needs more than a by-id delete, the structured correction
+For more than a by-id delete, the structured correction
 seam stays consistent across transports:
 
 - Core Python: `kb.add_resolved([Fact(..., op=MemoryOp.UPDATE)])`

@@ -48,7 +48,7 @@ ai-knot solves the replay-tax problem by keeping **knowledge**, not the raw log.
    Most frameworks improved orchestration faster than they improved memory.
 2. **Benchmark trust is weak.**
    Memory leaderboard claims move dramatically with the reader, judge, prompts,
-   and category filters. A reproducible stance is now a differentiator.
+   and category filters. Naming the reader and judge is now a differentiator.
 3. **MCP made memory pluggable.**
    Claude Desktop / Claude Code / OpenClaw and the rise of HTTP-capable MCP
    hosts gave developers immediate integration surfaces for bring-your-own
@@ -69,7 +69,7 @@ populate memory without an LLM: Mem0, Zep/Graphiti, Letta, Cognee, LangMem, and 
 use a model to extract facts or build a graph on ingestion. In `ai-knot`, direct fact
 insertion (`add` / `add_resolved`) needs **no model call**, and `learn()` extraction is
 opt-in — so the *entire pipeline* can run with zero LLM calls. That is what makes a truly
-air-gapped, fully-reproducible deployment possible.
+air-gapped deployment possible.
 
 > **Message discipline / honesty guardrail.** Do **not** claim ai-knot is the *only*
 > no-LLM-on-recall system — it isn't, and a developer audience will catch it. Lead with
@@ -103,9 +103,9 @@ Shared memory is not just a common database:
 ai-knot ships both:
 
 - named-reader QA numbers, and
-- deterministic, rerunnable retrieval numbers.
+- a deterministic retrieval number.
 
-That makes reproducibility part of the product promise, not just a footnote.
+Between them, the read-and-write no-LLM claim has a number behind it, not just a footnote.
 
 ## Proof points to repeat
 
@@ -171,4 +171,4 @@ That honesty helps trust.
 > auditable, and testable. It works over SQLite/Postgres/YAML, ships MCP over
 > stdio or Streamable HTTP, framework adapters including LlamaIndex,
 > PydanticAI, and the OpenAI Agents SDK, LangGraph memory helpers, and a
-> TypeScript client, and publishes benchmark numbers you can actually re-run.
+> TypeScript client, with 78% LoCoMo QA accuracy and no LLM on read or write.

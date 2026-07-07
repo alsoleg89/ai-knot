@@ -2,25 +2,20 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that
-starts from a **polyglot runtime boundary** instead of a Python framework or an
-MCP desktop client.
+One concrete `ai-knot` integration story that starts from a polyglot runtime boundary instead of a Python framework or an MCP desktop client.
 
 Official references:
 
 - FastAPI repo: https://github.com/fastapi/fastapi
 - FastAPI docs: https://fastapi.tiangolo.com/
 
-The point of this surface is not "we also have an API." The point is that a
-team can keep its existing runtime, service boundary, or language mix and add
-deterministic long-term memory through plain HTTP.
+Not "we also have an API" — a team can keep its existing runtime, service boundary, or language mix and add deterministic long-term memory through plain HTTP.
 
 ---
 
 ## The angle
 
-Do not pitch this as "yet another wrapper around the Python library." Pitch it
-as:
+Not "yet another wrapper around the Python library" — instead:
 
 > **Keep your runtime, add deterministic long-term memory over plain HTTP.**
 
@@ -32,9 +27,7 @@ That means:
 - support and debugging stay easier because `/inspect` exposes a browser view of
   the same store.
 
-The hook is not "infrastructure for infrastructure people." The hook is that a
-polyglot team can trial memory quickly without changing how the rest of the app
-is deployed.
+Not "infrastructure for infrastructure people" — a polyglot team can trial memory quickly without changing how the rest of the app is deployed.
 
 ---
 
@@ -98,8 +91,7 @@ npm run example:http-sidecar
 
 ### Problem
 
-Many teams want persistent memory, but they do not want every runtime to depend
-on a local Python subprocess or an MCP-specific setup path.
+Many teams want persistent memory without every runtime depending on a local Python subprocess or an MCP-specific setup path.
 
 ### What ai-knot adds
 
@@ -113,10 +105,10 @@ on a local Python subprocess or an MCP-specific setup path.
 
 ### What not to claim
 
-- Do not say this replaces the core Python API.
-- Do not lead with MCP if the audience is explicitly polyglot/app-service
+- Don't say this replaces the core Python API.
+- Don't lead with MCP if the audience is explicitly polyglot/app-service
   oriented.
-- Do not overcomplicate the message with every backend detail; lead with the
+- Don't overcomplicate the message with every backend detail; lead with the
   JSON loop and debugging surface.
 
 ---
@@ -168,5 +160,5 @@ Lead with one of these, in order:
 3. `cd npm && npm run example:http-sidecar`
 4. [deployment.md](deployment.md)
 
-Do not send polyglot/runtime teams to framework-specific examples first. Send
+Don't send polyglot/runtime teams to framework-specific examples first. Send
 them to the JSON boundary they can adopt without changing the rest of the stack.

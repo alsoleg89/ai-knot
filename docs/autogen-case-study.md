@@ -2,9 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story for teams
-that are **already on AutoGen** and want persistent memory without rewriting
-their agent stack first.
+One concrete `ai-knot` integration story for teams already on AutoGen who want persistent memory without rewriting their agent stack.
 
 Official references:
 
@@ -15,15 +13,13 @@ Official references:
 The official README marks AutoGen as **maintenance mode** and points new users
 toward Microsoft Agent Framework.
 
-That means AutoGen is still a large installed-base channel, but it should be
-framed as a **migration-friendly / existing-user** surface, not as the main
-greenfield framework wedge.
+AutoGen is still a large installed-base channel, but frame it as a migration-friendly / existing-user surface, not the main greenfield framework wedge.
 
 ---
 
 ## The angle
 
-Do not pitch this as "start a new AutoGen project." Pitch it as:
+Not "start a new AutoGen project" — instead:
 
 > **If you already use AutoGen, add deterministic long-term memory without rewriting your assistant.**
 
@@ -34,8 +30,7 @@ That means:
 - AutoGen keeps short-term context management,
 - ai-knot handles durable fact storage and ranked recall underneath.
 
-The hook is not "another memory library." The hook is that an existing AutoGen
-team can add persistence locally before making bigger framework decisions.
+Not "another memory library" — an existing AutoGen team can add persistence locally before making bigger framework decisions.
 
 ---
 
@@ -74,8 +69,7 @@ What it proves:
 
 ### Problem
 
-Existing AutoGen users may want durable memory without turning every new turn
-into transcript replay and without rewriting their stack before they are ready.
+Existing AutoGen users want durable memory without transcript replay on every turn, and without rewriting their stack.
 
 ### What ai-knot adds
 
@@ -87,9 +81,9 @@ into transcript replay and without rewriting their stack before they are ready.
 
 ### What not to claim
 
-- Do not recommend AutoGen as the main greenfield framework in 2026.
-- Do not hide the maintenance-mode status from the official README.
-- Do not pitch this as a replacement for AutoGen's orchestration primitives.
+- Don't recommend AutoGen as the main greenfield framework in 2026.
+- Don't hide the maintenance-mode status from the official README.
+- Don't pitch this as a replacement for AutoGen's orchestration primitives.
 
 ---
 
@@ -137,4 +131,4 @@ Lead with one of these, in order:
 2. `examples/autogen_integration.py`
 3. [integrations.md](integrations.md)
 
-Do not use AutoGen as the lead launch wedge. Use it as an honest installed-base follow-up.
+Don't use AutoGen as the lead launch wedge. Use it as an honest installed-base follow-up.

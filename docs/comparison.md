@@ -2,8 +2,8 @@
 
 Updated: **July 5, 2026**
 
-This is the buyer-facing comparison page: honest, specific, and explicit about where
-`ai-knot` fits against the OSS agent-memory projects that actually matter in 2026.
+This is the buyer-facing comparison page: honest and specific about where
+`ai-knot` fits against the OSS agent-memory projects that matter in 2026.
 
 Every capability claim below is checked against each project's public docs and repo. Where
 a competitor shares a strength with `ai-knot`, this page says so — an honest comparison is
@@ -32,7 +32,7 @@ worth more than a flattering one, and the whole category has a
 ## One-sentence difference
 
 - **ai-knot** — deterministic, self-hosted fact memory that needs no LLM on the read path
-  *or* the write path, with a reproducible benchmark and real multi-agent governance.
+  *or* the write path, with real multi-agent governance and 78% LoCoMo QA accuracy.
 - **Mem0** — a broad, popular memory layer that uses an LLM to extract facts on write and to
   help select what to retrieve; vector-store (optionally graph) backed.
 - **Zep / Graphiti** — builds an LLM-extracted *temporal knowledge graph*; recall is
@@ -87,10 +87,9 @@ Memori all qualify, so "no LLM on recall" is not, by itself, unique to `ai-knot`
 
 The rarer property is the **write** row: `ai-knot` is the only project in this table that
 does not *require* an LLM to populate memory. Direct fact insertion is the default; `learn()`
-extraction is opt-in. That's what makes a genuinely **zero-LLM, air-gappable, fully
-reproducible** deployment possible — and it's what the deterministic benchmark in
-[benchmarks.md](benchmarks.md) proves: same fixtures, fixed seeds, no network, no model,
-identical numbers on every run.
+extraction is opt-in. That's what makes a genuinely **zero-LLM, air-gappable** deployment
+possible — the deterministic suite in [benchmarks.md](benchmarks.md) backs it: same fixtures,
+fixed seeds, no network, no model, identical numbers on every run.
 
 ## When ai-knot wins clearly
 
@@ -105,8 +104,8 @@ Choose `ai-knot` if you care about:
   instead of "just overwrite the memory"
 - shared memory across several agents with **trust, provenance, and visibility rules**, not
   just a common table
-- a benchmark stance a skeptic can re-run in one command, in a category where headline
-  numbers swing 25+ points between vendors
+- deterministic retrieval numbers, in a category where headline QA numbers swing 25+
+  points between vendors
 
 ## When not to choose ai-knot
 
@@ -160,17 +159,16 @@ swap only the long-term memory layer for a deterministic, self-hosted one.
 
 Nobody can answer that from the public numbers, and that's the point. Published LoCoMo claims
 span ~58% to >92%, the same system (Zep) has been reported at 84%, 58%, and 75%, and vendors
-openly dispute each other's methodology. `ai-knot`'s response is to publish a number with
-**zero degrees of freedom** you can re-run yourself — see [benchmarks.md](benchmarks.md).
+openly dispute each other's methodology. `ai-knot` reports 78% with the reader and judge named, plus a deterministic retrieval number with zero degrees of freedom — see [benchmarks.md](benchmarks.md).
 
 ## The honest wedge
 
 `ai-knot` is not trying to be everything in the category, and it is not the most adopted
 project on this page. Its wedge is narrow and defensible:
 
-> **A self-hosted memory layer that needs no LLM on the read *or* write path, proves its
-> retrieval with a benchmark that can't drift, and treats multi-agent memory as a governance
-> problem — not just a shared table.**
+> **A self-hosted memory layer that needs no LLM on the read *or* write path, treats
+> multi-agent memory as a governance problem, not just a shared table, and backs its
+> retrieval with a benchmark that can't drift.**
 
 That is narrower than the graph systems and younger than the incumbents, but it is easier to
 trust, easier to test, and easier to explain.

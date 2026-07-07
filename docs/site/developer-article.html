@@ -382,15 +382,14 @@ print(context)
 </code></pre>
 <p>That is the hot path: <code>add</code> or <code>learn</code>, then <code>search</code> / <code>recall</code>. For persistent
 memory, the full first-run loop should stay just as obvious: <code>add → search → list → delete</code>.</p>
-<p>If you want to prove the same loop without opening Python first:</p>
+<p>To try the same loop without opening Python first:</p>
 <pre><code class="language-bash">ai-knot add    assistant &quot;User prefers Python over Java&quot;
 ai-knot learn  assistant &quot;User deploys in Docker and uses PostgreSQL&quot;
 ai-knot search assistant &quot;what language does the user prefer?&quot;
 ai-knot list   assistant
 ai-knot delete assistant &lt;fact_id&gt;
 </code></pre>
-<p>If you want that same loop mapped across Python, TypeScript, CLI, MCP, and HTTP,
-use <a href="../memory-commands.md">memory-commands.md</a>.</p>
+<p>For that same loop mapped across Python, TypeScript, CLI, MCP, and HTTP, see <a href="../memory-commands.md">memory-commands.md</a>.</p>
 <h2 id="why-this-is-better-than-replaying-history">2. Why this is better than replaying history</h2>
 <p>The goal of memory is not to preserve every sentence. The goal is to preserve the
 few facts that matter later:</p>
@@ -402,7 +401,7 @@ few facts that matter later:</p>
 </ul>
 <p>Everything else is often noise.</p>
 <h2 id="use-llms-where-they-help-not-everywhere">3. Use LLMs where they help, not everywhere</h2>
-<p>If you want ai-knot to extract facts from a conversation, give it a provider during
+<p>To extract facts from a conversation, give ai-knot a provider during
 <code>learn()</code>. If you only need recall, no LLM is required.</p>
 <pre><code class="language-python">from ai_knot import ConversationTurn, KnowledgeBase
 
@@ -422,7 +421,7 @@ print(kb.search(&quot;how should I deploy this service?&quot;))
 <p>Use <code>ai-knot-mcp</code> for stdio MCP clients, or <code>ai-knot serve-mcp assistant --port 8765</code>
 when the host supports remote Streamable HTTP MCP. The same memory loop inside
 the client stays <code>add/search/list/delete</code>.</p>
-<p>On supported platforms, the shortest stdio setup path is now one command:</p>
+<p>On supported platforms, the shortest stdio setup path is one command:</p>
 <pre><code class="language-bash">ai-knot setup claude --agent-id assistant --storage sqlite --write-default-config
 ai-knot setup openclaw --agent-id assistant --storage sqlite --write-default-config
 ai-knot doctor --json
@@ -432,7 +431,7 @@ ai-knot doctor --json
 If the local Python bridge is unclear, start with <code>npx ai-knot-doctor --json</code>.
 If a sidecar is already running, use <code>HttpKnowledgeBase({ baseUrl, token })</code>
 instead of the local MCP subprocess path.
-That sidecar path now also keeps <code>learn([...])</code> and <code>addResolved([...])</code>, so
+The sidecar path also keeps <code>learn([...])</code> and <code>addResolved([...])</code>, so
 the no-spawn Node route still has extract-on-write and structured supersession.</p>
 <h3 id="vercel-ai-sdk">Vercel AI SDK</h3>
 <p>Use <code>AiKnotAISDKMemory</code> when you want deterministic recalled facts to fill the
@@ -508,18 +507,18 @@ full agent runtime.</p>
 <h2 id="what-to-try-next">8. What to try next</h2>
 <ol>
 <li>Run <code>ai-knot demo</code>
-If you want the raw Python API immediately after that, run <code>python examples/quickstart.py</code>.</li>
+For the raw Python API immediately after that, run <code>python examples/quickstart.py</code>.</li>
 <li>Try the zero-network surface that matches your stack:
 <code>examples/crewai_surface_demo.py</code>, <code>examples/pydanticai_surface_demo.py</code>,
 <code>examples/langgraph_surface_demo.py</code>, <code>examples/llamaindex_surface_demo.py</code>,
 <code>examples/openai_agents_surface_demo.py</code>, or <code>examples/autogen_surface_demo.py</code>
-If you're evaluating the npm path first, use <code>cd npm &amp;&amp; npm run doctor</code>.</li>
+For the npm path, use <code>cd npm &amp;&amp; npm run doctor</code>.</li>
 <li>Try the real integration example for that surface
 If a sidecar is already running, use <code>cd npm &amp;&amp; npm run example:http-sidecar</code>.</li>
 <li>Wire the stdio or remote MCP path into Claude or OpenClaw</li>
 <li>Re-run the deterministic benchmark command in <code>docs/benchmarks.md</code></li>
 </ol>
-<p>The practical takeaway is simple: the next generation of agent memory should not be
+<p>The next generation of agent memory should not be
 &quot;more transcript.&quot; It should be <strong>better selected knowledge</strong>.</p>
     </article>
 

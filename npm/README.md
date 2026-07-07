@@ -47,20 +47,19 @@ pip install "ai-knot[mcp]"
 npx ai-knot-doctor
 ```
 
-If you want the fastest installed proof after `npm install ai-knot`, run:
+Fastest installed proof after `npm install ai-knot`:
 
 ```bash
 npx ai-knot-demo
 ```
 
-If you want the shortest app-level TypeScript path with a mainstream runtime,
-pair it with the Vercel AI SDK:
+Shortest app-level TypeScript path with a mainstream runtime — pair it with the Vercel AI SDK:
 
 ```bash
 npm install ai-knot ai @ai-sdk/openai
 ```
 
-If the install path is unclear or the Python bridge looks suspicious, use:
+If the install path is unclear or the Python bridge looks wrong, use:
 
 ```bash
 npx ai-knot-doctor --json
@@ -99,8 +98,7 @@ Use `npx ai-knot-doctor --json` when filing an issue or comparing environments.
 
 ## First-run demo
 
-If you want the shortest installed proof that the npm package and Python bridge
-are both alive, run:
+Shortest installed proof that the npm package and Python bridge are both alive:
 
 ```bash
 npx ai-knot-demo
@@ -115,8 +113,7 @@ store afterward.
 
 ## HTTP sidecar client
 
-If you already run `ai-knot serve`, you can skip the local MCP subprocess path
-entirely and call the same `/v1/*` routes from TypeScript:
+If you already run `ai-knot serve`, skip the local MCP subprocess path entirely and call the same `/v1/*` routes from TypeScript:
 
 ```typescript
 import { HttpKnowledgeBase } from "ai-knot";
@@ -202,7 +199,7 @@ await kb.close();
 
 ## Basic memory loop
 
-If you only remember one thing, make it this:
+The core loop:
 
 `add -> search -> list -> delete`
 
@@ -295,7 +292,7 @@ guide: [`docs/memory-commands.md`](https://github.com/alsoleg89/ai-knot/blob/mai
 flows. It keeps ai-knot dependency-light: ai-knot does the recall, and your AI
 SDK code keeps control of the model call.
 
-If you want the shortest repo-native proof before wiring Python or a model call:
+Shortest repo-native proof before wiring Python or a model call:
 
 ```bash
 npm run example:basic-memory-loop
@@ -356,8 +353,7 @@ pip install "ai-knot[mcp]"
 npx ai-knot-doctor
 ```
 
-If you want to inspect the same memory surface before any model call,
-use the repo-native surface proof:
+To inspect the same memory surface before any model call, use the repo-native surface proof:
 
 [`npm/examples/vercel-ai-sdk-surface.ts`](examples/vercel-ai-sdk-surface.ts)
 

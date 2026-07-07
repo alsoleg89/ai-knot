@@ -1,7 +1,6 @@
 # Codespaces quickstart
 
-Use this path when you want to try `ai-knot` without installing Python, Node,
-or local dependencies first.
+Try `ai-knot` without installing Python, Node, or local dependencies first.
 
 Open the repo in GitHub Codespaces:
 
@@ -12,7 +11,7 @@ The repo already ships `.devcontainer/devcontainer.json`, which installs:
 - Python dev deps plus `mcp`, `postgres`, and `server` extras
 - the npm workspace dependencies in `npm/`
 
-Wait for the post-create step to finish, then start with one of these proofs.
+Wait for the post-create step to finish, then run one of these proofs.
 
 ## Fastest first runs
 
@@ -28,7 +27,7 @@ What you see:
 - temporary local storage, so you can prove the behavior without cleanup
 - the shortest path from "repo opened" to "memory works"
 
-If you want the raw Python API right after that:
+For the raw Python API:
 
 ```bash
 python examples/quickstart.py
@@ -77,7 +76,7 @@ What you see:
 - the packaged npm bridge can route into the built-in proof command
 - the repo-native Node example shows the same `add` / `search` / `list` / `delete` loop from TypeScript
 
-If you want the Vercel AI SDK surface specifically:
+For the Vercel AI SDK surface specifically:
 
 ```bash
 cd npm
@@ -90,7 +89,7 @@ What you see:
 - no Python-side MCP process required
 - no model call required
 
-If you later switch to the real npm client path and the bridge fails, run:
+If the real npm client path fails, run:
 
 ```bash
 cd npm

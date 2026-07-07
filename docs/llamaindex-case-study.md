@@ -2,9 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that
-starts from the LlamaIndex ecosystem rather than from MCP or a framework-neutral
-Python snippet.
+One concrete `ai-knot` integration story that starts from the LlamaIndex ecosystem rather than MCP or a framework-neutral Python snippet.
 
 Official references:
 
@@ -20,7 +18,7 @@ packages.
 
 ## The angle
 
-Do not pitch this as "another retriever." Pitch it as:
+Not "another retriever" — instead:
 
 > **Keep the LlamaIndex `memory=...` flow, add deterministic long-term memory.**
 
@@ -69,9 +67,7 @@ memory = AiKnotLlamaIndexMemory.from_defaults(knowledge_base=kb, top_k=5)
 chat_engine = SimpleChatEngine.from_defaults(llm=llm, memory=memory)
 ```
 
-If you want write-time fact extraction instead of storing raw user messages,
-turn on `extract_on_write=True` and give the `KnowledgeBase` a configured
-provider.
+For write-time fact extraction instead of raw user messages, set `extract_on_write=True` and give the `KnowledgeBase` a configured provider.
 
 Repo-native real run:
 
@@ -85,9 +81,7 @@ OPENAI_API_KEY=... python examples/llamaindex_integration.py
 
 ### Problem
 
-LlamaIndex users often have good short-term chat memory but still need a
-durable, inspectable long-term memory layer that does not require replaying the
-whole transcript or adopting another hosted memory product.
+LlamaIndex users often have good short-term chat memory but still need a durable, inspectable long-term memory layer that doesn't require replaying the whole transcript or adopting another hosted memory product.
 
 ### What ai-knot adds
 
@@ -100,9 +94,9 @@ whole transcript or adopting another hosted memory product.
 
 ### What not to claim
 
-- Do not say it replaces LlamaIndex.
-- Do not say it is more native to LlamaIndex than the framework's own building blocks.
-- Do not hide the trade-off: the default write path is intentionally simple and
+- Don't say it replaces LlamaIndex.
+- Don't say it is more native to LlamaIndex than the framework's own building blocks.
+- Don't hide the trade-off: the default write path is intentionally simple and
   deterministic; richer extraction is opt-in.
 
 ---
@@ -151,5 +145,5 @@ Lead with one of these, in order:
 2. `pip install "ai-knot[llamaindex]"`
 3. [integrations.md](integrations.md)
 
-Do not send LlamaIndex users to the whitepaper first. Send them to the shortest
+Don't send LlamaIndex users to the whitepaper first. Send them to the shortest
 proof.

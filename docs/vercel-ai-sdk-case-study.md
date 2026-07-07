@@ -2,11 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that
-starts from a mainstream TypeScript app stack rather than from Python. The
-Vercel AI SDK is a strong follow-up surface because its `system` / `messages`
-shape is already familiar to app builders, and `ai-knot` can slot into that
-surface without taking over the model/runtime layer.
+One concrete `ai-knot` integration story that starts from a mainstream TypeScript app stack rather than Python. The Vercel AI SDK is a strong follow-up surface: its `system` / `messages` shape is already familiar to app builders, and `ai-knot` slots into that surface without taking over the model/runtime layer.
 
 Official references:
 
@@ -22,7 +18,7 @@ stack.
 
 ## The angle
 
-Do not pitch this as "a new framework." Pitch it as:
+Not "a new framework" — instead:
 
 > **Keep your AI SDK app flow, add deterministic long-term memory.**
 
@@ -32,8 +28,7 @@ That means:
 - ai-knot fills the exact `system` or `messages` surface the app already uses,
 - model choice, streaming, and UI routing stay inside your own AI SDK code.
 
-The hook is not "another SDK." The hook is that the app developer can keep the
-same TypeScript ergonomics and gain persistence underneath.
+Not "another SDK" — the app developer keeps the same TypeScript ergonomics and gains persistence underneath.
 
 If the team already runs `ai-knot serve`, the same adapter can also sit on top
 of `HttpKnowledgeBase` instead of the local MCP subprocess path.
@@ -79,8 +74,7 @@ What it proves:
 
 ### Problem
 
-TypeScript app builders want persistent memory without moving to a Python-first
-stack or replaying too much chat history into every `system` prompt.
+TypeScript app builders want persistent memory without moving to a Python-first stack or replaying too much chat history into every `system` prompt.
 
 ### What ai-knot adds
 
@@ -92,9 +86,9 @@ stack or replaying too much chat history into every `system` prompt.
 
 ### What not to claim
 
-- Do not say it replaces the Vercel AI SDK.
-- Do not overfocus on MCP or Python when talking to TS builders.
-- Do not make this about benchmarks first; lead with the app surface.
+- Don't say it replaces the Vercel AI SDK.
+- Don't overfocus on MCP or Python when talking to TS builders.
+- Don't make this about benchmarks first; lead with the app surface.
 
 ---
 
@@ -142,4 +136,4 @@ Lead with one of these, in order:
 3. `cd npm && npm run doctor` when the TypeScript bridge needs triage
 4. [../npm/README.md](../npm/README.md)
 
-Do not send TypeScript app builders to Python docs first. Send them to the app-shaped proof.
+Don't send TypeScript app builders to Python docs first. Send them to the app-shaped proof.

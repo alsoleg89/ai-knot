@@ -35,7 +35,7 @@
 > HTTP, or native adapters for Claude, LangGraph, CrewAI, LlamaIndex, AutoGen, OpenAI Agents, and
 > PydanticAI. Quality holds up: **78% on LoCoMo** with the optional embedding dial. [See the benchmarks →](docs/benchmarks.md)
 
-*Self-hosted OSS — no cloud tier, no signup, no API key. New and pre-1.0: if the no-LLM, self-hosted approach resonates, a ⭐ helps others find it, and questions are welcome in [Discussions](https://github.com/alsoleg89/ai-knot/discussions).*
+*Self-hosted OSS — no cloud tier, no signup, no API key. New and pre-1.0 — a ⭐ helps others find it, and questions are welcome in [Discussions](https://github.com/alsoleg89/ai-knot/discussions).*
 
 ---
 
@@ -69,14 +69,14 @@ First-generation memory layers (2023–2024) fixed transcript replay by throwing
 
 ## Fastest proof (30 seconds)
 
-If you want the single shortest proof that the product works, use this path:
+Shortest proof the product works:
 
 ```bash
 pip install ai-knot
 ai-knot demo
 ```
 
-If you are starting from Node / TypeScript instead:
+From Node / TypeScript:
 
 ```bash
 npm install ai-knot
@@ -107,7 +107,7 @@ That is the core promise: persist facts to your own storage, then pull back only
 
 ## Basic memory commands
 
-If you only remember one product loop, make it this:
+The core product loop:
 
 ```bash
 ai-knot add    assistant "User deploys APIs with Docker and Kubernetes"
@@ -135,7 +135,7 @@ When you need a deeper correction or audit loop:
 
 For the full command map, including `include_inactive`, `lineage`, structured correction, and cross-surface equivalents, use [docs/memory-commands.md](docs/memory-commands.md).
 
-If you're wiring Claude or OpenClaw, keep setup separate from the memory verbs:
+Wiring Claude or OpenClaw: keep setup separate from the memory verbs.
 
 ```bash
 ai-knot setup openclaw --agent-id assistant --storage sqlite --write-default-config
@@ -173,7 +173,7 @@ Need every runnable path in one place? Use [examples/README.md](examples/README.
 
 TypeScript note: the npm package uses the Python engine underneath, so keep Python `3.11+` on `PATH` and use `npx ai-knot-doctor --json` if the bridge looks wrong.
 
-If the bridge or environment looks suspicious:
+To check the bridge or environment:
 
 ```bash
 ai-knot doctor --json
@@ -181,8 +181,6 @@ npx ai-knot-doctor --json
 ```
 
 ## What it looks like in your stack
-
-You should be able to spot your existing runtime in under a minute.
 
 | Stack | Integration seam |
 |---|---|
@@ -294,7 +292,7 @@ The single-agent path is the easy part. The harder problem is shared memory that
 - deterministic conflict handling
 - trust penalties that survive flooding or laundering attempts
 
-If multi-agent memory is part of the product, not a future nice-to-have, this is one of `ai-knot`'s sharpest edges. See [docs/multi-agent-governance.md](docs/multi-agent-governance.md) for how it maps to the 2026 governed-shared-memory problem, and watch it defend itself under attack in [`examples/poisoned_pool.py`](examples/poisoned_pool.py) (`python examples/poisoned_pool.py`). Full API: [docs/usage.md](docs/usage.md#multi-agent).
+This is one of `ai-knot`'s sharpest edges. See [docs/multi-agent-governance.md](docs/multi-agent-governance.md) for how it maps to the 2026 governed-shared-memory problem, and watch it defend itself under attack in [`examples/poisoned_pool.py`](examples/poisoned_pool.py) (`python examples/poisoned_pool.py`). Full API: [docs/usage.md](docs/usage.md#multi-agent).
 
 ## What you can build
 

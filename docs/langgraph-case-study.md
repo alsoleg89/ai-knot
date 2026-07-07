@@ -2,9 +2,7 @@
 
 Updated: **July 2, 2026**
 
-Use this file when you want one concrete `ai-knot` integration story that
-starts from the LangChain / LangGraph ecosystem rather than from MCP or a
-framework-neutral Python snippet.
+One concrete `ai-knot` integration story that starts from the LangChain / LangGraph ecosystem rather than MCP or a framework-neutral Python snippet.
 
 Official references:
 
@@ -22,7 +20,7 @@ search-shaped tool flow while keeping memory deterministic and portable.
 
 ## The angle
 
-Do not pitch this as "LangMem but different." Pitch it as:
+Not "LangMem but different" — instead:
 
 > **Keep the LangGraph agent/tool flow, add deterministic long-term memory.**
 
@@ -88,9 +86,7 @@ surface and do not want the full LangGraph runtime.
 
 ### Problem
 
-LangGraph users often want durable memory, but the market's default answers are
-either "adopt the ecosystem-native store story" or "move memory into another
-hosted/vector-heavy layer."
+LangGraph users often want durable memory, but the default answers are "adopt the ecosystem-native store story" or "move memory into another hosted/vector-heavy layer."
 
 ### What ai-knot adds
 
@@ -103,9 +99,9 @@ hosted/vector-heavy layer."
 
 ### What not to claim
 
-- Do not say it replaces LangGraph.
-- Do not say it is more native than LangMem inside LangGraph.
-- Do not hide the trade-off: LangMem is tighter to the ecosystem; ai-knot is
+- Don't say it replaces LangGraph.
+- Don't say it is more native than LangMem inside LangGraph.
+- Don't hide the trade-off: LangMem is tighter to the ecosystem; ai-knot is
   broader, more portable, and more storage-controlled.
 
 ---
@@ -158,5 +154,5 @@ Lead with one of these, in order:
 2. `python examples/langchain_integration.py`
 3. [integrations.md](integrations.md)
 
-Do not send LangGraph users to the whitepaper first. Send them to the shortest
+Don't send LangGraph users to the whitepaper first. Send them to the shortest
 proof.

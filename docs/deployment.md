@@ -178,7 +178,7 @@ unchanged by the anchor.
 
 ## 6. Multi-agent pool (shared memory + governance)
 
-When multiple agents share a memory layer, use the pool. It adds trust scoring,
+For multiple agents sharing a memory layer, use the pool. It adds trust scoring,
 evidence-gated belief, per-scope read ACLs, and an append-only audit ledger on
 top of the same storage backend.
 
@@ -282,8 +282,8 @@ console.log(await kb.search("what does the user deploy with?"));
 console.log(await kb.list());
 ```
 
-If you want the same sidecar path to do extract-on-write or structured
-supersession, `HttpKnowledgeBase` now also supports `learn([...], options?)`
+For extract-on-write or structured supersession over the same sidecar path,
+`HttpKnowledgeBase` also supports `learn([...], options?)`
 and `addResolved([...])`, including `op: "update" | "delete" | "noop"` on
 structured facts.
 
@@ -293,9 +293,8 @@ in production.
 
 ### Browser inspector
 
-The same sidecar now ships a lightweight read-only HTML inspector. It is useful
-for demo flows, support, and debugging when you want to see what the store
-contains without writing a custom UI.
+The same sidecar ships a lightweight read-only HTML inspector, useful for
+demo flows, support, and debugging without writing a custom UI.
 
 Open:
 

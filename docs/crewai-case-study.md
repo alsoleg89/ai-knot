@@ -2,11 +2,7 @@
 
 Updated: **July 1, 2026**
 
-Use this file when someone asks for one concrete `ai-knot` integration instead
-of the full product story. Right now the best prepared follow-up surface is
-**CrewAI**: the framework has large existing pull, memory is already a native
-concept in its docs, and `ai-knot` can now plug into the exact objects CrewAI
-users already touch.
+One concrete `ai-knot` integration story instead of the full product pitch. CrewAI is the best-prepared follow-up surface: large existing pull, memory already a native concept in its docs, and `ai-knot` plugs into the exact objects CrewAI users already touch.
 
 Official CrewAI references:
 
@@ -17,7 +13,7 @@ Official CrewAI references:
 
 ## The angle
 
-Do not pitch this as "yet another adapter." Pitch it as:
+Not "yet another adapter" — instead:
 
 > **Keep CrewAI's ergonomics, swap in deterministic long-term memory.**
 
@@ -27,8 +23,7 @@ That means:
 - `Agent(memory=memory.scope("/agent/researcher"))` stays the agent-level shape,
 - ai-knot takes over long-term storage and ranked recall underneath.
 
-The hook is not abstract "memory." The hook is that the developer does **not**
-have to replace CrewAI or move to a hosted memory platform to get persistence.
+Not abstract "memory" — the developer does not have to replace CrewAI or move to a hosted memory platform to get persistence.
 
 ---
 
@@ -74,9 +69,7 @@ What it proves:
 
 ### Problem
 
-CrewAI users can orchestrate agents well, but long-term memory still needs a
-clear persistence story that does not turn into full transcript replay or a
-hosted dependency.
+CrewAI users can orchestrate agents well, but long-term memory still needs a persistence story that isn't full transcript replay or a hosted dependency.
 
 ### What ai-knot adds
 
@@ -88,9 +81,9 @@ hosted dependency.
 
 ### What not to claim
 
-- Do not say it replaces CrewAI.
-- Do not say it is better because it is "more autonomous."
-- Do not oversell semantic richness; the wedge is reproducibility and storage control.
+- Don't say it replaces CrewAI.
+- Don't say it is better because it is "more autonomous."
+- Don't oversell semantic richness; the wedge is reproducibility and storage control.
 
 ---
 
@@ -138,4 +131,4 @@ Lead with one of these, in order:
 2. `examples/crewai_integration.py`
 3. [docs/integrations.md](integrations.md)
 
-Do not send people to the whitepaper first. Send them to the shortest proof.
+Don't send people to the whitepaper first. Send them to the shortest proof.
