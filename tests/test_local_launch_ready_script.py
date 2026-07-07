@@ -74,7 +74,7 @@ def test_main_reports_release_render_failure(
     out = capsys.readouterr().out
 
     assert code == 1
-    assert "[FAIL] release notes render: broken release body for 0.11.0" in out
+    assert "[FAIL] release notes render: broken release body for 0.12.0" in out
 
 
 def test_main_reports_site_article_drift(

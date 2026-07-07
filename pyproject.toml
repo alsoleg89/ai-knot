@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-knot"
-version = "0.11.0"
+version = "0.12.0"
 description = "Deterministic, self-hosted long-term memory for AI agents."
 readme = "README.md"
 license = {text = "MIT"}

@@ -8,6 +8,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-07-07
+
 ### Added
 - Multi-agent governance guide ([docs/multi-agent-governance.md](docs/multi-agent-governance.md)):
   the governed-shared-memory surface (access control, temporal supersession,
