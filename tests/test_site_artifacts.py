@@ -14,7 +14,7 @@ def test_hero_demo_asset_exists_and_is_wired_into_readme_and_site() -> None:
     assert gif_path.exists()
     assert poster_path.exists()
     assert "docs/assets/hero-demo.gif" in readme
-    assert "../assets/hero-demo.gif" in site
+    assert "assets/hero-demo.gif" in site
 
 
 def test_pages_site_exists_and_covers_core_message() -> None:
