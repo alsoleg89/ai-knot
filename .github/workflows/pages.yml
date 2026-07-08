@@ -41,6 +41,9 @@ jobs:
       - name: Render long-form Pages articles
         run: python scripts/render_site_articles.py
 
+      - name: Copy shared assets into the site root
+        run: cp -r docs/assets docs/site/assets
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
