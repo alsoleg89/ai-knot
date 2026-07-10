@@ -408,6 +408,9 @@ def test_example30_poisoned_pool_governance_defends_shared_state() -> None:
     # The honest agent earns trust by being recalled; the attacker cannot.
     assert result.honest_trust_after_use > result.attacker_trust_final
     assert result.attacker_trust_final < result.honest_trust_final
+    # The poison really does take the slot first — the demo computes this rather than
+    # staging it, so the recovery below is a defense and not a no-op.
+    assert result.poison_superseded is True
     # The stale replay of the poisoned fact is rejected by the monotonic CAS guard.
     assert result.stale_replay_rejected is True
     # The honest value wins recall and the poisoned endpoint is suppressed.
