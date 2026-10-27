@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -31,8 +31,19 @@ class FakeClock:
 
 
 @pytest.fixture
-def clock() -> FakeClock:
-    return FakeClock()
+def clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
+    clock = FakeClock()
+
+    class ClockDatetime(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> datetime:
+            return clock().astimezone(tz) if tz is not None else clock().replace(tzinfo=None)
+
+    # Fact defaults and foreground writes must use the same time as the facade.
+    # Otherwise tests start failing once real time passes the fixed scenario date.
+    for module in ("types", "knowledge", "learning", "_resolve"):
+        monkeypatch.setattr(f"ai_knot.{module}.datetime", ClockDatetime)
+    return clock
 
 
 @pytest.fixture(params=["sqlite", "postgres"])

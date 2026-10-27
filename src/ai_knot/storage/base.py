@@ -132,6 +132,13 @@ class PoolStatsCapable(Protocol):
 
 
 @runtime_checkable
+class AtomicPoolStatsCapable(Protocol):
+    """Atomically add counters and union consumer sets, returning durable totals."""
+
+    def merge_pool_stats(self, delta: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@runtime_checkable
 class ACLStoreCapable(Protocol):
     """Optional extension for durable per-agent read-scope grants (multi-agent ACL).
 

@@ -10,17 +10,18 @@ import math
 import time
 from collections.abc import Callable
 from contextlib import suppress
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal, Protocol, cast
 from uuid import uuid4
 
 from ai_knot.types import Fact, MemoryType, MESIState
 
-from . import _state
+from . import _state, shared_maintenance
 from .changes import evidence_revision
 from .codec import canonical_json, decode_value
 from .models import (
+    AccessDenied,
     EvidenceRef,
     FreshnessRecord,
     IdempotencyConflict,
@@ -192,13 +193,61 @@ def _reserve(
     budget: MaintenanceBudget,
     cost: int,
     input_bytes: int,
-) -> None:
-    with memory._transaction() as session:
+    *,
+    request: VerificationRequest | None = None,
+    claim_key: str = "",
+    expected_policy: FreshnessRecord | None = None,
+    expected_revision: int | None = None,
+) -> str | None:
+    namespaces = (
+        (
+            *shared_maintenance.locks(memory, request.ref.namespace),
+            *memory._evidence_scopes((request.ref,)),
+        )
+        if request
+        else ()
+    )
+    with memory._transaction(namespaces) as session:
         row = _guard(memory, session, key, generation)
         if int(row["reserved"] or 0) + cost > budget.max_model_calls:
             raise _BudgetExhausted("model_budget")
         if int(row["input_bytes"] or 0) + input_bytes > budget.max_input_bytes:
             raise _BudgetExhausted("input_budget")
+        token = None
+        if request is not None and request.ref.namespace != memory._owner:
+            fact = memory._fact_for_ref(session, request.ref, memory._now())
+            policy = memory._policy(session, request.ref.namespace, fact)
+            revision = (
+                session.fetch_one(
+                    sql(
+                        "SELECT revision FROM ao_freshness WHERE namespace=? "
+                        "AND subject_kind=? AND subject_key=?"
+                    ),
+                    (
+                        request.ref.namespace,
+                        expected_policy.subject_kind,
+                        expected_policy.subject_key,
+                    ),
+                )
+                if expected_policy is not None
+                else None
+            )
+            if (
+                policy != expected_policy
+                or revision is None
+                or int(revision["revision"] or 0) != expected_revision
+            ):
+                raise RevisionConflict("freshness policy changed before reservation")
+            token = shared_maintenance.claim(
+                memory,
+                session,
+                request,
+                claim_key,
+                datetime.fromisoformat(str(row["expires_at"])).isoformat(timespec="microseconds"),
+                cost,
+            )
+        else:
+            shared_maintenance.reserve_budget(memory, session, cost)
         session.execute(
             sql(
                 "UPDATE ao_maintenance_runs SET "
@@ -207,6 +256,8 @@ def _reserve(
             ),
             (cost, input_bytes, memory._owner, key, generation),
         )
+
+        return token
 
 
 def _fact_from_sql(row: SQLRow) -> Fact:
@@ -326,7 +377,7 @@ def commit_consolidation(
     outputs, covered = validate_proposal(proposal, selected, now=memory._now())
     if not outputs:
         return 0
-    with memory._transaction(tuple(sorted({ref.namespace for ref in selected}))) as session:
+    with memory._transaction(memory._evidence_scopes(selected)) as session:
         now = memory._now()
         if any(not output.is_active(now) for output in outputs):
             raise ValueError("consolidation output expired before commit")
@@ -338,6 +389,14 @@ def commit_consolidation(
             if source.type != MemoryType.EPISODIC or ref.namespace != memory._owner:
                 raise ValueError("invalid consolidation source type")
         current = session.load_facts(memory._owner)
+        archived_policies = {}
+        for fact in current:
+            if fact.id in covered:
+                policy = memory._policy(session, memory._owner, fact)
+                if policy is not None and policy.ref == EvidenceRef(
+                    memory._owner, fact.id, evidence_revision(fact)
+                ):
+                    archived_policies[fact.id] = policy
         if {fact.id for fact in outputs} & {fact.id for fact in current}:
             raise RevisionConflict("output ID exists")
         if anchor_seq is not None and any(output.slot_key for output in outputs):
@@ -376,7 +435,45 @@ def commit_consolidation(
         for fact in current:
             if fact.id in covered:
                 fact.valid_until = now
+        from .lineage import (
+            DEPENDENCIES_KEY,
+            ROOTS_KEY,
+            encode_roots,
+            evidence_dependencies,
+            evidence_roots,
+        )
+
+        for output in outputs:
+            sources = set(json.loads(output.qualifiers["consolidation_ids"]))
+            roots = {
+                ref
+                for source in current
+                if source.id in sources
+                for ref in evidence_roots(memory._owner, source)
+            }
+            output.qualifiers[ROOTS_KEY] = encode_roots(tuple(roots))
+            dependencies = {
+                ref
+                for source in current
+                if source.id in sources
+                for ref in (
+                    EvidenceRef(memory._owner, source.id, evidence_revision(source)),
+                    *evidence_dependencies(source),
+                )
+            }
+            output.qualifiers[DEPENDENCIES_KEY] = encode_roots(tuple(dependencies))
         session.replace_facts(memory._owner, [*current, *outputs])
+        for fact in current:
+            policy = archived_policies.get(fact.id)
+            if policy is not None:
+                # Closing an episode archives the same evidence. Carry its exact
+                # attestation to that archived revision, never extend its deadline.
+                save_freshness(
+                    session,
+                    replace(
+                        policy, ref=EvidenceRef(memory._owner, fact.id, evidence_revision(fact))
+                    ),
+                )
         if run_key is not None:
             session.execute(
                 sql(
@@ -396,9 +493,19 @@ def _verify(
     result: VerificationResult,
     expected_policy: FreshnessRecord,
     expected_revision: int,
+    claim_token: str | None = None,
+    release: bool = True,
 ) -> bool:
-    with memory._transaction((request.ref.namespace,)) as session:
+    with memory._transaction(
+        (
+            *shared_maintenance.locks(memory, request.ref.namespace),
+            *memory._evidence_scopes((request.ref,)),
+        )
+    ) as session:
         _guard(memory, session, key, generation)
+        shared_maintenance.require_maintain(memory, session, request.ref.namespace)
+        if claim_token is not None:
+            shared_maintenance.guard_claim(memory, session, request, claim_token)
         now = memory._now()
         fact = memory._fact_for_ref(session, request.ref, now)
         policy = memory._policy(session, request.ref.namespace, fact)
@@ -420,6 +527,8 @@ def _verify(
             policy, request.ref, current=request.ref, result=result, now=now
         )
         save_freshness(session, current)
+        if claim_token is not None and release:
+            shared_maintenance.release_claim(memory, session, request, claim_token)
         accepted = result.outcome == VerificationOutcome.CONFIRMED
         if accepted:
             session.execute(
@@ -443,6 +552,11 @@ def _cleanup(memory: AlwaysOnMemory, key: str, generation: int, limit: int) -> t
     with memory._transaction(tuple(namespaces)) as session:
         _guard(memory, session, key, generation)
         now = memory._now()
+        if "__shared__" in namespaces:
+            try:
+                shared_maintenance.require_maintain(memory, session, "__shared__")
+            except AccessDenied:
+                namespaces.remove("__shared__")
         if "__shared__" in namespaces:
             assert memory._pool is not None
             cutoff = timestamp(now - timedelta(seconds=memory._pool._POOL_TTL_SECONDS))
@@ -544,24 +658,28 @@ async def run_maintenance(
             raise _BudgetExhausted("wall_budget")
         return seconds
 
-    async def verify_one(
-        provider: VerificationProvider, request: VerificationRequest
-    ) -> VerificationResult:
-        seconds = remaining()
-        _reserve(
-            memory,
-            run_key,
-            generation,
-            budget,
-            provider.model_cost,
-            len(canonical_json(request).encode()),
-        )
-        return await asyncio.wait_for(provider.verify(request), timeout=seconds)
-
     try:
-        for request in memory.due_verifications(limit=min(500, budget.max_items)):
+        include_shared = False
+        if memory._pool is not None and memory._pool._persist_stats:
+            with memory._transaction(write=False) as snapshot:
+                try:
+                    shared_maintenance.require_maintain(memory, snapshot, "__shared__")
+                    include_shared = True
+                except AccessDenied:
+                    pass
+        for request in memory.due_verifications(
+            limit=min(500, budget.max_items), include_shared=include_shared
+        ):
             remaining()
             inspected += 1
+            if request.ref.namespace != memory._owner:
+                with memory._transaction((request.ref.namespace,), write=False) as snapshot:
+                    try:
+                        shared_maintenance.require_maintain(memory, snapshot, request.ref.namespace)
+                    except AccessDenied:
+                        skipped += 1
+                        reasons.append("shared_maintenance_not_authorized")
+                        continue
             if verifier is None:
                 skipped += 1
                 reasons.append("verifier_disabled")
@@ -585,8 +703,22 @@ async def run_maintenance(
                 if revision_row is None:
                     raise RevisionConflict("freshness policy disappeared before verification")
                 expected_revision = int(revision_row["revision"] or 0)
+            claim_token = _reserve(
+                memory,
+                run_key,
+                generation,
+                budget,
+                verifier.model_cost,
+                len(canonical_json(request).encode()),
+                request=request,
+                claim_key=canonical_json([request, expected_policy, expected_revision]),
+                expected_policy=expected_policy,
+                expected_revision=expected_revision,
+            )
+            known_response = False
             try:
-                result = await verify_one(verifier, request)
+                result = await asyncio.wait_for(verifier.verify(request), timeout=remaining())
+                known_response = True
             except asyncio.CancelledError:
                 with suppress(Exception):
                     _verify(
@@ -599,6 +731,8 @@ async def run_maintenance(
                         ),
                         expected_policy,
                         expected_revision,
+                        claim_token,
+                        release=False,
                     )
                 raise
             except (_BudgetExhausted, RevisionConflict):
@@ -609,7 +743,15 @@ async def run_maintenance(
                     VerificationOutcome.UNAVAILABLE, {"reason": type(exc).__name__}, ""
                 )
             _verify(
-                memory, run_key, generation, request, result, expected_policy, expected_revision
+                memory,
+                run_key,
+                generation,
+                request,
+                result,
+                expected_policy,
+                expected_revision,
+                claim_token,
+                release=known_response,
             )
         remaining()
         episodes = select_episodes(memory, budget.max_items - inspected)

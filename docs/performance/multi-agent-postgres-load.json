@@ -1,0 +1,53 @@
+{
+  "backend": "postgres",
+  "combined_throughput_per_second": 89.47345043393372,
+  "environment": {
+    "backend_version": "16.15",
+    "cpus": 15,
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "python": "3.12.13"
+  },
+  "invariants": {
+    "consumer_agents": 8,
+    "idle_provider_calls": 0,
+    "permits": 1,
+    "published": 200,
+    "recalled": 200,
+    "refresh_provider_calls": 1,
+    "usage_counter": 200
+  },
+  "publish": {
+    "p50_ms": 75.10766701307148,
+    "p95_ms": 108.0007089767605,
+    "samples": 200,
+    "throughput_per_second": 44.73672521696686
+  },
+  "recall": {
+    "p50_ms": 96.36525006499141,
+    "p95_ms": 133.6587080731988,
+    "samples": 200,
+    "throughput_per_second": 44.73672521696686
+  },
+  "refresh": {
+    "checks": 8,
+    "idle_calls": 0,
+    "idle_verified": 0,
+    "provider_calls": 1,
+    "seconds": 0.7306742499349639,
+    "verified": 1
+  },
+  "resource": {
+    "p50_ms": 34.12233293056488,
+    "p95_ms": 80.94891591463238,
+    "samples": 8,
+    "throughput_per_second": 73.99576806452025
+  },
+  "shared_phase_seconds": 4.470599916065112,
+  "workload": {
+    "agents": 8,
+    "operations_per_agent": 25,
+    "processes": 8,
+    "refresh": "async fleet, independent connections, scripted verifier",
+    "retrieval": "BM25, no network embeddings"
+  }
+}

@@ -12,6 +12,8 @@ batches. Creating a normal `KnowledgeBase` starts no worker and enables no journ
 SQLite and PostgreSQL support these guarantees. YAML remains supported for legacy
 memory operations and reports `UnsupportedAlwaysOnBackend` for always-on state.
 
+For multiple logical agents, see [workspace coordination and shared memory](multi-agent-always-on.md).
+
 ```python
 from ai_knot import KnowledgeBase
 from ai_knot.storage.sqlite_storage import SQLiteStorage
@@ -84,8 +86,9 @@ verdict invalidates the old response, including error/cancellation diagnostics.
 Cancellation propagates even if best-effort diagnostics cannot be written.
 
 `max_wall_seconds` is a cooperative scheduling timeout, not a hard realtime bound
-for a connector that ignores cancellation. Scheduling, daily quotas, credentials
-and actual external effects remain responsibilities of the host.
+for a connector that ignores cancellation. An optional workspace adds a persistent
+daily maintenance budget; scheduling, credentials and actual external effects
+remain responsibilities of the host.
 
 ## Transports
 

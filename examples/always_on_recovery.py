@@ -81,8 +81,24 @@ def phase(directory: Path, name: str) -> None:
     if name == "prepare":
         kb.add_resolved(
             [
-                Fact("CI pending", slot_key="ci::status", value_text="pending"),
-                Fact("Old target", slot_key="deploy::target", value_text="old"),
+                Fact(
+                    "CI pending",
+                    slot_key="ci::status",
+                    value_text="pending",
+                    created_at=now,
+                    last_accessed=now,
+                    valid_from=now,
+                    event_time=now,
+                ),
+                Fact(
+                    "Old target",
+                    slot_key="deploy::target",
+                    value_text="old",
+                    created_at=now,
+                    last_accessed=now,
+                    valid_from=now,
+                    event_time=now,
+                ),
             ]
         )
         intent = ao.create_intent(client_key="deploy:42", goal="Deploy after CI")
@@ -108,8 +124,24 @@ def phase(directory: Path, name: str) -> None:
     if name == "effect":
         kb.add_resolved(
             [
-                Fact("CI green", slot_key="ci::status", value_text="green"),
-                Fact("New target", slot_key="deploy::target", value_text="new"),
+                Fact(
+                    "CI green",
+                    slot_key="ci::status",
+                    value_text="green",
+                    created_at=now,
+                    last_accessed=now,
+                    valid_from=now,
+                    event_time=now,
+                ),
+                Fact(
+                    "New target",
+                    slot_key="deploy::target",
+                    value_text="new",
+                    created_at=now,
+                    last_accessed=now,
+                    valid_from=now,
+                    event_time=now,
+                ),
             ]
         )
         batch = ao.poll("deploy-watch")
