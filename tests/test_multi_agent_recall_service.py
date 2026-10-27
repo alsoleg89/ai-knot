@@ -10,6 +10,58 @@ from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.types import Fact
 
 
+def test_list_callers_and_explicit_coverage_results_are_independent() -> None:
+    svc = SharedPoolRecallService()
+    query = (
+        "Integrate lattice reduction tuning, hypergraph bisection settings, "
+        "and firmware scheduling rules."
+    )
+    rich = svc.recall_with_coverage(
+        query,
+        requesting_agent_id="reader",
+        active_facts=_facts(),
+        requesting_agent_fact_count=1,
+        top_k=1,
+    )
+    assert rich is not None
+    assert len(rich.pairs) == 1
+    assert rich.coverage_score == 1 / 3
+    legacy = svc.recall(
+        query,
+        requesting_agent_id="reader",
+        active_facts=_facts(),
+        requesting_agent_fact_count=1,
+        top_k=3,
+    )
+    assert isinstance(legacy, list)
+    assert len(legacy) == 3
+    assert rich.coverage_score == 1 / 3
+    assert len(rich.covered_facets) == 1
+
+
+def test_decomposition_fallback_keeps_flat_retrieval_contract() -> None:
+    svc = SharedPoolRecallService()
+    for query in ("lattice reduction", "compare lattice reduction tuning"):
+        assert (
+            svc.recall(
+                query,
+                requesting_agent_id="reader",
+                active_facts=_facts(),
+                requesting_agent_fact_count=1,
+            )
+            is None
+        )
+        assert (
+            svc.recall_with_coverage(
+                query,
+                requesting_agent_id="reader",
+                active_facts=_facts(),
+                requesting_agent_fact_count=1,
+            )
+            is None
+        )
+
+
 def _facts() -> list[Fact]:
     out: list[Fact] = []
     for aid, content in [

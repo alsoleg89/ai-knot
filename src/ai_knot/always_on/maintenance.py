@@ -435,33 +435,15 @@ def commit_consolidation(
         for fact in current:
             if fact.id in covered:
                 fact.valid_until = now
-        from .lineage import (
-            DEPENDENCIES_KEY,
-            ROOTS_KEY,
-            encode_roots,
-            evidence_dependencies,
-            evidence_roots,
-        )
+        from .lineage import derivation_qualifiers
 
         for output in outputs:
             sources = set(json.loads(output.qualifiers["consolidation_ids"]))
-            roots = {
-                ref
-                for source in current
-                if source.id in sources
-                for ref in evidence_roots(memory._owner, source)
-            }
-            output.qualifiers[ROOTS_KEY] = encode_roots(tuple(roots))
-            dependencies = {
-                ref
-                for source in current
-                if source.id in sources
-                for ref in (
-                    EvidenceRef(memory._owner, source.id, evidence_revision(source)),
-                    *evidence_dependencies(source),
+            output.qualifiers.update(
+                derivation_qualifiers(
+                    memory._owner, [source for source in current if source.id in sources]
                 )
-            }
-            output.qualifiers[DEPENDENCIES_KEY] = encode_roots(tuple(dependencies))
+            )
         session.replace_facts(memory._owner, [*current, *outputs])
         for fact in current:
             policy = archived_policies.get(fact.id)
@@ -717,7 +699,8 @@ async def run_maintenance(
             )
             known_response = False
             try:
-                result = await asyncio.wait_for(verifier.verify(request), timeout=remaining())
+                seconds = remaining()
+                result = await asyncio.wait_for(verifier.verify(request), timeout=seconds)
                 known_response = True
             except asyncio.CancelledError:
                 with suppress(Exception):

@@ -144,3 +144,21 @@ class TestCoverageAwareAssembler:
         # The rare fact must be selected.
         selected_contents = [c.fact.content for c in result.selected]
         assert "rare" in selected_contents
+
+    def test_selected_fact_covers_all_its_facets_even_when_top_k_is_full(self) -> None:
+        shared = _candidate("shared evidence", facet_id="f0", score=0.9)
+        shared.facet_scores["f1"] = 0.8
+        result = self.assembler.assemble(
+            candidates_by_facet={"f0": [shared], "f1": [shared], "f2": []}, top_k=1
+        )
+        assert result.covered_facets == {"f0", "f1"}
+        assert result.uncovered_facets == {"f2"}
+        assert result.coverage_score == 2 / 3
+
+    def test_ranked_candidate_without_facet_evidence_does_not_cover(self) -> None:
+        unrelated = _candidate("unrelated", facet_id="f0", score=0.0)
+        unrelated.base_score = 1.0  # A rank-only score is not facet evidence.
+        result = self.assembler.assemble(candidates_by_facet={"f0": [unrelated]}, top_k=1)
+        assert result.covered_facets == set()
+        assert result.uncovered_facets == {"f0"}
+        assert result.coverage_score == 0.0

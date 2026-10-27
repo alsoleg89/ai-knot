@@ -1384,30 +1384,36 @@ class KnowledgeBase(_LearningMixin):
         )
         return pairs, trace
 
-    def recall_by_tag(self, tag: str, *, include_unsupported: bool = False) -> builtins.list[Fact]:
-        """Return all facts that carry the given tag.
+    def recall_by_tag(
+        self, tag: str, *, include_unsupported: bool = False, now: datetime | None = None
+    ) -> builtins.list[Fact]:
+        """Return current facts that carry the given tag.
 
         Tags are assigned at add() time via the ``tags=`` parameter.
 
         Args:
             tag: The tag string to filter by.
             include_unsupported: Include facts with ``supported=False`` (default: False).
+            now: Point-in-time for temporal eligibility; defaults to current UTC.
 
         Returns:
             List of Facts whose tags include ``tag`` (may be empty).
         """
+        now_dt = now or datetime.now(UTC)
         return self._current_lineage(
             [
                 f
                 for f in self._storage.load(self._agent_id)
-                if tag in f.tags and (include_unsupported or f.supported is not False)
+                if tag in f.tags
+                and f.is_active(now_dt)
+                and (include_unsupported or f.supported is not False)
             ]
         )
 
     def _current_lineage(self, facts: builtins.list[Fact]) -> builtins.list[Fact]:
-        from ai_knot.always_on.lineage import ROOTS_KEY, filter_current_lineage
+        from ai_knot.always_on.lineage import filter_current_lineage, is_derived
 
-        if not any(ROOTS_KEY in f.qualifiers for f in facts):
+        if not any(is_derived(f) for f in facts):
             return facts
         grants = (
             self._storage.load_grants().get(self._agent_id, set())
@@ -1431,7 +1437,24 @@ class KnowledgeBase(_LearningMixin):
         Args:
             fact_id: The 8-char hex ID of the fact to remove.
         """
-        self._storage.delete(self._agent_id, fact_id)
+        from ai_knot.always_on.storage import AlwaysOnSession, AlwaysOnStorageCapable
+
+        def remove(
+            current: builtins.list[Fact], session: AlwaysOnSession | None = None
+        ) -> tuple[builtins.list[Fact], None]:
+            remaining = [f for f in current if f.id != fact_id]
+            if len(remaining) != len(current):
+                remaining.extend(self._consolidate_phase([], remaining, session))
+            return remaining, None
+
+        if isinstance(self._storage, AlwaysOnStorageCapable):
+            with self._storage.always_on_transaction(
+                (self._agent_id, "__shared__"), write=True
+            ) as session:
+                remaining, _ = remove(session.load_facts(self._agent_id), session)
+                session.replace_facts(self._agent_id, remaining)
+        else:
+            mutate_facts(self._storage, self._agent_id, remove)
         logger.info("Forgot fact '%s' from agent '%s'", fact_id, self._agent_id)
 
     def delete(self, fact_id: str) -> None:

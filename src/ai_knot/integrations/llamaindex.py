@@ -30,6 +30,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
+from ai_knot.integrations._task_context import task_query, user_texts
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.types import ConversationTurn, MemoryType
 
@@ -133,22 +134,17 @@ def _inject_memory_block(messages: list[Any], memory_block: str) -> list[Any]:
     return [_make_message("system", memory_block), *updated]
 
 
-def _build_query(messages: list[Any], explicit_input: str | None, *, limit: int) -> str:
-    if explicit_input and explicit_input.strip():
-        return explicit_input.strip()
-
-    recent: list[str] = []
-    for message in reversed(messages):
-        role = _role_name(message)
-        if role not in {"user", "assistant"}:
-            continue
-        text = _message_text(message).strip()
-        if not text:
-            continue
-        recent.append(text)
-        if len(recent) >= max(1, limit):
-            break
-    return "\n".join(reversed(recent)).strip()
+def _build_query(
+    messages: list[Any],
+    explicit_input: str | None,
+    *,
+    limit: int,
+    task_context: str | None = None,
+) -> str:
+    texts = user_texts(messages, limit=limit)
+    if explicit_input is not None:
+        texts.append(explicit_input)
+    return task_query(texts, task_context=task_context)
 
 
 def _messages_to_turns(messages: list[Any], *, include_assistant: bool) -> list[ConversationTurn]:
@@ -200,10 +196,14 @@ class _AiKnotLlamaIndexMemoryMixin:
     tags: list[str]
     _kb: KnowledgeBase
 
-    def get(self, input: str | None = None, **kwargs: Any) -> list[Any]:
+    def get(
+        self, input: str | None = None, *, task_context: str | None = None, **kwargs: Any
+    ) -> list[Any]:
         """Return chat history with relevant ai-knot facts injected up front."""
         messages = list(self.primary_memory.get(input=input, **kwargs))
-        query = _build_query(messages, input, limit=self.query_message_limit)
+        query = _build_query(
+            messages, input, limit=self.query_message_limit, task_context=task_context
+        )
         if not query:
             return messages
 
@@ -304,8 +304,9 @@ if _LLAMAINDEX_AVAILABLE:  # pragma: no cover - exercised when the extra is inst
                 ``Memory.from_defaults()``.
             top_k: Maximum number of facts to recall on each read.
             heading: Heading for the injected memory block.
-            query_message_limit: How many recent chat messages to fold into the
-                recall query when LlamaIndex does not pass ``input=...``.
+            query_message_limit: Recent user turns to inspect for task context
+                (default three, capped at eight), including follow-ups
+                passed through ``input=...``. Assistant text is excluded.
             store_assistant_messages: Persist assistant messages alongside user
                 messages on writes. Disabled by default to keep memory tighter.
             extract_on_write: When True, route writes through ``kb.learn(...)``
@@ -332,9 +333,7 @@ if _LLAMAINDEX_AVAILABLE:  # pragma: no cover - exercised when the extra is inst
         heading: str = Field(default="## Agent Memory", description="Injected memory heading.")
         query_message_limit: int = Field(
             default=3,
-            description=(
-                "Recent chat messages to fold into recall when no explicit input is passed."
-            ),
+            description=("Recent user turns to inspect for task context (capped at eight)."),
         )
         store_assistant_messages: bool = Field(
             default=False,

@@ -2,8 +2,8 @@
 
 ai-knot complements AutoGen's short-term model context with a distilled,
 self-hosted fact store. The adapter implements the async methods expected by
-AutoGen's ``Memory`` protocol, recalling only the facts relevant to the latest
-user turn and appending them to the agent's model context as a ``SystemMessage``.
+AutoGen's ``Memory`` protocol, recalling only the facts relevant to the current
+user task and appending them to the agent's model context as a ``SystemMessage``.
 
 There is **no hard dependency** on AutoGen. Importing this module is safe
 without ``autogen-core`` / ``autogen-agentchat`` installed; those imports are
@@ -27,6 +27,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from ai_knot.integrations._task_context import task_query, user_texts
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.types import Fact, MemoryType
 
@@ -57,18 +58,6 @@ def _content_to_text(content: object) -> str:
         if text:
             return text
     return ""
-
-
-def _is_user_message(message: object) -> bool:
-    """Return True when *message* looks like an AutoGen user message."""
-    if isinstance(message, dict):
-        source = message.get("source") or message.get("role")
-        return isinstance(source, str) and source.lower() == "user"
-    for attr in ("source", "role"):
-        value = getattr(message, attr, None)
-        if isinstance(value, str) and value.lower() == "user":
-            return True
-    return type(message).__name__ == "UserMessage"
 
 
 def _memory_type(value: object) -> MemoryType:
@@ -172,18 +161,9 @@ class AiKnotAutoGenMemory:
         """Return the memory instance identifier."""
         return self._name
 
-    def extract_query(self, messages: Sequence[object]) -> str:
-        """Return the latest user text from AutoGen-style message objects."""
-        for message in reversed(messages):
-            if not _is_user_message(message):
-                continue
-            if isinstance(message, dict):
-                text = _content_to_text(message.get("content"))
-            else:
-                text = _content_to_text(getattr(message, "content", None))
-            if text:
-                return text
-        return ""
+    def extract_query(self, messages: Sequence[object], *, task_context: str | None = None) -> str:
+        """Build a bounded user-task query from this context's messages only."""
+        return task_query(user_texts(messages), task_context=task_context)
 
     def build_memory_context(self, memories: Sequence[object]) -> str:
         """Format recalled memories as a ``SystemMessage`` payload."""
@@ -223,12 +203,13 @@ class AiKnotAutoGenMemory:
         ]
         return MemoryQueryResult(results=results)
 
-    async def update_context(self, model_context: Any) -> Any:
+    async def update_context(self, model_context: Any, *, task_context: str | None = None) -> Any:
         """Append relevant long-term memory to an AutoGen model context."""
         _, _, MemoryQueryResult, UpdateContextResult = _autogen_memory_symbols()
         SystemMessage = _autogen_system_message()
 
-        query_text = self.extract_query(await model_context.get_messages())
+        messages = await model_context.get_messages()
+        query_text = self.extract_query(messages, task_context=task_context)
         if not query_text:
             return UpdateContextResult(memories=MemoryQueryResult(results=[]))
 

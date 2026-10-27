@@ -29,7 +29,7 @@ from ai_knot.storage.base import (
     TemporalStorageCapable,
     mutate_facts,
 )
-from ai_knot.types import Fact
+from ai_knot.types import Fact, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,13 @@ class _PoolRecallMixin:
             _SHARED_NAMESPACE,
             agent_id,
             grants,
-            [fact for fact in facts if _scope_visible(fact, agent_id, grants)],
+            [
+                fact
+                for fact in facts
+                if fact.supported is not False
+                and fact.type != MemoryType.EPISODIC
+                and _scope_visible(fact, agent_id, grants)
+            ],
         )
 
     def recall(
@@ -195,13 +201,10 @@ class _PoolRecallMixin:
         Returns:
             List of (Fact, score) pairs sorted by relevance.
         """
-        # Use index-accelerated fast path if available (SQLite/Postgres).
-        if isinstance(self._storage, TemporalStorageCapable):
-            active = self._storage.load_active(_SHARED_NAMESPACE)
-        else:
-            now_dt = now or datetime.now(UTC)
-            all_shared = self._storage.load(_SHARED_NAMESPACE)
-            active = [f for f in all_shared if f.is_active(now_dt)]
+        # load_active() is a current frontier (NULL expiry), not an arbitrary
+        # validity window: it drops still-valid expiring rows and ignores now.
+        now_dt = now or datetime.now(UTC)
+        active = [f for f in self._storage.load(_SHARED_NAMESPACE) if f.is_active(now_dt)]
 
         # Topic channel filter: include global facts (no channel) + matching channel.
         if topic_channel:
@@ -209,20 +212,12 @@ class _PoolRecallMixin:
 
         active = self._readable_shared_facts(requesting_agent_id, active)
 
-        if not active:
-            self._last_recall_meta = _RecallMeta(
-                intent=_PoolQueryIntent.GENERAL,
-                total_active=0,
-                returned=0,
-                coverage=0.0,
-                low_coverage=True,
-                should_abstain=True,
-                unsupported_answer_risk=1.0,
-            )
-            return []
-
         agent_private = self._storage.load(requesting_agent_id)
-        agent_fact_count = sum(1 for f in agent_private if f.is_active())
+        agent_fact_count = sum(
+            1
+            for f in agent_private
+            if f.is_active(now_dt) and f.supported is not False and f.type != MemoryType.EPISODIC
+        )
 
         # --- V3 query analysis: separate semantic intent from exploration mode ---
         v3_analysis = self._query_router.analyze(
@@ -237,7 +232,7 @@ class _PoolRecallMixin:
         # Delegate to SharedPoolRecallService for conjunctive queries.
         # Returns None if the query is not MULTI_SOURCE or decomposition fails,
         # in which case we fall through to the existing flat retrieval below.
-        facet_result = self._recall_service.recall(
+        facet_result = self._recall_service.recall_with_coverage(
             query,
             requesting_agent_id=requesting_agent_id,
             active_facts=active,
@@ -251,29 +246,38 @@ class _PoolRecallMixin:
             is_adversary=lambda aid: self._quick_inv_count.get(aid, 0) > 0,
         )
         if facet_result is not None:
+            facet_pairs = list(facet_result.pairs)
             # Clear single-use query vector (facet path exits before flat path).
             self._query_vector = None
             # Track recall hits for trust accounting (same as flat path).
-            for fact, _ in facet_result:
-                if fact.origin_agent_id and fact.origin_agent_id != requesting_agent_id:
+            facet_credited_agents: set[str] = set()
+            for fact, _ in facet_pairs:
+                if (
+                    fact.origin_agent_id
+                    and fact.origin_agent_id != requesting_agent_id
+                    and fact.origin_agent_id not in facet_credited_agents
+                ):
                     self._used_count[fact.origin_agent_id] = (
                         self._used_count.get(fact.origin_agent_id, 0) + 1
                     )
+                    facet_credited_agents.add(fact.origin_agent_id)
                 consumers = self._fact_consumers.setdefault(fact.id, set())
                 consumers.add(requesting_agent_id)
                 self._log_usage_event(fact.id, requesting_agent_id)
-            facet_coverage = 1.0 if facet_result else 0.0
-            facet_risk, facet_abstain = _abstention(facet_result, facet_coverage)
+            facet_coverage = facet_result.coverage_score
+            facet_risk, facet_abstain = _abstention(facet_pairs, facet_coverage)
             self._last_recall_meta = _RecallMeta(
                 intent=_PoolQueryIntent.MULTI_SOURCE,
                 total_active=len(active),
-                returned=len(facet_result),
+                returned=len(facet_pairs),
                 coverage=facet_coverage,
-                low_coverage=not facet_result,
+                low_coverage=facet_coverage < 0.5,
                 should_abstain=facet_abstain,
                 unsupported_answer_risk=facet_risk,
+                covered_facets=facet_result.covered_facets,
+                uncovered_facets=facet_result.uncovered_facets,
             )
-            return facet_result
+            return facet_pairs
 
         # --- Flat retrieval path (existing logic) ---
         # Use V3 intent mapping for canonical resolver gating.

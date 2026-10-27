@@ -452,14 +452,15 @@ def _assert_legacy_waiting_expiry(kb, clock, monkeypatch):
         ],
     )
     storage = kb._storage
-    if hasattr(storage, "atomic_update"):
-        original = storage.atomic_update
+    if hasattr(storage, "always_on_transaction"):
+        original = storage.always_on_transaction
 
-        def delayed(agent_id, fn):
-            clock.advance(seconds=2)
-            return original(agent_id, fn)
+        def delayed(namespaces, *, write):
+            if write:
+                clock.advance(seconds=2)
+            return original(namespaces, write=write)
 
-        monkeypatch.setattr(storage, "atomic_update", delayed)
+        monkeypatch.setattr(storage, "always_on_transaction", delayed)
     else:
         original_load = storage.load
         calls = 0
@@ -488,3 +489,57 @@ def test_legacy_output_expiry_while_waiting_for_yaml_commit(tmp_path, clock, mon
 
     kb = KnowledgeBase("owner", storage=YAMLStorage(str(tmp_path)), embed_url="")
     _assert_legacy_waiting_expiry(kb, clock, monkeypatch)
+
+
+def test_wall_budget_after_reservation_does_not_construct_verifier_coroutine(
+    ao_factory, kb, monkeypatch
+):
+    import warnings
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from ai_knot.always_on import maintenance
+    from ai_knot.always_on.storage import sql
+
+    ao = ao_factory()
+    source = kb.add("Deployment verification source")
+    (ref,) = ao.capture_evidence((("owner", source.id),))
+    ao.set_freshness(ref, source_ref="deployment", recheck_after_seconds=60)
+    elapsed = 0.0
+    reserve = maintenance._reserve
+
+    def delayed_reserve(*args, **kwargs):
+        nonlocal elapsed
+        token = reserve(*args, **kwargs)
+        elapsed = 2.0
+        return token
+
+    async def verify(request):
+        raise AssertionError("verifier must not run after the wall deadline")
+
+    provider = SimpleNamespace(
+        config_key="wall-after-reserve", model_cost=1, verify=Mock(wraps=verify)
+    )
+    monkeypatch.setattr(maintenance, "_reserve", delayed_reserve)
+    with warnings.catch_warnings(record=True) as observed:
+        warnings.simplefilter("always", RuntimeWarning)
+        report = asyncio.run(
+            maintenance.run_maintenance(
+                ao,
+                run_key="wall-after-reserve",
+                budget=MaintenanceBudget(max_model_calls=1, max_wall_seconds=1),
+                verifier=provider,
+                monotonic=lambda: elapsed,
+            )
+        )
+    assert report.status == "budget_exhausted"
+    assert "wall_budget" in report.reasons
+    assert report.model_calls_reserved == 1
+    with ao._transaction(write=False) as session:
+        row = session.fetch_one(
+            sql("SELECT reserved FROM ao_maintenance_runs WHERE owner=? AND run_key=?"),
+            ("owner", "wall-after-reserve"),
+        )
+    assert row["reserved"] == 1
+    provider.verify.assert_not_called()
+    assert not [warning for warning in observed if issubclass(warning.category, RuntimeWarning)]

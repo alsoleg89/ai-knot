@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 
+from ai_knot.integrations._task_context import task_query, user_texts
 from ai_knot.knowledge import KnowledgeBase
 
 
@@ -37,6 +38,8 @@ class MemoryEnabledOpenAI:
     def enrich_messages(
         self,
         messages: list[dict[str, str]],
+        *,
+        task_context: str | None = None,
     ) -> list[dict[str, str]]:
         """Inject relevant knowledge into the system prompt.
 
@@ -45,17 +48,15 @@ class MemoryEnabledOpenAI:
 
         Args:
             messages: OpenAI-format message list.
+            task_context: Optional host task hint for an anaphoric follow-up.
 
         Returns:
             New message list with memory context injected.
         """
-        # Find the user query to determine what context to recall.
-        user_messages = [m for m in messages if m.get("role") == "user"]
-        if not user_messages:
+        query = task_query(user_texts(messages), task_context=task_context)
+        if not query:
             return messages
-
-        last_user_msg = user_messages[-1]["content"]
-        context = self._kb.recall(last_user_msg)
+        context = self._kb.recall(query)
 
         if not context:
             return messages

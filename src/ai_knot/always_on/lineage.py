@@ -25,6 +25,10 @@ PUBLICATION_KEY = "_ai_knot_publication_identity"
 MAX_ROOTS = 128
 
 
+class LineageCapacityExceeded(ValueError):
+    """Exact lineage exceeds the bounded evidence representation."""
+
+
 def observation_identity(ref: EvidenceRef) -> str:
     """Opaque identity of one source revision, without a private root pointer."""
     return hashlib.sha256(
@@ -59,10 +63,22 @@ def canonical_observations(
     )
 
 
+def is_derived(fact: Fact) -> bool:
+    """Recognize persisted automatic projections without guessing their revisions."""
+    return (
+        ROOTS_KEY in fact.qualifiers
+        or fact.verification_source == "aggregate"
+        or fact.attribute.startswith("_aggregate")
+        or "consolidation_ids" in fact.qualifiers
+    )
+
+
 def evidence_roots(namespace: str, fact: Fact) -> tuple[EvidenceRef, ...]:
     """Original facts are one root; derived facts carry a flattened unique set."""
     raw = fact.qualifiers.get(ROOTS_KEY)
     if raw is None:
+        if is_derived(fact):
+            raise ValueError("generated fact has no exact evidence roots")
         return (EvidenceRef(namespace, fact.id, evidence_revision(fact)),)
     return _decode_refs(raw)
 
@@ -87,7 +103,9 @@ def _decode_refs(raw: str) -> tuple[EvidenceRef, ...]:
 
 def encode_roots(roots: tuple[EvidenceRef, ...]) -> str:
     roots = tuple(sorted(set(roots)))
-    if not 1 <= len(roots) <= MAX_ROOTS:
+    if len(roots) > MAX_ROOTS:
+        raise LineageCapacityExceeded("evidence roots must contain 1..128 entries")
+    if not roots:
         raise ValueError("evidence roots must contain 1..128 entries")
     return canonical(
         [
@@ -95,6 +113,23 @@ def encode_roots(roots: tuple[EvidenceRef, ...]) -> str:
             for ref in roots
         ]
     )
+
+
+def derivation_qualifiers(namespace: str, sources: list[Fact]) -> dict[str, str]:
+    """Record flattened roots and every input revision, including intermediate views."""
+    roots = {ref for source in sources for ref in evidence_roots(namespace, source)}
+    dependencies = {
+        ref
+        for source in sources
+        for ref in (
+            EvidenceRef(namespace, source.id, evidence_revision(source)),
+            *evidence_dependencies(source),
+        )
+    }
+    return {
+        ROOTS_KEY: encode_roots(tuple(roots)),
+        DEPENDENCIES_KEY: encode_roots(tuple(dependencies)),
+    }
 
 
 def lineage_status(
@@ -110,7 +145,7 @@ def lineage_status(
     revision remains usable; changing/removing that revision invalidates descendants.
     """
     if ROOTS_KEY not in fact.qualifiers:
-        return True, True
+        return True, not is_derived(fact)
     try:
         roots = evidence_roots(namespace, fact)
         dependencies = evidence_dependencies(fact)
@@ -130,9 +165,9 @@ def lineage_status(
             return True, False
         if root.namespace != reader and not visible(access_projection(original), reader, grants):
             return False, False
-        if (root in roots and ROOTS_KEY in original.qualifiers) or evidence_revision(
-            original
-        ) != root.revision:
+        if is_derived(original) and (root in roots or ROOTS_KEY not in original.qualifiers):
+            return True, False
+        if evidence_revision(original) != root.revision:
             return True, False
     return True, True
 

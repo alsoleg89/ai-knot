@@ -12,12 +12,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from ai_knot._inverted_index import InvertedIndex
 from ai_knot.multi_agent.assembly import CoverageAwareAssembler
 from ai_knot.multi_agent.bridge import BridgeRetriever
 from ai_knot.multi_agent.expertise import AgentExpertiseIndex
 from ai_knot.multi_agent.facets import ConjunctiveFacetPlanner
 from ai_knot.multi_agent.models import (
     CandidateFact,
+    FacetRecallResult,
     QueryAnalysis,
     QueryFacet,
     RetrievalIntent,
@@ -120,11 +122,36 @@ class SharedPoolRecallService:
         get_trust: Callable[[str], float] | None = None,
         is_adversary: Callable[[str], bool] | None = None,
     ) -> list[tuple[Fact, float]] | None:
-        """Run the multi-source retrieval pipeline.
+        """Compatible fact-list entry point; ``None`` requests flat retrieval."""
+        result = self.recall_with_coverage(
+            query,
+            requesting_agent_id=requesting_agent_id,
+            active_facts=active_facts,
+            requesting_agent_fact_count=requesting_agent_fact_count,
+            top_k=top_k,
+            topic_channel=topic_channel,
+            get_trust=get_trust,
+            is_adversary=is_adversary,
+        )
+        return list(result.pairs) if result is not None else None
+
+    def recall_with_coverage(
+        self,
+        query: str,
+        *,
+        requesting_agent_id: str,
+        active_facts: list[Fact],
+        requesting_agent_fact_count: int,
+        top_k: int = 5,
+        topic_channel: str = "",
+        get_trust: Callable[[str], float] | None = None,
+        is_adversary: Callable[[str], bool] | None = None,
+    ) -> FacetRecallResult | None:
+        """Run the multi-source retrieval pipeline with explicit coverage.
 
         Returns:
-            List of (Fact, score) pairs if MULTI_SOURCE intent was
-            detected and facets were decomposed.  Returns ``None`` if
+            Immutable scored pairs and selected-fact coverage if MULTI_SOURCE
+            intent was detected and facets were decomposed. Returns ``None`` if
             the query should use the standard flat retrieval path.
         """
         # Step 1: Route.
@@ -203,8 +230,12 @@ class SharedPoolRecallService:
             result.uncovered_facets,
         )
 
-        # Convert to (Fact, score) pairs.
-        return [(c.fact, c.final_score) for c in result.selected]
+        return FacetRecallResult(
+            pairs=tuple((c.fact, c.final_score) for c in result.selected),
+            covered_facets=frozenset(result.covered_facets),
+            uncovered_facets=frozenset(result.uncovered_facets),
+            coverage_score=result.coverage_score,
+        )
 
     def _retrieve_per_facet(
         self,
@@ -254,6 +285,10 @@ class SharedPoolRecallService:
 
             facet_overfetch = min(overfetch_k, len(search_facts))
 
+            # Relevance is original-query BM25F evidence, independent of RRF's
+            # positive importance/recency ranks and any later PRF expansion.
+            relevance = InvertedIndex(search_facts).score(facet.text)
+
             # --- First pass: plain BM25, no expansion ---
             first_pass = self._bm25.search(
                 facet.text,
@@ -262,7 +297,7 @@ class SharedPoolRecallService:
             )
 
             # Determine whether per-facet PRF is worthwhile.
-            scored_results = [(f, s) for f, s in first_pass if s > 0]
+            scored_results = [(f, s) for f, s in first_pass if relevance.get(f.id, 0.0) > 0]
             expansion: dict[str, float] = {}
 
             if len(scored_results) >= 3:
@@ -286,6 +321,8 @@ class SharedPoolRecallService:
 
             candidates: list[CandidateFact] = []
             for fact, score in pairs:
+                if relevance.get(fact.id, 0.0) <= 0:
+                    continue
                 # Apply trust discount.
                 if (
                     get_trust
@@ -314,7 +351,7 @@ class SharedPoolRecallService:
                 cand = CandidateFact(
                     fact=fact,
                     base_score=score,
-                    facet_scores={facet.facet_id: score},
+                    facet_scores={facet.facet_id: relevance[fact.id]},
                     specificity_score=spec,
                     near_miss_penalty=nm_penalty,
                 )

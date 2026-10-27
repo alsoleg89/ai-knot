@@ -149,3 +149,86 @@ class TestAiKnotAgentsMemory:
             )
         )
         assert filtered.instructions == "Existing instructions."
+
+
+@pytest.mark.parametrize(
+    "followup", ["Continue.", "Да, продолжай.", "What about cost?", "А стоимость?"]
+)
+def test_filter_recalls_after_composition_with_explicit_run_context(
+    monkeypatch: pytest.MonkeyPatch, kb: KnowledgeBase, followup: str
+) -> None:
+    _install_fake_agents(monkeypatch)
+    kb.add("Billing export required invoice column is invoice_id.")
+    memory = AiKnotAgentsMemory(kb, top_k=1)
+    task = "Prepare the billing export with the required invoice columns."
+    original = [{"role": "user", "content": "Write haiku"}]
+    filtered_input = [{"role": "user", "content": followup}]
+
+    def existing(data: _FakeCallModelData) -> _FakeModelInputData:
+        assert data.model_data.input is original
+        return _FakeModelInputData(input=filtered_input, instructions="Composed instructions.")
+
+    config = memory.build_run_config(
+        task_context=task, workflow_name="context", call_model_input_filter=existing
+    )
+    result = config.call_model_input_filter(_FakeCallModelData(_FakeModelInputData(original)))
+    assert "invoice_id" in result.instructions
+    assert result.instructions.startswith("Composed instructions.")
+    assert result.input == filtered_input
+    assert result.input[0] is filtered_input[0]
+    assert original == [{"role": "user", "content": "Write haiku"}]
+    # The adapter instance does not retain the run's explicit context.
+    assert memory.extract_query(filtered_input) == followup
+
+
+@pytest.mark.parametrize("followup", [None, "Continue."])
+def test_filter_keeps_user_task_during_long_tool_loop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, followup: str | None
+) -> None:
+    _install_fake_agents(monkeypatch)
+    kb = KnowledgeBase("tool-loop", storage=YAMLStorage(base_dir=str(tmp_path)), embed_url="")
+    kb.add("Billing export required invoice column is invoice_id.")
+    memory = AiKnotAgentsMemory(kb, top_k=3)
+    items = [{"role": "user", "content": "Prepare billing export required invoice columns."}]
+    if followup:
+        items.append({"role": "user", "content": followup})
+    items.extend({"type": "function_call_output", "output": "Done."} for _ in range(9))
+    filtered = memory.build_call_model_input_filter()(
+        _FakeCallModelData(_FakeModelInputData(items, "Original instructions."))
+    )
+    assert "invoice_id" in filtered.instructions
+    assert filtered.input == items
+    assert all(new is old for new, old in zip(filtered.input, items, strict=True))
+
+
+@pytest.mark.parametrize("content", ["", " \t\n", [], {"unrelated": "value"}, None])
+@pytest.mark.parametrize("host_context", [None, "Prepare billing export"])
+def test_composed_filter_empty_latest_user_performs_no_recall(
+    monkeypatch, kb, content, host_context
+):
+    _install_fake_agents(monkeypatch)
+    kb.add("Billing export required invoice column is invoice_id.")
+    memory = AiKnotAgentsMemory(kb)
+    original = [{"role": "user", "content": "Continue."}]
+    latest = [
+        {"role": "user", "content": "Prepare billing export"},
+        {"role": "user", "content": content},
+        {"type": "function_call_output", "output": "Done"},
+    ]
+    calls = []
+    recall = kb.recall
+
+    def tracked_recall(query, **kwargs):
+        calls.append(query)
+        return recall(query, **kwargs)
+
+    def existing(data):
+        return _FakeModelInputData(latest, "Existing instructions.")
+
+    monkeypatch.setattr(kb, "recall", tracked_recall)
+    config = memory.build_run_config(call_model_input_filter=existing, task_context=host_context)
+    result = config.call_model_input_filter(_FakeCallModelData(_FakeModelInputData(original)))
+    assert result.instructions == "Existing instructions."
+    assert result.input == latest
+    assert result.input[1] is latest[1]
+    assert calls == []

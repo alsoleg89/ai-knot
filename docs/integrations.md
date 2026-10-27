@@ -189,6 +189,50 @@ Try next:
 - distribution-ready proof asset: [openai-agents-case-study.md](openai-agents-case-study.md)
 - full API notes: [usage.md#openai-agents-sdk](usage.md#openai-agents-sdk)
 
+#### Follow-up task context
+
+The OpenAI Agents, OpenAI message wrapper, AutoGen and LlamaIndex adapters build
+retrieval queries from user input only. A short English or Russian follow-up
+such as `Continue.`, `Да, продолжай.`, `Tell me more.`, `What about cost?` or
+`А стоимость?` includes the nearest recent standalone user task. A new task such
+as `Write haiku` uses its own text, without the previous topic. Assistant, system
+and tool messages do not supply task authority or context.
+
+When the host has task context outside the message list, pass it explicitly:
+
+```python
+run_config = memory.build_run_config(
+    task_context="Prepare the billing export with the required invoice columns."
+)
+# Pass this run_config to the SDK run for that task.
+```
+
+`task_context` is consumed by ai-knot, not forwarded to `RunConfig`. It replaces
+inferred history only for a recognized follow-up; a standalone current task
+still wins. The equivalent per-call keywords are
+`MemoryEnabledOpenAI.enrich_messages(..., task_context=...)`,
+`AiKnotAutoGenMemory.update_context(..., task_context=...)` and
+`AiKnotLlamaIndexMemory.get(..., task_context=...)` (also `aget`). Existing calls
+continue to work. Build a fresh SDK config/filter when switching host tasks;
+other calls retain no task context on the adapter.
+
+Queries are limited to 4,096 Unicode characters, including current input and
+context, and parse at most eight recent user messages from the supplied history (plus
+LlamaIndex's separate current input, when provided). Intervening assistant/tool
+messages do not consume this user-turn budget. Finding those users scans role
+metadata backwards through the supplied history; other message payloads are not
+parsed. LlamaIndex also honors its smaller `query_message_limit` (default three
+user turns). Text extraction visits at most
+32 content nodes and four nesting levels per message; overlong content uses its
+prefix. No current user text means no retrieval, even with explicit context.
+These are deterministic English/Russian wording heuristics, not semantic topic
+detection or token budgets. For other wording, the host can provide a complete,
+standalone query through the existing explicit-query adapters. Context is a
+retrieval hint, never permission, instructions or an additional fact. Query
+building makes no model or network calls; normal KnowledgeBase recall settings
+still control embedding/reranking behavior. This change does not guarantee
+ambient preference recall or real-model answer accuracy.
+
 ### PydanticAI
 
 Use `AiKnotPydanticAIMemory` when you already have a PydanticAI `Agent` and
@@ -531,3 +575,7 @@ MCP, assistant skills, TypeScript, and the HTTP sidecar/browser inspector.
 See [always-on memory](always-on.md) for explicit enablement, transport contracts,
 backup scope, PostgreSQL clock requirements and recovery of unknown external
 action outcomes. The layer stores durable state; the host schedules and executes.
+
+See [grounded memory and task-context retrieval](memory-grounding-context.md) for
+source retraction, partial facet coverage, bounded follow-up queries and the
+per-run `task_context` options.

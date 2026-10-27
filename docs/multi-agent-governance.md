@@ -82,7 +82,9 @@ Trust is computed, not configured:
 trust = min(1, used / published) × (1 − quick_invalidation_rate)
 ```
 
-`used` counts recall hits (facts that proved useful); `quick_invalidation_rate`
+`used` counts publisher recall credits (at most one per publisher per recall,
+even when several of its facts are returned). Consumer and usage events still
+record each returned fact. `quick_invalidation_rate`
 is the fraction of an agent's **verifiable, slot-addressed** publishes that a
 different agent had to overturn within an hour. Taking the rate over *slot
 events* — not total publish volume — means an attacker **cannot launder a bad

@@ -153,3 +153,13 @@ class AssemblyResult:
     covered_facets: set[str] = field(default_factory=set)
     uncovered_facets: set[str] = field(default_factory=set)
     coverage_score: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class FacetRecallResult:
+    """Explicit facet recall output; coverage describes only the returned facts."""
+
+    pairs: tuple[tuple[Fact, float], ...]
+    covered_facets: frozenset[str]
+    uncovered_facets: frozenset[str]
+    coverage_score: float
