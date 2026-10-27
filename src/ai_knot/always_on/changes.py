@@ -106,3 +106,7 @@ class ChangeBatch:
     delivery_id: str | None
     events: tuple[FactChange, ...]
     resync_required: bool = False
+    through_seq: int = 0
+    head_seq: int = 0
+    has_more: bool = False
+    is_snapshot: bool = False

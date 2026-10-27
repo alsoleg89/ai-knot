@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -106,14 +107,19 @@ class TestDDSAFixRegression:
     def test_ddsa_output_stable_across_calls(self, kb: KnowledgeBase) -> None:
         """F2: removing post-MMR guard doesn't introduce non-determinism.
 
-        Two identical recall calls should return the same set of fact IDs.
+        Identical query, fact state and evaluation time yield identical IDs.
+        Recall reinforces access statistics, so restore that state between calls.
         """
         for i in range(5):
             kb.add(f"hobby fact about music {i}", tags=["hobby", "music"])
         for i in range(5):
             kb.add(f"work fact about coding {i}", tags=["work", "programming"])
-        first = {f.id for f in kb.recall_facts("music hobby", top_k=5)}
-        second = {f.id for f in kb.recall_facts("music hobby", top_k=5)}
+        initial = kb.list_facts()
+        now = datetime.now(UTC)
+        first = {f.id for f in kb.recall_facts("music hobby", top_k=5, now=now)}
+        kb._storage.save(kb._agent_id, initial)
+        second = {f.id for f in kb.recall_facts("music hobby", top_k=5, now=now)}
+        assert first
         assert first == second, "DDSA recall is non-deterministic across identical calls"
 
     def test_temporal_window_reduced_does_not_explode_pool(self, kb: KnowledgeBase) -> None:

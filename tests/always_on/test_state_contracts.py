@@ -480,7 +480,7 @@ def test_opt_in_installs_complete_schema_and_lazy_maintenance_exports(ao_factory
         assert name in public.__all__
     ao = ao_factory()
     with ao._transaction(write=False) as session:
-        assert session.fetch_one(sql("SELECT version FROM ao_schema WHERE id=1"))["version"] == 6
+        assert session.fetch_one(sql("SELECT version FROM ao_schema WHERE id=1"))["version"] == 7
         assert session.fetch_all(sql("SELECT * FROM ao_maintenance_runs")) == []
 
 

@@ -20,6 +20,8 @@ TOOL_METHODS = {
     "memory_evidence_capture": "capture_evidence",
     "memory_subscribe": "subscribe",
     "memory_poll": "poll",
+    "memory_resync": "resync",
+    "memory_context_review": "review_context",
     "memory_ack": "ack",
     "memory_unsubscribe": "unsubscribe",
     "action_prepare": "prepare_action",

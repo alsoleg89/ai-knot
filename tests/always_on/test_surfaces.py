@@ -1,9 +1,58 @@
 import asyncio
 
+import pytest
 from fastapi.testclient import TestClient
 
 from ai_knot._always_on_tools import invoke_always_on
+from ai_knot.always_on import WatchSelector
 from ai_knot.server.app import create_app
+
+
+@pytest.mark.parametrize("watch", ["watch", "watch/team"])
+def test_http_snapshot_and_context_are_strict_and_preserve_delivery(ao_factory, kb, watch):
+    ao = ao_factory()
+    client = TestClient(create_app(kb, token="secret", always_on=ao))
+    headers = {"Authorization": "Bearer secret"}
+    ao.subscribe(subscription_id=watch, selector=WatchSelector("owner"))
+    fact = kb.add("Production uses PostgreSQL")
+    base = "/v1/always-on/subscriptions/" + watch.replace("/", "%2F")
+    path = base + "/resync"
+    assert client.post(path).status_code == 401
+    response = client.post(path, headers=headers, json={})
+    assert response.status_code == 200, response.text
+    snapshot = response.json()
+    assert snapshot["is_snapshot"] and snapshot["through_seq"] == snapshot["head_seq"]
+    assert snapshot["events"][0]["fact_id"] == fact.id
+    ref = {
+        "namespace": "owner",
+        "fact_id": fact.id,
+        "revision": snapshot["events"][0]["after_revision"],
+    }
+    review = client.post("/v1/always-on/evidence/review", headers=headers, json={"refs": [ref]})
+    assert review.status_code == 200 and review.json()["complete"]
+    assert review.json()["accepted"][0]["content"] == "Production uses PostgreSQL"
+    assert (
+        client.post(
+            "/v1/always-on/evidence/review",
+            headers=headers,
+            json={"refs": [ref], "owner_agent_id": "peer"},
+        ).status_code
+        == 422
+    )
+    assert client.post(path, headers=headers, json={"limit": True}).status_code == 422
+    kb.add("A second memory")
+    overflow = client.post(path, headers=headers, json={"limit": 1})
+    assert overflow.status_code == 413 and overflow.json()["error"]["code"] == "SnapshotTooLarge"
+    assert ao.poll(watch).delivery_id == snapshot["delivery_id"]
+    replay = client.post(base + "/poll", headers=headers, json={})
+    assert replay.status_code == 200 and replay.json()["is_snapshot"]
+    assert (
+        client.post(
+            base + "/ack", headers=headers, json={"delivery_id": snapshot["delivery_id"]}
+        ).status_code
+        == 204
+    )
+    assert client.delete(base, headers=headers).status_code == 204
 
 
 def test_actor_cannot_be_spoofed(ao_factory, kb):

@@ -1372,6 +1372,18 @@ def changes_poll(
     _work_invoke(ctx, agent_id, "poll", {"subscription_id": subscription_id, "limit": limit})
 
 
+@changes.command("resync")
+@click.argument("agent_id")
+@click.argument("subscription_id")
+@click.option("--limit", default=500, type=int)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def changes_resync(
+    ctx: click.Context, agent_id: str, subscription_id: str, limit: int, json_output: bool
+) -> None:
+    _work_invoke(ctx, agent_id, "resync", {"subscription_id": subscription_id, "limit": limit})
+
+
 @changes.command("ack")
 @click.argument("agent_id")
 @click.argument("subscription_id")

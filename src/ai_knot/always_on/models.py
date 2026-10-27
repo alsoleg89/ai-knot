@@ -22,6 +22,10 @@ class CursorExpired(Exception):
     pass
 
 
+class SnapshotTooLarge(Exception):
+    """The selected working set cannot fit a complete bounded snapshot."""
+
+
 class InvalidDelivery(Exception):
     pass
 
@@ -236,6 +240,22 @@ class ResumePacket:
     freshness_due: tuple[EvidenceRef, ...]
     ready: bool
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ContextFact:
+    ref: EvidenceRef
+    content: str
+    slot_key: str
+
+
+@dataclass(frozen=True)
+class ContextReview:
+    accepted: tuple[ContextFact, ...]
+    issues: tuple[BasisIssue, ...]
+    omitted: tuple[EvidenceRef, ...]
+    checked_at: datetime
+    complete: bool
 
 
 def nonempty(value: str, field: str = "value") -> str:

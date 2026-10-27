@@ -32,7 +32,37 @@ def test_mcp_strict_owner_and_capabilities(ao_factory, kb):
         )
 
     asyncio.run(calls())
-    assert len(ROUTES) == 20
+    assert len(ROUTES) == 22
+
+
+def test_mcp_recovery_and_context_review_use_real_typed_boundary(ao_factory, kb):
+    app = _make_server(kb, always_on=ao_factory())
+    fact = kb.add("Persisted team decision")
+
+    async def call(name, args):
+        return json.loads(await app._tool_manager.call_tool(name, args))
+
+    async def workflow():
+        await call(
+            "memory_subscribe", {"subscription_id": "task", "selector": {"namespace": "owner"}}
+        )
+        snapshot = await call("memory_resync", {"subscription_id": "task"})
+        assert snapshot["is_snapshot"] and snapshot["events"][0]["fact_id"] == fact.id
+        ref = {
+            "namespace": "owner",
+            "fact_id": fact.id,
+            "revision": snapshot["events"][0]["after_revision"],
+        }
+        review = await call("memory_context_review", {"refs": [ref], "max_chars": 100})
+        assert review["complete"] and review["accepted"][0]["content"] == "Persisted team decision"
+        invalid = await call("memory_context_review", {"refs": [ref], "max_chars": True})
+        assert invalid["error"]["code"] == "InvalidInput"
+        await call(
+            "memory_ack", {"subscription_id": "task", "delivery_id": snapshot["delivery_id"]}
+        )
+        assert (await call("memory_poll", {"subscription_id": "task"}))["delivery_id"] is None
+
+    asyncio.run(workflow())
 
 
 class Session:

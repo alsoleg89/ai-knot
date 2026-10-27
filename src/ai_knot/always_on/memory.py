@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, suppress
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
@@ -14,7 +16,8 @@ from ai_knot.pool import SharedMemoryPool
 from ai_knot.types import Fact
 
 from . import _state as transitions
-from .changes import access_projection, evidence_revision, visible
+from .changes import ChangeBatch, FactChange, access_projection, evidence_revision, visible
+from .changes import canonical as encode_changes
 from .lineage import (
     DEPENDENCIES_KEY,
     ROOTS_KEY,
@@ -30,6 +33,8 @@ from .models import (
     ActionPermit,
     ActionRecord,
     BasisIssue,
+    ContextFact,
+    ContextReview,
     EvidenceRef,
     FreshnessRecord,
     IdempotencyConflict,
@@ -39,6 +44,7 @@ from .models import (
     Lease,
     ResumePacket,
     RevisionConflict,
+    SnapshotTooLarge,
     StaleEvidence,
     UnsupportedAlwaysOnBackend,
     VerificationRequest,
@@ -66,7 +72,7 @@ from .state_storage import (
     save_intent,
     timestamp,
 )
-from .storage import AlwaysOnSession, AlwaysOnStorageCapable, enable_stream, sql
+from .storage import AlwaysOnSession, AlwaysOnStorageCapable, SQLStatement, enable_stream, sql
 from .subscriptions import SubscriptionsMixin
 from .workspace import WorkspaceMemory, initialize_workspace_bindings, require_action_workspace
 
@@ -107,6 +113,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
             initialize(session)
             initialize_workspace_bindings(session)
             initialize_maintenance(session)
+            session.execute(sql("UPDATE ao_schema SET version=7 WHERE id=1 AND version<7"))
             enable_stream(session, self._owner, self._now())
 
     def _now(self) -> datetime:
@@ -578,6 +585,133 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 self._fact_for_ref(session, ref, now)
                 found.append(ref)
             return transitions.union_basis(tuple(found))
+
+    def _snapshot_current(self, session: AlwaysOnSession, event: FactChange, now: datetime) -> bool:
+        if event.after_revision is None:
+            return False
+        ref = EvidenceRef(event.namespace, event.fact_id, event.after_revision)
+        return not self._validate_basis(session, (ref,), now, freshness=False)
+
+    def resync(self, subscription_id: str, *, limit: int = 500) -> ChangeBatch:
+        """Replace a pending delivery with a complete bounded working-set manifest.
+
+        Persist the replacement cache and receipt before ack. No cursor advances
+        here, and writes after the captured head remain in the delta journal.
+        """
+        nonempty(subscription_id, "subscription_id")
+        page_limit(limit)
+        with self._transaction(write=False) as session:
+            namespace = str(self._subrow(session, subscription_id)["namespace"])
+        self._subscription_namespace(namespace)
+        scopes = (self._owner, "__shared__") if self._pool is not None else (self._owner,)
+        with self._transaction(scopes) as session:
+            row = self._subrow(session, subscription_id)
+            if row["namespace"] != namespace:
+                raise RevisionConflict("subscription changed")
+            selector = self._subscription(row).selector
+            stream = session.fetch_one(
+                sql("SELECT head_seq FROM ao_streams WHERE namespace=?"), (namespace,)
+            )
+            assert stream is not None
+            head = int(stream["head_seq"] or 0)
+            now = self._now()
+            events: list[FactChange] = []
+            after: str | None = None
+            while True:
+                clause = " AND id>?" if after is not None else ""
+                candidates = session.fetch_all(
+                    SQLStatement(
+                        "SELECT id,slot_key FROM facts WHERE agent_id=?"
+                        + clause
+                        + " ORDER BY id LIMIT 500",
+                        'SELECT id,slot_key FROM "ai-knot_facts" WHERE agent_id=%s'
+                        + clause.replace("?", "%s")
+                        + " ORDER BY id LIMIT 500",
+                    ),
+                    (namespace, after) if after is not None else (namespace,),
+                )
+                for candidate in candidates:
+                    fact_id = str(candidate["id"])
+                    if (selector.fact_ids or selector.slot_keys) and (
+                        fact_id not in selector.fact_ids
+                        and candidate["slot_key"] not in selector.slot_keys
+                    ):
+                        continue
+                    fact = session.load_facts(namespace, fact_id=fact_id)[0]
+                    if not fact.supported or not fact.is_active(now):
+                        continue
+                    event = FactChange(
+                        namespace,
+                        head,
+                        "snapshot",
+                        fact.id,
+                        fact.slot_key,
+                        None,
+                        evidence_revision(fact),
+                    )
+                    if not self._snapshot_current(session, event, now):
+                        continue
+                    events.append(event)
+                    if len(events) > limit:
+                        raise SnapshotTooLarge("Narrow the selected working set before recovery")
+                if len(candidates) < 500:
+                    break
+                after = str(candidates[-1]["id"])
+            token = uuid4().hex
+            grants = self._grants(session, namespace)
+            acl_digest = hashlib.sha256(encode_changes(sorted(grants)).encode()).hexdigest()
+            session.execute(
+                sql(
+                    "UPDATE ao_subscriptions SET pending_since=NULL,inflight_token=?,"
+                    "inflight_through_seq=?,inflight_events_json=?,inflight_resync=0,"
+                    "inflight_acl_digest=?,inflight_snapshot=1 WHERE owner=? AND id=?"
+                ),
+                (
+                    token,
+                    head,
+                    encode_changes([asdict(event) for event in events]),
+                    acl_digest,
+                    self._owner,
+                    subscription_id,
+                ),
+            )
+            return ChangeBatch(
+                token, tuple(events), through_seq=head, head_seq=head, is_snapshot=True
+            )
+
+    def review_context(
+        self, refs: tuple[EvidenceRef, ...], *, max_chars: int = 12000
+    ) -> ContextReview:
+        """Admit exact saved revisions within a whole-fact character budget.
+
+        Replace cached model context with the accepted set. This read-only view
+        is point-in-time evidence checking, not permission for a later effect.
+        """
+        positive_integer(max_chars, "max_chars", 65536)
+        if len(refs) > 128 or any(not isinstance(ref, EvidenceRef) for ref in refs):
+            raise ValueError("context requires at most 128 evidence references")
+        transitions.union_basis(refs)
+        scopes = (self._owner, "__shared__") if self._pool is not None else (self._owner,)
+        with self._transaction(scopes, write=False) as session:
+            now = self._now()
+            accepted: list[ContextFact] = []
+            issues: list[BasisIssue] = []
+            omitted: list[EvidenceRef] = []
+            remaining = max_chars
+            for ref in dict.fromkeys(refs):
+                problems = self._validate_basis(session, (ref,), now)
+                if problems:
+                    issues.extend(problems)
+                    continue
+                fact = session.load_facts(ref.namespace, fact_id=ref.fact_id)[0]
+                if len(fact.content) > remaining:
+                    omitted.append(ref)
+                    continue
+                accepted.append(ContextFact(ref, fact.content, fact.slot_key))
+                remaining -= len(fact.content)
+            return ContextReview(
+                tuple(accepted), tuple(issues), tuple(omitted), now, not issues and not omitted
+            )
 
     def independent_evidence(self, refs: tuple[EvidenceRef, ...]) -> tuple[EvidenceRef, ...]:
         """Flatten copied observations into distinct current source revisions."""

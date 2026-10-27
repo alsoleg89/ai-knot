@@ -22,3 +22,20 @@ def test_offline_recovery_twice(tmp_path):
             "model_calls": 0,
             "no_idempotency_branch": "blocked",
         }
+
+
+def test_two_agent_memory_return_example():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, str(root / "examples" / "shared_memory_return.py")],
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "current_context": ["Deploy in US"],
+        "stale_context_rejected": True,
+        "snapshot_recovered": True,
+        "model_calls": 0,
+    }

@@ -150,7 +150,8 @@ DDL = (
         "unce_seconds DOUBLE PRECISION NOT NULL CHECK(debounce_seconds BETWEEN "
         "0 AND 3600), pending_since TEXT, inflight_token TEXT, inflight_through"
         "_seq BIGINT, inflight_events_json TEXT, inflight_resync INTEGER, infli"
-        "ght_acl_digest TEXT, PRIMARY KEY(owner,id), CHECK((inflight_token IS N"
+        "ght_acl_digest TEXT, inflight_snapshot INTEGER NOT NULL DEFAULT 0, "
+        "PRIMARY KEY(owner,id), CHECK((inflight_token IS N"
         "ULL AND inflight_through_seq IS NULL AND inflight_events_json IS NULL "
         "AND inflight_resync IS NULL AND inflight_acl_digest IS NULL) OR (infli"
         "ght_token IS NOT NULL AND inflight_through_seq IS NOT NULL AND infligh"
@@ -188,11 +189,25 @@ def migrate(session: AlwaysOnSession) -> None:
     for statement in DDL:
         session.execute(sql(statement))
     row = session.fetch_one(sql("SELECT version FROM ao_schema WHERE id=1"))
-    if row is not None and int(row["version"] or 0) > 6:
+    if row is not None and int(row["version"] or 0) > 7:
         raise RuntimeError("unsupported always-on schema version")
     session.execute(sql("INSERT INTO ao_schema(id,version) VALUES(1,2) ON CONFLICT(id) DO NOTHING"))
     if row is not None and int(row["version"] or 0) >= 5:
         migrate_freshness(session)
+    columns = session.fetch_all(
+        SQLStatement(
+            "SELECT name FROM pragma_table_info('ao_subscriptions')",
+            "SELECT column_name AS name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='ai-knot_ao_subscriptions'",
+        )
+    )
+    if "inflight_snapshot" not in {column["name"] for column in columns}:
+        session.execute(
+            sql(
+                "ALTER TABLE ao_subscriptions ADD COLUMN "
+                "inflight_snapshot INTEGER NOT NULL DEFAULT 0"
+            )
+        )
 
 
 def append_event(

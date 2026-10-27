@@ -2,6 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { AlwaysOnError, HttpAlwaysOnMemory, HttpKnowledgeBase, KnowledgeBase, McpAlwaysOnMemory } from "../index.js";
 
 describe("always-on adapters", () => {
+  it("routes snapshot recovery and checked context with bounded inputs", async () => {
+    const calls: unknown[] = [];
+    const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return "{}"; });
+    const http = new HttpAlwaysOnMemory(async (path, options) => { calls.push([path, options]); return {} as never; }, async () => {});
+    const refs = [{ namespace: "owner", fact_id: "fact", revision: "r" }];
+    await mcp.resync("watch/id", 5); await mcp.reviewContext(refs, 100);
+    await http.resync("watch/id", 5); await http.reviewContext(refs, 100);
+    expect(calls).toEqual([
+      ["memory_resync", { subscription_id: "watch/id", limit: 5 }],
+      ["memory_context_review", { refs, max_chars: 100 }],
+      ["/v1/always-on/subscriptions/watch%2Fid/resync", { method: "POST", body: { limit: 5 } }],
+      ["/v1/always-on/evidence/review", { method: "POST", body: { refs, max_chars: 100 } }],
+    ]);
+  });
   it("constructs without polling or a subprocess", () => {
     const fetch = vi.fn();
     expect(new HttpKnowledgeBase({ baseUrl: "http://localhost", fetch }).alwaysOn).toBeInstanceOf(HttpAlwaysOnMemory);
