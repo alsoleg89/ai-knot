@@ -33,6 +33,7 @@ ROUTES = (
     ("POST", "/actions/{action_id}/reconcile", "reconcile_action", "action_id"),
     ("POST", "/evidence/capture", "capture_evidence", None),
     ("POST", "/evidence/review", "review_context", None),
+    ("POST", "/evidence/select", "select_context", None),
     ("POST", "/freshness", "set_freshness", None),
     ("GET", "/freshness/due", "due_verifications", None),
     ("POST", "/freshness/record", "record_verification", None),

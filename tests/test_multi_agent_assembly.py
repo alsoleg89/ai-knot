@@ -8,6 +8,66 @@ from ai_knot.multi_agent.scoring import DiversityPolicy
 from ai_knot.types import Fact
 
 
+def test_whole_fact_budget_preserves_later_coverage_and_bounds_backfill():
+    assembler = CoverageAwareAssembler()
+    long = _candidate("A" * 30, facet_id="f0", score=2.0)
+    short = _candidate("small", facet_id="f0", score=1.0)
+    other = _candidate("other", facet_id="f1", score=1.0)
+    extra = _candidate("extra", facet_id="f0", score=0.8)
+    result = assembler.assemble(
+        candidates_by_facet={"f0": [long, short, extra], "f1": [other]},
+        top_k=4,
+        n_publishers=1,
+        max_chars=10,
+    )
+    assert {candidate.fact.content for candidate in result.selected} == {"small", "other"}
+    assert result.coverage_score == 1.0 and result.budget_limited
+    assert sum(len(candidate.fact.content) for candidate in result.selected) == 10
+
+
+def test_admission_applies_to_coverage_and_backfill():
+    blocked = _candidate("blocked", facet_id="f0", score=3.0)
+    allowed = _candidate("allowed", facet_id="f0", score=2.0)
+    blocked_tail = _candidate("blocked tail", facet_id="f1", score=1.0)
+    result = CoverageAwareAssembler().assemble(
+        candidates_by_facet={"f0": [blocked, allowed], "f1": [blocked_tail]},
+        top_k=5,
+        admit=lambda candidate: candidate.fact.content == "allowed",
+    )
+    assert [candidate.fact.content for candidate in result.selected] == ["allowed"]
+    assert result.covered_facets == {"f0"} and result.uncovered_facets == {"f1"}
+
+
+def test_equal_candidate_scores_use_stable_identity_order():
+    first = _candidate("first", facet_id="f0", score=1)
+    second = _candidate("second", facet_id="f0", score=1)
+    first.fact.id, second.fact.id = "a", "z"
+    for ordered in ([second, first], [first, second]):
+        result = CoverageAwareAssembler().assemble(candidates_by_facet={"f0": ordered}, top_k=1)
+        assert result.selected[0].fact.id == "a"
+
+
+def test_multifacet_fact_frees_budget_for_still_missing_requirements():
+    shared = _candidate("alpha beta " + "details " * 100, facet_id="f0", score=2)
+    alias = CandidateFact(shared.fact, base_score=2, facet_scores={"f1": 2})
+    redundant = _candidate("beta", facet_id="f1", score=3)
+    gamma = _candidate("gamma", facet_id="f2", score=1)
+    other = _candidate("gamma alternate", facet_id="f2", score=0.8)
+    another = _candidate("gamma more", facet_id="f2", score=0.7)
+    result = CoverageAwareAssembler().assemble(
+        candidates_by_facet={
+            "f0": [shared],
+            "f1": [redundant, alias],
+            "f2": [gamma, other, another],
+        },
+        top_k=2,
+        n_publishers=1,
+        max_chars=len(shared.fact.content) + len(gamma.fact.content),
+    )
+    assert {candidate.fact.id for candidate in result.selected} == {shared.fact.id, gamma.fact.id}
+    assert result.covered_facets == {"f0", "f1", "f2"} and result.coverage_score == 1
+
+
 def _candidate(
     content: str,
     *,

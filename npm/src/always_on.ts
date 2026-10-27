@@ -45,6 +45,10 @@ export interface ContextReview {
   accepted: ContextFact[]; issues: BasisIssue[]; omitted: EvidenceRef[];
   checked_at: string; complete: boolean;
 }
+export interface TaskContext {
+  facts: ContextFact[]; covered_requirements: string[]; missing_requirements: string[];
+  budget_limited: boolean; checked_at: string; complete: boolean;
+}
 export type VerificationOutcome = "confirmed" | "changed" | "unavailable";
 export interface VerificationResult {
   outcome: VerificationOutcome; evidence: JsonObject; source_version: string;
@@ -81,6 +85,7 @@ export interface AlwaysOnClient {
   poll(subscriptionId: string, limit?: number): Promise<ChangeBatch>;
   resync(subscriptionId: string, limit?: number): Promise<ChangeBatch>;
   reviewContext(refs: EvidenceRef[], maxChars?: number): Promise<ContextReview>;
+  selectContext(input: { requirements: string[]; task_key?: string; role?: string; max_facts?: number; max_chars?: number }): Promise<TaskContext>;
   ack(subscriptionId: string, deliveryId: string): Promise<void>;
   unsubscribe(subscriptionId: string): Promise<void>;
   prepareAction(input: { intent_id: string; lease_token: string; action_key: string; request: JsonObject; basis?: EvidenceRef[] }): Promise<ActionRecord>;
@@ -121,6 +126,7 @@ const operations: Record<string, Operation> = {
   poll: { tool: "memory_poll", path: "/subscriptions/{id}/poll", id: "subscription_id" },
   resync: { tool: "memory_resync", path: "/subscriptions/{id}/resync", id: "subscription_id" },
   reviewContext: { tool: "memory_context_review", path: "/evidence/review" },
+  selectContext: { tool: "memory_context_select", path: "/evidence/select" },
   ack: { tool: "memory_ack", path: "/subscriptions/{id}/ack", id: "subscription_id" },
   unsubscribe: { tool: "memory_unsubscribe", path: "/subscriptions/{id}", verb: "DELETE", id: "subscription_id" },
   prepareAction: { tool: "action_prepare", path: "/actions" },
@@ -146,6 +152,7 @@ abstract class AlwaysOnMethods implements AlwaysOnClient {
   poll(id: string, limit = 100): Promise<ChangeBatch> { return this.invoke("poll", { limit }, id); }
   resync(id: string, limit = 500): Promise<ChangeBatch> { return this.invoke("resync", { limit }, id); }
   reviewContext(refs: EvidenceRef[], maxChars = 12000): Promise<ContextReview> { return this.invoke("reviewContext", { refs, max_chars: maxChars }); }
+  selectContext(input: Parameters<AlwaysOnClient["selectContext"]>[0]): Promise<TaskContext> { return this.invoke("selectContext", input); }
   async ack(id: string, deliveryId: string): Promise<void> { await this.invoke("ack", { delivery_id: deliveryId }, id); }
   async unsubscribe(id: string): Promise<void> { await this.invoke("unsubscribe", {}, id); }
   prepareAction(input: Parameters<AlwaysOnClient["prepareAction"]>[0]): Promise<ActionRecord> { return this.invoke("prepareAction", input); }

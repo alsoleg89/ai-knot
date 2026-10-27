@@ -258,6 +258,21 @@ class ContextReview:
     complete: bool
 
 
+@dataclass(frozen=True)
+class TaskContext:
+    facts: tuple[ContextFact, ...]
+    covered_requirements: tuple[str, ...]
+    missing_requirements: tuple[str, ...]
+    budget_limited: bool
+    checked_at: datetime
+    complete: bool
+
+
+def context_label(value: str, field: str) -> None:
+    if not isinstance(value, str) or len(value) > 256 or value != value.strip():
+        raise ValueError(f"{field} must be an exact label of at most 256 characters")
+
+
 def nonempty(value: str, field: str = "value") -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a nonempty string")

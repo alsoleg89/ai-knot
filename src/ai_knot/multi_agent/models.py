@@ -153,6 +153,7 @@ class AssemblyResult:
     covered_facets: set[str] = field(default_factory=set)
     uncovered_facets: set[str] = field(default_factory=set)
     coverage_score: float = 0.0
+    budget_limited: bool = False
 
 
 @dataclass(frozen=True, slots=True)

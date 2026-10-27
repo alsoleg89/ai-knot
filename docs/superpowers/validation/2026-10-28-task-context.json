@@ -1,0 +1,158 @@
+{
+  "base_commit": "fcbcad5fc8cd46b4f915055c9f68708c56ad5585",
+  "branch": "codex/always-on-memory-return",
+  "scope": "Task context milestone, not the entire shared-memory roadmap",
+  "python312_postgres_required": {
+    "passed": 1889,
+    "skipped": 2,
+    "coverage_percent": 89.24,
+    "warning": "Existing OpenClaw no-LLM multi-turn warning",
+    "expected_skips": [
+      "SQLite parameter of PostgreSQL initialization regression",
+      "Missing-psycopg branch with psycopg installed"
+    ]
+  },
+  "typescript": {
+    "tests_passed": 58,
+    "typecheck": "pass",
+    "esm_cjs_build": "pass"
+  },
+  "static_checks": {
+    "ruff": "pass",
+    "format": "pass",
+    "mypy_source_files": 77
+  },
+  "python_compatibility": {
+    "3.11": {
+      "focused_passed": 42,
+      "skipped_no_pg_dsn": 21
+    },
+    "3.13": {
+      "focused_passed": 42,
+      "skipped_no_pg_dsn": 21
+    },
+    "scope": "Task context, assembly, trace and transport focused compatibility before diagnostic redaction helper; full suite on 3.12"
+  },
+  "recovery": {
+    "sqlite": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    },
+    "postgres": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    }
+  },
+  "ma_gate": {
+    "binding_passed": 11,
+    "binding_total": 11,
+    "advisory_misses_unchanged": [
+      "S9 conflict_resolution .333",
+      "S9 wrong_suppression .333",
+      "S19 evidence_precision .615",
+      "S26 target_shard_recall_at1000 .333",
+      "S26 distractor_rate_at1000 .900"
+    ]
+  },
+  "controlled_comparison": {
+    "frozen_corpus_sha256": "283a0b281c29383a97813538185369da6e44cc1401440580c61405bd05ae04d0",
+    "traces": 16,
+    "checkpoints_per_arm": 64,
+    "arms": 6,
+    "records_per_backend": 384,
+    "paired_evidence_and_quality_metrics_identical": true,
+    "fact_budget": 3,
+    "content_character_budget": 600,
+    "requirement_positions_per_arm": 192,
+    "available_evidence_groups": 112,
+    "intentionally_unavailable": 80,
+    "best_scoped_existing_recall": 112,
+    "task_selector_recall": 112,
+    "preferred_role_presence_best_control": [
+      24,
+      32
+    ],
+    "preferred_role_presence_task_role": [
+      32,
+      32
+    ],
+    "selection_model_calls": 0,
+    "selection_embedding_calls": 0,
+    "claims": "Explicit applicability, lexical missing-evidence report and role-source preference; no retrieval advantage over strongest scoped Integrate control or real-model accuracy measured",
+    "artifacts": [
+      "docs/performance/task-context-sqlite.json",
+      "docs/performance/task-context-postgres.json",
+      "docs/performance/task-context-sqlite.json.gz",
+      "docs/performance/task-context-postgres.json.gz",
+      "docs/performance/task-context-manifest.json.gz"
+    ]
+  },
+  "review": {
+    "model": "gpt-6-astra",
+    "skill": "Ponytail review",
+    "independent_production_tests": 67,
+    "source_verdict": "Ship subject to final acceptance, now passed",
+    "method_audit": "No material methodological blocker; publish narrow claims only",
+    "owner_followup": "Failure diagnostic redaction corrected after audit; 11 harness tests and full 1889-test suite passed"
+  },
+  "diagnostics": {
+    "postgres_transient": "One six-arm worker attempt and cleanup lost a connection; server/container remained running with unchanged postmaster time. Isolated repeat succeeded; root cause not established.",
+    "harness_improvements": "Preserve bounded child stderr with DSN/raw/URL-encoded password redaction; RED/GREEN regressions; no production retry added"
+  },
+  "constraints": {
+    "new_dependencies": 0,
+    "versions_unchanged": "0.12.0",
+    "original_checkout_head_status_unchanged": true,
+    "protected_existing_files_unchanged": 30,
+    "release_published": false,
+    "pushed": false,
+    "merged": false
+  },
+  "source_test_sha256": {
+    "examples/task_context.py": "479591fef43ec256ab25f3a938e5a27ab215f7f719cd688cb4d0d13c1177bddc",
+    "npm/src/__tests__/always_on.test.ts": "9c512407a0406b54361b90006117c1f41316c8267f4c1e2a39d7c0ba07bddf31",
+    "npm/src/always_on.ts": "285628d48140001b3e788696bf1e80384e7118fae57f3b592125ef9c6e6e6695",
+    "src/ai_knot/_always_on_tools.py": "0a92bb0bde71add51a9a131f503d1d61a6cdf851f7e293d41dc49b0e8cc5307e",
+    "src/ai_knot/always_on/__init__.py": "b8e228ee2f78873d591b344107b940c9c6a389d9601d80ffeb9ac49b84b13569",
+    "src/ai_knot/always_on/context.py": "6739dcb2c3afaca6d38c58c48308d7993c17776971c3318682ee07f4359e5051",
+    "src/ai_knot/always_on/memory.py": "e6c2547d9b0554b8f8873ea1dc8705699202fd3afef9561b4061ef69027a8458",
+    "src/ai_knot/always_on/models.py": "aaaa1ae7adee04894de7e2c9c63e5dfe34a67d913f9d5fa446d60352c697a9a4",
+    "src/ai_knot/multi_agent/assembly.py": "609ce1a88c2bc488dfd6a1963c6f7be1ea082a5713bc698e9b77df03b7a9b47a",
+    "src/ai_knot/multi_agent/models.py": "eb0c79be23d26ca664dd14f5f2b66358e60635bfedbc87a74260f8aeab9cf7a8",
+    "src/ai_knot/server/always_on.py": "c05f5710258b1b671a54010f66847231ed7c32d6734ae292e177125112ebc019",
+    "tests/always_on/test_example.py": "0581b8322103c8e0b1750f3bd6b0bc1677415539f28dee38882fe82e439c41c7",
+    "tests/always_on/test_mcp_surface.py": "9ac6c5748cb0561ac44bcd616b297f0eaea75abb83509492d47c22b407af3183",
+    "tests/always_on/test_surfaces.py": "75fb131a5066e055a7346d7f8ce02afe2bf86af262efe97552bad9d2e9782f93",
+    "tests/always_on/test_task_context.py": "3cba55069880746424a60437f161155b14fe53c9cddf24488121f0e043ff67ee",
+    "tests/always_on/test_task_context_trace.py": "ea20ca08eeecc353820debcd3eac23794f013ae4a5fe26f3adc89a9ccfb3cdfd",
+    "tests/eval/task_context/__init__.py": "d2f7b87b4d25f22f55a0593255997ee1a581c1ba53dfa37d89b58addc81d56c9",
+    "tests/eval/task_context/fixtures.py": "dd85976e1faf9e0e81eb62484e15403cbbd75684f9f4b2ee563a19c99feed314",
+    "tests/eval/task_context/runner.py": "6e6d90b6b0b248839230ff80ca9048e518b894860e9813f1260985d20f8dc3a3",
+    "tests/test_multi_agent_assembly.py": "ff783b6e942dbe9d7522dee32f12813c3637b05f4994808a4274325817cc3ae8"
+  },
+  "limitations": [
+    "Lexical coverage is not semantic entailment or action authorization",
+    "Role labels do not grant permissions; alternatives share text in comparison",
+    "Failed/unknown outcome exclusions are explicit fixture support labels, not inferred success",
+    "Output content budget excludes prompt formatting; latency descriptive only",
+    "Opt-in selection indexes retained corpus; no production capacity claim"
+  ]
+}

@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { AlwaysOnError, HttpAlwaysOnMemory, HttpKnowledgeBase, KnowledgeBase, McpAlwaysOnMemory } from "../index.js";
 
 describe("always-on adapters", () => {
+  it("selects task context through HTTP and MCP without changing its request", async () => {
+    const calls: unknown[] = [];
+    const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return "{}"; });
+    const http = new HttpAlwaysOnMemory(async (path, options) => { calls.push([path, options]); return {} as never; }, async () => {});
+    const request = { requirements: ["rollback checkpoint"], task_key: "release42", role: "operator", max_facts: 3, max_chars: 800 };
+    await mcp.selectContext(request); await http.selectContext(request);
+    expect(calls).toEqual([
+      ["memory_context_select", request],
+      ["/v1/always-on/evidence/select", { method: "POST", body: request }],
+    ]);
+  });
   it("routes snapshot recovery and checked context with bounded inputs", async () => {
     const calls: unknown[] = [];
     const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return "{}"; });

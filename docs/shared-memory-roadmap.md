@@ -14,3 +14,11 @@ This is a development program, not a claim that all stages have shipped. Priorit
 Track useful knowledge retained, invalid knowledge rejected, missed updates, redundant work, unnecessary model wakes, model calls/tokens per useful update, context bytes and p50/p95 latency separately. Green deterministic tests do not establish real-model answer quality.
 
 See [primary-source research](research/2026-10-27-shared-memory-direction.md).
+
+Current source progress: [reliable return](shared-memory-return.md) is committed,
+and [explicit task working sets](task-context.md) add bounded requirement coverage,
+applicability labels and soft role preference. The latter matches the strongest
+existing scoped retrieval baseline on frozen evidence recall; role preference and
+structured missing-evidence reports are its measured additions. Outcome-bound
+experience formation remains the next milestone; typed host-authored derivation
+alone does not establish automatic learning or verified external success.

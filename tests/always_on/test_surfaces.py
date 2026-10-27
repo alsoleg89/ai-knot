@@ -55,6 +55,27 @@ def test_http_snapshot_and_context_are_strict_and_preserve_delivery(ao_factory, 
     assert client.delete(base, headers=headers).status_code == 204
 
 
+def test_http_task_context_returns_truthful_bounded_requirements(ao_factory, kb):
+    ao = ao_factory()
+    kb.add("Rollback checkpoint verified")
+    client = TestClient(create_app(kb, token="secret", always_on=ao))
+    path = "/v1/always-on/evidence/select"
+    body = {"requirements": ["rollback checkpoint", "certificate expiry"], "max_chars": 40}
+    assert client.post(path, json=body).status_code == 401
+    headers = {"Authorization": "Bearer secret"}
+    response = client.post(path, headers=headers, json=body)
+    assert response.status_code == 200, response.text
+    view = response.json()
+    assert view["covered_requirements"] == ["rollback checkpoint"]
+    assert view["missing_requirements"] == ["certificate expiry"] and not view["complete"]
+    assert sum(len(item["content"]) for item in view["facts"]) <= 40
+    assert client.post(path, headers=headers, json={**body, "max_chars": True}).status_code == 422
+    assert (
+        client.post(path, headers=headers, json={**body, "owner_agent_id": "peer"}).status_code
+        == 422
+    )
+
+
 def test_actor_cannot_be_spoofed(ao_factory, kb):
     client = TestClient(create_app(kb, token="secret", always_on=ao_factory()))
     path = "/v1/always-on/intents"

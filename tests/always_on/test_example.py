@@ -39,3 +39,20 @@ def test_two_agent_memory_return_example():
         "snapshot_recovered": True,
         "model_calls": 0,
     }
+
+
+def test_recipient_roles_and_outcome_retraction_example():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, str(root / "examples" / "task_context.py")],
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "operator_role_fit": True,
+        "reviewer_role_fit": True,
+        "retracted_source_blocks_reuse": True,
+        "model_calls": 0,
+    }

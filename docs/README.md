@@ -9,6 +9,7 @@
 | [always-on.md](always-on.md) | Durable intentions, leases, subscriptions with acknowledgment, guarded actions, freshness, maintenance, and recovery. Unreleased source feature for SQLite/PostgreSQL. |
 | [multi-agent-always-on.md](multi-agent-always-on.md) | Workspace operations, resource fencing, shared maintenance authority/budgets, evidence lineage, and local load checks. |
 | [shared-memory-return.md](shared-memory-return.md) | Catch-up progress, bounded snapshot recovery, checked saved context and an executable two-agent workflow. |
+| [task-context.md](task-context.md) | Explicit task requirements, applicability/role preference, grounded procedures and fixed-data selection comparisons. |
 | [shared-memory-roadmap.md](shared-memory-roadmap.md) | Development program and acceptance criteria for lightweight always-on team memory. |
 | [multi-agent-governance.md](multi-agent-governance.md) | The governed-shared-memory surface: access control, supersession, provenance, trust, and audit — mapped to code and to the 2026 literature. |
 | [memory-commands.md](memory-commands.md) | Cross-surface command map for `add`, `search`, `list`, `get`, `delete`, `learn`, and structured correction. |

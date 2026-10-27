@@ -32,7 +32,7 @@ def test_mcp_strict_owner_and_capabilities(ao_factory, kb):
         )
 
     asyncio.run(calls())
-    assert len(ROUTES) == 22
+    assert len(ROUTES) == 23
 
 
 def test_mcp_recovery_and_context_review_use_real_typed_boundary(ao_factory, kb):
@@ -61,6 +61,35 @@ def test_mcp_recovery_and_context_review_use_real_typed_boundary(ao_factory, kb)
             "memory_ack", {"subscription_id": "task", "delivery_id": snapshot["delivery_id"]}
         )
         assert (await call("memory_poll", {"subscription_id": "task"}))["delivery_id"] is None
+
+    asyncio.run(workflow())
+
+
+def test_mcp_task_selection_keeps_requirements_separate_from_role(ao_factory, kb):
+    app = _make_server(kb, always_on=ao_factory())
+    kb.add("Backup restoration verified")
+
+    async def workflow():
+        view = json.loads(
+            await app._tool_manager.call_tool(
+                "memory_context_select",
+                {
+                    "requirements": ["backup restoration", "rollback checkpoint"],
+                    "role": "operator",
+                },
+            )
+        )
+        assert view["covered_requirements"] == ["backup restoration"]
+        assert view["missing_requirements"] == ["rollback checkpoint"]
+        invalid = json.loads(
+            await app._tool_manager.call_tool(
+                "memory_context_select",
+                {
+                    "requirements": "backup restoration",
+                },
+            )
+        )
+        assert invalid["error"]["code"] == "InvalidInput"
 
     asyncio.run(workflow())
 

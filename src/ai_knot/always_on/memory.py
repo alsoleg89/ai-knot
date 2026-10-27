@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.pool import SharedMemoryPool
-from ai_knot.types import Fact
+from ai_knot.types import Fact, MemoryType
 
 from . import _state as transitions
 from .changes import ChangeBatch, FactChange, access_projection, evidence_revision, visible
@@ -46,6 +46,7 @@ from .models import (
     RevisionConflict,
     SnapshotTooLarge,
     StaleEvidence,
+    TaskContext,
     UnsupportedAlwaysOnBackend,
     VerificationRequest,
     VerificationResult,
@@ -54,6 +55,7 @@ from .models import (
     WaitForSlot,
     WaitUntil,
     canonical,
+    context_label,
     digest,
     nonempty,
     page_limit,
@@ -727,6 +729,27 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 roots, lambda namespace, fact_id: session.load_facts(namespace, fact_id=fact_id)
             )
 
+    def select_context(
+        self,
+        requirements: tuple[str, ...],
+        *,
+        task_key: str = "",
+        role: str = "",
+        max_facts: int = 8,
+        max_chars: int = 12000,
+    ) -> TaskContext:
+        """Select current task evidence within a whole-fact context budget."""
+        from .context import select_context
+
+        return select_context(
+            self,
+            requirements,
+            task_key=task_key,
+            role=role,
+            max_facts=max_facts,
+            max_chars=max_chars,
+        )
+
     def derive_fact(
         self,
         content: str,
@@ -734,6 +757,9 @@ class AlwaysOnMemory(SubscriptionsMixin):
         basis: tuple[EvidenceRef, ...],
         namespace: str | None = None,
         visibility_scope: str = "global",
+        memory_type: MemoryType = MemoryType.SEMANTIC,
+        task_key: str = "",
+        for_role: str = "",
     ) -> Fact:
         """Store a host-declared derivation with flattened, revision-bound roots.
 
@@ -744,6 +770,9 @@ class AlwaysOnMemory(SubscriptionsMixin):
         self._check_namespace(namespace)
         nonempty(content, "content")
         nonempty(visibility_scope, "visibility_scope")
+        memory_type = MemoryType(memory_type)
+        context_label(task_key, "task_key")
+        context_label(for_role, "for_role")
         if not basis:
             raise ValueError("derivation requires evidence")
         scopes = {namespace, *(ref.namespace for ref in basis)}
@@ -762,6 +791,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
             now = self._now()
             output = Fact(
                 content,
+                type=memory_type,
                 created_at=now,
                 last_accessed=now,
                 valid_from=now,
@@ -772,6 +802,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 qualifiers={
                     ROOTS_KEY: encode_roots(tuple(roots)),
                     DEPENDENCIES_KEY: encode_roots(tuple(dependencies)),
+                    **({"task_key": task_key} if task_key else {}),
+                    **({"for_role": for_role} if for_role else {}),
                 },
             )
             session.replace_facts(namespace, [*session.load_facts(namespace), output])
