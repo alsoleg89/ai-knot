@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -197,7 +198,16 @@ class Fact:
         lineage survives a process restart (closing the gap where the declared
         ``Provenance`` record was never persisted).
         """
+        raw_ids = self.qualifiers.get("consolidation_ids", "[]")
+        try:
+            ids = json.loads(raw_ids)
+        except (ValueError, TypeError):
+            ids = []
+        consolidation_ids = (
+            tuple(ids) if isinstance(ids, list) and all(isinstance(i, str) for i in ids) else ()
+        )
         return Provenance(
+            consolidation_ids=consolidation_ids,
             origin_agent=self.origin_agent_id,
             published_by=self.qualifiers.get("published_by", ""),
             promoted_by=self.qualifiers.get("promoted_by", ""),

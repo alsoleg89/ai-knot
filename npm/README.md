@@ -156,6 +156,60 @@ HTTP services and you do not want a Node process to spawn Python itself.
 
 ---
 
+## Always-on agent state (unreleased)
+
+The source checkout includes `client.alwaysOn` on both HTTP and MCP clients.
+Install the matching Python engine from that checkout; this API is not part of
+the published `0.12.0` release yet:
+
+```bash
+pip install -e ".[mcp,server]"
+# Build the TypeScript client from the repository's npm directory.
+npm --prefix npm ci
+npm --prefix npm run build
+```
+
+Explicitly enable durable state on the configured SQLite/PostgreSQL server.
+For the local MCP client:
+
+```typescript
+import { KnowledgeBase } from "ai-knot";
+
+const kb = new KnowledgeBase({
+  agentId: "deploy-agent",
+  storage: "sqlite",
+  dbPath: "/absolute/path/to/memory.db",
+  env: { AI_KNOT_ALWAYS_ON: "true" },
+});
+
+const intent = await kb.alwaysOn.createIntent({
+  client_key: "deploy:42",
+  goal: "Deploy after CI",
+});
+const lease = await kb.alwaysOn.claim(intent.id, { worker_id: "host-1" });
+const current = await kb.alwaysOn.getIntent(intent.id);
+await kb.alwaysOn.checkpoint(intent.id, {
+  lease_token: lease.token,
+  expected_revision: current.revision,
+  state: "ready",
+  progress: { stage: "planned" },
+});
+await kb.close();
+```
+
+For HTTP, start the source-built sidecar with
+`AI_KNOT_ALWAYS_ON=true ai-knot --storage sqlite serve deploy-agent`, then use
+the same `alwaysOn` methods on `HttpKnowledgeBase`.
+
+The API also provides acknowledged subscriptions, evidence capture, guarded
+action permits, outcome reconciliation, freshness and one-batch maintenance.
+Constructors start no background polling. The host schedules work and executes
+external tools; an unknown outcome requires reconciliation before retry.
+YAML continues to support ordinary memory operations and rejects always-on state.
+
+See the [always-on guide](https://github.com/alsoleg89/ai-knot/blob/codex/always-on-p1-p3/docs/always-on.md)
+and [verified implementation report](https://github.com/alsoleg89/ai-knot/blob/codex/always-on-p1-p3/docs/superpowers/implementation-final.md).
+
 ## Quickstart
 
 Fastest installed proof: `npx ai-knot-demo`. The code below is the raw

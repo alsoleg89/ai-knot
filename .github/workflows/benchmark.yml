@@ -1,6 +1,7 @@
 name: Benchmarks
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -38,4 +39,37 @@ jobs:
           name: benchmark-results-${{ github.run_id }}-${{ github.sha }}
           path: benchmark.json
           retention-days: 90
+
+      - name: Always-on bounded performance matrix
+        run: >-
+          python -m tests.eval.always_on.runner --storage sqlite
+          --benchmark --facts 1000,10000 --subscriptions 1,10,100
+          --output-dir always-on-benchmark
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: always-on-benchmark-${{ github.run_id }}
+          path: always-on-benchmark/always_on_report.json
+
+  always-on-large-replay:
+    name: Always-on 100k event replay (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: >-
+          python -m tests.eval.always_on.runner --storage sqlite
+          --benchmark --facts 1000 --subscriptions 1 --large-replay 100000
+          --output-dir always-on-large-replay
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: always-on-large-replay-${{ github.run_id }}
+          path: always-on-large-replay/always_on_report.json
 

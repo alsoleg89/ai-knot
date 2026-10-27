@@ -6,6 +6,7 @@
 |---|---|
 | [../README.md](../README.md) | Product overview, quickstart, install-by-surface, integration snippets, and examples. |
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent memory, and bi-temporal recall. |
+| [always-on.md](always-on.md) | Durable intentions, leases, subscriptions with acknowledgment, guarded actions, freshness, maintenance, and recovery. Unreleased source feature for SQLite/PostgreSQL. |
 | [multi-agent-governance.md](multi-agent-governance.md) | The governed-shared-memory surface: access control, supersession, provenance, trust, and audit — mapped to code and to the 2026 literature. |
 | [memory-commands.md](memory-commands.md) | Cross-surface command map for `add`, `search`, `list`, `get`, `delete`, `learn`, and structured correction. |
 | [integrations.md](integrations.md) | Fast routing by ecosystem surface: CrewAI, LangGraph, LangChain, LlamaIndex, AutoGen, OpenAI Agents SDK, PydanticAI, MCP, HTTP, and TypeScript. |
@@ -58,4 +59,5 @@
 | Guide | What it covers |
 |---|---|
 | [RELEASE.md](RELEASE.md) | Release workflow, version sync, registry publishing, and pre-release checks. |
+| [superpowers/implementation-final.md](superpowers/implementation-final.md) | P1–P3 implementation, SQLite/live PostgreSQL acceptance, performance reports, and independent Astra/Ponytail reviews. |
 | [../server.json](../server.json) | MCP Registry manifest for the PyPI-backed `ai-knot` server. |

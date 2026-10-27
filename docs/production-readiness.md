@@ -131,3 +131,22 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 3. **Temporal/relation graph** — `GraphStorageCapable` edges from provenance.
 4. **Self-repair probes** — generate + run consistency probes over the KB.
 5. **Ecosystem** — CLI pool/gov ops and any post-launch framework expansion.
+
+## Always-on memory
+
+Implemented in the source checkout; package release is pending. SQLite and
+PostgreSQL provide durable intentions, fenced leases, acknowledged subscriptions,
+evidence guards, action reconciliation, freshness and bounded maintenance.
+Python/HTTP/MCP/CLI/TypeScript share the same owner-scoped contracts. YAML supports
+legacy operations and explicitly rejects the new always-on guarantees.
+
+Acceptance on 2026-10-27: **1453 tests passed**, **87.80% coverage**, including
+**93 always-on cases on live PostgreSQL 16**. The separate performance suite has
+18 passing tests and the TypeScript suite has 56. Astra and Ponytail closed their
+findings after rechecking the fixes. See the
+[implementation report](superpowers/implementation-final.md) for commands,
+intentional skips and measured JSON reports, including 100k-event replay.
+
+See [always-on memory](always-on.md) for enablement, transport contracts, backup
+scope, PostgreSQL clock requirements and recovery of unknown external action
+outcomes. The host schedules batches and executes external tools.

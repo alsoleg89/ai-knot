@@ -8,6 +8,16 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add opt-in durable always-on memory for SQLite and PostgreSQL: intentions,
+  leases, acknowledged change subscriptions, evidence guards, action outcome
+  reconciliation, freshness policies and bounded maintenance.
+- Expose the same configured-owner operations through Python, HTTP, MCP, CLI and
+  typed TypeScript HTTP/MCP clients; preserve legacy defaults.
+- Guard foreground/background fact updates and consolidation against concurrent
+  corrections. Add real process recovery and live PostgreSQL acceptance checks.
+
 ## [0.12.0] — 2026-07-07
 
 ### Added

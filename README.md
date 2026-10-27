@@ -48,11 +48,20 @@
 | one memory product across stacks | Python, TypeScript, CLI, MCP, HTTP sidecar, Browser inspector, and framework adapters |
 | memory you can debug and correct | `list`, `get`, `delete`, `lineage`, `learn`, `add_resolved`, and `valid_until` |
 | more than one agent writing to memory | shared memory with trust, provenance, visibility, and fan-in recall |
+| agents that resume work after a crash | opt-in durable intentions, acknowledged changes, evidence guards and action reconciliation ([unreleased source guide](docs/always-on.md)) |
 
 ```text
 conversation / tool output -> add or learn -> ai-knot -> SQLite | PostgreSQL | YAML
 next question              -> search / recall -> 3-5 relevant facts -> next prompt
 ```
+
+## Always-on agent memory (unreleased)
+
+Opt-in SQLite/PostgreSQL support stores resumable intentions, acknowledged memory
+changes, evidence guards, external action reconciliation and bounded maintenance.
+The host schedules work and executes tools. Install from the source checkout to
+use this feature; it is not yet in the published `0.12.0` packages.
+[Usage, recovery example and operational guarantees](docs/always-on.md).
 
 ## The 2026 memory problem
 

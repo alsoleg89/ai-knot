@@ -525,3 +525,9 @@ See also: [deployment.md#browser-inspector](deployment.md#browser-inspector)
 The main stack-specific surfaces are now in-repo: CrewAI, LlamaIndex, AutoGen,
 OpenAI Agents SDK, PydanticAI, OpenClaw, LangChain / LangGraph, Vercel AI SDK,
 MCP, assistant skills, TypeScript, and the HTTP sidecar/browser inspector.
+
+## Always-on memory
+
+See [always-on memory](always-on.md) for explicit enablement, transport contracts,
+backup scope, PostgreSQL clock requirements and recovery of unknown external
+action outcomes. The layer stores durable state; the host schedules and executes.

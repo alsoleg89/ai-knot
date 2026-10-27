@@ -7,6 +7,7 @@ import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
+from ai_knot.always_on.changes import evidence_revision
 from ai_knot.extractor import (
     Extractor,
     resolve_against_existing,
@@ -14,7 +15,7 @@ from ai_knot.extractor import (
     resolve_structured,
 )
 from ai_knot.providers import LLMProvider
-from ai_knot.storage.base import StorageBackend
+from ai_knot.storage.base import StorageBackend, mutate_facts
 from ai_knot.types import (
     CONFLICT_POLICIES,
     ConversationTurn,
@@ -156,17 +157,7 @@ class _LearningMixin:
             for f in verified:
                 f.event_time = event_time
 
-        # Stage 3: resolve against existing knowledge.
-        existing = self._storage.load(self._agent_id)
-        to_insert = self._resolve_phase(verified, existing, conflict_threshold)
-
-        # Stage 3.5: create/update entity-level aggregate facts.
-        aggregates = self._consolidate_phase(to_insert, existing)
-        to_insert.extend(aggregates)
-
-        # Stage 4: commit to storage.
-        self._commit_phase(existing, to_insert)
-        return to_insert
+        return self._resolve_and_commit(verified, conflict_threshold)
 
     def add_resolved(
         self,
@@ -210,12 +201,7 @@ class _LearningMixin:
             if not f.slot_key and f.entity and f.attribute:
                 f.slot_key = f"{f.entity}::{f.attribute}"
         verified = self._candidate_phase(facts)
-        existing = self._storage.load(self._agent_id)
-        to_insert = self._resolve_phase(verified, existing, conflict_threshold)
-        aggregates = self._consolidate_phase(to_insert, existing)
-        to_insert.extend(aggregates)
-        self._commit_phase(existing, to_insert)
-        return to_insert
+        return self._resolve_and_commit(verified, conflict_threshold)
 
     # ------------------------------------------------------------------
     # learn() pipeline stages
@@ -519,21 +505,15 @@ class _LearningMixin:
             )
         return aggregates
 
-    def _commit_phase(self, existing: list[Fact], to_insert: list[Fact]) -> None:
-        """Stage 4: persist resolved facts to storage."""
-        self._storage.save(self._agent_id, existing + to_insert)
-        if _LEARN_DEBUG:
-            logger.debug(
-                "learn/_commit_phase: saved %d total facts (%d new) for '%s'",
-                len(existing) + len(to_insert),
-                len(to_insert),
-                self._agent_id,
-            )
-        logger.info(
-            "Learned %d facts for agent '%s'",
-            len(to_insert),
-            self._agent_id,
-        )
+    def _resolve_and_commit(self, verified: list[Fact], conflict_threshold: float) -> list[Fact]:
+        def commit(current: list[Fact]) -> tuple[list[Fact], list[Fact]]:
+            inserted = self._resolve_phase(verified, current, conflict_threshold)
+            inserted.extend(self._consolidate_phase(inserted, current))
+            return current + inserted, inserted
+
+        inserted = mutate_facts(self._storage, self._agent_id, commit)
+        logger.info("Learned %d facts for agent '%s'", len(inserted), self._agent_id)
+        return inserted
 
     async def alearn(
         self,
@@ -673,6 +653,7 @@ class _LearningMixin:
         # close the old fact (set valid_until = now) and keep the new fact as
         # the current version — proper temporal versioning instead of mutation.
         closed_ids: set[str] = set()
+        closures: list[tuple[str, str, str, str, datetime]] = []
         updated_prior: list[Fact] = []
         for _new_fact, new_emb in zip(new_facts, new_embs, strict=True):
             updated_prior_ids = {p.id for p in updated_prior}
@@ -688,13 +669,42 @@ class _LearningMixin:
 
             if best_prior is not None and best_score >= semantic_threshold:
                 # Temporal close: mark prior fact as superseded instead of mutating content.
-                best_prior.valid_until = datetime.now(UTC)
+                closed_at = datetime.now(UTC)
+                closures.append(
+                    (
+                        best_prior.id,
+                        evidence_revision(best_prior),
+                        _new_fact.id,
+                        evidence_revision(_new_fact),
+                        closed_at,
+                    )
+                )
+                best_prior.valid_until = closed_at
                 best_prior.importance = min(1.0, best_prior.importance + 0.05)
                 updated_prior.append(best_prior)
                 closed_ids.add(best_prior.id)
 
         if closed_ids:
-            await loop.run_in_executor(None, lambda: self._storage.save(self._agent_id, existing))
+
+            def guarded_close(current: list[Fact]) -> tuple[list[Fact], None]:
+                by_id = {fact.id: fact for fact in current}
+                for old_id, old_rev, new_id, new_rev, closed_at in closures:
+                    old, new = by_id.get(old_id), by_id.get(new_id)
+                    if (
+                        old is not None
+                        and new is not None
+                        and old.is_active(closed_at)
+                        and new.is_active(closed_at)
+                        and evidence_revision(old) == old_rev
+                        and evidence_revision(new) == new_rev
+                    ):
+                        old.valid_until = closed_at
+                        old.importance = min(1.0, old.importance + 0.05)
+                return current, None
+
+            await loop.run_in_executor(
+                None, lambda: mutate_facts(self._storage, self._agent_id, guarded_close)
+            )
             logger.info(
                 "Temporal consolidation closed %d prior fact(s) for agent '%s'",
                 len(closed_ids),
@@ -738,45 +748,75 @@ class _LearningMixin:
             )
             return 0
 
+        import copy
+        import json
+
+        from ai_knot.always_on.maintenance import ConsolidationProposal, validate_proposal
+        from ai_knot.always_on.models import EvidenceRef, RevisionConflict
+
+        if not older_than_hours >= 0:
+            raise ValueError("older_than_hours must be nonnegative")
         now = datetime.now(UTC)
         cutoff = now - timedelta(hours=older_than_hours)
-
-        all_facts = self._storage.load(self._agent_id)
-        to_consolidate = [
+        before = self._storage.load(self._agent_id)
+        episodes = [
             f
-            for f in all_facts
-            if f.type == MemoryType.EPISODIC and f.is_active(now) and f.created_at <= cutoff
-        ]
-
-        if not to_consolidate:
+            for f in before
+            if f.type == MemoryType.EPISODIC
+            and f.is_active(now)
+            and f.supported
+            and f.created_at <= cutoff
+        ][:100]
+        if not episodes:
             return 0
-
-        # Run LLM extraction on the episodic batch (treat as conversation turns)
+        refs = tuple(EvidenceRef(self._agent_id, f.id, evidence_revision(f)) for f in episodes)
         turns = [
-            ConversationTurn(role="user", content=f.source_verbatim or f.content)
-            for f in to_consolidate
+            ConversationTurn(role="user", content=f.source_verbatim or f.content) for f in episodes
         ]
-        new_semantic = await self.learn_async(
-            turns,
-            embed_url=embed_url,
-            embed_model=embed_model,
-            embed_api_key=embed_api_key,
-            semantic_threshold=semantic_threshold,
-        )
+        # Extraction prepares detached candidates; it must not save before the guard.
+        candidates = await asyncio.to_thread(self._extract_phase, turns)
+        outputs = copy.deepcopy(self._candidate_phase(candidates))
+        for fact in outputs:
+            fact.type = MemoryType.SEMANTIC
+            fact.qualifiers = {
+                **fact.qualifiers,
+                "consolidation_ids": json.dumps([f.id for f in episodes]),
+            }
+        proposal = ConsolidationProposal(tuple(outputs), tuple(f.id for f in episodes), refs)
+        prepared, covered = validate_proposal(proposal, refs)
+        if not prepared:
+            return 0
+        baseline = {f.id: evidence_revision(f) for f in before}
 
-        # Reload after learn_async() (which internally saved new semantic facts)
-        # to avoid overwriting them with the stale snapshot.
-        all_facts = self._storage.load(self._agent_id)
-        consolidated_ids = {f.id for f in to_consolidate}
-        for fact in all_facts:
-            if fact.id in consolidated_ids:
-                fact.valid_until = now
+        def commit(current: list[Fact]) -> tuple[list[Fact], int]:
+            # Waiting for a writer lock can outlive a short-lived prepared summary.
+            now = datetime.now(UTC)
+            prepared, covered = validate_proposal(proposal, refs, now=now)
+            current_by_id = {f.id: f for f in current}
+            for ref in refs:
+                source = current_by_id.get(ref.fact_id)
+                if (
+                    source is None
+                    or evidence_revision(source) != ref.revision
+                    or not source.is_active(now)
+                ):
+                    raise RevisionConflict("consolidation source changed")
+            if {f.id for f in prepared} & current_by_id.keys():
+                raise RevisionConflict("consolidation output ID exists")
+            for output in prepared:
+                for target in current:
+                    if (
+                        output.slot_key
+                        and target.slot_key == output.slot_key
+                        and target.is_active(now)
+                    ):
+                        if baseline.get(target.id) != evidence_revision(target):
+                            raise RevisionConflict("consolidation target changed")
+                        target.valid_until = now
+                output.created_at = output.valid_from = now
+            for fact in current:
+                if fact.id in covered:
+                    fact.valid_until = now
+            return [*current, *prepared], len(prepared)
 
-        self._storage.save(self._agent_id, all_facts)
-        logger.info(
-            "Consolidated %d episodic facts → %d new semantic facts for agent '%s'",
-            len(to_consolidate),
-            len(new_semantic),
-            self._agent_id,
-        )
-        return len(new_semantic)
+        return await asyncio.to_thread(mutate_facts, self._storage, self._agent_id, commit)

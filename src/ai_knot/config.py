@@ -78,6 +78,7 @@ class AIKnotConfig:
     llm: LLMConfig
     embed: EmbedConfig
     recall: RecallConfig
+    always_on_enabled: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> AIKnotConfig:
@@ -94,6 +95,9 @@ class AIKnotConfig:
             raise ValueError(
                 f"AI_KNOT_STORAGE must be one of {', '.join(_BACKENDS)}, got {backend!r}"
             )
+        always_on_enabled = _as_bool(e.get("AI_KNOT_ALWAYS_ON"))
+        if always_on_enabled and backend == "yaml":
+            raise ValueError("AI_KNOT_ALWAYS_ON requires SQLite or PostgreSQL storage")
         data_dir = e.get("AI_KNOT_DATA_DIR", ".ai_knot")
         db_path = e.get("AI_KNOT_DB_PATH")
         if backend == "sqlite":
@@ -130,6 +134,7 @@ class AIKnotConfig:
             raise ValueError(f"AI_KNOT_EPISODIC_TTL must be > 0, got {episodic_ttl_hours}")
 
         return cls(
+            always_on_enabled=always_on_enabled,
             agent_id=e.get("AI_KNOT_AGENT_ID", "default"),
             storage=StorageConfig(
                 backend=cast(Literal["yaml", "sqlite", "postgres"], backend),

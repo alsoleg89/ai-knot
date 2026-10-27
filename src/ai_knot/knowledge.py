@@ -29,6 +29,7 @@ from ai_knot.retriever import DenseRetriever, HybridRetriever, TFIDFRetriever
 from ai_knot.storage.base import (
     SnapshotCapable,
     StorageBackend,
+    mutate_facts,
 )
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.tokenizer import tokenize as _tokenize
@@ -270,25 +271,6 @@ class KnowledgeBase(_LearningMixin):
         if not 0.0 <= importance <= 1.0:
             raise ValueError(f"importance must be between 0.0 and 1.0, got {importance}")
 
-        facts = self._storage.load(self._agent_id)
-
-        # Fuzzy near-duplicate check against the last _DEDUP_WINDOW facts.
-        if facts:
-            new_tokens = frozenset(_tokenize(content.lower()))
-            if new_tokens:
-                for existing_fact in facts[-self._DEDUP_WINDOW :]:
-                    existing_tokens = frozenset(_tokenize(existing_fact.content.lower()))
-                    if existing_tokens:
-                        union_size = len(new_tokens | existing_tokens)
-                        jaccard = len(new_tokens & existing_tokens) / union_size
-                        if jaccard >= self._DEDUP_THRESHOLD:
-                            logger.debug(
-                                "Skipped near-duplicate (jaccard=%.2f): '%s'",
-                                jaccard,
-                                content[:50],
-                            )
-                            return existing_fact
-
         fact = Fact(
             content=content,
             type=type,
@@ -296,53 +278,43 @@ class KnowledgeBase(_LearningMixin):
             tags=list(tags),
             visibility_scope=visibility_scope,
         )
-        # C6c: inject canonical date tags for temporal recall (mode-agnostic).
         enrich_date_tags(fact)
-        # v1.6: resolve relative-time against the structured event_time anchor.
         _apply_temporal(fact, event_time)
+        children = split_enumerations([fact])[1:]
+        for child in children:
+            enrich_date_tags(child)
+            _apply_temporal(child, event_time)
+            child.visibility_scope = visibility_scope
+        candidates = [
+            (candidate, frozenset(_tokenize(candidate.content.lower())))
+            for candidate in [fact, *children]
+        ]
 
-        # C6b v2: split enumeration/aggregation lists into atomic child facts
-        # so raw/dated windows get the same treatment as learn/dated-learn.
-        all_facts = split_enumerations([fact])  # [fact, *children]
-        accepted_children: list[Fact] = []
-        # Reference for child near-dup check: previously STORED facts only.
-        # We intentionally exclude both the parent (fact) and sibling children
-        # from the reference window:
-        # - Parent: children are derived from it, so they always share most tokens.
-        # - Siblings: they differ only in the final enumerated item but share the
-        #   date prefix and verb, making their pairwise Jaccard artificially high
-        #   (≈ 0.71 for 4-item dated windows) which would suppress valid children.
-        reference_window = facts[-self._DEDUP_WINDOW :]
-        for child in all_facts[1:]:  # skip original (index 0 = fact)
-            child_tokens = frozenset(_tokenize(child.content.lower()))
-            if not child_tokens:
-                continue
-            is_dup = False
-            # Check only against previously stored facts (not parent or siblings).
-            for ref in reference_window:
-                ref_tokens = frozenset(_tokenize(ref.content.lower()))
-                if not ref_tokens:
-                    continue
-                union_size = len(child_tokens | ref_tokens)
-                if len(child_tokens & ref_tokens) / union_size >= self._DEDUP_THRESHOLD:
-                    is_dup = True
-                    break
-            if not is_dup:
-                enrich_date_tags(child)  # inherit date from [date] prefix in content
-                _apply_temporal(child, event_time)  # resolve relative-time per child
-                child.visibility_scope = visibility_scope  # inherit parent scope
-                accepted_children.append(child)
+        def append(current: list[Fact]) -> tuple[list[Fact], Fact]:
+            references = [
+                (prior, frozenset(_tokenize(prior.content.lower())))
+                for prior in current[-self._DEDUP_WINDOW :]
+            ]
+            accepted = []
+            for candidate, tokens in candidates:
+                duplicate = next(
+                    (
+                        prior
+                        for prior, previous in references
+                        if tokens
+                        and previous
+                        and len(tokens & previous) / len(tokens | previous) >= self._DEDUP_THRESHOLD
+                    ),
+                    None,
+                )
+                if candidate is fact and duplicate is not None:
+                    return current, duplicate
+                # Compare children only with stored facts, never parent or siblings.
+                if duplicate is None and (candidate is fact or tokens):
+                    accepted.append(candidate)
+            return current + accepted, fact
 
-        facts.append(fact)
-        facts.extend(accepted_children)
-        self._storage.save(self._agent_id, facts)
-        logger.info(
-            "Added fact '%s' (+%d derived) to agent '%s'",
-            content[:50],
-            len(accepted_children),
-            self._agent_id,
-        )
-        return fact
+        return mutate_facts(self._storage, self._agent_id, append)
 
     def add_many(
         self,
@@ -405,9 +377,7 @@ class KnowledgeBase(_LearningMixin):
             )
 
         # Single load + save: O(1) storage round-trips regardless of list length.
-        existing = self._storage.load(self._agent_id)
-        existing.extend(new_facts)
-        self._storage.save(self._agent_id, existing)
+        mutate_facts(self._storage, self._agent_id, lambda current: (current + new_facts, None))
         logger.info("Added %d facts to agent '%s'", len(new_facts), self._agent_id)
         return new_facts
 
@@ -445,9 +415,7 @@ class KnowledgeBase(_LearningMixin):
             valid_from=now,
             valid_until=now + timedelta(hours=ttl),
         )
-        facts = self._storage.load(self._agent_id)
-        facts.append(fact)
-        self._storage.save(self._agent_id, facts)
+        mutate_facts(self._storage, self._agent_id, lambda current: (current + [fact], None))
         logger.info("Added episodic fact (TTL=%.0fh) to agent '%s'", ttl, self._agent_id)
         return fact
 
@@ -1005,20 +973,20 @@ class KnowledgeBase(_LearningMixin):
                 "dropped_ids": [fid for fid in (_trace_pre_mmr_ids or []) if fid not in _post_mmr],
             }
 
-        # Update access metadata on the *original* (unfiltered) fact objects so
-        # that the subsequent save persists ALL facts, not just the filtered set.
-        returned_ids = {f.id for f, _ in pairs}
-        access_time = datetime.now(UTC)
-        for fact in facts:
-            if fact.id in returned_ids:
-                interval = (access_time - fact.last_accessed).total_seconds() / 3600.0
-                fact.access_intervals.append(interval)
-                if len(fact.access_intervals) > 20:
-                    fact.access_intervals = fact.access_intervals[-20:]
-                fact.access_count += 1
-                fact.last_accessed = access_time
-        self._storage.save(self._agent_id, all_facts)
+        self._record_access({fact.id for fact, _ in pairs}, datetime.now(UTC))
         return pairs
+
+    def _record_access(self, returned_ids: set[str], access_time: datetime) -> None:
+        def update(current: list[Fact]) -> tuple[list[Fact], None]:
+            for fact in current:
+                if fact.id in returned_ids:
+                    interval = max(0.0, (access_time - fact.last_accessed).total_seconds() / 3600)
+                    fact.access_intervals = (fact.access_intervals + [interval])[-20:]
+                    fact.access_count += 1
+                    fact.last_accessed = max(fact.last_accessed, access_time)
+            return current, None
+
+        mutate_facts(self._storage, self._agent_id, update)
 
     _MMR_DATE_PREFIX = re.compile(r"^\[\d.*?\]\s*")
 
@@ -1460,12 +1428,12 @@ class KnowledgeBase(_LearningMixin):
         Args:
             now: Point-in-time for decay calculation (default: current UTC).
         """
-        facts = self._storage.load(self._agent_id)
-        if not facts:
-            return
-        apply_decay(facts, type_exponents=self._decay_config, now=now)
-        self._storage.save(self._agent_id, facts)
-        logger.debug("Applied decay to %d facts for agent '%s'", len(facts), self._agent_id)
+
+        def update(facts: list[Fact]) -> tuple[list[Fact], None]:
+            apply_decay(facts, type_exponents=self._decay_config, now=now)
+            return facts, None
+
+        mutate_facts(self._storage, self._agent_id, update)
 
     def clear_all(self) -> None:
         """Remove all facts for this agent."""

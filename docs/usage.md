@@ -5,6 +5,8 @@ The complete API reference. For the quick pitch and benchmarks, see the
 For a surface-by-surface routing guide, see [integrations.md](integrations.md).
 If you only need the cross-surface `add -> search -> list -> delete` loop, start
 with [memory-commands.md](memory-commands.md).
+For resumable agent work, acknowledged changes and guarded external actions,
+see [always-on memory](always-on.md) (unreleased source feature).
 
 - [Initialization — storage + provider](#initialization)
 - [Memory types](#memory-types)

@@ -1171,7 +1171,14 @@ def serve(ctx: click.Context, agent_id: str, host: str, port: int) -> None:
         ) from exc
 
     kb = _make_kb(ctx, agent_id)
-    app = create_app(kb, token=os.environ.get("AI_KNOT_SERVER_TOKEN") or None)
+    from ai_knot.always_on import AlwaysOnMemory
+
+    enabled = os.environ.get("AI_KNOT_ALWAYS_ON", "").lower() in ("1", "true", "yes")
+    app = create_app(
+        kb,
+        token=os.environ.get("AI_KNOT_SERVER_TOKEN") or None,
+        always_on=AlwaysOnMemory(kb) if enabled else None,
+    )
     click.echo(f"ai-knot HTTP sidecar on http://{host}:{port}  (agent: {agent_id})")
     click.echo(f"Browser inspector: http://{host}:{port}/inspect")
     uvicorn.run(app, host=host, port=port)
@@ -1210,9 +1217,224 @@ def serve_mcp(ctx: click.Context, agent_id: str, host: str, port: int, path: str
         ) from exc
 
     kb = _make_kb(ctx, agent_id)
-    app = _make_server(kb, host=host, port=port, streamable_http_path=path)
+    from ai_knot.always_on import AlwaysOnMemory
+
+    enabled = os.environ.get("AI_KNOT_ALWAYS_ON", "").lower() in ("1", "true", "yes")
+    app_kwargs: dict[str, Any] = dict(host=host, port=port, streamable_http_path=path)
+    if enabled:
+        app_kwargs["always_on"] = AlwaysOnMemory(kb)
+    app = _make_server(kb, **app_kwargs)
     click.echo(f"ai-knot MCP server on http://{host}:{port}{path}  (agent: {agent_id})")
     app.run("streamable-http")
+
+
+def _work_invoke(ctx: click.Context, agent_id: str, method: str, payload: object) -> None:
+    import asyncio
+
+    from ai_knot._always_on_tools import invoke_always_on
+    from ai_knot.always_on import AlwaysOnMemory
+    from ai_knot.always_on.codec import error_response
+
+    try:
+        result = asyncio.run(
+            invoke_always_on(AlwaysOnMemory(_make_kb(ctx, agent_id)), method, payload)
+        )
+    except Exception as exc:
+        _, body = error_response(exc)
+        raise click.ClickException(json.dumps(body)) from None
+    click.echo(json.dumps(result, ensure_ascii=False))
+
+
+@main.group()
+def work() -> None:
+    """Persist and recover agent work (SQL backends)."""
+
+
+@work.command("create")
+@click.argument("agent_id")
+@click.option("--client-key", required=True)
+@click.option("--goal", required=True)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_create(
+    ctx: click.Context, agent_id: str, client_key: str, goal: str, json_output: bool
+) -> None:
+    _work_invoke(ctx, agent_id, "create_intent", {"client_key": client_key, "goal": goal})
+
+
+@work.command("list")
+@click.argument("agent_id")
+@click.option("--limit", default=100, type=int)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_list(ctx: click.Context, agent_id: str, limit: int, json_output: bool) -> None:
+    _work_invoke(ctx, agent_id, "list_intents", {"limit": limit})
+
+
+@work.command("resume")
+@click.argument("agent_id")
+@click.argument("intent_id")
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_resume(ctx: click.Context, agent_id: str, intent_id: str, json_output: bool) -> None:
+    _work_invoke(ctx, agent_id, "resume", {"intent_id": intent_id})
+
+
+@work.command("claim")
+@click.argument("agent_id")
+@click.argument("intent_id")
+@click.option("--worker-id", required=True)
+@click.option("--ttl-seconds", default=60, type=int)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_claim(
+    ctx: click.Context,
+    agent_id: str,
+    intent_id: str,
+    worker_id: str,
+    ttl_seconds: int,
+    json_output: bool,
+) -> None:
+    _work_invoke(
+        ctx,
+        agent_id,
+        "claim",
+        {"intent_id": intent_id, "worker_id": worker_id, "ttl_seconds": ttl_seconds},
+    )
+
+
+def _read_work_json(file: Any) -> object:
+    from ai_knot.always_on.codec import loads_strict
+
+    try:
+        return loads_strict(file.read())
+    except (ValueError, TypeError):
+        raise click.ClickException("Invalid JSON input.") from None
+
+
+@work.command("checkpoint")
+@click.argument("agent_id")
+@click.argument("intent_id")
+@click.option("--input", "input_file", type=click.File("r"), default="-")
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def work_checkpoint(
+    ctx: click.Context, agent_id: str, intent_id: str, input_file: Any, json_output: bool
+) -> None:
+    payload = _read_work_json(input_file)
+    if not isinstance(payload, dict) or "intent_id" in payload:
+        raise click.ClickException("Expected checkpoint JSON without intent_id.")
+    _work_invoke(ctx, agent_id, "checkpoint", {**payload, "intent_id": intent_id})
+
+
+@main.group()
+def changes() -> None:
+    """Acknowledge durable memory change deliveries."""
+
+
+@changes.command("subscribe")
+@click.argument("agent_id")
+@click.argument("subscription_id")
+@click.option("--start", type=click.Choice(["now", "beginning"]), default="now")
+@click.option("--debounce-seconds", default=0.0, type=float)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def changes_subscribe(
+    ctx: click.Context,
+    agent_id: str,
+    subscription_id: str,
+    start: str,
+    debounce_seconds: float,
+    json_output: bool,
+) -> None:
+    _work_invoke(
+        ctx,
+        agent_id,
+        "subscribe",
+        {
+            "subscription_id": subscription_id,
+            "selector": {"namespace": agent_id},
+            "start": start,
+            "debounce_seconds": debounce_seconds,
+        },
+    )
+
+
+@changes.command("poll")
+@click.argument("agent_id")
+@click.argument("subscription_id")
+@click.option("--limit", default=100, type=int)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def changes_poll(
+    ctx: click.Context, agent_id: str, subscription_id: str, limit: int, json_output: bool
+) -> None:
+    _work_invoke(ctx, agent_id, "poll", {"subscription_id": subscription_id, "limit": limit})
+
+
+@changes.command("ack")
+@click.argument("agent_id")
+@click.argument("subscription_id")
+@click.option("--delivery-id", required=True)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def changes_ack(
+    ctx: click.Context, agent_id: str, subscription_id: str, delivery_id: str, json_output: bool
+) -> None:
+    _work_invoke(
+        ctx, agent_id, "ack", {"subscription_id": subscription_id, "delivery_id": delivery_id}
+    )
+
+
+@changes.command("unsubscribe")
+@click.argument("agent_id")
+@click.argument("subscription_id")
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def changes_unsubscribe(
+    ctx: click.Context, agent_id: str, subscription_id: str, json_output: bool
+) -> None:
+    _work_invoke(ctx, agent_id, "unsubscribe", {"subscription_id": subscription_id})
+
+
+@main.group()
+def maintenance() -> None:
+    """Run one bounded maintenance batch; scheduling belongs to the host."""
+
+
+@maintenance.command("run")
+@click.argument("agent_id")
+@click.option("--run-key", required=True)
+@click.option("--max-items", default=100, type=int)
+@click.option("--max-model-calls", default=0, type=int)
+@click.option("--max-input-bytes", default=65536, type=int)
+@click.option("--max-wall-seconds", default=1.0, type=float)
+@click.option("--json", "json_output", is_flag=True)
+@click.pass_context
+def maintenance_run(
+    ctx: click.Context,
+    agent_id: str,
+    run_key: str,
+    max_items: int,
+    max_model_calls: int,
+    max_input_bytes: int,
+    max_wall_seconds: float,
+    json_output: bool,
+) -> None:
+    _work_invoke(
+        ctx,
+        agent_id,
+        "run_maintenance",
+        {
+            "run_key": run_key,
+            "budget": {
+                "max_items": max_items,
+                "max_model_calls": max_model_calls,
+                "max_input_bytes": max_input_bytes,
+                "max_wall_seconds": max_wall_seconds,
+            },
+        },
+    )
 
 
 if __name__ == "__main__":

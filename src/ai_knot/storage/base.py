@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from ai_knot.types import Fact, SlotDelta
 
@@ -214,3 +214,24 @@ class SnapshotCapable(Protocol):
     def delete_snapshot(self, agent_id: str, name: str) -> None:
         """Delete a named snapshot. No-op if the snapshot does not exist."""
         ...
+
+
+T = TypeVar("T")
+
+
+def mutate_facts(
+    storage: StorageBackend, agent_id: str, fn: Callable[[list[Fact]], tuple[list[Fact], T]]
+) -> T:
+    """Return callback output only after its atomic fact mutation commits."""
+    result: list[T] = []
+
+    def transform(current: list[Fact]) -> list[Fact]:
+        facts, value = fn(current)
+        result.append(value)
+        return facts
+
+    if isinstance(storage, AtomicUpdateCapable):
+        storage.atomic_update(agent_id, transform)
+    else:
+        storage.save(agent_id, transform(storage.load(agent_id)))
+    return result[0]

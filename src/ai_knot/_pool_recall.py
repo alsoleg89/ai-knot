@@ -22,7 +22,12 @@ from ai_knot.multi_agent.models import ExplorationMode
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
 from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
-from ai_knot.storage.base import StorageBackend, TemporalStorageCapable
+from ai_knot.storage.base import (
+    ACLStoreCapable,
+    StorageBackend,
+    TemporalStorageCapable,
+    mutate_facts,
+)
 from ai_knot.types import Fact
 
 logger = logging.getLogger(__name__)
@@ -161,6 +166,8 @@ class _PoolRecallMixin:
             active = [f for f in active if not f.topic_channel or f.topic_channel == topic_channel]
 
         # visibility_scope projection: public ("global") + own + explicitly-granted scopes.
+        if getattr(self, "_persist_stats", False) and isinstance(self._storage, ACLStoreCapable):
+            self._read_scopes = self._storage.load_grants()
         read_scopes = self._read_scopes.get(requesting_agent_id, set())
         active = [f for f in active if _scope_visible(f, requesting_agent_id, read_scopes)]
 
@@ -423,15 +430,18 @@ class _PoolRecallMixin:
 
         # Auto-promote facts consumed by enough distinct agents.
         if auto_promote_ids:
-            shared = self._storage.load(_SHARED_NAMESPACE)
-            promoted = 0
-            for f in shared:
-                if f.id in auto_promote_ids and f.memory_tier == "pool":
-                    f.memory_tier = "org"
-                    promoted += 1
-            if promoted:
-                self._storage.save(_SHARED_NAMESPACE, shared)
-                logger.info("Auto-promoted %d facts to 'org' tier", promoted)
+
+            def promote_current(shared: list[Fact]) -> tuple[list[Fact], None]:
+                for fact in shared:
+                    if (
+                        fact.id in auto_promote_ids
+                        and fact.memory_tier == "pool"
+                        and fact.is_active()
+                    ):
+                        fact.memory_tier = "org"
+                return shared, None
+
+            mutate_facts(self._storage, _SHARED_NAMESPACE, promote_current)
 
         # Compute coverage: fraction of returned results with meaningful scores.
         relevant_count = sum(1 for _, s in top_results if s >= _COVERAGE_SCORE_FLOOR)

@@ -1,3 +1,5 @@
+import { McpAlwaysOnMemory } from "./always_on.js";
+export * from "./always_on.js";
 import { McpClient } from "./client.js";
 import { HttpKnowledgeBase } from "./http.js";
 import {
@@ -72,6 +74,7 @@ export type {
  * ```
  */
 export class KnowledgeBase {
+  readonly alwaysOn: McpAlwaysOnMemory;
   private readonly client: McpClient;
 
   constructor(options: KnowledgeBaseOptions = {}) {
@@ -81,6 +84,7 @@ export class KnowledgeBase {
     if (options.dataDir !== undefined) env["AI_KNOT_DATA_DIR"] = options.dataDir;
     if (options.dbPath !== undefined) env["AI_KNOT_DB_PATH"] = options.dbPath;
     this.client = new McpClient({ command: options.command, env });
+    this.alwaysOn = new McpAlwaysOnMemory((name, args) => this.client.call(name, args));
   }
 
   /**
