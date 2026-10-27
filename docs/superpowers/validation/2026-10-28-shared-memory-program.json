@@ -1,0 +1,586 @@
+{
+  "baseline_commit": "3618bfb573bedf48c3356e8000847a1ac02d839a",
+  "operational_base_commit": "1b21ed455f2cac4f0639111ee1e9d67c6f3158d2",
+  "branch": "codex/always-on-memory-return",
+  "scope": "All four stages of the shared-memory development program; local source delivery, not a package release or market-success claim",
+  "python312_postgres_required": {
+    "passed": 1993,
+    "skipped": 2,
+    "coverage_percent": 89.38,
+    "warning": "Existing OpenClaw no-LLM multi-turn warning",
+    "command": "python -m pytest -n 4 --timeout=20 -m 'not slow' --cov=ai_knot --cov-report=term -rs",
+    "skip_reasons": [
+      "PostgreSQL initialization regression SQLite parameter",
+      "Missing-psycopg import path while psycopg is installed"
+    ],
+    "slow_tests": "Not part of normal CI; dedicated real-process memory workloads repeated separately"
+  },
+  "python_compatibility": {
+    "3.11": {
+      "focused_passed": 19,
+      "no_pg_skipped": 18
+    },
+    "3.13": {
+      "focused_passed": 19,
+      "no_pg_skipped": 18
+    },
+    "scope": "Operational recipe and CLI after the final manual-block fix; earlier milestone focused matrices retained separately"
+  },
+  "typescript": {
+    "tests_passed": 59,
+    "typecheck": "pass",
+    "esm_cjs_build": "pass"
+  },
+  "static_checks": {
+    "ruff": "pass",
+    "format_files": 281,
+    "strict_mypy_source_files": 78
+  },
+  "recovery": {
+    "sqlite": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    },
+    "postgres": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    }
+  },
+  "ma_gate": {
+    "binding_passed": 11,
+    "binding_total": 11,
+    "unchanged_advisory_misses": [
+      "S9 conflict_resolution .333",
+      "S9 wrong_suppression .333",
+      "S19 evidence_precision .615",
+      "S26 target_shard_recall_at1000 .333",
+      "S26 distractor_rate_at1000 .900"
+    ]
+  },
+  "loads": {
+    "return": {
+      "sqlite": {
+        "agents": 8,
+        "backend": "sqlite",
+        "filtered_empty_pages": 16,
+        "idle_checks": 80,
+        "idle_wake_decisions": 0,
+        "irrelevant_updates": 2500,
+        "missed_target_updates": 0,
+        "model_calls": 0,
+        "platform": "Darwin",
+        "process_model": "spawned processes, independent SQL connections",
+        "python": "3.12.13",
+        "return_seconds_p50": 0.010823250049725175,
+        "return_seconds_p95": 0.019317292026244104,
+        "scope": "Protocol correctness/local timing; scripted host; LLM accuracy unmeasured",
+        "snapshots_recovered": 8,
+        "stale_contexts_rejected": 8,
+        "target_observations": 16,
+        "useful_wake_decisions": 16
+      },
+      "postgres": {
+        "agents": 8,
+        "backend": "postgres",
+        "filtered_empty_pages": 16,
+        "idle_checks": 80,
+        "idle_wake_decisions": 0,
+        "irrelevant_updates": 2500,
+        "missed_target_updates": 0,
+        "model_calls": 0,
+        "platform": "Darwin",
+        "process_model": "spawned processes, independent SQL connections",
+        "python": "3.12.13",
+        "return_seconds_p50": 0.12998654099646956,
+        "return_seconds_p95": 0.15853391599375755,
+        "scope": "Protocol correctness/local timing; scripted host; LLM accuracy unmeasured",
+        "snapshots_recovered": 8,
+        "stale_contexts_rejected": 8,
+        "target_observations": 16,
+        "useful_wake_decisions": 16
+      }
+    },
+    "experience": {
+      "sqlite": {
+        "backend": "sqlite",
+        "environment": {
+          "platform": "macOS-26.4-arm64-arm-64bit",
+          "python": "3.12.13"
+        },
+        "expected": {
+          "durable_lessons": 64,
+          "record_calls": 384
+        },
+        "fixed_source_corpus_sha256": "ad41b7c7df6add2ba4907487e6b436f8d5fac8973fd64148ebd4c297745b80cd",
+        "invariants": {
+          "acl_rejected": 64,
+          "distinct_record_processes": 8,
+          "duplicate_bindings": 0,
+          "durable_lessons": 64,
+          "historical_attempt_warning_survives": true,
+          "independent_roots_for_original_and_copies": 1,
+          "independent_sources_for_all_lessons": 8,
+          "inference_endpoints_blocked": true,
+          "model_calls": 0,
+          "outcome_rejected": 32,
+          "overlapping_worker_intervals": true,
+          "record_calls": 384,
+          "reopened_without_pool": 4,
+          "source_rejected": 8,
+          "stale_selections": 0,
+          "unique_returned_lessons": 64
+        },
+        "record": {
+          "samples": 384,
+          "seconds_p50": 0.00138729193713516,
+          "seconds_p95": 0.06862679100595415
+        },
+        "return": {
+          "samples": 112,
+          "seconds_p50": 0.019321667030453682,
+          "seconds_p95": 0.0246255419915542
+        },
+        "return_stages": [
+          {
+            "accepted_lessons": 64,
+            "historical_survives": true,
+            "selected_facts": 48,
+            "stage": "before_changes"
+          },
+          {
+            "accepted_lessons": 0,
+            "historical_survives": false,
+            "selected_facts": 0,
+            "stage": "acl_revoked"
+          },
+          {
+            "accepted_lessons": 56,
+            "historical_survives": true,
+            "selected_facts": 42,
+            "stage": "source_corrected"
+          },
+          {
+            "accepted_lessons": 24,
+            "historical_survives": true,
+            "selected_facts": 18,
+            "stage": "outcome_reconciled"
+          }
+        ],
+        "scope": "Consistency/local timing only; no capacity, comparison or model-accuracy claim",
+        "timing_scope": {
+          "record": "record_experience calls, including idempotent replays",
+          "return": "select_context only; subsequent review/assertions excluded"
+        },
+        "workload": {
+          "actions": 8,
+          "correction_schedule": "between fresh-process return phases",
+          "keys": 8,
+          "max_chars": 600,
+          "max_facts": 3,
+          "noise": 500,
+          "owners": 4,
+          "process_model": "simultaneous processes; independent SQL connections",
+          "replays_per_worker": 3,
+          "workers": 8
+        }
+      },
+      "postgres": {
+        "backend": "postgres",
+        "environment": {
+          "platform": "macOS-26.4-arm64-arm-64bit",
+          "python": "3.12.13"
+        },
+        "expected": {
+          "durable_lessons": 64,
+          "record_calls": 384
+        },
+        "fixed_source_corpus_sha256": "ad41b7c7df6add2ba4907487e6b436f8d5fac8973fd64148ebd4c297745b80cd",
+        "invariants": {
+          "acl_rejected": 64,
+          "distinct_record_processes": 8,
+          "duplicate_bindings": 0,
+          "durable_lessons": 64,
+          "historical_attempt_warning_survives": true,
+          "independent_roots_for_original_and_copies": 1,
+          "independent_sources_for_all_lessons": 8,
+          "inference_endpoints_blocked": true,
+          "model_calls": 0,
+          "outcome_rejected": 32,
+          "overlapping_worker_intervals": true,
+          "record_calls": 384,
+          "reopened_without_pool": 4,
+          "source_rejected": 8,
+          "stale_selections": 0,
+          "unique_returned_lessons": 64
+        },
+        "record": {
+          "samples": 384,
+          "seconds_p50": 0.10720687499269843,
+          "seconds_p95": 0.48369920800905675
+        },
+        "return": {
+          "samples": 112,
+          "seconds_p50": 0.03972870798315853,
+          "seconds_p95": 0.0500281669665128
+        },
+        "return_stages": [
+          {
+            "accepted_lessons": 64,
+            "historical_survives": true,
+            "selected_facts": 48,
+            "stage": "before_changes"
+          },
+          {
+            "accepted_lessons": 0,
+            "historical_survives": false,
+            "selected_facts": 0,
+            "stage": "acl_revoked"
+          },
+          {
+            "accepted_lessons": 56,
+            "historical_survives": true,
+            "selected_facts": 42,
+            "stage": "source_corrected"
+          },
+          {
+            "accepted_lessons": 24,
+            "historical_survives": true,
+            "selected_facts": 18,
+            "stage": "outcome_reconciled"
+          }
+        ],
+        "scope": "Consistency/local timing only; no capacity, comparison or model-accuracy claim",
+        "timing_scope": {
+          "record": "record_experience calls, including idempotent replays",
+          "return": "select_context only; subsequent review/assertions excluded"
+        },
+        "workload": {
+          "actions": 8,
+          "correction_schedule": "between fresh-process return phases",
+          "keys": 8,
+          "max_chars": 600,
+          "max_facts": 3,
+          "noise": 500,
+          "owners": 4,
+          "process_model": "simultaneous processes; independent SQL connections",
+          "replays_per_worker": 3,
+          "workers": 8
+        }
+      }
+    },
+    "coordination": {
+      "sqlite": {
+        "backend": "sqlite",
+        "combined_throughput_per_second": 882.0748609362516,
+        "environment": {
+          "backend_version": "3.51.3",
+          "cpus": 15,
+          "platform": "macOS-26.4-arm64-arm-64bit",
+          "python": "3.12.13"
+        },
+        "invariants": {
+          "consumer_agents": 4,
+          "idle_provider_calls": 0,
+          "permits": 1,
+          "published": 40,
+          "recalled": 40,
+          "refresh_provider_calls": 1,
+          "usage_counter": 40
+        },
+        "publish": {
+          "p50_ms": 1.764165936037898,
+          "p95_ms": 6.0747910756617785,
+          "samples": 40,
+          "throughput_per_second": 441.0374304681258
+        },
+        "recall": {
+          "p50_ms": 2.710708067752421,
+          "p95_ms": 7.043667021207511,
+          "samples": 40,
+          "throughput_per_second": 441.0374304681258
+        },
+        "refresh": {
+          "checks": 4,
+          "idle_calls": 0,
+          "idle_verified": 0,
+          "provider_calls": 1,
+          "seconds": 0.029797333059832454,
+          "verified": 1
+        },
+        "resource": {
+          "p50_ms": 1.7545419977977872,
+          "p95_ms": 3.03966598585248,
+          "samples": 4,
+          "throughput_per_second": 78.45162682776643
+        },
+        "shared_phase_seconds": 0.09069524996448308,
+        "workload": {
+          "agents": 4,
+          "operations_per_agent": 10,
+          "processes": 4,
+          "refresh": "async fleet, independent connections, scripted verifier",
+          "retrieval": "BM25, no network embeddings"
+        }
+      },
+      "postgres": {
+        "backend": "postgres",
+        "combined_throughput_per_second": 89.60627422944249,
+        "environment": {
+          "backend_version": "16.15",
+          "cpus": 15,
+          "platform": "macOS-26.4-arm64-arm-64bit",
+          "python": "3.12.13"
+        },
+        "invariants": {
+          "consumer_agents": 4,
+          "idle_provider_calls": 0,
+          "permits": 1,
+          "published": 40,
+          "recalled": 40,
+          "refresh_provider_calls": 1,
+          "usage_counter": 40
+        },
+        "publish": {
+          "p50_ms": 33.701709005981684,
+          "p95_ms": 46.58354097045958,
+          "samples": 40,
+          "throughput_per_second": 44.803137114721245
+        },
+        "recall": {
+          "p50_ms": 51.82349996175617,
+          "p95_ms": 65.35133300349116,
+          "samples": 40,
+          "throughput_per_second": 44.803137114721245
+        },
+        "refresh": {
+          "checks": 4,
+          "idle_calls": 0,
+          "idle_verified": 0,
+          "provider_calls": 1,
+          "seconds": 1.5467120420653373,
+          "verified": 1
+        },
+        "resource": {
+          "p50_ms": 39.80295790825039,
+          "p95_ms": 68.18779197055846,
+          "samples": 4,
+          "throughput_per_second": 58.6615270036473
+        },
+        "shared_phase_seconds": 0.8927946250187233,
+        "workload": {
+          "agents": 4,
+          "operations_per_agent": 10,
+          "processes": 4,
+          "refresh": "async fleet, independent connections, scripted verifier",
+          "retrieval": "BM25, no network embeddings"
+        }
+      }
+    }
+  },
+  "frozen_task_comparison": {
+    "frozen_manifest_sha256": "283a0b281c29383a97813538185369da6e44cc1401440580c61405bd05ae04d0",
+    "records_per_backend": 384,
+    "fresh_process_handoff_rows_per_backend": 96,
+    "retained_gold_metrics_controls_match": true,
+    "paired_backend_quality_metrics_identical": true,
+    "task_selector_and_strongest_scoped_baseline_exact_evidence_unchanged": true,
+    "ordinary_unscoped_integrate_equivalent_text_identity_variations": [
+      {
+        "backend": "postgres",
+        "trace": "release-reviewer-mismatch",
+        "checkpoint": "peer_update",
+        "arm": "ordinary_integrate_recall",
+        "new_ids": [
+          "release-prerequisite",
+          "release-reviewer",
+          "release-lesson"
+        ],
+        "retained_ids": [
+          "release-prerequisite",
+          "release-operator",
+          "release-lesson"
+        ],
+        "quality_metrics_identical": true,
+        "selected_text_identical": true,
+        "reason_text_differs_only_by_selected_identity": true
+      },
+      {
+        "backend": "postgres",
+        "trace": "release-reviewer-mismatch",
+        "checkpoint": "handoff",
+        "arm": "ordinary_integrate_recall",
+        "new_ids": [
+          "release-prerequisite",
+          "release-reviewer",
+          "release-lesson"
+        ],
+        "retained_ids": [
+          "release-prerequisite",
+          "release-operator",
+          "release-lesson"
+        ],
+        "quality_metrics_identical": true,
+        "selected_text_identical": true,
+        "reason_text_differs_only_by_selected_identity": true
+      }
+    ],
+    "best_scoped_baseline_and_selectors_available_groups": [
+      112,
+      112
+    ],
+    "available_requirement_positions": 112,
+    "total_requirement_positions": 192,
+    "task_role_preference_presence": [
+      32,
+      32
+    ],
+    "best_control_preference_presence": [
+      24,
+      32
+    ],
+    "selection_model_calls": 0,
+    "selection_embedding_calls": 0,
+    "raw_report_sha256": {
+      "sqlite": "aa56449deb8244efc8bf0220c275ec11398fb5de7f48f5527b603230a98a26dd",
+      "postgres": "182f79484cda9322d7a026d5bd8bef93c1997603b92cdbf4ca34b2b2ffdde8d9"
+    }
+  },
+  "experience_control": {
+    "test": "test_equal_budget_managed_receipt_matches_final_view_with_explicit_host_update",
+    "sql_backends": [
+      "sqlite",
+      "postgres"
+    ],
+    "same_retained_observations": true,
+    "same_returned_text": true,
+    "fact_budget": 1,
+    "content_character_budget": 600,
+    "model_embedding_calls": 0,
+    "same_independent_observation_roots": true,
+    "candidate_retracts_in_action_transaction": true,
+    "strong_existing_control_matches_after_explicit_host_projection_update": true,
+    "claim": "Atomic current-outcome bookkeeping; no quality superiority over a correctly maintained receipt baseline"
+  },
+  "operational_recipe": {
+    "focused_sql_cli_passed": 37,
+    "file": "examples/always_on_team.py",
+    "model_calls": 0,
+    "library_api_schema_dependency_change": false,
+    "full_workflow_report": "docs/performance/program-example.json"
+  },
+  "independent_review": {
+    "model": "gpt-6-astra",
+    "skill": "Ponytail review",
+    "range": "3618bfb through three milestone commits and operational source",
+    "focused_passed": 183,
+    "initial_regression_failures": 2,
+    "important_findings": 1,
+    "owner_fix": "Preserve manual host block before stale-basis replanning",
+    "regression_proof": "Two SQL RED→GREEN;37focusedGREEN;1993fullGREEN",
+    "final_independent_ship_signoff": false,
+    "other_confirmed_material_findings": 0,
+    "report": "docs/superpowers/reviews/2026-10-28-shared-memory-program-astra-ponytail.md"
+  },
+  "test_diagnostic": {
+    "policy_fencing_race": "One full run legitimately exhausted the preexisting default1s wall budget under concurrent local load; race test now explicitly permits100s to isolate fencing, while pytest20s timeout and dedicated wall-budget tests remain. Production default unchanged.",
+    "separate_fencing_wall_tests_passed": 26
+  },
+  "archival_hash_verification": [
+    {
+      "commit": "fcbcad5",
+      "source_hashes_verified": 22
+    },
+    {
+      "commit": "f877440",
+      "source_hashes_verified": 20
+    },
+    {
+      "commit": "1b21ed4",
+      "source_hashes_verified": 20
+    }
+  ],
+  "constraints": {
+    "new_dependencies": 0,
+    "package_versions_unchanged": "0.12.0",
+    "always_on_schema": 8,
+    "original_checkout_head_status_unchanged": true,
+    "protected_original_files_unchanged": 30,
+    "release_metadata_diff_from_baseline": false,
+    "published": false,
+    "pushed": false,
+    "merged": false
+  },
+  "source_test_sha256": {
+    "examples/always_on_team.py": "99b567fbc3787839848b6b6dd9b47959dd9f7e89bd2a38a8bc5a9335c46bfa5c",
+    "examples/shared_memory_return.py": "06f4670ee0b2d10b7db2a0de30039a647127ab991bb18cf9c3fa40c5bb333624",
+    "examples/task_context.py": "479591fef43ec256ab25f3a938e5a27ab215f7f719cd688cb4d0d13c1177bddc",
+    "examples/team_experience.py": "007da5742fad67e3794ae298d8a2b2e086c69723951205cee4c12b6e2c105453",
+    "npm/src/__tests__/always_on.test.ts": "a7f7c40b9be6a42cbcd78d91f9fbd87c101a7ec37a9171d0a6075b5e81052af7",
+    "npm/src/always_on.ts": "a55d516989d7a23f8f77d64512a0c2f876ae13d52b496a819446258b9ba5763f",
+    "scripts/benchmark_memory_return.py": "e112b84a0c431e97a03350c0c56e7a3a905d8f25e8a34357ca86af6e92d4d3f5",
+    "scripts/benchmark_team_experience.py": "769124d53035123b8e7ebbc3a9588981591409bd09362a3260c2fe08187a6f0b",
+    "src/ai_knot/_always_on_tools.py": "58065d04ec547363ef6b774aced63e5b339297c3dfc9d4f4956c676adda46413",
+    "src/ai_knot/always_on/__init__.py": "4b79c7b451dbcfb557511c98784fed59119993ac0769685d6c1961e70155c322",
+    "src/ai_knot/always_on/changes.py": "5a2aaff067694f8af764fc12bba1de970e6bc608612e628052cf3383315aea24",
+    "src/ai_knot/always_on/codec.py": "282e71098697b8550f3a437cc14f656c25231172df5f52e5874e406c0ef38a8e",
+    "src/ai_knot/always_on/context.py": "6739dcb2c3afaca6d38c58c48308d7993c17776971c3318682ee07f4359e5051",
+    "src/ai_knot/always_on/experience.py": "58629db0908ca0d3b8710e1e9e247ebd0dbd6a2b64594fb2caffe38586bfc9e0",
+    "src/ai_knot/always_on/memory.py": "85e9838ff60cd70d4f3528f1a63693d2dcf77b6f805de9181adbf8f8c0f78769",
+    "src/ai_knot/always_on/models.py": "d837eb1492927cd09f50a73392f1c73823d4d3cd659e09088233dc6ab37a8708",
+    "src/ai_knot/always_on/state_storage.py": "c6020ec56d0086710d5abd9b832423501887b9649735dba6cb2c4b129d5890f8",
+    "src/ai_knot/always_on/storage.py": "50bd5b69ef8d57db341e5ead37fe5c84624bad054e5fd00645f9f1fa19cec1ae",
+    "src/ai_knot/always_on/subscriptions.py": "55bc95a94f0468dc62fda1abc1070c60ae754de7a640b0795bada8b930213e82",
+    "src/ai_knot/cli.py": "da11534455b3380c6f5b838e98a992b671cb0b6b8c318ee0c4989062b04564e5",
+    "src/ai_knot/multi_agent/assembly.py": "609ce1a88c2bc488dfd6a1963c6f7be1ea082a5713bc698e9b77df03b7a9b47a",
+    "src/ai_knot/multi_agent/models.py": "eb0c79be23d26ca664dd14f5f2b66358e60635bfedbc87a74260f8aeab9cf7a8",
+    "src/ai_knot/pool.py": "ed71091feeaa9cdea385408dd994ab6d2bc34d42cd4dff95a0b3b7b44b80cd56",
+    "src/ai_knot/server/always_on.py": "5087e8b71fbc9178e3a37ed590acefb5056095ea14c695beb5c0f30fcaa12991",
+    "src/ai_knot/storage/postgres_storage.py": "12046fbafc28e6c39b8f45256c4d578c98af2690a80805f9c7686dabb477d20f",
+    "src/ai_knot/storage/sqlite_storage.py": "8cdb6ce9d07d6cd27f5acbcc0fac35be6a9f19bad9b2df70ca51652e4210abb7",
+    "tests/always_on/test_cli.py": "617dbe486c84ee1ba3739d02bad014dd1ee1f3834dfbc5d1f833761c57e230d7",
+    "tests/always_on/test_context_review.py": "aa6b3380df6dcf634e2090d686d8f11a7c26c7c57a7fd6f54a4e4339ea3fda79",
+    "tests/always_on/test_example.py": "0581b8322103c8e0b1750f3bd6b0bc1677415539f28dee38882fe82e439c41c7",
+    "tests/always_on/test_maintenance.py": "d51c6fdbfea33e8996e2f1b61a2bcdd914e03bb3b55bf1fd895ef0eeca5a86c5",
+    "tests/always_on/test_mcp_surface.py": "ab919b79211a532338f41035f158cdabb3040f882fba298c6367af1accb62479",
+    "tests/always_on/test_memory_return.py": "611e70daf9844453a222247b8c3cfc7d07187b717195eb5a2ca17ee94a171027",
+    "tests/always_on/test_state_contracts.py": "c866ac77d3d40e4fb81a8c86e3d65d554abd85671222c5c3cbdb64a9252b89b0",
+    "tests/always_on/test_surfaces.py": "a0335fecf55b7356d666e736f4b1a98302e98d42281f366de62ab247efb153a9",
+    "tests/always_on/test_task_context.py": "3cba55069880746424a60437f161155b14fe53c9cddf24488121f0e043ff67ee",
+    "tests/always_on/test_task_context_trace.py": "ea20ca08eeecc353820debcd3eac23794f013ae4a5fe26f3adc89a9ccfb3cdfd",
+    "tests/always_on/test_team_cycle.py": "047cffdfb86b0b3309fbde7e0ac0a55794b6f29490c1f2df2b9cce081956e1dc",
+    "tests/always_on/test_team_experience.py": "561746e32675e195db616f4472f81f4d5f15ca3ac17ceed3258e76857b4593cd",
+    "tests/always_on/test_team_experience_workload.py": "bc2be1b28184852a74192c609b011f14ba9f030b85aba9eccaa028451f97e536",
+    "tests/eval/task_context/__init__.py": "d2f7b87b4d25f22f55a0593255997ee1a581c1ba53dfa37d89b58addc81d56c9",
+    "tests/eval/task_context/fixtures.py": "dd85976e1faf9e0e81eb62484e15403cbbd75684f9f4b2ee563a19c99feed314",
+    "tests/eval/task_context/runner.py": "6e6d90b6b0b248839230ff80ca9048e518b894860e9813f1260985d20f8dc3a3",
+    "tests/test_ddsa_integration.py": "f2fe925dcd420ff5cebe978d65e608662757322fba46a079010242443c7998f2",
+    "tests/test_multi_agent_assembly.py": "ff783b6e942dbe9d7522dee32f12813c3637b05f4994808a4274325817cc3ae8"
+  },
+  "limitations": [
+    "No paid-model answer-accuracy/generalization/end-task study; selector is opt-in and strongest scoped baseline matches its recall",
+    "Host-declared result/source relationship is not proof of remote success or entailment",
+    "Local bounded timings do not establish production capacity/SLO/HA",
+    "Archived exact source revisions retain existing historical-evidence semantics; hosts use freshness policies for mutable claims",
+    "Ordinary unscoped Integrate baseline has two equivalent-text source-ID variations in PostgreSQL rerun; all quality/gold/controls and strongest scoped/selector identities retained",
+    "Five existing advisory MA misses remain; all binding gates pass",
+    "New source operations are unreleased; no package publishing/installed-release check was requested for this program"
+  ]
+}

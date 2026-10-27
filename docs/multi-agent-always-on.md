@@ -130,6 +130,10 @@ adds explicit backlog metadata, acknowledged snapshot recovery after a retention
 gap, and read-only admission of saved revision-bound context. Reuse the existing
 fact/slot selectors to keep each agent's working set small.
 
+The [event/timer host recipe](always-on-team-cycle.md) composes this return path
+with task/role context and outcome-bound experience, including quiet-state
+diagnostics and claim-before-inference. It adds no resident library worker.
+
 ## Preserve independent evidence
 
 ```python

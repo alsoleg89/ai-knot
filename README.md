@@ -52,6 +52,8 @@
 | teams sharing task and role context | explicit requirements, applicability labels, bounded evidence and missing-context reports ([unreleased source guide](docs/task-context.md)) |
 | teams retaining action experience | conditional lessons bound to recorded outcomes, exact sources and automatic withdrawal ([unreleased source guide](docs/team-experience.md)) |
 
+For an event/timer driven team, start with the [runnable host cycle](docs/always-on-team-cycle.md): one source example connects catch-up, task context, guarded work and shared experience.
+
 ```text
 conversation / tool output -> add or learn -> ai-knot -> SQLite | PostgreSQL | YAML
 next question              -> search / recall -> 3-5 relevant facts -> next prompt

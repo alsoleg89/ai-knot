@@ -78,6 +78,8 @@ The committed harness freezes 16 traces (four task families × two roles × matc
 
 Of 192 requirement positions per variant, 112 have current applicable gold evidence; the remaining 80 intentionally lack it. Both SQL backends produced identical selected evidence and quality metrics.
 
+That sentence describes the retained milestone runs. The final whole-program reproduction retained every quality metric, gold label and corpus/grant/usage control, and the selectors/strongest scoped control retained their evidence identities. Two PostgreSQL records in the older unscoped `Integrate` baseline chose the other role-labelled source with identical emitted text; its forbidden-source explanation changed only that ID. This is tied-source variation, not a retrieval/safety gain or a promise of bit-identical source IDs across all runs. See the [reproduction record](performance/program-trace-reproduction.json).
+
 | Variant | Available evidence groups found | Wrong-applicability facts | Preferred role present, matching checkpoints |
 |---|---:|---:|---:|
 | Ordinary recall, task/role/requirements in query | 56/112 | 96 | 12/32 |

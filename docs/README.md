@@ -11,6 +11,8 @@
 | [shared-memory-return.md](shared-memory-return.md) | Catch-up progress, bounded snapshot recovery, checked saved context and an executable two-agent workflow. |
 | [task-context.md](task-context.md) | Explicit task requirements, applicability/role preference, grounded procedures and fixed-data selection comparisons. |
 | [team-experience.md](team-experience.md) | Idempotent outcome-bound procedures, source lineage, reconciliation retraction and a real-process workload. |
+| [always-on-team-cycle.md](always-on-team-cycle.md) | One-shot event/timer host recipe composing return, bounded context, guarded work, diagnostics and experience. |
+| [shared-memory-completion.md](shared-memory-completion.md) | Four-stage acceptance audit, reproducible local results, source hashes and claim boundaries. |
 | [shared-memory-roadmap.md](shared-memory-roadmap.md) | Development program and acceptance criteria for lightweight always-on team memory. |
 | [multi-agent-governance.md](multi-agent-governance.md) | The governed-shared-memory surface: access control, supersession, provenance, trust, and audit — mapped to code and to the 2026 literature. |
 | [memory-commands.md](memory-commands.md) | Cross-surface command map for `add`, `search`, `list`, `get`, `delete`, `learn`, and structured correction. |

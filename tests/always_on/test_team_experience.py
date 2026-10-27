@@ -454,3 +454,58 @@ def test_snapshot_restore_cannot_resurrect_action_bound_lesson_or_copy(kb, clock
     assert not {ref.fact_id for ref in refs} & {
         f.id for f in kb.recall_facts("Restore checkpoint", top_k=10)
     }
+
+
+def test_equal_budget_managed_receipt_matches_final_view_with_explicit_host_update(
+    kb, clock, monkeypatch
+):
+    """Strong existing receipt+derive control, same observations/output/inference budget.
+
+    The host explicitly updates its current-outcome projection. The new binding
+    closes that bookkeeping gap atomically; neither path proves model quality.
+    """
+    monkeypatch.setattr("httpx.Client.send", lambda *a, **kw: pytest.fail("model HTTP call"))
+    monkeypatch.setattr(
+        "ai_knot.embedder.embed_texts", lambda *a, **kw: pytest.fail("embedding call")
+    )
+    memory = AlwaysOnMemory(kb, clock=clock)
+    receipt = kb.add("Retained tool observation for the recorded attempt")
+    basis = memory.capture_evidence((("owner", receipt.id),))
+    action, lease = completed(memory, "failed")
+    current_outcome = memory.derive_fact(
+        "Current host result: failed", basis=basis, memory_type=MemoryType.EPISODIC
+    )
+    view_ref = memory.capture_evidence((("owner", current_outcome.id),))
+    expected = (
+        "Recorded outcome: failed.\nRestore checkpoint: verify backup before switching traffic."
+    )
+    baseline = memory.derive_fact(expected, basis=view_ref, memory_type=MemoryType.PROCEDURAL)
+    baseline_ref = memory.capture_evidence((("owner", baseline.id),))[0]
+    candidate = record(memory, action, basis).lesson.ref
+    assert len(expected) <= 600
+    for ref in (baseline_ref, candidate):
+        view = memory.review_context((ref,), max_chars=600)
+        assert view.complete and len(view.accepted) == 1
+        assert view.accepted[0].content == expected
+    assert memory.independent_evidence((baseline_ref, candidate)) == basis
+
+    memory.reconcile_action(
+        action.id,
+        lease_token=lease.token,
+        outcome="succeeded",
+        evidence={"independent_check": "corrected"},
+    )
+    assert not memory.review_context((candidate,), max_chars=600).accepted
+    # A receipt-based host must also apply its observed outcome update.
+    assert memory.review_context((baseline_ref,), max_chars=600).complete
+    kb.replace_facts(
+        [
+            replace(f, content="Current host result: succeeded")
+            if f.id == current_outcome.id
+            else f
+            for f in kb.list_facts()
+        ]
+    )
+    for ref in (baseline_ref, candidate):
+        assert not memory.review_context((ref,), max_chars=600).accepted
+    assert memory.capture_evidence((("owner", receipt.id),)) == basis

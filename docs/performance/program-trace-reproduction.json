@@ -1,0 +1,68 @@
+{
+  "frozen_manifest_sha256": "283a0b281c29383a97813538185369da6e44cc1401440580c61405bd05ae04d0",
+  "records_per_backend": 384,
+  "fresh_process_handoff_rows_per_backend": 96,
+  "retained_gold_metrics_controls_match": true,
+  "paired_backend_quality_metrics_identical": true,
+  "task_selector_and_strongest_scoped_baseline_exact_evidence_unchanged": true,
+  "ordinary_unscoped_integrate_equivalent_text_identity_variations": [
+    {
+      "backend": "postgres",
+      "trace": "release-reviewer-mismatch",
+      "checkpoint": "peer_update",
+      "arm": "ordinary_integrate_recall",
+      "new_ids": [
+        "release-prerequisite",
+        "release-reviewer",
+        "release-lesson"
+      ],
+      "retained_ids": [
+        "release-prerequisite",
+        "release-operator",
+        "release-lesson"
+      ],
+      "quality_metrics_identical": true,
+      "selected_text_identical": true,
+      "reason_text_differs_only_by_selected_identity": true
+    },
+    {
+      "backend": "postgres",
+      "trace": "release-reviewer-mismatch",
+      "checkpoint": "handoff",
+      "arm": "ordinary_integrate_recall",
+      "new_ids": [
+        "release-prerequisite",
+        "release-reviewer",
+        "release-lesson"
+      ],
+      "retained_ids": [
+        "release-prerequisite",
+        "release-operator",
+        "release-lesson"
+      ],
+      "quality_metrics_identical": true,
+      "selected_text_identical": true,
+      "reason_text_differs_only_by_selected_identity": true
+    }
+  ],
+  "best_scoped_baseline_and_selectors_available_groups": [
+    112,
+    112
+  ],
+  "available_requirement_positions": 112,
+  "total_requirement_positions": 192,
+  "task_role_preference_presence": [
+    32,
+    32
+  ],
+  "best_control_preference_presence": [
+    24,
+    32
+  ],
+  "selection_model_calls": 0,
+  "selection_embedding_calls": 0,
+  "raw_report_sha256": {
+    "sqlite": "aa56449deb8244efc8bf0220c275ec11398fb5de7f48f5527b603230a98a26dd",
+    "postgres": "182f79484cda9322d7a026d5bd8bef93c1997603b92cdbf4ca34b2b2ffdde8d9"
+  }
+}

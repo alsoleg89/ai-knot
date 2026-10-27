@@ -74,7 +74,7 @@ Keep existing `resume(intent_id)` for work state and unresolved effects, and `be
 
 CLI supports `ai-knot changes resync AGENT SUBSCRIPTION --limit 100 --json` for its existing private-owner subscriptions. HTTP/MCP use the configured owner and existing authorization; requests cannot override identity. URL-encode subscription IDs, including `/`. Snapshot overflow returns HTTP 413 / domain code `SnapshotTooLarge`.
 
-Always-on initialization upgrades schema 6 to 7 additively, preserving pending deliveries and receipts. Use one compatible deployed library version; old binaries reject the newer schema. Version/package publication is separate from this source change.
+The return milestone added schema 7 on top of schema 6, preserving pending deliveries and receipts. Current source also includes [outcome-bound experience](team-experience.md) and initializes schema 8. Use compatible deployed clients; older binaries reject newer schemas. Package publication is separate from these source changes.
 
 ## Local load observations
 

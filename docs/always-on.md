@@ -13,6 +13,8 @@ SQLite and PostgreSQL support these guarantees. YAML remains supported for legac
 memory operations and reports `UnsupportedAlwaysOnBackend` for always-on state.
 
 For multiple logical agents, see [workspace coordination and shared memory](multi-agent-always-on.md).
+For a runnable event/timer host that connects return, task context and experience,
+see the [always-on team cycle](always-on-team-cycle.md).
 
 ```python
 from ai_knot import KnowledgeBase
