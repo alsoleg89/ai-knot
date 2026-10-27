@@ -168,6 +168,13 @@ class PostgresStorage:
                 )
             )
 
+    def merge_pool_stats(self, delta: dict[str, Any]) -> dict[str, Any]:
+        """Merge telemetry under the shared namespace writer lock."""
+        from ai_knot.storage.pool_stats import merge_stats
+
+        with self.always_on_transaction(("__shared__",), write=True) as session:
+            return merge_stats(session, delta)
+
     def save_pool_stats(self, stats: dict[str, Any]) -> None:
         """Persist shared-pool trust/usage telemetry (single-row upsert)."""
         payload = json.dumps(stats)

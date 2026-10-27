@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, suppress
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
@@ -15,6 +15,15 @@ from ai_knot.types import Fact
 
 from . import _state as transitions
 from .changes import access_projection, evidence_revision, visible
+from .lineage import (
+    DEPENDENCIES_KEY,
+    ROOTS_KEY,
+    canonical_observations,
+    encode_roots,
+    evidence_dependencies,
+    evidence_roots,
+    lineage_status,
+)
 from .models import (
     AccessDenied,
     ActionPermit,
@@ -58,6 +67,7 @@ from .state_storage import (
 )
 from .storage import AlwaysOnSession, AlwaysOnStorageCapable, enable_stream, sql
 from .subscriptions import SubscriptionsMixin
+from .workspace import WorkspaceMemory, initialize_workspace_bindings, require_action_workspace
 
 
 def utc_now() -> datetime:
@@ -76,6 +86,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
         kb: KnowledgeBase,
         *,
         pool: SharedMemoryPool | None = None,
+        workspace: WorkspaceMemory | None = None,
         clock: Callable[[], datetime] = utc_now,
     ) -> None:
         if not isinstance(kb._storage, AlwaysOnStorageCapable):
@@ -84,12 +95,16 @@ class AlwaysOnMemory(SubscriptionsMixin):
         self._storage = kb._storage
         self._owner = kb._agent_id
         self._pool = pool
+        self._workspace = workspace
+        if workspace is not None:
+            workspace.check_storage(self._storage)
         self._clock = clock
         self._now()
         from .maintenance import initialize_maintenance
 
         with self._transaction(("__always_on_schema__",)) as session:
             initialize(session)
+            initialize_workspace_bindings(session)
             initialize_maintenance(session)
             enable_stream(session, self._owner, self._now())
 
@@ -100,7 +115,17 @@ class AlwaysOnMemory(SubscriptionsMixin):
         self, namespaces: tuple[str, ...] = (), *, write: bool = True
     ) -> AbstractContextManager[AlwaysOnSession]:
         return self._storage.always_on_transaction(
-            tuple(sorted({self._owner, *namespaces})), write=write
+            tuple(
+                sorted(
+                    {
+                        self._owner,
+                        *namespaces,
+                        *((self._workspace.lock_namespace,) if self._workspace else ()),
+                        *(("__shared__",) if not write and self._pool is not None else ()),
+                    }
+                )
+            ),
+            write=write,
         )
 
     def _intent(self, session: AlwaysOnSession, intent_id: str) -> Intent:
@@ -112,6 +137,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
         return intent_from_row(row)
 
     def _action(self, session: AlwaysOnSession, action_id: str) -> ActionRecord:
+        require_action_workspace(session, self._owner, action_id, self._workspace)
         row = session.fetch_one(
             sql("SELECT * FROM ao_actions WHERE owner=? AND id=?"), (self._owner, action_id)
         )
@@ -120,24 +146,57 @@ class AlwaysOnMemory(SubscriptionsMixin):
         return action_from_row(row)
 
     def _actions(self, session: AlwaysOnSession, intent_id: str) -> tuple[ActionRecord, ...]:
-        return tuple(
-            action_from_row(row)
-            for row in session.fetch_all(
-                sql("SELECT * FROM ao_actions WHERE owner=? AND intent_id=? ORDER BY id"),
-                (self._owner, intent_id),
-            )
+        rows = session.fetch_all(
+            sql("SELECT * FROM ao_actions WHERE owner=? AND intent_id=? ORDER BY id"),
+            (self._owner, intent_id),
         )
+        for row in rows:
+            require_action_workspace(session, self._owner, str(row["id"]), self._workspace)
+        return tuple(action_from_row(row) for row in rows)
 
-    @staticmethod
-    def _dependencies(intent: Intent, actions: tuple[ActionRecord, ...]) -> set[str]:
+    def _root_scopes(self, session: AlwaysOnSession, refs: tuple[EvidenceRef, ...]) -> set[str]:
+        scopes: set[str] = set()
+        for ref in refs:
+            try:
+                self._check_namespace(ref.namespace)
+            except AccessDenied:
+                continue
+            try:
+                fact = next(iter(session.load_facts(ref.namespace, fact_id=ref.fact_id)), None)
+            except ValueError:
+                continue  # The outer dependency loop first expands direct scopes.
+            if fact is not None and ROOTS_KEY in fact.qualifiers:
+                with suppress(TypeError, ValueError, KeyError):
+                    scopes.update(
+                        root.namespace
+                        for root in (
+                            *evidence_roots(ref.namespace, fact),
+                            *evidence_dependencies(fact),
+                        )
+                        if root.namespace in (self._owner, "__shared__")
+                    )
+        return scopes
+
+    def _dependencies(
+        self, session: AlwaysOnSession, intent: Intent, actions: tuple[ActionRecord, ...]
+    ) -> set[str]:
         scopes = {ref.namespace for ref in intent.basis}
+        refs = list(intent.basis)
         for action in actions:
             scopes.update(ref.namespace for ref in action.basis)
+            refs.extend(action.basis)
+        scopes.update(self._root_scopes(session, tuple(refs)))
         if isinstance(intent.waiting_for, WaitForSlot):
             scopes.add(intent.waiting_for.namespace)
         elif isinstance(intent.waiting_for, WaitForChange):
             scopes.add(intent.waiting_for.ref.namespace)
         return scopes
+
+    def _evidence_scopes(self, refs: tuple[EvidenceRef, ...]) -> tuple[str, ...]:
+        scopes = {ref.namespace for ref in refs}
+        with self._transaction(tuple(sorted(scopes)), write=False) as snapshot:
+            scopes.update(self._root_scopes(snapshot, refs))
+        return tuple(sorted(scopes))
 
     @contextmanager
     def _intent_transaction(
@@ -147,12 +206,17 @@ class AlwaysOnMemory(SubscriptionsMixin):
         for _attempt in range(3):
             with self._transaction(write=False) as snapshot:
                 item = self._intent(snapshot, intent_id)
-                namespaces.update(self._dependencies(item, self._actions(snapshot, intent_id)))
+                namespaces.update(
+                    self._dependencies(snapshot, item, self._actions(snapshot, intent_id))
+                )
+                namespaces.update(self._root_scopes(snapshot, refs))
             try:
                 with self._transaction(tuple(sorted(namespaces))) as session:
                     item = self._intent(session, intent_id)
                     actions = self._actions(session, intent_id)
-                    current = self._dependencies(item, actions)
+                    current = self._dependencies(session, item, actions) | self._root_scopes(
+                        session, refs
+                    )
                     if not current <= namespaces:
                         namespaces.update(current)
                         raise _ExpandedLocks
@@ -239,12 +303,29 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 != max(current, key=lambda item: (item.version, item.created_at, item.id)).id
             ):
                 return transitions.EvidenceView(ref.namespace, ref.fact_id, None)
+        lineage_readable = lineage_current = True
+        if ROOTS_KEY in fact.qualifiers:
+            lineage_readable, lineage_current = lineage_status(
+                ref.namespace,
+                fact,
+                self._owner,
+                self._evidence_grants(session),
+                lambda namespace, fact_id: session.load_facts(namespace, fact_id=fact_id),
+            )
+            if freshness and lineage_readable and lineage_current:
+                for root in {*evidence_roots(ref.namespace, fact), *evidence_dependencies(fact)}:
+                    original = session.load_facts(root.namespace, fact_id=root.fact_id)[0]
+                    policy = self._policy(session, root.namespace, original)
+                    if policy is not None and transitions.freshness_blocks(policy, root, now):
+                        lineage_current = False
+                        break
         return transitions.EvidenceView(
             ref.namespace,
             ref.fact_id,
             evidence_revision(fact),
             active=fact.is_active(now),
-            supported=supported,
+            supported=supported and lineage_current,
+            readable=lineage_readable,
             freshness=self._policy(session, ref.namespace, fact) if freshness else None,
         )
 
@@ -497,6 +578,70 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 found.append(ref)
             return transitions.union_basis(tuple(found))
 
+    def independent_evidence(self, refs: tuple[EvidenceRef, ...]) -> tuple[EvidenceRef, ...]:
+        """Flatten copied observations into distinct current source revisions."""
+        scopes = {ref.namespace for ref in refs}
+        if self._pool is not None:
+            scopes.add("__shared__")
+        with self._transaction(tuple(sorted(scopes)), write=False) as session:
+            roots: set[EvidenceRef] = set()
+            for ref in refs:
+                fact = self._fact_for_ref(session, ref, self._now())
+                roots.update(evidence_roots(ref.namespace, fact))
+            return canonical_observations(
+                roots, lambda namespace, fact_id: session.load_facts(namespace, fact_id=fact_id)
+            )
+
+    def derive_fact(
+        self,
+        content: str,
+        *,
+        basis: tuple[EvidenceRef, ...],
+        namespace: str | None = None,
+        visibility_scope: str = "global",
+    ) -> Fact:
+        """Store a host-declared derivation with flattened, revision-bound roots.
+
+        Shared derivation requires maintain authority and readable inputs. This
+        creates a dependency record, not a new independent confirmation.
+        """
+        namespace = namespace or self._owner
+        self._check_namespace(namespace)
+        nonempty(content, "content")
+        nonempty(visibility_scope, "visibility_scope")
+        if not basis:
+            raise ValueError("derivation requires evidence")
+        scopes = {namespace, *(ref.namespace for ref in basis)}
+        if self._pool is not None:
+            scopes.add("__shared__")
+        from .shared_maintenance import require_maintain
+
+        with self._transaction(tuple(sorted(scopes))) as session:
+            require_maintain(self, session, namespace)
+            roots: set[EvidenceRef] = set()
+            dependencies: set[EvidenceRef] = set()
+            for ref in transitions.union_basis(basis):
+                fact = self._fact_for_ref(session, ref, self._now())
+                roots.update(evidence_roots(ref.namespace, fact))
+                dependencies.update((ref, *evidence_dependencies(fact)))
+            now = self._now()
+            output = Fact(
+                content,
+                created_at=now,
+                last_accessed=now,
+                valid_from=now,
+                origin_agent_id=self._owner,
+                visibility_scope=visibility_scope,
+                visibility="shared" if namespace == "__shared__" else "private",
+                memory_tier="pool" if namespace == "__shared__" else "private",
+                qualifiers={
+                    ROOTS_KEY: encode_roots(tuple(roots)),
+                    DEPENDENCIES_KEY: encode_roots(tuple(dependencies)),
+                },
+            )
+            session.replace_facts(namespace, [*session.load_facts(namespace), output])
+            return output
+
     def prepare_action(
         self,
         intent_id: str,
@@ -505,7 +650,17 @@ class AlwaysOnMemory(SubscriptionsMixin):
         action_key: str,
         request: JSONObject,
         basis: tuple[EvidenceRef, ...] = (),
+        operation_key: str | None = None,
+        resource_key: str | None = None,
     ) -> ActionRecord:
+        if (operation_key is None) != (resource_key is None):
+            raise ValueError("operation_key and resource_key are required together")
+        if operation_key is not None:
+            nonempty(operation_key, "operation_key")
+            assert resource_key is not None
+            nonempty(resource_key, "resource_key")
+            if self._workspace is None:
+                raise ValueError("workspace required for shared operations")
         nonempty(action_key, "action_key")
         if not isinstance(request, dict):
             raise ValueError("request must be object")
@@ -517,6 +672,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 (self._owner, intent_id, action_key),
             )
             old = None if row is None else action_from_row(row)
+            if old is not None:
+                require_action_workspace(session, self._owner, old.id, self._workspace)
             now = self._now()
             effective = transitions.union_basis(intent.basis, refs)
             current = transitions.prepare_action(
@@ -530,6 +687,15 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 views=self._views(session, effective, now),
                 now=now,
             )
+            if operation_key is not None:
+                assert self._workspace is not None and resource_key is not None
+                current = self._workspace.reserve(
+                    session, self._owner, current, operation_key, resource_key
+                )
+            elif self._workspace is not None:
+                bound = self._workspace.check(session, self._owner, current)
+                if bound is not None:
+                    raise ValueError("shared action requires operation_key and resource_key")
             save_action(session, self._owner, old, current)
             return current
 
@@ -542,6 +708,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
         error = None
         with self._intent_transaction(intent_id) as (session, intent, actions):
             action = self._action(session, action_id)
+            if self._workspace is not None:
+                self._workspace.check(session, self._owner, action)
             now = self._now()
             transitions.require_lease(intent, lease_token, now)
             refs = transitions.union_basis(intent.basis, action.basis)
@@ -564,6 +732,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
                     views=self._views(session, refs, now),
                     now=now,
                 )
+                if self._workspace is not None:
+                    permit = self._workspace.update(session, self._owner, started_action) or permit
                 save_action(session, self._owner, action, started_action)
         if error is not None:
             raise error
@@ -585,6 +755,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
             current = transitions.finish_action(
                 intent, old, token=lease_token, outcome=outcome, result=result, now=self._now()
             )
+            if self._workspace is not None:
+                self._workspace.update(session, self._owner, current)
             save_action(session, self._owner, old, current)
             return current
 
@@ -618,6 +790,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 now=now,
             )
             save_intent(session, intent, current)
+            if self._workspace is not None:
+                self._workspace.update(session, self._owner, action)
             save_action(session, self._owner, old, action)
             return action
 
@@ -626,7 +800,12 @@ class AlwaysOnMemory(SubscriptionsMixin):
     ) -> FreshnessRecord:
         nonempty(source_ref, "source_ref")
         positive_integer(recheck_after_seconds, "recheck_after_seconds")
-        with self._transaction((ref.namespace,)) as session:
+        from .shared_maintenance import locks, require_maintain
+
+        with self._transaction(
+            (*locks(self, ref.namespace), *self._evidence_scopes((ref,)))
+        ) as session:
+            require_maintain(self, session, ref.namespace)
             now = self._now()
             fact = self._fact_for_ref(session, ref, now)
             policy = transitions.set_freshness(
@@ -639,11 +818,15 @@ class AlwaysOnMemory(SubscriptionsMixin):
             save_freshness(session, policy)
             return policy
 
-    def due_verifications(self, *, limit: int = 100) -> list[VerificationRequest]:
+    def due_verifications(
+        self, *, limit: int = 100, include_shared: bool = True
+    ) -> list[VerificationRequest]:
         page_limit(limit)
+        if type(include_shared) is not bool:
+            raise ValueError("include_shared must be a boolean")
         namespaces = (
             (self._owner, "__shared__")
-            if self._pool is not None and self._pool._persist_stats
+            if include_shared and self._pool is not None and self._pool._persist_stats
             else (self._owner,)
         )
         with self._transaction(namespaces, write=False) as session:
@@ -693,7 +876,12 @@ class AlwaysOnMemory(SubscriptionsMixin):
         if not isinstance(result.evidence, dict) or not isinstance(result.source_version, str):
             raise ValueError("invalid verification result")
         canonical(result.evidence)
-        with self._transaction((ref.namespace,)) as session:
+        from .shared_maintenance import locks, require_maintain
+
+        with self._transaction(
+            (*locks(self, ref.namespace), *self._evidence_scopes((ref,)))
+        ) as session:
+            require_maintain(self, session, ref.namespace)
             now = self._now()
             fact = self._fact_for_ref(session, ref, now)
             policy = self._policy(session, ref.namespace, fact)

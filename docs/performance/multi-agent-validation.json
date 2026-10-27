@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "a525d2a7929d6903380352cb3c208ab98571a9c1",
+  "branch": "codex/multi-agent-always-on",
+  "execution": "local",
+  "checks": {
+    "python_3.11": {
+      "passed": 1411,
+      "skipped": 153,
+      "postgres_required": false,
+      "command": "pytest -n 4 --timeout=20 -m \"not slow\" --no-cov"
+    },
+    "python_3.12": {
+      "passed": 1562,
+      "skipped": 2,
+      "postgres_required": true,
+      "command": "pytest -n 4 --timeout=20 -m \"not slow\" --cov=ai_knot -rs"
+    },
+    "python_3.13": {
+      "passed": 1411,
+      "skipped": 153,
+      "postgres_required": false,
+      "command": "pytest -n 4 --timeout=20 -m \"not slow\" --no-cov"
+    },
+    "coverage_percent": 88.37740777015998,
+    "ruff": "passed",
+    "format": "passed",
+    "mypy": "75 source files passed",
+    "typescript": {
+      "tests_passed": 56,
+      "typecheck": "passed",
+      "build_esm_cjs": "passed",
+      "node": "20"
+    },
+    "mcp_e2e_passed": 6,
+    "eval_tests_passed": 70,
+    "legacy_multi_agent_gate": {
+      "binding_thresholds_passed": 11,
+      "judge": "mock",
+      "advisory_metrics_below_target": 5
+    },
+    "recovery": {
+      "sqlite": {
+        "passed": true,
+        "passed_scenarios": 12,
+        "total_scenarios": 12,
+        "invariants": {
+          "missing_committed_changes": 0,
+          "stale_action_starts": 0,
+          "accepted_stale_lease_mutations": 0,
+          "unintended_duplicate_effects": 0,
+          "false_auto_retries_unknown_actions": 0,
+          "cross_owner_scope_leaks": 0
+        }
+      },
+      "postgres": {
+        "passed": true,
+        "passed_scenarios": 12,
+        "total_scenarios": 12,
+        "invariants": {
+          "missing_committed_changes": 0,
+          "stale_action_starts": 0,
+          "accepted_stale_lease_mutations": 0,
+          "unintended_duplicate_effects": 0,
+          "false_auto_retries_unknown_actions": 0,
+          "cross_owner_scope_leaks": 0
+        }
+      }
+    },
+    "load": {
+      "agents": 8,
+      "processes": 8,
+      "publications": 200,
+      "recalls": 200,
+      "resource_permits": 1,
+      "shared_refresh_calls": 1,
+      "idle_provider_calls": 0
+    }
+  },
+  "reviews": {
+    "Astra": {
+      "verdict": "no outstanding actionable findings",
+      "final_scoped_sql_tests_passed": 68
+    },
+    "Ponytail": {
+      "verdict": "Ship",
+      "final_scoped_sql_tests_passed": 40
+    }
+  },
+  "source_sha256": {
+    "src/ai_knot/pool.py": "c1797d325b2242eedec76ead875c1685c70eb9bf0aecaaca5cc7c8b14631f404",
+    "src/ai_knot/_pool_recall.py": "a25ffa992600cfbcf9d16a567ebb8c7405b74ae47a4864b89ea041241927ea10",
+    "src/ai_knot/knowledge.py": "943c499e50ebd53b44f19532e47d487e3a7adcbb87dfda0a57f2ee9c50d709f5",
+    "src/ai_knot/always_on/__init__.py": "4579e9c79145f154d23a948ac126a1fc1b939c6444d7afaf6ab8f4ea2a9f20da",
+    "src/ai_knot/always_on/memory.py": "807cf67e8e7011aba93831d834dcc4f1a90010ecfb01442bb91ed854efa5a59a",
+    "src/ai_knot/always_on/maintenance.py": "b44701d2bd7d30ef59addc8cf00ea9c96628b034afb53a4657a1cb7ffbaa6f59",
+    "src/ai_knot/always_on/workspace.py": "0c202159e0c12775a19c4e9292639a1a38c2326983cd8e76227e3f485d39fc6f",
+    "src/ai_knot/always_on/shared_maintenance.py": "203a1376f973f0bddede84c418f4a6e2be4ccf73b80f2c6f41e3a98b64be1f19",
+    "src/ai_knot/always_on/lineage.py": "9ef4fe9003c6984a6824c524e878a879c757b1956ad848102b0cdb5e9ec6bb8b",
+    "src/ai_knot/storage/base.py": "ffb578572b1d26e15f921f481a3291626c2a56d1c3055b79f191efc3c677d771",
+    "src/ai_knot/storage/sqlite_storage.py": "d234c3abe16c79a9ed6a6a82874d723f36a774f139eff8170a20c317b52cc5de",
+    "src/ai_knot/storage/postgres_storage.py": "78148bc86eb90c8c452e3d936c237a37b78b8f1c50e76ef66f3913be5bd1db72",
+    "src/ai_knot/storage/pool_stats.py": "7bea33615136501cce07ec4bbd0284d3d6b4cb7fdfccf9b0ab105ed57d8366dd",
+    "examples/always_on_recovery.py": "f987e870031d203f757a8de89313ef64bb9f0437df25dc17c4ace347f227aa37",
+    "scripts/benchmark_multi_agent.py": "cacc133053abc3c5ad7abff536a85f1eba15b72e9a7202ad631d03f3aef06b98"
+  },
+  "limitations": [
+    "Workspace coordination and grants are trusted-host Python APIs, not multi-tenant transport authentication.",
+    "External APIs must enforce idempotency/fencing; local permits do not prove one remote effect.",
+    "Load refresh uses asynchronous tasks with independent connections; publication and resource load use independent processes.",
+    "Latency observations are machine-specific; no production SLO or accuracy improvement is claimed.",
+    "Python 3.11/3.13 runs omit PostgreSQL; Python 3.12 requires and exercises it.",
+    "The two Python3.12 skips are the SQLite variant of a PostgreSQL initialization regression and the missing-psycopg branch when psycopg is installed."
+  ]
+}

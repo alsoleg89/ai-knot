@@ -7,6 +7,7 @@
 | [../README.md](../README.md) | Product overview, quickstart, install-by-surface, integration snippets, and examples. |
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent memory, and bi-temporal recall. |
 | [always-on.md](always-on.md) | Durable intentions, leases, subscriptions with acknowledgment, guarded actions, freshness, maintenance, and recovery. Unreleased source feature for SQLite/PostgreSQL. |
+| [multi-agent-always-on.md](multi-agent-always-on.md) | Workspace operations, resource fencing, shared maintenance authority/budgets, evidence lineage, and local load checks. |
 | [multi-agent-governance.md](multi-agent-governance.md) | The governed-shared-memory surface: access control, supersession, provenance, trust, and audit — mapped to code and to the 2026 literature. |
 | [memory-commands.md](memory-commands.md) | Cross-surface command map for `add`, `search`, `list`, `get`, `delete`, `learn`, and structured correction. |
 | [integrations.md](integrations.md) | Fast routing by ecosystem surface: CrewAI, LangGraph, LangChain, LlamaIndex, AutoGen, OpenAI Agents SDK, PydanticAI, MCP, HTTP, and TypeScript. |

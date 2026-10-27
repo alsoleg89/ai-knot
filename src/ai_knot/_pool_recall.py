@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import threading
 from datetime import UTC, datetime
 
 from ai_knot._pool_helpers import _pool_rerank
@@ -100,6 +101,7 @@ class _PoolRecallMixin:
     """
 
     # Declared for type-checker awareness; set by SharedMemoryPool.__init__.
+    _publish_lock: threading.RLock
     _storage: StorageBackend
     _bm25: BM25Retriever
     _dense: DenseRetriever
@@ -119,6 +121,9 @@ class _PoolRecallMixin:
     _AUTO_PROMOTE_THRESHOLD: int
     _TIER_BOOST: dict[str, float]
 
+    def flush_stats(self) -> None:  # provided by SharedMemoryPool
+        raise NotImplementedError
+
     def get_trust(self, agent_id: str) -> float:  # provided by SharedMemoryPool
         raise NotImplementedError
 
@@ -127,7 +132,44 @@ class _PoolRecallMixin:
     ) -> None:
         raise NotImplementedError
 
+    def _readable_shared_facts(self, agent_id: str, facts: list[Fact]) -> list[Fact]:
+        """One current ACL/lineage gate for every agent-facing pool pull."""
+        if getattr(self, "_persist_stats", False) and isinstance(self._storage, ACLStoreCapable):
+            self._read_scopes = self._storage.load_grants()
+        grants = self._read_scopes.get(agent_id, set())
+        from ai_knot.always_on.lineage import filter_current_lineage
+
+        return filter_current_lineage(
+            self._storage,
+            _SHARED_NAMESPACE,
+            agent_id,
+            grants,
+            [fact for fact in facts if _scope_visible(fact, agent_id, grants)],
+        )
+
     def recall(
+        self,
+        query: str,
+        requesting_agent_id: str,
+        *,
+        top_k: int = 5,
+        now: datetime | None = None,
+        topic_channel: str = "",
+    ) -> list[tuple[Fact, float]]:
+        """Search visible active facts, refreshing durable peer trust before ranking.
+
+        Pending local usage is merged first; usage from this call remains buffered
+        until the next recall, publish, or explicit ``flush_stats()``.
+        """
+        with self._publish_lock:
+            # Merge pending local usage before refreshing peer trust. The baseline
+            # prevents repeated flushes from replaying increments.
+            self.flush_stats()
+            return self._recall_locked(
+                query, requesting_agent_id, top_k=top_k, now=now, topic_channel=topic_channel
+            )
+
+    def _recall_locked(
         self,
         query: str,
         requesting_agent_id: str,
@@ -165,11 +207,7 @@ class _PoolRecallMixin:
         if topic_channel:
             active = [f for f in active if not f.topic_channel or f.topic_channel == topic_channel]
 
-        # visibility_scope projection: public ("global") + own + explicitly-granted scopes.
-        if getattr(self, "_persist_stats", False) and isinstance(self._storage, ACLStoreCapable):
-            self._read_scopes = self._storage.load_grants()
-        read_scopes = self._read_scopes.get(requesting_agent_id, set())
-        active = [f for f in active if _scope_visible(f, requesting_agent_id, read_scopes)]
+        active = self._readable_shared_facts(requesting_agent_id, active)
 
         if not active:
             self._last_recall_meta = _RecallMeta(

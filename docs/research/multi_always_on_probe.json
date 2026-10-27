@@ -1,0 +1,28 @@
+{
+  "cross_agent_action": {
+    "permits": 2,
+    "distinct_idempotency_keys": 2
+  },
+  "cross_intent_resource": {
+    "second_intent_permitted_despite_other_started": true
+  },
+  "shared_policy": {
+    "source_seen_by_researcher": "operator-source",
+    "policy_reset_by_other_reader": true
+  },
+  "duplicate_verification": {
+    "provider_calls": 2,
+    "statuses": [
+      "conflict",
+      "completed"
+    ],
+    "reserved_calls": 2,
+    "committed_verifications": 1
+  },
+  "pool_stats": {
+    "durable_publish_count": {
+      "operator": 1
+    },
+    "durable_publish_events": 2
+  }
+}

@@ -27,6 +27,7 @@ from ai_knot.providers import LLMProvider, create_provider
 from ai_knot.query_expander import LLMQueryExpander
 from ai_knot.retriever import DenseRetriever, HybridRetriever, TFIDFRetriever
 from ai_knot.storage.base import (
+    ACLStoreCapable,
     SnapshotCapable,
     StorageBackend,
     mutate_facts,
@@ -697,6 +698,7 @@ class KnowledgeBase(_LearningMixin):
             and (include_unsupported or f.supported is not False)
             and (config.memory_type_filter is None or f.type == config.memory_type_filter)
         ]
+        facts = self._current_lineage(facts)
         if not facts:
             return []
 
@@ -1394,11 +1396,25 @@ class KnowledgeBase(_LearningMixin):
         Returns:
             List of Facts whose tags include ``tag`` (may be empty).
         """
-        return [
-            f
-            for f in self._storage.load(self._agent_id)
-            if tag in f.tags and (include_unsupported or f.supported is not False)
-        ]
+        return self._current_lineage(
+            [
+                f
+                for f in self._storage.load(self._agent_id)
+                if tag in f.tags and (include_unsupported or f.supported is not False)
+            ]
+        )
+
+    def _current_lineage(self, facts: builtins.list[Fact]) -> builtins.list[Fact]:
+        from ai_knot.always_on.lineage import ROOTS_KEY, filter_current_lineage
+
+        if not any(ROOTS_KEY in f.qualifiers for f in facts):
+            return facts
+        grants = (
+            self._storage.load_grants().get(self._agent_id, set())
+            if isinstance(self._storage, ACLStoreCapable)
+            else set()
+        )
+        return filter_current_lineage(self._storage, self._agent_id, self._agent_id, grants, facts)
 
     def replace_facts(self, facts: builtins.list[Fact]) -> None:
         """Replace all stored facts with the given list (used for import).

@@ -34,7 +34,9 @@ from .models import (
     WaitForSlot,
     WaitUntil,
 )
+from .shared_maintenance import configure_workspace_budget
 from .subscriptions import Subscription, WatchSelector
+from .workspace import WorkspaceActionPermit, WorkspaceMemory
 
 if TYPE_CHECKING:
     from .maintenance import (
@@ -49,6 +51,9 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "WorkspaceMemory",
+    "WorkspaceActionPermit",
+    "configure_workspace_budget",
     "AlwaysOnMemory",
     "MaintenanceBudget",
     "MaintenanceReport",

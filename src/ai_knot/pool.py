@@ -12,18 +12,23 @@ from typing import TYPE_CHECKING
 from ai_knot._pool_helpers import _extract_claim_key
 from ai_knot._pool_recall import _SHARED_NAMESPACE, _PoolRecallMixin
 from ai_knot._query_intent import _RecallMeta
+from ai_knot.always_on.changes import evidence_revision
+from ai_knot.always_on.lineage import PUBLICATION_KEY, ROOTS_KEY, observation_identity
+from ai_knot.always_on.models import EvidenceRef
+from ai_knot.always_on.storage import AlwaysOnStorageCapable
 from ai_knot.multi_agent.canonical import ClaimFamilyResolver, SemanticConflictResolver
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
 from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
 from ai_knot.storage.base import (
     ACLStoreCapable,
+    AtomicPoolStatsCapable,
     EventLedgerCapable,
     PoolStatsCapable,
     StorageBackend,
-    TemporalStorageCapable,
     mutate_facts,
 )
+from ai_knot.storage.pool_stats import merge_stats, stats_delta, trust_event
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import Fact, MESIState, SlotDelta
 
@@ -138,8 +143,10 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._slot_publish_count: dict[str, int] = {}
         # MESI: per-agent high-water mark of versions pulled from shared pool.
         self._known_version: dict[str, int] = {}
+        # Only metadata about facts delivered through sync, never their text.
+        self._sync_visible: dict[str, dict[str, tuple[str, int, str]]] = {}
         # Serialise concurrent publish() calls on the same pool instance.
-        self._publish_lock = threading.Lock()
+        self._publish_lock = threading.RLock()
         # Internal recall metadata (not part of public API).
         self._last_recall_meta: _RecallMeta | None = None
         # Per-fact usage tracking: fact_id -> set of agent_ids that recalled it.
@@ -164,6 +171,7 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._persist_stats = persist_stats
         if persist_stats and isinstance(self._storage, PoolStatsCapable):
             self._restore_stats(self._storage.load_pool_stats())
+        self._stats_baseline = self._stats_snapshot()
         # Restore durable read-scope grants (ACL projection) when supported, so
         # access grants survive a process restart.
         if persist_stats and isinstance(self._storage, ACLStoreCapable):
@@ -261,7 +269,17 @@ class SharedMemoryPool(_PoolRecallMixin):
         ``used_count`` increments between publishes.
         """
         if self._persist_stats and isinstance(self._storage, PoolStatsCapable):
-            self._storage.save_pool_stats(self._stats_snapshot())
+            with self._publish_lock:
+                snapshot = self._stats_snapshot()
+                if isinstance(self._storage, AtomicPoolStatsCapable):
+                    merged = self._storage.merge_pool_stats(
+                        stats_delta(snapshot, self._stats_baseline)
+                    )
+                    self._restore_stats(merged)
+                    self._stats_baseline = self._stats_snapshot()
+                else:
+                    self._storage.save_pool_stats(snapshot)
+                    self._stats_baseline = snapshot
 
     def _log_trust_event(
         self, agent_id: str, event_type: str, delta: float, reason: str = ""
@@ -384,9 +402,8 @@ class SharedMemoryPool(_PoolRecallMixin):
 
         Note:
             Thread-safe within a single process (protected by ``_publish_lock``).
-            Cross-process atomicity is not guaranteed — concurrent writers from
-            separate processes can interleave; use an external advisory lock if
-            cross-process CAS semantics are required.
+            SQL backends serialize cross-process writers under a shared namespace
+            lock; durable telemetry commits with the published facts.
         """
         if agent_id not in self._agents:
             raise ValueError(f"Agent {agent_id!r} is not registered. Call register() first.")
@@ -441,6 +458,10 @@ class SharedMemoryPool(_PoolRecallMixin):
 
             for fact in to_publish:
                 new_fact = copy.deepcopy(fact)
+                if ROOTS_KEY not in fact.qualifiers:
+                    new_fact.qualifiers[PUBLICATION_KEY] = observation_identity(
+                        EvidenceRef(agent_id, fact.id, evidence_revision(fact))
+                    )
                 new_fact.origin_agent_id = agent_id
                 new_fact.visibility = "pool"
                 new_fact.memory_tier = "pool"
@@ -514,6 +535,48 @@ class SharedMemoryPool(_PoolRecallMixin):
                     slot_events.append(cas_key)
 
             return shared
+
+        # Durable SQL backends commit evidence, counters and trust events together.
+        # Keep local state unchanged until commit so rollback cannot consume deltas.
+        if (
+            self._persist_stats
+            and isinstance(self._storage, AtomicPoolStatsCapable)
+            and isinstance(self._storage, AlwaysOnStorageCapable)
+        ):
+            with self._storage.always_on_transaction((_SHARED_NAMESPACE,), write=True) as session:
+                session.replace_facts(
+                    _SHARED_NAMESPACE, _merge(session.load_facts(_SHARED_NAMESPACE))
+                )
+                delta = stats_delta(self._stats_snapshot(), self._stats_baseline)
+                for agt, count in quick_inv_updates.items():
+                    delta["quick_inv_count"][agt] = delta["quick_inv_count"].get(agt, 0) + count
+                    trust_event(
+                        session,
+                        self._clock().isoformat(),
+                        agt,
+                        "quick_invalidation",
+                        float(count),
+                        "slot superseded",
+                    )
+                if slot_events:
+                    delta["slot_publish_count"][agent_id] = delta["slot_publish_count"].get(
+                        agent_id, 0
+                    ) + len(slot_events)
+                if published:
+                    delta["publish_count"][agent_id] = delta["publish_count"].get(
+                        agent_id, 0
+                    ) + len(published)
+                    trust_event(
+                        session,
+                        self._clock().isoformat(),
+                        agent_id,
+                        "publish",
+                        float(len(published)),
+                    )
+                merged = merge_stats(session, delta)
+            self._restore_stats(merged)
+            self._stats_baseline = self._stats_snapshot()
+            return published
 
         mutate_facts(self._storage, _SHARED_NAMESPACE, lambda current: (_merge(current), None))
 
@@ -594,90 +657,77 @@ class SharedMemoryPool(_PoolRecallMixin):
 
         return mutate_facts(self._storage, _SHARED_NAMESPACE, update)
 
-    def sync_dirty(self, agent_id: str) -> list[Fact]:
-        """Pull facts changed by other agents since the last sync (MESI lazy invalidation).
+    def _sync_changes(self, agent_id: str) -> list[Fact]:
+        """Pull readable updates and content-free revocations of delivered facts.
 
-        Implements the Modified/Invalid state pull from MESI protocol.
-        Token savings: ~95% vs broadcast when only a small subset of facts
-        changes between syncs (arXiv 2603.15183).
-
-        Uses ``TemporalStorageCapable.load_since_version()`` for index-accelerated
-        queries on SQLite/Postgres; falls back to Python filtering on YAML.
-
-        Args:
-            agent_id: The agent requesting dirty facts.
-
-        Returns:
-            Facts changed by other agents since the last sync call for this agent.
+        ACL/root revisions can change without advancing a pool version. Recheck
+        delivered metadata on each pull, and advance over hidden versions too.
         """
-        since = self._known_version.get(agent_id, 0)
-
-        if isinstance(self._storage, TemporalStorageCapable):
-            dirty = self._storage.load_since_version(_SHARED_NAMESPACE, since, agent_id)
-        else:
-            now_dt = datetime.now(UTC)
-            all_shared = self._storage.load(_SHARED_NAMESPACE)
-            dirty = [
-                f
-                for f in all_shared
-                if f.version > since and f.origin_agent_id != agent_id and f.is_active(now_dt)
+        with self._publish_lock:
+            since = self._known_version.get(agent_id, 0)
+            shared = [
+                fact
+                for fact in self._storage.load(_SHARED_NAMESPACE)
+                if fact.origin_agent_id != agent_id
             ]
+            self._known_version[agent_id] = max([since, *(fact.version for fact in shared)])
+            readable = self._readable_shared_facts(agent_id, shared)
+            now = datetime.now(UTC)
+            active = {fact.id: fact for fact in readable if fact.is_active(now)}
+            previous = self._sync_visible.setdefault(agent_id, {})
+            changes: list[Fact] = []
+            for fact_id, (slot_key, version, _) in list(previous.items()):
+                if fact_id not in active:
+                    changes.append(
+                        Fact(
+                            "",
+                            id=fact_id,
+                            slot_key=slot_key,
+                            version=version,
+                            valid_until=now,
+                            mesi_state=MESIState.INVALID,
+                        )
+                    )
+                    del previous[fact_id]
+            for fact in active.values():
+                metadata = (fact.slot_key, fact.version, evidence_revision(fact))
+                if fact.version > since or previous.get(fact.id) != metadata:
+                    changes.append(fact)
+                previous[fact.id] = metadata
+            return sorted(changes, key=lambda fact: (fact.version, fact.id))
 
-        if dirty:
-            self._known_version[agent_id] = max(f.version for f in dirty)
-        return dirty
+    def sync_dirty(self, agent_id: str) -> list[Fact]:
+        """Pull currently readable changes by peers since this agent's last sync.
+
+        Previously delivered facts that lose access/current lineage are returned
+        as empty INVALID tombstones, even when no pool version changed. Hidden
+        first-time facts are omitted; the cursor still advances over them.
+        """
+        return self._sync_changes(agent_id)
 
     def sync_slot_deltas(self, agent_id: str) -> list[SlotDelta]:
-        """Pull slot-level changes since the last sync as lightweight ``SlotDelta`` records.
+        """Pull readable slot changes and content-free cache invalidations.
 
-        Semantically equivalent to :meth:`sync_dirty` but returns compact
-        ``SlotDelta`` objects instead of full ``Fact`` copies.  Each delta
-        carries only ``slot_key``, ``version``, ``op``, ``fact_id``,
-        ``content``, and ``prompt_surface`` — roughly 10–30× less data than
-        a full ``Fact`` for a typical memory entry.
-
-        On SQLite/Postgres backends the query is index-accelerated; on YAML
-        backends it falls back to Python-level filtering.
-
-        Args:
-            agent_id: The agent requesting delta records.
-
-        Returns:
-            ``SlotDelta`` records for slot changes by other agents since the
-            last call for this agent.  The per-agent high-water mark is
-            updated on each call.
+        Shares the per-agent cursor with ``sync_dirty``. ACL/lineage revocations
+        invalidate delivered entries without disclosing newly inaccessible text.
         """
-        since = self._known_version.get(agent_id, 0)
-
-        if isinstance(self._storage, TemporalStorageCapable):
-            deltas = self._storage.load_slot_deltas_since(_SHARED_NAMESPACE, since, agent_id)
-        else:
-            # Python-level fallback for YAML backends.
-            all_shared = self._storage.load(_SHARED_NAMESPACE)
-            deltas = []
-            for f in all_shared:
-                if f.version <= since or f.origin_agent_id == agent_id:
-                    continue
-                if f.valid_until is not None:
-                    op = "invalidate"
-                elif f.mesi_state == MESIState.MODIFIED:
-                    op = "supersede"
-                else:
-                    op = "new"
-                deltas.append(
-                    SlotDelta(
-                        slot_key=f.slot_key,
-                        version=f.version,
-                        op=op,
-                        fact_id=f.id,
-                        content=f.content,
-                        prompt_surface=f.prompt_surface,
-                    )
-                )
-
-        if deltas:
-            self._known_version[agent_id] = max(d.version for d in deltas)
-        return deltas
+        return [
+            SlotDelta(
+                slot_key=fact.slot_key,
+                version=fact.version,
+                op=(
+                    "invalidate"
+                    if fact.mesi_state == MESIState.INVALID
+                    else "supersede"
+                    if fact.mesi_state == MESIState.MODIFIED
+                    else "new"
+                ),
+                fact_id=fact.id,
+                content=fact.content,
+                prompt_surface=fact.prompt_surface,
+            )
+            for fact in self._sync_changes(agent_id)
+        ]
 
     def list_shared_facts(self) -> list[Fact]:
         """Return all facts in the shared pool.
