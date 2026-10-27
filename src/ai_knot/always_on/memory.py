@@ -22,6 +22,7 @@ from .lineage import (
     encode_roots,
     evidence_dependencies,
     evidence_roots,
+    is_derived,
     lineage_status,
 )
 from .models import (
@@ -304,7 +305,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
             ):
                 return transitions.EvidenceView(ref.namespace, ref.fact_id, None)
         lineage_readable = lineage_current = True
-        if ROOTS_KEY in fact.qualifiers:
+        if is_derived(fact):
             lineage_readable, lineage_current = lineage_status(
                 ref.namespace,
                 fact,

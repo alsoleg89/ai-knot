@@ -5,9 +5,16 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from ai_knot.always_on.changes import evidence_revision
+from ai_knot.always_on.lineage import (
+    LineageCapacityExceeded,
+    derivation_qualifiers,
+    lineage_status,
+)
+from ai_knot.always_on.storage import AlwaysOnSession, AlwaysOnStorageCapable, sql
 from ai_knot.extractor import (
     Extractor,
     resolve_against_existing,
@@ -15,7 +22,7 @@ from ai_knot.extractor import (
     resolve_structured,
 )
 from ai_knot.providers import LLMProvider
-from ai_knot.storage.base import StorageBackend, mutate_facts
+from ai_knot.storage.base import ACLStoreCapable, StorageBackend, mutate_facts
 from ai_knot.types import (
     CONFLICT_POLICIES,
     ConversationTurn,
@@ -147,7 +154,10 @@ class _LearningMixin:
             return []
 
         # Stage 2: candidate verification (dedup, future ATC checks).
-        verified = self._candidate_phase(candidates)
+        # DELETE expresses an operation; its target/value need not occur in the turn.
+        verified = [
+            f for f in self._candidate_phase(candidates) if f.supported or f.op == MemoryOp.DELETE
+        ]
 
         # Anchor every extracted fact to the conversation's event time so the
         # bi-temporal resolver (``_resolve_phase``) sets ``valid_from`` and
@@ -427,6 +437,7 @@ class _LearningMixin:
         self,
         to_insert: list[Fact],
         existing: list[Fact],
+        session: AlwaysOnSession | None = None,
     ) -> list[Fact]:
         """Stage 3.5: create/update entity-level aggregate facts.
 
@@ -451,18 +462,61 @@ class _LearningMixin:
 
         # Build a unified view: active existing facts + incoming new facts.
         active_existing = [f for f in existing if f.is_active(now)]
-        all_active = active_existing + to_insert
+        all_active = active_existing + [f for f in to_insert if f.is_active(now)]
+
+        by_id = {f.id: f for f in [*existing, *to_insert]}
+        grants = (
+            {
+                str(row["scope"])
+                for row in session.fetch_all(
+                    sql("SELECT scope FROM acl_grants WHERE agent_id=?"), (self._agent_id,)
+                )
+            }
+            if session is not None
+            else (
+                self._storage.load_grants().get(self._agent_id, set())
+                if isinstance(self._storage, ACLStoreCapable)
+                else set()
+            )
+        )
+
+        def load(namespace: str, fact_id: str) -> list[Fact]:
+            facts = (
+                list(by_id.values())
+                if namespace == self._agent_id
+                else session.load_facts(namespace)
+                if session is not None
+                else self._storage.load(namespace)
+            )
+            return [f for f in facts if f.id == fact_id]
 
         # Group by entity — skip facts without entity field or with _aggregate attribute
         # (prevent aggregate-on-aggregate chaining).
         entity_groups: dict[str, list[Fact]] = defaultdict(list)
         for f in all_active:
-            if f.entity and f.attribute and not f.attribute.startswith("_aggregate"):
+            if (
+                f.entity
+                and f.attribute
+                and not f.attribute.startswith("_aggregate")
+                and f.supported
+                and f.type != MemoryType.EPISODIC
+                and all(lineage_status(self._agent_id, f, self._agent_id, grants, load))
+            ):
                 entity_groups[f.entity.lower()].append(f)
 
         aggregates: list[Fact] = []
-        for entity, group in entity_groups.items():
+        existing_aggregates = {
+            f.entity.lower(): f
+            for f in active_existing
+            if f.entity
+            and (f.attribute.startswith("_aggregate") or f.verification_source == "aggregate")
+        }
+        for entity in entity_groups.keys() | existing_aggregates.keys():
+            group = entity_groups.get(entity, [])
+            existing_agg = existing_aggregates.get(entity)
             if len(group) < 2:
+                if existing_agg is not None:
+                    existing_agg.valid_until = now
                 continue
 
             # Sort by importance descending, cap at 30 pairs.
@@ -474,13 +528,24 @@ class _LearningMixin:
             canonical = f"{entity} {' '.join(v for v in values if v)}"
             slot_key = f"{entity}::_agg"
 
-            # CAS against existing aggregate with the same slot_key.
-            existing_agg = next(
-                (f for f in active_existing if f.slot_key == slot_key),
-                None,
+            try:
+                lineage = derivation_qualifiers(self._agent_id, group_sorted)
+            except LineageCapacityExceeded:
+                # Optional retrieval projections must not reject accepted mutations.
+                if existing_agg is not None:
+                    existing_agg.valid_until = now
+                continue
+            valid_until = min(
+                (f.valid_until for f in group_sorted if f.valid_until is not None), default=None
             )
             if existing_agg is not None:
-                if existing_agg.content == content:
+                if (
+                    existing_agg.content == content
+                    and existing_agg.valid_until == valid_until
+                    and all(
+                        existing_agg.qualifiers.get(key) == value for key, value in lineage.items()
+                    )
+                ):
                     continue  # identical — nothing to do
                 existing_agg.valid_until = now  # supersede stale aggregate
 
@@ -494,6 +559,8 @@ class _LearningMixin:
                 canonical_surface=canonical,
                 tags=["aggregate"],
                 verification_source="aggregate",
+                qualifiers=lineage,
+                valid_until=valid_until,
             )
             aggregates.append(agg)
 
@@ -506,12 +573,22 @@ class _LearningMixin:
         return aggregates
 
     def _resolve_and_commit(self, verified: list[Fact], conflict_threshold: float) -> list[Fact]:
-        def commit(current: list[Fact]) -> tuple[list[Fact], list[Fact]]:
+        def commit(
+            current: list[Fact], session: AlwaysOnSession | None = None
+        ) -> tuple[list[Fact], list[Fact]]:
             inserted = self._resolve_phase(verified, current, conflict_threshold)
-            inserted.extend(self._consolidate_phase(inserted, current))
+            inserted.extend(self._consolidate_phase(inserted, current, session))
             return current + inserted, inserted
 
-        inserted = mutate_facts(self._storage, self._agent_id, commit)
+        if isinstance(self._storage, AlwaysOnStorageCapable):
+            # Shared roots and their ACL must stay stable through the private write.
+            with self._storage.always_on_transaction(
+                (self._agent_id, "__shared__"), write=True
+            ) as session:
+                facts, inserted = commit(session.load_facts(self._agent_id), session)
+                session.replace_facts(self._agent_id, facts)
+        else:
+            inserted = mutate_facts(self._storage, self._agent_id, commit)
         logger.info("Learned %d facts for agent '%s'", len(inserted), self._agent_id)
         return inserted
 
@@ -775,7 +852,13 @@ class _LearningMixin:
         ]
         # Extraction prepares detached candidates; it must not save before the guard.
         candidates = await asyncio.to_thread(self._extract_phase, turns)
-        outputs = copy.deepcopy(self._candidate_phase(candidates))
+        outputs = copy.deepcopy(
+            [
+                f
+                for f in self._candidate_phase(candidates)
+                if f.supported and f.op in (MemoryOp.ADD, MemoryOp.UPDATE)
+            ]
+        )
         for fact in outputs:
             fact.type = MemoryType.SEMANTIC
             fact.qualifiers = {
@@ -788,17 +871,45 @@ class _LearningMixin:
             return 0
         baseline = {f.id: evidence_revision(f) for f in before}
 
-        def commit(current: list[Fact]) -> tuple[list[Fact], int]:
+        def commit(
+            current: list[Fact], session: AlwaysOnSession | None = None
+        ) -> tuple[list[Fact], int]:
             # Waiting for a writer lock can outlive a short-lived prepared summary.
             now = datetime.now(UTC)
             prepared, covered = validate_proposal(proposal, refs, now=now)
             current_by_id = {f.id: f for f in current}
+            grants = (
+                {
+                    str(row["scope"])
+                    for row in session.fetch_all(
+                        sql("SELECT scope FROM acl_grants WHERE agent_id=?"), (self._agent_id,)
+                    )
+                }
+                if session is not None
+                else (
+                    self._storage.load_grants().get(self._agent_id, set())
+                    if isinstance(self._storage, ACLStoreCapable)
+                    else set()
+                )
+            )
+
+            def load(namespace: str, fact_id: str) -> list[Fact]:
+                facts = (
+                    current
+                    if namespace == self._agent_id
+                    else session.load_facts(namespace)
+                    if session is not None
+                    else self._storage.load(namespace)
+                )
+                return [f for f in facts if f.id == fact_id]
+
             for ref in refs:
                 source = current_by_id.get(ref.fact_id)
                 if (
                     source is None
                     or evidence_revision(source) != ref.revision
                     or not source.is_active(now)
+                    or not all(lineage_status(self._agent_id, source, self._agent_id, grants, load))
                 ):
                     raise RevisionConflict("consolidation source changed")
             if {f.id for f in prepared} & current_by_id.keys():
@@ -817,6 +928,44 @@ class _LearningMixin:
             for fact in current:
                 if fact.id in covered:
                     fact.valid_until = now
+            for output in prepared:
+                sources = set(json.loads(output.qualifiers["consolidation_ids"]))
+                output.qualifiers.update(
+                    derivation_qualifiers(self._agent_id, [f for f in current if f.id in sources])
+                )
             return [*current, *prepared], len(prepared)
 
-        return await asyncio.to_thread(mutate_facts, self._storage, self._agent_id, commit)
+        def commit_prepared() -> int:
+            if not isinstance(self._storage, AlwaysOnStorageCapable):
+                return mutate_facts(self._storage, self._agent_id, commit)
+            from ai_knot.always_on.state_storage import freshness_from_row, save_freshness
+
+            with self._storage.always_on_transaction(
+                (self._agent_id, "__shared__"), write=True
+            ) as session:
+                # Freshness tables exist only after the host opts into always-on.
+                schema = session.fetch_one(sql("SELECT version FROM ao_schema WHERE id=1"))
+                policies = []
+                if schema is not None and int(schema["version"] or 0) >= 5:
+                    selected_refs = set(refs)
+                    policies = [
+                        policy
+                        for row in session.fetch_all(
+                            sql("SELECT * FROM ao_freshness WHERE namespace=?"), (self._agent_id,)
+                        )
+                        if (policy := freshness_from_row(row)).ref in selected_refs
+                        and policy.ref.fact_id in covered
+                    ]
+                facts, count = commit(session.load_facts(self._agent_id), session)
+                session.replace_facts(self._agent_id, facts)
+                by_id = {f.id: f for f in facts}
+                for policy in policies:
+                    archived_ref = EvidenceRef(
+                        self._agent_id,
+                        policy.ref.fact_id,
+                        evidence_revision(by_id[policy.ref.fact_id]),
+                    )
+                    save_freshness(session, replace(policy, ref=archived_ref))
+                return count
+
+        return await asyncio.to_thread(commit_prepared)

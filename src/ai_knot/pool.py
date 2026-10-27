@@ -13,9 +13,15 @@ from ai_knot._pool_helpers import _extract_claim_key
 from ai_knot._pool_recall import _SHARED_NAMESPACE, _PoolRecallMixin
 from ai_knot._query_intent import _RecallMeta
 from ai_knot.always_on.changes import evidence_revision
-from ai_knot.always_on.lineage import PUBLICATION_KEY, ROOTS_KEY, observation_identity
+from ai_knot.always_on.lineage import (
+    PUBLICATION_KEY,
+    ROOTS_KEY,
+    is_derived,
+    lineage_status,
+    observation_identity,
+)
 from ai_knot.always_on.models import EvidenceRef
-from ai_knot.always_on.storage import AlwaysOnStorageCapable
+from ai_knot.always_on.storage import AlwaysOnSession, AlwaysOnStorageCapable, sql
 from ai_knot.multi_agent.canonical import ClaimFamilyResolver, SemanticConflictResolver
 from ai_knot.multi_agent.recall_service import SharedPoolRecallService
 from ai_knot.multi_agent.router import QueryShapeRouter
@@ -328,6 +334,9 @@ class SharedMemoryPool(_PoolRecallMixin):
         volume — means free-standing facts cannot dilute the penalty, while
         re-asserting a slot with a corrected value lets a penalised agent recover.
 
+        Each recall credits a publisher at most once, even when several of its
+        facts are returned. Per-fact consumer and usage events remain separate.
+
         Falls back to ``_PROVENANCE_DISCOUNT`` when the agent has not yet
         published any facts (no track record).
 
@@ -428,7 +437,6 @@ class SharedMemoryPool(_PoolRecallMixin):
         self, agent_id: str, to_publish: list[Fact], visibility_scope: str | None = None
     ) -> list[Fact]:
         """Execute publish while holding ``_publish_lock``.  Called only from :meth:`publish`."""
-        now = datetime.now(UTC)
         published: list[Fact] = []
         quick_inv_updates: dict[str, int] = {}
         # Verifiable (slot-addressed) publish events the agent makes in this call —
@@ -436,7 +444,33 @@ class SharedMemoryPool(_PoolRecallMixin):
         # quick_inv_updates pattern so atomic_update retries stay side-effect-free).
         slot_events: list[str] = []
 
-        def _merge(shared: list[Fact]) -> list[Fact]:
+        def _merge(shared: list[Fact], session: AlwaysOnSession | None = None) -> list[Fact]:
+            # Waiting for the writer lock may outlive a prepared projection.
+            now = datetime.now(UTC)
+
+            def load(namespace: str, fact_id: str) -> list[Fact]:
+                if namespace == _SHARED_NAMESPACE:
+                    return [f for f in shared if f.id == fact_id]
+                if session is not None:
+                    return session.load_facts(namespace, fact_id=fact_id)
+                return [f for f in self._storage.load(namespace) if f.id == fact_id]
+
+            grants = self._read_scopes.get(agent_id, set())
+            if (
+                any(is_derived(f) for f in to_publish)
+                and self._persist_stats
+                and isinstance(self._storage, ACLStoreCapable)
+            ):
+                grants = (
+                    {
+                        str(row["scope"])
+                        for row in session.fetch_all(
+                            sql("SELECT scope FROM acl_grants WHERE agent_id=?"), (agent_id,)
+                        )
+                    }
+                    if session is not None
+                    else self._storage.load_grants().get(agent_id, set())
+                )
             # Index active shared facts by slot_key for O(1) CAS lookup.
             # Falls back to (entity, attribute) for pre-Phase-3 facts without slot_key.
             active_by_slot: dict[str, Fact] = {}
@@ -457,6 +491,16 @@ class SharedMemoryPool(_PoolRecallMixin):
             next_version = max((f.version for f in shared), default=0) + 1
 
             for fact in to_publish:
+                if is_derived(fact):
+                    current = next(iter(load(agent_id, fact.id)), None)
+                    if (
+                        current is None
+                        or not current.supported
+                        or not current.is_active(now)
+                        or evidence_revision(current) != evidence_revision(fact)
+                        or not all(lineage_status(agent_id, current, agent_id, grants, load))
+                    ):
+                        continue
                 new_fact = copy.deepcopy(fact)
                 if ROOTS_KEY not in fact.qualifiers:
                     new_fact.qualifiers[PUBLICATION_KEY] = observation_identity(
@@ -466,7 +510,8 @@ class SharedMemoryPool(_PoolRecallMixin):
                 new_fact.visibility = "pool"
                 new_fact.memory_tier = "pool"
                 new_fact.valid_from = now
-                new_fact.valid_until = None
+                if not is_derived(fact):
+                    new_fact.valid_until = None
                 # Provenance lineage (persisted via qualifiers): who published this fact.
                 new_fact.qualifiers["published_by"] = agent_id
                 # Optional publish-time scope override; otherwise the fact keeps the
@@ -543,9 +588,11 @@ class SharedMemoryPool(_PoolRecallMixin):
             and isinstance(self._storage, AtomicPoolStatsCapable)
             and isinstance(self._storage, AlwaysOnStorageCapable)
         ):
-            with self._storage.always_on_transaction((_SHARED_NAMESPACE,), write=True) as session:
+            with self._storage.always_on_transaction(
+                (_SHARED_NAMESPACE, agent_id), write=True
+            ) as session:
                 session.replace_facts(
-                    _SHARED_NAMESPACE, _merge(session.load_facts(_SHARED_NAMESPACE))
+                    _SHARED_NAMESPACE, _merge(session.load_facts(_SHARED_NAMESPACE), session)
                 )
                 delta = stats_delta(self._stats_snapshot(), self._stats_baseline)
                 for agt, count in quick_inv_updates.items():
@@ -578,7 +625,15 @@ class SharedMemoryPool(_PoolRecallMixin):
             self._stats_baseline = self._stats_snapshot()
             return published
 
-        mutate_facts(self._storage, _SHARED_NAMESPACE, lambda current: (_merge(current), None))
+        if isinstance(self._storage, AlwaysOnStorageCapable):
+            with self._storage.always_on_transaction(
+                (_SHARED_NAMESPACE, agent_id), write=True
+            ) as session:
+                session.replace_facts(
+                    _SHARED_NAMESPACE, _merge(session.load_facts(_SHARED_NAMESPACE), session)
+                )
+        else:
+            mutate_facts(self._storage, _SHARED_NAMESPACE, lambda current: (_merge(current), None))
 
         # Apply trust-tracking side effects outside the storage transaction.
         for agt, count in quick_inv_updates.items():

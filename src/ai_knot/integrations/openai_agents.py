@@ -29,36 +29,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from ai_knot.integrations._task_context import task_query, user_texts
 from ai_knot.knowledge import KnowledgeBase
-
-
-def _text_from_node(node: object) -> str:
-    """Extract text from a Responses-style content node."""
-    if isinstance(node, str):
-        return node
-    if isinstance(node, dict):
-        text = node.get("text")
-        if isinstance(text, str):
-            return text
-        if isinstance(text, dict):
-            for key in ("value", "text"):
-                value = text.get(key)
-                if isinstance(value, str):
-                    return value
-        content = node.get("content")
-        if content is not None:
-            return _text_from_content(content)
-    return ""
-
-
-def _text_from_content(content: object) -> str:
-    """Extract text from a Responses-style message content payload."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = [_text_from_node(item) for item in content]
-        return " ".join(part.strip() for part in parts if part and part.strip()).strip()
-    return ""
 
 
 def _normalise_input_items(items: object) -> list[Any]:
@@ -96,17 +68,11 @@ class AiKnotAgentsMemory:
         self._top_k = top_k
         self._heading = heading
 
-    def extract_query(self, input_items: Sequence[object]) -> str:
-        """Return the latest user text from Responses-style input items."""
-        for item in reversed(input_items):
-            if not isinstance(item, dict):
-                continue
-            if item.get("role") != "user":
-                continue
-            text = _text_from_content(item.get("content"))
-            if text:
-                return text
-        return ""
+    def extract_query(
+        self, input_items: Sequence[object], *, task_context: str | None = None
+    ) -> str:
+        """Build a bounded user-task query; standalone latest tasks win."""
+        return task_query(user_texts(input_items), task_context=task_context)
 
     def augment_instructions(self, instructions: str | None, query: str) -> str | None:
         """Append recalled memory to *instructions* when query-relevant facts exist."""
@@ -123,11 +89,15 @@ class AiKnotAgentsMemory:
     def build_call_model_input_filter(
         self,
         existing_filter: Callable[[Any], Any] | None = None,
+        *,
+        task_context: str | None = None,
     ) -> Callable[[Any], Any]:
         """Return a ``call_model_input_filter`` for the OpenAI Agents SDK.
 
         If *existing_filter* is provided, it runs first; ai-knot then appends
         memory to the resulting instructions while preserving the filtered input.
+        ``task_context`` is an optional per-run retrieval hint for follow-ups;
+        build a fresh filter when the host task changes.
         """
 
         def filter_fn(data: Any) -> Any:
@@ -142,7 +112,7 @@ class AiKnotAgentsMemory:
             model_data = existing_filter(data) if existing_filter else data.model_data
             input_items = _normalise_input_items(getattr(model_data, "input", None))
             instructions = getattr(model_data, "instructions", None)
-            query = self.extract_query(input_items)
+            query = self.extract_query(input_items, task_context=task_context)
             return ModelInputData(
                 input=input_items,
                 instructions=self.augment_instructions(instructions, query),
@@ -150,8 +120,12 @@ class AiKnotAgentsMemory:
 
         return filter_fn
 
-    def build_run_config(self, **kwargs: Any) -> Any:
-        """Return an SDK ``RunConfig`` wired with ai-knot memory injection."""
+    def build_run_config(self, *, task_context: str | None = None, **kwargs: Any) -> Any:
+        """Build a run config, consuming the optional host ``task_context`` hint.
+
+        The hint is captured by this config's filter, not stored on the adapter
+        or forwarded as an SDK field. Build a fresh config for a different task.
+        """
         try:
             from agents import RunConfig
         except ImportError as exc:  # pragma: no cover - exercised via explicit import test
@@ -162,6 +136,8 @@ class AiKnotAgentsMemory:
 
         existing_filter = kwargs.pop("call_model_input_filter", None)
         return RunConfig(
-            call_model_input_filter=self.build_call_model_input_filter(existing_filter),
+            call_model_input_filter=self.build_call_model_input_filter(
+                existing_filter, task_context=task_context
+            ),
             **kwargs,
         )

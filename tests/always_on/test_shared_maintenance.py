@@ -158,7 +158,8 @@ async def test_unknown_outcome_holds_claim_and_daily_cost_survives_recovery(sql_
             raise TimeoutError("remote outcome unknown")
 
     provider = Provider()
-    budget = MaintenanceBudget(max_model_calls=10)
+    # This checks daily accounting and recovery, not shared database latency.
+    budget = MaintenanceBudget(max_model_calls=10, max_wall_seconds=10)
     first = await run_maintenance(one, run_key="a", budget=budget, verifier=provider)
     assert first.model_calls_reserved == 1
     # A policy/source change cannot make the old in-flight refresh safe to replay.

@@ -90,6 +90,8 @@ class CoverageAwareAssembler:
             # not just the first in insertion order.
             sorted_cands = sorted(candidates, key=lambda c: c.final_score, reverse=True)
             for cand in sorted_cands:
+                if cand.facet_scores.get(facet_id, 0.0) <= 0:
+                    continue
                 fid = cand.fact.id
                 aid = cand.fact.origin_agent_id or "__self__"
 
@@ -146,6 +148,14 @@ class CoverageAwareAssembler:
                     if score > 0 and fid not in covered_facets:
                         covered_facets.add(fid)
 
+        # A selected fact can cover several facets even when top_k stops phase 1.
+        # Rank/list membership alone does not establish relevance to a facet.
+        covered_facets = {
+            fid
+            for cand in selected
+            for fid, score in cand.facet_scores.items()
+            if score > 0 and fid in all_facet_ids
+        }
         uncovered = all_facet_ids - covered_facets
         coverage = len(covered_facets) / len(all_facet_ids) if all_facet_ids else 0.0
 

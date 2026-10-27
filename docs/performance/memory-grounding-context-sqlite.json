@@ -1,0 +1,53 @@
+{
+  "backend": "sqlite",
+  "combined_throughput_per_second": 205.82152020004492,
+  "environment": {
+    "backend_version": "3.51.3",
+    "cpus": 15,
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "python": "3.12.13"
+  },
+  "invariants": {
+    "consumer_agents": 8,
+    "idle_provider_calls": 0,
+    "permits": 1,
+    "published": 200,
+    "recalled": 200,
+    "refresh_provider_calls": 1,
+    "usage_counter": 200
+  },
+  "publish": {
+    "p50_ms": 7.771000033244491,
+    "p95_ms": 70.05958305671811,
+    "samples": 200,
+    "throughput_per_second": 102.91076010002246
+  },
+  "recall": {
+    "p50_ms": 9.791792021133006,
+    "p95_ms": 105.29554192908108,
+    "samples": 200,
+    "throughput_per_second": 102.91076010002246
+  },
+  "refresh": {
+    "checks": 8,
+    "idle_calls": 0,
+    "idle_verified": 0,
+    "provider_calls": 1,
+    "seconds": 0.08544391591567546,
+    "verified": 1
+  },
+  "resource": {
+    "p50_ms": 2.3930829484015703,
+    "p95_ms": 11.367583996616304,
+    "samples": 8,
+    "throughput_per_second": 5.574958381304544
+  },
+  "shared_phase_seconds": 1.943431374966167,
+  "workload": {
+    "agents": 8,
+    "operations_per_agent": 25,
+    "processes": 8,
+    "refresh": "async fleet, independent connections, scripted verifier",
+    "retrieval": "BM25, no network embeddings"
+  }
+}

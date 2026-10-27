@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-27",
+  "base": "84fbc7a56cb341fb449ab15d3ef48ccae35e81a1",
+  "branch": "codex/memory-grounding-context",
+  "verification_tree": "clean feature-only export; deferred release files excluded; version0.12.0",
+  "python": {
+    "3.12": {
+      "passed": 1784,
+      "skipped": 2,
+      "warnings": 1,
+      "seconds": 81.04,
+      "postgres_required": true
+    },
+    "3.11": {
+      "passed": 1583,
+      "skipped": 203,
+      "warnings": 1,
+      "seconds": 34.44,
+      "postgres_required": false
+    },
+    "3.13": {
+      "passed": 1583,
+      "skipped": 203,
+      "warnings": 1,
+      "seconds": 34.76,
+      "postgres_required": false
+    }
+  },
+  "coverage_percent": 88.7741935483871,
+  "typescript": {
+    "passed": 56,
+    "typecheck": "passed",
+    "build": "ESM+CJS passed",
+    "node": "20.20.2"
+  },
+  "lint": "passed",
+  "format": "passed",
+  "mypy_source_files": 76,
+  "recovery": {
+    "sqlite": "12/12",
+    "postgres": "12/12",
+    "all_safety_counters": 0
+  },
+  "multi_agent_gate": {
+    "binding_passed": 11,
+    "binding_total": 11,
+    "advisory_misses_unchanged": [
+      "s9 conflict_resolution",
+      "s9 wrong_suppression",
+      "s19 evidence_precision",
+      "s26 target_shard_recall_at_1000",
+      "s26 distractor_rate_at_1000"
+    ]
+  },
+  "load": {
+    "processes": 8,
+    "publications_per_backend": 200,
+    "recalls_per_backend": 200,
+    "exact_usage": 200,
+    "distinct_consumers": 8,
+    "resource_permits": 1,
+    "shared_provider_calls": 1,
+    "idle_provider_calls": 0,
+    "sqlite_report": "../../performance/memory-grounding-context-sqlite.json",
+    "postgres_report": "../../performance/memory-grounding-context-postgres.json",
+    "timings": "Local concurrent backend measurements; not capacity SLOs or before/after speed comparison"
+  },
+  "reviews": {
+    "astra": "approved, all material findings closed",
+    "ponytail": "Ship, all material findings closed",
+    "astra_report": "../reviews/2026-10-27-memory-grounding-astra.md",
+    "ponytail_report": "../reviews/2026-10-27-memory-grounding-ponytail.md"
+  },
+  "preservation": {
+    "original_files_byte_identical": 30,
+    "versions_changelog_release_workflows": "unchanged",
+    "release_publication": false
+  },
+  "real_model_accuracy_measured": false,
+  "feature_source_sha256": {
+    "src/ai_knot/_pool_recall.py": "84c750b7adafbb02d057d5fb0c9aaad9c73d83c0815d5a3bf89cfb504fafe423",
+    "src/ai_knot/_query_intent.py": "2f4ebfe55c329d35a807bd65ef5daf544056919fea970ec4e76c1688f91771cd",
+    "src/ai_knot/always_on/lineage.py": "ab8b91cf3e81457543f9994dce60d22371d3fea8293520662e20f210349fe5a8",
+    "src/ai_knot/always_on/maintenance.py": "e9d122892a7873d137b5f850d0f0386fe022c6ae5ce8e8e7b57e204043b1dfbf",
+    "src/ai_knot/always_on/memory.py": "96d6dc7f171d830d0230b348386056c7d8df44927cf5b343f4ba4a9b0aa1fb66",
+    "src/ai_knot/integrations/_task_context.py": "5f4e7a1a6ae012da2f491e98c5277efed5214c0b865f1a014d00a9359da39235",
+    "src/ai_knot/integrations/autogen.py": "4ed52829a3140e85425df887339561f33c39fe6941e92ffa0acf684e35e1a99e",
+    "src/ai_knot/integrations/llamaindex.py": "46ce81a4fe8cd80c242a0f2631c6be5940783e834e2ca31704fc6106dd566522",
+    "src/ai_knot/integrations/openai.py": "934b3df5c8bb14f1b179e56cff54c6faf579723cabbf6b569c55dc15f4d011c8",
+    "src/ai_knot/integrations/openai_agents.py": "fe405eb03f3825c66c2c5f0e56eecd61286d230919bac5f397097d171aa246de",
+    "src/ai_knot/knowledge.py": "932a15473961608ef9121a845cd5c06a2d22b3ebefd7e9a1007ecc5d4654717e",
+    "src/ai_knot/learning.py": "1d06412238e014e51951fb86f179621aebe503e9e3b0093c9d8cdd6cef58c1f0",
+    "src/ai_knot/multi_agent/assembly.py": "6c110b923f560de006cccdefb33cb2f52779dc2b8910524f69152c2e1300ae92",
+    "src/ai_knot/multi_agent/models.py": "4d69569d60ba9eb5592c7c2485f01f07a71ee217df07fff6bdd241d7d5f97be0",
+    "src/ai_knot/multi_agent/recall_service.py": "ada73c56770bb6e73f2c16bdbc1007b67dd30ed3e33a0d9db0e6530e10ba0428",
+    "src/ai_knot/pool.py": "6baa0652002afc6b7eec5ff74d1d2cf327a59a229513f7fecdbc9e72a39f98cf",
+    "src/ai_knot/storage/yaml_storage.py": "9fe1f58ac41ff8654592a7eecb30cf55a95454bc2adbbd7a377d70470060c05b",
+    "tests/always_on/test_grounded_context_integration.py": "771fe34c187f030b7dbb3a69d82ddc20d852eb6dd8d1518de918e989b8d7b2d3",
+    "tests/always_on/test_learning_lineage.py": "40d4fb15fa4545bb9a311f32ac13c4174c6c9b0492fdcc641b492f59063d3e63",
+    "tests/always_on/test_maintenance.py": "d2293124b7b30ec0d1e790b977b63e0c400d1728fe1d57ee97d8ac895022427f",
+    "tests/always_on/test_publication_grounding.py": "8df1865e93f814632c7b883f7827592eb9725ffeaeaf5a88097a3469c65de02c",
+    "tests/always_on/test_recall_coverage.py": "c97571c3c0de686f77c3020fadedca3e82c94aced89b01a18fdccfb455ec117a",
+    "tests/always_on/test_shared_maintenance.py": "0ec8c11d05a92082d8f3f7563f6f5dc99ea2f73838a04402f61849c8e0ec3e0e",
+    "tests/test_integrations_autogen.py": "ca1dc0f6a5ea38d8c069bc7850e087accc5b27861961a7996633046d2a6ab395",
+    "tests/test_integrations_openai_agents.py": "d6ee56b2900c5d46ccf4e8552a39983396c6d6e0129c9b79b127c61860f5b772",
+    "tests/test_integrations_task_context.py": "404e6d81a4f2657292cf835285b8c84a5d3024daac629a9b3d1bf8dfb07ded6f",
+    "tests/test_learning_grounding.py": "c4f860a9fb4d01c91e5c2fbfa311eea5102f2b15a836d370e5042500e5ec3ade",
+    "tests/test_multi_agent_assembly.py": "6b815ab4e93aeb1864cf039ebaa70782f9a246944500d203bc39fffc3eb0f747",
+    "tests/test_multi_agent_recall_service.py": "71ec4a22c81ff597b2ee483f78e2997a89c56bbca5a3be00b83c5c5fef86345e"
+  }
+}

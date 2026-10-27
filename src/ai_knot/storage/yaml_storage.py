@@ -70,8 +70,8 @@ class YAMLStorage:
             d["supported"] = fact.supported
         if fact.support_confidence != 1.0:
             d["support_confidence"] = fact.support_confidence
-        if fact.verification_source != "manual":
-            d["verification_source"] = fact.verification_source
+        # Missing values load as legacy; omitting manual changes evidence revisions.
+        d["verification_source"] = fact.verification_source
         if fact.access_intervals:
             d["access_intervals"] = fact.access_intervals
         if fact.origin_agent_id:
