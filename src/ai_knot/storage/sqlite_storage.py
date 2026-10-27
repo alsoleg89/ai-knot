@@ -280,7 +280,6 @@ class SQLiteStorage:
         if len({fact.id for fact in facts}) != len(facts):
             raise ValueError("duplicate fact IDs")
         before = self._load_on_connection(conn, agent_id)
-        rows = self._build_rows(agent_id, facts)
         # Validate before deleting so serialization cannot leave partial data.
         session = SQLSession(
             conn,
@@ -290,6 +289,10 @@ class SQLiteStorage:
             loader=self._load_on_connection,
             saver=self._save_on_connection,
         )
+        from ai_knot.always_on.experience import guard_experience_writes
+
+        facts = guard_experience_writes(session, agent_id, facts)
+        rows = self._build_rows(agent_id, facts)
         journal_diff(session, agent_id, before, facts)
         conn.execute("DELETE FROM facts WHERE agent_id=?", (agent_id,))
         conn.executemany(_INSERT_FACTS_SQL, rows)

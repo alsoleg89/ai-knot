@@ -8,6 +8,43 @@ from ai_knot.always_on import WatchSelector
 from ai_knot.server.app import create_app
 
 
+def test_http_experience_uses_owner_revision_and_strict_evidence(ao_factory, kb):
+    from dataclasses import asdict
+
+    from tests.always_on.test_team_experience import completed
+
+    memory = ao_factory()
+    basis = memory.capture_evidence((("owner", kb.add("Receipt").id),))
+    action, _ = completed(memory)
+    client = TestClient(create_app(kb, token="secret", always_on=memory))
+    path = f"/v1/always-on/actions/{action.id}/experience"
+    body = {
+        "expected_action_revision": action.revision,
+        "experience_key": "one",
+        "content": "Restore checkpoint",
+        "basis": [asdict(ref) for ref in basis],
+    }
+    assert client.post(path, json=body).status_code == 401
+    headers = {"Authorization": "Bearer secret"}
+    response = client.post(path, headers=headers, json=body)
+    assert response.status_code == 200, response.text
+    assert response.json()["outcome"] == "succeeded"
+    assert client.post(path, headers=headers, json=body).json() == response.json()
+    for extra in (
+        {"expected_action_revision": True},
+        {"expected_action_revision": "3"},
+        {"owner_agent_id": "peer"},
+        {"outcome": "succeeded"},
+    ):
+        assert client.post(path, headers=headers, json={**body, **extra}).status_code == 422
+    assert (
+        client.post(
+            "/v1/always-on/actions/foreign/experience", headers=headers, json=body
+        ).status_code
+        == 403
+    )
+
+
 @pytest.mark.parametrize("watch", ["watch", "watch/team"])
 def test_http_snapshot_and_context_are_strict_and_preserve_delivery(ao_factory, kb, watch):
     ao = ao_factory()

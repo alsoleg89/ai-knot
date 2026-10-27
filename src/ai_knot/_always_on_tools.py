@@ -29,6 +29,7 @@ TOOL_METHODS = {
     "action_begin": "begin_action",
     "action_finish": "finish_action",
     "action_reconcile": "reconcile_action",
+    "action_experience_record": "record_experience",
     "memory_freshness_set": "set_freshness",
     "memory_freshness_due": "due_verifications",
     "memory_freshness_record": "record_verification",

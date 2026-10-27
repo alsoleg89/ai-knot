@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { AlwaysOnError, HttpAlwaysOnMemory, HttpKnowledgeBase, KnowledgeBase, McpAlwaysOnMemory } from "../index.js";
 
 describe("always-on adapters", () => {
+  it("records revision-bound experience through HTTP and MCP", async () => {
+    const calls: unknown[] = [];
+    const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return "{}"; });
+    const http = new HttpAlwaysOnMemory(async (path, options) => { calls.push([path, options]); return {} as never; }, async () => {});
+    const request = { expected_action_revision: 3, experience_key: "lesson", content: "Restore warning", basis: [{ namespace: "owner", fact_id: "receipt", revision: "r" }], task_key: "rollout42", for_role: "operator" };
+    await mcp.recordExperience("action/id", request); await http.recordExperience("action/id", request);
+    expect(calls).toEqual([
+      ["action_experience_record", { ...request, action_id: "action/id" }],
+      ["/v1/always-on/actions/action%2Fid/experience", { method: "POST", body: request }],
+    ]);
+  });
   it("selects task context through HTTP and MCP without changing its request", async () => {
     const calls: unknown[] = [];
     const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return "{}"; });

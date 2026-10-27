@@ -42,6 +42,7 @@ from .models import (
     IntentState,
     JSONObject,
     Lease,
+    RecordedExperience,
     ResumePacket,
     RevisionConflict,
     SnapshotTooLarge,
@@ -115,7 +116,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
             initialize(session)
             initialize_workspace_bindings(session)
             initialize_maintenance(session)
-            session.execute(sql("UPDATE ao_schema SET version=7 WHERE id=1 AND version<7"))
+            session.execute(sql("UPDATE ao_schema SET version=8 WHERE id=1 AND version<8"))
             enable_stream(session, self._owner, self._now())
 
     def _now(self) -> datetime:
@@ -196,6 +197,9 @@ class AlwaysOnMemory(SubscriptionsMixin):
             scopes.update(ref.namespace for ref in action.basis)
             refs.extend(action.basis)
         scopes.update(self._root_scopes(session, tuple(refs)))
+        from .experience import experience_scopes
+
+        scopes.update(experience_scopes(session, self._owner, intent.id))
         if isinstance(intent.waiting_for, WaitForSlot):
             scopes.add(intent.waiting_for.namespace)
         elif isinstance(intent.waiting_for, WaitForChange):
@@ -210,9 +214,13 @@ class AlwaysOnMemory(SubscriptionsMixin):
 
     @contextmanager
     def _intent_transaction(
-        self, intent_id: str, refs: tuple[EvidenceRef, ...] = ()
+        self,
+        intent_id: str,
+        refs: tuple[EvidenceRef, ...] = (),
+        *,
+        extra_namespaces: tuple[str, ...] = (),
     ) -> Iterator[tuple[AlwaysOnSession, Intent, tuple[ActionRecord, ...]]]:
-        namespaces = {self._owner, *(ref.namespace for ref in refs)}
+        namespaces = {self._owner, *extra_namespaces, *(ref.namespace for ref in refs)}
         for _attempt in range(3):
             with self._transaction(write=False) as snapshot:
                 item = self._intent(snapshot, intent_id)
@@ -808,6 +816,35 @@ class AlwaysOnMemory(SubscriptionsMixin):
             )
             session.replace_facts(namespace, [*session.load_facts(namespace), output])
             return output
+
+    def record_experience(
+        self,
+        action_id: str,
+        *,
+        expected_action_revision: int,
+        experience_key: str,
+        content: str,
+        basis: tuple[EvidenceRef, ...],
+        namespace: str | None = None,
+        visibility_scope: str = "global",
+        task_key: str = "",
+        for_role: str = "",
+    ) -> RecordedExperience:
+        """Record a host-authored lesson bound to this action's current outcome."""
+        from .experience import record_experience
+
+        return record_experience(
+            self,
+            action_id,
+            expected_action_revision=expected_action_revision,
+            experience_key=experience_key,
+            content=content,
+            basis=basis,
+            namespace=namespace,
+            visibility_scope=visibility_scope,
+            task_key=task_key,
+            for_role=for_role,
+        )
 
     def prepare_action(
         self,

@@ -198,6 +198,13 @@ class ActionPermit:
 
 
 @dataclass(frozen=True)
+class RecordedExperience:
+    lesson: ContextFact
+    outcome: Literal["succeeded", "failed"]
+    action_revision: int
+
+
+@dataclass(frozen=True)
 class FreshnessRecord:
     ref: EvidenceRef
     subject_kind: Literal["slot", "fact"]

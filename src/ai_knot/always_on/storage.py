@@ -189,7 +189,7 @@ def migrate(session: AlwaysOnSession) -> None:
     for statement in DDL:
         session.execute(sql(statement))
     row = session.fetch_one(sql("SELECT version FROM ao_schema WHERE id=1"))
-    if row is not None and int(row["version"] or 0) > 7:
+    if row is not None and int(row["version"] or 0) > 8:
         raise RuntimeError("unsupported always-on schema version")
     session.execute(sql("INSERT INTO ao_schema(id,version) VALUES(1,2) ON CONFLICT(id) DO NOTHING"))
     if row is not None and int(row["version"] or 0) >= 5:

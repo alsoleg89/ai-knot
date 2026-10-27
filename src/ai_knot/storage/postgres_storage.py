@@ -415,7 +415,6 @@ class PostgresStorage:
         if len({fact.id for fact in facts}) != len(facts):
             raise ValueError("duplicate fact IDs")
         before = self._load_on_connection(conn, agent_id)
-        rows = self._build_rows(facts, agent_id)
         session = SQLSession(
             conn,
             (agent_id,),
@@ -424,6 +423,10 @@ class PostgresStorage:
             loader=self._load_on_connection,
             saver=self._save_on_connection,
         )
+        from ai_knot.always_on.experience import guard_experience_writes
+
+        facts = guard_experience_writes(session, agent_id, facts)
+        rows = self._build_rows(facts, agent_id)
         journal_diff(session, agent_id, before, facts)
         conn.execute('DELETE FROM "ai-knot_facts" WHERE agent_id = %s', (agent_id,))
         if rows:

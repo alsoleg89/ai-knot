@@ -49,6 +49,9 @@ export interface TaskContext {
   facts: ContextFact[]; covered_requirements: string[]; missing_requirements: string[];
   budget_limited: boolean; checked_at: string; complete: boolean;
 }
+export interface RecordedExperience {
+  lesson: ContextFact; outcome: "succeeded" | "failed"; action_revision: number;
+}
 export type VerificationOutcome = "confirmed" | "changed" | "unavailable";
 export interface VerificationResult {
   outcome: VerificationOutcome; evidence: JsonObject; source_version: string;
@@ -92,6 +95,7 @@ export interface AlwaysOnClient {
   beginAction(actionId: string, leaseToken: string): Promise<ActionPermit>;
   finishAction(actionId: string, input: { lease_token: string; outcome: "succeeded" | "failed" | "unknown"; result: JsonObject }): Promise<ActionRecord>;
   reconcileAction(actionId: string, input: { lease_token: string; outcome: "succeeded" | "failed" | "retryable"; evidence: JsonObject }): Promise<ActionRecord>;
+  recordExperience(actionId: string, input: { expected_action_revision: number; experience_key: string; content: string; basis: EvidenceRef[]; namespace?: string | null; visibility_scope?: string; task_key?: string; for_role?: string }): Promise<RecordedExperience>;
   setFreshness(input: { ref: EvidenceRef; source_ref: string; recheck_after_seconds: number }): Promise<FreshnessRecord>;
   dueVerifications(limit?: number): Promise<VerificationRequest[]>;
   recordVerification(input: { ref: EvidenceRef; result: VerificationResult }): Promise<FreshnessRecord>;
@@ -133,6 +137,7 @@ const operations: Record<string, Operation> = {
   beginAction: { tool: "action_begin", path: "/actions/{id}/begin", id: "action_id" },
   finishAction: { tool: "action_finish", path: "/actions/{id}/finish", id: "action_id" },
   reconcileAction: { tool: "action_reconcile", path: "/actions/{id}/reconcile", id: "action_id" },
+  recordExperience: { tool: "action_experience_record", path: "/actions/{id}/experience", id: "action_id" },
   setFreshness: { tool: "memory_freshness_set", path: "/freshness" },
   dueVerifications: { tool: "memory_freshness_due", path: "/freshness/due", verb: "GET" },
   recordVerification: { tool: "memory_freshness_record", path: "/freshness/record" },
@@ -159,6 +164,7 @@ abstract class AlwaysOnMethods implements AlwaysOnClient {
   beginAction(id: string, leaseToken: string): Promise<ActionPermit> { return this.invoke("beginAction", { lease_token: leaseToken }, id); }
   finishAction(id: string, input: Parameters<AlwaysOnClient["finishAction"]>[1]): Promise<ActionRecord> { return this.invoke("finishAction", input, id); }
   reconcileAction(id: string, input: Parameters<AlwaysOnClient["reconcileAction"]>[1]): Promise<ActionRecord> { return this.invoke("reconcileAction", input, id); }
+  recordExperience(id: string, input: Parameters<AlwaysOnClient["recordExperience"]>[1]): Promise<RecordedExperience> { return this.invoke("recordExperience", input, id); }
   setFreshness(input: Parameters<AlwaysOnClient["setFreshness"]>[0]): Promise<FreshnessRecord> { return this.invoke("setFreshness", input); }
   dueVerifications(limit = 100): Promise<VerificationRequest[]> { return this.invoke("dueVerifications", { limit }); }
   recordVerification(input: Parameters<AlwaysOnClient["recordVerification"]>[0]): Promise<FreshnessRecord> { return this.invoke("recordVerification", input); }

@@ -50,6 +50,7 @@
 | more than one agent writing to memory | shared memory with trust, provenance, visibility, and fan-in recall |
 | agents that resume work after a crash | opt-in durable intentions, acknowledged changes, evidence guards and action reconciliation ([unreleased source guide](docs/always-on.md)) |
 | teams sharing task and role context | explicit requirements, applicability labels, bounded evidence and missing-context reports ([unreleased source guide](docs/task-context.md)) |
+| teams retaining action experience | conditional lessons bound to recorded outcomes, exact sources and automatic withdrawal ([unreleased source guide](docs/team-experience.md)) |
 
 ```text
 conversation / tool output -> add or learn -> ai-knot -> SQLite | PostgreSQL | YAML

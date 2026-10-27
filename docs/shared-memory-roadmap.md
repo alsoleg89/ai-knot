@@ -19,6 +19,9 @@ Current source progress: [reliable return](shared-memory-return.md) is committed
 and [explicit task working sets](task-context.md) add bounded requirement coverage,
 applicability labels and soft role preference. The latter matches the strongest
 existing scoped retrieval baseline on frozen evidence recall; role preference and
-structured missing-evidence reports are its measured additions. Outcome-bound
-experience formation remains the next milestone; typed host-authored derivation
-alone does not establish automatic learning or verified external success.
+structured missing-evidence reports are its measured additions.
+[Outcome-bound experience](team-experience.md) now binds explicitly recorded
+lessons to action revisions and source observations, with idempotent writes and
+automatic retraction. Host-authored procedural memory does not establish
+automatic learning or verified external success. Operational recipes and a final
+whole-program acceptance audit remain before completing this development program.

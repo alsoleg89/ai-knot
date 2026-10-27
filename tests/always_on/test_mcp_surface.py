@@ -32,7 +32,36 @@ def test_mcp_strict_owner_and_capabilities(ao_factory, kb):
         )
 
     asyncio.run(calls())
-    assert len(ROUTES) == 23
+    assert len(ROUTES) == 24
+
+
+def test_mcp_experience_records_exact_outcome_and_rejects_spoofing(ao_factory, kb):
+    from dataclasses import asdict
+
+    from tests.always_on.test_team_experience import completed
+
+    memory = ao_factory()
+    basis = memory.capture_evidence((("owner", kb.add("Receipt").id),))
+    action, _ = completed(memory, "failed")
+    app = _make_server(kb, always_on=memory)
+
+    async def workflow():
+        body = {
+            "action_id": action.id,
+            "expected_action_revision": action.revision,
+            "experience_key": "one",
+            "content": "Restore warning",
+            "basis": [asdict(ref) for ref in basis],
+        }
+        result = json.loads(await app._tool_manager.call_tool("action_experience_record", body))
+        assert result["outcome"] == "failed" and result["lesson"]["ref"]["namespace"] == "owner"
+        for extra in ({"expected_action_revision": "3"}, {"owner_agent_id": "peer"}):
+            invalid = json.loads(
+                await app._tool_manager.call_tool("action_experience_record", {**body, **extra})
+            )
+            assert invalid["error"]["code"] == "InvalidInput"
+
+    asyncio.run(workflow())
 
 
 def test_mcp_recovery_and_context_review_use_real_typed_boundary(ao_factory, kb):

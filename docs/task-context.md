@@ -39,7 +39,7 @@ The type and labels are persisted atomically with exact source roots and interme
 
 For a shared procedure, its readers must also be able to read its roots. Publish an appropriately authorized source first and derive from its shared reference; a public projection of somebody else's private source does not bypass source access. Shared derivation still requires the workspace's maintain grant. Source correction/deletion/revocation retracts dependent procedures on subsequent selection/review.
 
-The host supplies the observed evidence and lesson text. These options do not infer that an action succeeded, promote an assembled answer into a successful experience, prove the procedure follows from its source, or establish that one success generalizes. Raw episodic records stay outside ordinary task context; a grounded procedural projection can reference retained outcome evidence. Copies retain roots and do not become independent confirmations.
+The host supplies the observed evidence and lesson text. These options do not infer that an action succeeded, promote an assembled answer into a successful experience, prove the procedure follows from its source, or establish that one success generalizes. Use [record_experience](team-experience.md) when a lesson must also depend on an action's current recorded outcome. Raw episodic records stay outside ordinary task context; a grounded procedural projection can reference retained outcome evidence. Copies retain roots and do not become independent confirmations.
 
 Run the model-free two-role example:
 

@@ -31,6 +31,7 @@ ROUTES = (
     ("POST", "/actions/{action_id}/begin", "begin_action", "action_id"),
     ("POST", "/actions/{action_id}/finish", "finish_action", "action_id"),
     ("POST", "/actions/{action_id}/reconcile", "reconcile_action", "action_id"),
+    ("POST", "/actions/{action_id}/experience", "record_experience", "action_id"),
     ("POST", "/evidence/capture", "capture_evidence", None),
     ("POST", "/evidence/review", "review_context", None),
     ("POST", "/evidence/select", "select_context", None),

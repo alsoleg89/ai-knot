@@ -491,6 +491,9 @@ class SharedMemoryPool(_PoolRecallMixin):
             next_version = max((f.version for f in shared), default=0) + 1
 
             for fact in to_publish:
+                if "_ai_knot_action_binding" in fact.qualifiers:
+                    # Publish through record_experience so shared authority/binding survive.
+                    continue
                 if is_derived(fact):
                     current = next(iter(load(agent_id, fact.id)), None)
                     if (
