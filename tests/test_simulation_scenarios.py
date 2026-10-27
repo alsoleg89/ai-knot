@@ -353,6 +353,18 @@ class TestStorageScenarios:
         mock_conn.__enter__ = MagicMock(return_value=mock_conn)
         mock_conn.__exit__ = MagicMock(return_value=False)
 
+        # Transactional initialization now reads schema identity and named SQL rows.
+        def execute_initialization(query, params=()):
+            cursor = MagicMock()
+            cursor.description = ()
+            cursor.fetchall.return_value = []
+            cursor.fetchone.return_value = (
+                ("public",) if query == "SELECT current_schema()" else None
+            )
+            return cursor
+
+        mock_conn.execute.side_effect = execute_initialization
+
         import sys
 
         sys.modules["psycopg"] = mock_psycopg
@@ -372,6 +384,7 @@ class TestStorageScenarios:
             # Test list_agents
             mock_cur = MagicMock()
             mock_cur.fetchall.return_value = [("agent1",), ("agent2",)]
+            mock_conn.execute.side_effect = None
             mock_conn.execute.return_value = mock_cur
             agents = storage.list_agents()
             assert agents == ["agent1", "agent2"]

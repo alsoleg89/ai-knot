@@ -1,3 +1,4 @@
+import { HttpAlwaysOnMemory, parseAlwaysOnError } from "./always_on.js";
 import type {
   AddOptions,
   Fact,
@@ -70,6 +71,7 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 }
 
 export class HttpKnowledgeBase {
+  readonly alwaysOn: HttpAlwaysOnMemory;
   private readonly baseUrl: string;
   private readonly token?: string;
   private readonly extraHeaders: Record<string, string>;
@@ -80,6 +82,10 @@ export class HttpKnowledgeBase {
     this.token = options.token;
     this.extraHeaders = { ...(options.headers ?? {}) };
     this.fetchImpl = resolveFetch(options.fetch);
+    this.alwaysOn = new HttpAlwaysOnMemory(
+      (path, options) => this.requestJson(path, options),
+      (path, options) => this.requestVoid(path, options),
+    );
   }
 
   async add(content: string, options: AddOptions = {}): Promise<Fact> {
@@ -223,13 +229,15 @@ export class HttpKnowledgeBase {
   private async requestVoid(
     path: string,
     options: {
-      method: "DELETE";
+      method: "POST" | "DELETE";
+      body?: Record<string, unknown>;
       auth?: boolean;
     },
   ): Promise<void> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: options.method,
-      headers: this.buildHeaders(false, options.auth !== false),
+      headers: this.buildHeaders(options.body !== undefined, options.auth !== false),
+      body: options.body !== undefined ? JSON.stringify(stripUndefined(options.body)) : undefined,
     });
     if (!response.ok) {
       throw await this.buildHttpError(response);
@@ -256,6 +264,8 @@ export class HttpKnowledgeBase {
     let detail = "";
     try {
       const payload = await response.json();
+      const alwaysOnError = parseAlwaysOnError(payload, response.status);
+      if (alwaysOnError) return alwaysOnError;
       if (payload && typeof payload === "object" && "detail" in payload) {
         const candidate = (payload as Record<string, unknown>).detail;
         detail = typeof candidate === "string" ? candidate : JSON.stringify(candidate);

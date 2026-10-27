@@ -1,0 +1,360 @@
+{
+  "setup": {
+    "storage": "postgres",
+    "postgres_required": true,
+    "offline": true
+  },
+  "scenarios": [
+    {
+      "name": "after_poll",
+      "passed": true,
+      "latency_seconds": 3.659355749958195,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_checkpoint",
+      "passed": true,
+      "latency_seconds": 4.827214666060172,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_begin",
+      "passed": true,
+      "latency_seconds": 3.1310417089844123,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_external",
+      "passed": true,
+      "latency_seconds": 3.704992291983217,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_finish",
+      "passed": true,
+      "latency_seconds": 1.2910709170391783,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "owner_and_scope_isolation",
+      "passed": true,
+      "latency_seconds": 0.5723457920830697,
+      "result": {
+        "cross_owner_scope_leaks": 0,
+        "replay_identity_preserved": true,
+        "revoked_resync": true
+      }
+    },
+    {
+      "name": "consolidation_race",
+      "passed": true,
+      "latency_seconds": 0.3155717090703547,
+      "result": {
+        "consolidated": 0,
+        "foreground_preserved": true,
+        "source_preserved": true,
+        "stale_summary_absent": true
+      }
+    },
+    {
+      "name": "unknown_without_proof",
+      "passed": true,
+      "latency_seconds": 1.2645083750830963,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": false,
+        "unknown_actions": 1,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "snapshot_restore",
+      "passed": true,
+      "latency_seconds": 0.5790459580020979,
+      "result": {
+        "action_survived": true,
+        "old_ack_noop": true,
+        "restore_change_delivered": true
+      }
+    },
+    {
+      "name": "stale_plan",
+      "passed": true,
+      "latency_seconds": 0.4605178340571001,
+      "result": {
+        "stale_action_starts": 0,
+        "blocked": true
+      }
+    },
+    {
+      "name": "deleted_basis",
+      "passed": true,
+      "latency_seconds": 0.4134710420621559,
+      "result": {
+        "stale_action_starts": 0,
+        "blocked": true
+      }
+    },
+    {
+      "name": "verifier_outage",
+      "passed": true,
+      "latency_seconds": 0.174483000067994,
+      "result": {
+        "fact_preserved": true,
+        "validity_not_extended": true,
+        "outcome": "unavailable",
+        "failure_count": 1
+      }
+    }
+  ],
+  "aggregate": {
+    "passed": true,
+    "passed_scenarios": 12,
+    "total_scenarios": 12,
+    "invariants": {
+      "missing_committed_changes": 0,
+      "stale_action_starts": 0,
+      "accepted_stale_lease_mutations": 0,
+      "unintended_duplicate_effects": 0,
+      "false_auto_retries_unknown_actions": 0,
+      "cross_owner_scope_leaks": 0
+    }
+  },
+  "benchmarks": [
+    {
+      "facts": 1000,
+      "subscriptions": 1,
+      "write_p50": 0.1120272499974817,
+      "write_p95": 0.24285662488546222,
+      "poll_p50": 0.03981458302587271,
+      "poll_p95": 0.06227062491234392,
+      "resume_p50": 0.027025916031561792,
+      "resume_p95": 0.05757570790592581,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 5,
+      "receipt_token_bytes": 160,
+      "receipt_logical_bytes": 390,
+      "raw_events_scanned": 5,
+      "largest_scan": 1,
+      "delivered_batches": 5,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "QUERY PLAN": "Limit  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "  ->  Index Scan using \"ai-knot_ao_changes_pkey\" on \"ai-knot_ao_changes\"  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "        Index Cond: ((namespace = 'perf-1000-1'::text) AND (seq > '0'::smallint))"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 1000,
+      "subscriptions": 10,
+      "write_p50": 0.14543604105710983,
+      "write_p95": 0.22416700003668666,
+      "poll_p50": 0.02488643751712516,
+      "poll_p95": 0.0739150830777362,
+      "resume_p50": 0.023729042033664882,
+      "resume_p95": 0.04314137506298721,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 50,
+      "receipt_token_bytes": 1600,
+      "receipt_logical_bytes": 3950,
+      "raw_events_scanned": 50,
+      "largest_scan": 1,
+      "delivered_batches": 50,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "QUERY PLAN": "Limit  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "  ->  Index Scan using \"ai-knot_ao_changes_pkey\" on \"ai-knot_ao_changes\"  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "        Index Cond: ((namespace = 'perf-1000-10'::text) AND (seq > '0'::smallint))"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 1000,
+      "subscriptions": 100,
+      "write_p50": 0.07390195794869214,
+      "write_p95": 0.08584175002761185,
+      "poll_p50": 0.020119749940931797,
+      "poll_p95": 0.027866916032508016,
+      "resume_p50": 0.020451707998290658,
+      "resume_p95": 0.023289042059332132,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 500,
+      "receipt_token_bytes": 16000,
+      "receipt_logical_bytes": 40450,
+      "raw_events_scanned": 500,
+      "largest_scan": 1,
+      "delivered_batches": 500,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "QUERY PLAN": "Limit  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "  ->  Index Scan using \"ai-knot_ao_changes_pkey\" on \"ai-knot_ao_changes\"  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "        Index Cond: ((namespace = 'perf-1000-100'::text) AND (seq > '0'::smallint))"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 10000,
+      "subscriptions": 1,
+      "write_p50": 0.6164057500427589,
+      "write_p95": 0.6393221250036731,
+      "poll_p50": 0.01956362498458475,
+      "poll_p95": 0.022227374953217804,
+      "resume_p50": 0.019143917015753686,
+      "resume_p95": 0.02040524990297854,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 5,
+      "receipt_token_bytes": 160,
+      "receipt_logical_bytes": 395,
+      "raw_events_scanned": 5,
+      "largest_scan": 1,
+      "delivered_batches": 5,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "QUERY PLAN": "Limit  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "  ->  Index Scan using \"ai-knot_ao_changes_pkey\" on \"ai-knot_ao_changes\"  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "        Index Cond: ((namespace = 'perf-10000-1'::text) AND (seq > '0'::smallint))"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 10000,
+      "subscriptions": 10,
+      "write_p50": 0.5778335839277133,
+      "write_p95": 0.6572490420658141,
+      "poll_p50": 0.017901958024594933,
+      "poll_p95": 0.02279541699681431,
+      "resume_p50": 0.018069125013425946,
+      "resume_p95": 0.019373458926565945,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 50,
+      "receipt_token_bytes": 1600,
+      "receipt_logical_bytes": 4000,
+      "raw_events_scanned": 50,
+      "largest_scan": 1,
+      "delivered_batches": 50,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "QUERY PLAN": "Limit  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "  ->  Index Scan using \"ai-knot_ao_changes_pkey\" on \"ai-knot_ao_changes\"  (cost=0.14..8.16 rows=1 width=328)"
+        },
+        {
+          "QUERY PLAN": "        Index Cond: ((namespace = 'perf-10000-10'::text) AND (seq > '0'::smallint))"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 10000,
+      "subscriptions": 100,
+      "write_p50": 0.6396076669916511,
+      "write_p95": 0.776317875017412,
+      "poll_p50": 0.019127937965095043,
+      "poll_p95": 0.025051207980141044,
+      "resume_p50": 0.020404125098139048,
+      "resume_p95": 0.026365292025730014,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 500,
+      "receipt_token_bytes": 16000,
+      "receipt_logical_bytes": 40950,
+      "raw_events_scanned": 500,
+      "largest_scan": 1,
+      "delivered_batches": 500,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "QUERY PLAN": "Limit  (cost=3.87..3.88 rows=5 width=409)"
+        },
+        {
+          "QUERY PLAN": "  ->  Sort  (cost=3.87..3.88 rows=5 width=409)"
+        },
+        {
+          "QUERY PLAN": "        Sort Key: seq"
+        },
+        {
+          "QUERY PLAN": "        ->  Seq Scan on \"ai-knot_ao_changes\"  (cost=0.00..3.81 rows=5 width=409)"
+        },
+        {
+          "QUERY PLAN": "              Filter: ((seq > '0'::smallint) AND (namespace = 'perf-10000-100'::text))"
+        }
+      ],
+      "large_replay_events": 0
+    }
+  ]
+}

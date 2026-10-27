@@ -18,11 +18,11 @@ from ai_knot.multi_agent.router import QueryShapeRouter
 from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
 from ai_knot.storage.base import (
     ACLStoreCapable,
-    AtomicUpdateCapable,
     EventLedgerCapable,
     PoolStatsCapable,
     StorageBackend,
     TemporalStorageCapable,
+    mutate_facts,
 )
 from ai_knot.storage.yaml_storage import YAMLStorage
 from ai_knot.types import Fact, MESIState, SlotDelta
@@ -197,9 +197,15 @@ class SharedMemoryPool(_PoolRecallMixin):
         ``persist_stats=True`` and the backend implements ``ACLStoreCapable``;
         otherwise they are in-memory (per pool instance).
         """
-        self._read_scopes.setdefault(agent_id, set()).add(scope)
         if self._persist_stats and isinstance(self._storage, ACLStoreCapable):
             self._storage.save_grant(agent_id, scope, granted_at=self._clock().isoformat())
+        self._read_scopes.setdefault(agent_id, set()).add(scope)
+
+    def revoke_read(self, agent_id: str, scope: str) -> None:
+        """Revoke a grant durably before updating the local cache."""
+        if self._persist_stats and isinstance(self._storage, ACLStoreCapable):
+            self._storage.revoke_grant(agent_id, scope)
+        self._read_scopes.get(agent_id, set()).discard(scope)
 
     @property
     def last_recall_abstains(self) -> bool:
@@ -509,19 +515,7 @@ class SharedMemoryPool(_PoolRecallMixin):
 
             return shared
 
-        # AtomicUpdateCapable backends (SQLite) protect the full load→merge→save
-        # cycle with an EXCLUSIVE transaction, preventing cross-process lost updates.
-        # Other backends fall back to the in-process lock only.
-        if isinstance(self._storage, AtomicUpdateCapable):
-            self._storage.atomic_update(_SHARED_NAMESPACE, _merge)
-        else:
-            current = self._storage.load(_SHARED_NAMESPACE)
-            _merge(current)
-            if published:
-                if isinstance(self._storage, TemporalStorageCapable):
-                    self._storage.save_atomic(_SHARED_NAMESPACE, current)
-                else:
-                    self._storage.save(_SHARED_NAMESPACE, current)
+        mutate_facts(self._storage, _SHARED_NAMESPACE, lambda current: (_merge(current), None))
 
         # Apply trust-tracking side effects outside the storage transaction.
         for agt, count in quick_inv_updates.items():
@@ -561,22 +555,17 @@ class SharedMemoryPool(_PoolRecallMixin):
         """
         if tier not in ("pool", "org"):
             raise ValueError(f"Invalid tier {tier!r}; must be 'pool' or 'org'.")
-        shared = self._storage.load(_SHARED_NAMESPACE)
-        promoted = 0
-        for fact in shared:
-            if fact.id in fact_ids and fact.is_active() and fact.origin_agent_id == agent_id:
-                fact.memory_tier = tier
-                fact.qualifiers["promoted_by"] = agent_id  # provenance lineage
-                promoted += 1
-        if promoted:
-            self._storage.save(_SHARED_NAMESPACE, shared)
-            logger.info(
-                "Promoted %d facts from agent '%s' to tier '%s'",
-                promoted,
-                agent_id,
-                tier,
-            )
-        return promoted
+
+        def update(shared: list[Fact]) -> tuple[list[Fact], int]:
+            promoted = 0
+            for fact in shared:
+                if fact.id in fact_ids and fact.is_active() and fact.origin_agent_id == agent_id:
+                    fact.memory_tier = tier
+                    fact.qualifiers["promoted_by"] = agent_id
+                    promoted += 1
+            return shared, promoted
+
+        return mutate_facts(self._storage, _SHARED_NAMESPACE, update)
 
     def gc_pool(self, *, now: datetime | None = None) -> int:
         """Garbage-collect stale pool facts that exceed the pool TTL.
@@ -590,22 +579,20 @@ class SharedMemoryPool(_PoolRecallMixin):
         """
         now_dt = now or datetime.now(UTC)
         cutoff = now_dt - timedelta(seconds=self._POOL_TTL_SECONDS)
-        shared = self._storage.load(_SHARED_NAMESPACE)
-        expired = 0
-        for fact in shared:
-            if (
-                fact.is_active(now_dt)
-                and fact.memory_tier == "pool"
-                and fact.last_accessed < cutoff
-            ):
-                fact.valid_until = now_dt
-                expired += 1
-        if expired:
-            self._storage.save(_SHARED_NAMESPACE, shared)
-            logger.info(
-                "Pool GC: expired %d stale facts (TTL=%ds)", expired, self._POOL_TTL_SECONDS
-            )
-        return expired
+
+        def update(shared: list[Fact]) -> tuple[list[Fact], int]:
+            expired = 0
+            for fact in shared:
+                if (
+                    fact.is_active(now_dt)
+                    and fact.memory_tier == "pool"
+                    and fact.last_accessed < cutoff
+                ):
+                    fact.valid_until = now_dt
+                    expired += 1
+            return shared, expired
+
+        return mutate_facts(self._storage, _SHARED_NAMESPACE, update)
 
     def sync_dirty(self, agent_id: str) -> list[Fact]:
         """Pull facts changed by other agents since the last sync (MESI lazy invalidation).

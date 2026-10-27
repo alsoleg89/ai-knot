@@ -1,0 +1,196 @@
+{
+  "setup": {
+    "storage": "sqlite",
+    "postgres_required": false,
+    "offline": true
+  },
+  "scenarios": [
+    {
+      "name": "after_poll",
+      "passed": true,
+      "latency_seconds": 0.2158280829899013,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_checkpoint",
+      "passed": true,
+      "latency_seconds": 0.21261404093820602,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_begin",
+      "passed": true,
+      "latency_seconds": 0.20669933303724974,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_external",
+      "passed": true,
+      "latency_seconds": 0.19920570799149573,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_finish",
+      "passed": true,
+      "latency_seconds": 0.19266266701743007,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "owner_and_scope_isolation",
+      "passed": true,
+      "latency_seconds": 0.012903749942779541,
+      "result": {
+        "cross_owner_scope_leaks": 0,
+        "replay_identity_preserved": true,
+        "revoked_resync": true
+      }
+    },
+    {
+      "name": "consolidation_race",
+      "passed": true,
+      "latency_seconds": 0.013107832986861467,
+      "result": {
+        "consolidated": 0,
+        "foreground_preserved": true,
+        "source_preserved": true,
+        "stale_summary_absent": true
+      }
+    },
+    {
+      "name": "unknown_without_proof",
+      "passed": true,
+      "latency_seconds": 0.202212292002514,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": false,
+        "unknown_actions": 1,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "snapshot_restore",
+      "passed": true,
+      "latency_seconds": 0.02410479204263538,
+      "result": {
+        "action_survived": true,
+        "old_ack_noop": true,
+        "restore_change_delivered": true
+      }
+    },
+    {
+      "name": "stale_plan",
+      "passed": true,
+      "latency_seconds": 0.015069000073708594,
+      "result": {
+        "stale_action_starts": 0,
+        "blocked": true
+      }
+    },
+    {
+      "name": "deleted_basis",
+      "passed": true,
+      "latency_seconds": 0.014956749975681305,
+      "result": {
+        "stale_action_starts": 0,
+        "blocked": true
+      }
+    },
+    {
+      "name": "verifier_outage",
+      "passed": true,
+      "latency_seconds": 0.00752654206007719,
+      "result": {
+        "fact_preserved": true,
+        "validity_not_extended": true,
+        "outcome": "unavailable",
+        "failure_count": 1
+      }
+    }
+  ],
+  "aggregate": {
+    "passed": true,
+    "passed_scenarios": 12,
+    "total_scenarios": 12,
+    "invariants": {
+      "missing_committed_changes": 0,
+      "stale_action_starts": 0,
+      "accepted_stale_lease_mutations": 0,
+      "unintended_duplicate_effects": 0,
+      "false_auto_retries_unknown_actions": 0,
+      "cross_owner_scope_leaks": 0
+    }
+  },
+  "benchmarks": [
+    {
+      "facts": 1000,
+      "subscriptions": 1,
+      "write_p50": 0.044997166958637536,
+      "write_p95": 0.04726387490518391,
+      "poll_p50": 0.0015141249168664217,
+      "poll_p95": 0.0016223329585045576,
+      "resume_p50": 0.0012938750442117453,
+      "resume_p95": 0.0013505419483408332,
+      "journal_rows": 100006,
+      "journal_logical_bytes": 19590745,
+      "receipt_rows": 205,
+      "receipt_token_bytes": 6560,
+      "receipt_logical_bytes": 17371,
+      "raw_events_scanned": 199505,
+      "largest_scan": 1000,
+      "delivered_batches": 205,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH ao_changes USING INDEX sqlite_autoindex_ao_changes_1 (namespace=? AND seq>?)"
+        }
+      ],
+      "large_replay_events": 100000
+    }
+  ]
+}

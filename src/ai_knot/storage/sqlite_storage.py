@@ -11,6 +11,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ai_knot.always_on.storage import (
+    AlwaysOnSession,
+    SQLSession,
+    append_event,
+    journal_diff,
+    migrate,
+    sql,
+)
 from ai_knot.storage.base import parse_datetime as _parse_datetime
 from ai_knot.types import Fact, MemoryType, MESIState, SlotDelta
 
@@ -144,6 +152,12 @@ class SQLiteStorage:
     def _conn(self) -> Iterator[sqlite3.Connection]:
         """Context manager that opens, yields, and always closes a SQLite connection."""
         conn = sqlite3.connect(self._db_path, timeout=30.0)
+        conn.create_function(
+            "ai_knot_utc",
+            1,
+            lambda value: _parse_datetime(value).astimezone(UTC).isoformat(timespec="microseconds"),
+            deterministic=True,
+        )
         conn.execute("PRAGMA synchronous=NORMAL")
         try:
             yield conn
@@ -166,6 +180,8 @@ class SQLiteStorage:
             for stmt in _CREATE_INDEXES:
                 conn.execute(stmt)
         self._migrate_db()
+        with self.always_on_transaction(("__migration__",), write=True) as session:
+            migrate(session)
 
     def _migrate_db(self) -> None:
         """Add new columns to existing databases (backward compat)."""
@@ -204,58 +220,79 @@ class SQLiteStorage:
             for col, definition in new_columns.items():
                 if col not in existing_cols:
                     conn.execute(f"ALTER TABLE facts ADD COLUMN {col} {definition}")
+            conn.execute("UPDATE facts SET valid_from=created_at WHERE valid_from=''")
+
+    @contextmanager
+    def always_on_transaction(
+        self, namespaces: tuple[str, ...], *, write: bool
+    ) -> Iterator[AlwaysOnSession]:
+        scopes = tuple(sorted(set(namespaces)))
+        if not scopes or any(not name for name in scopes):
+            raise ValueError("nonempty transaction namespaces required")
+        with self._conn() as conn:
+            if not write:
+                conn.execute("PRAGMA query_only=ON")
+            conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+            yield SQLSession(
+                conn,
+                scopes,
+                write=write,
+                postgres=False,
+                loader=self._load_on_connection,
+                saver=self._save_on_connection,
+            )
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
-        """Replace all facts for an agent."""
-        rows = self._build_rows(agent_id, facts)
-        self._execute_save(agent_id, rows)
-        logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
+        """Intentionally replace a namespace under its writer lock."""
+        with self.always_on_transaction((agent_id,), write=True) as session:
+            session.replace_facts(agent_id, facts)
 
-    def atomic_update(
-        self,
-        agent_id: str,
-        fn: Callable[[list[Fact]], list[Fact]],
-    ) -> None:
-        """Load, transform, and save facts in a single EXCLUSIVE SQLite transaction.
-
-        Blocks all other writers (including cross-process) for the duration,
-        preventing lost-update races in shared-namespace publish operations.
-        """
-        conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level=None)
-        conn.execute("PRAGMA synchronous=NORMAL")
-        try:
-            conn.execute("BEGIN EXCLUSIVE")
-            rows = conn.execute(
-                f"{self._SELECT_COLS} FROM facts WHERE agent_id = ? ORDER BY created_at",
-                (agent_id,),
-            ).fetchall()
-            current = [self._fact_from_row(row) for row in rows]
-            new_facts = fn(current)
-            conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
-            conn.executemany(_INSERT_FACTS_SQL, self._build_rows(agent_id, new_facts))
-            conn.execute("COMMIT")
-        except Exception:
-            conn.execute("ROLLBACK")
-            raise
-        finally:
-            conn.close()
+    def atomic_update(self, agent_id: str, fn: Callable[[list[Fact]], list[Fact]]) -> None:
+        with self.always_on_transaction((agent_id,), write=True) as session:
+            session.replace_facts(agent_id, fn(session.load_facts(agent_id)))
 
     def save_atomic(self, agent_id: str, facts: list[Fact]) -> None:
-        """Atomically replace facts using BEGIN IMMEDIATE to block concurrent writers."""
+        self.save(agent_id, facts)
+
+    def _load_on_connection(
+        self,
+        conn: sqlite3.Connection,
+        agent_id: str,
+        *,
+        fact_id: str | None = None,
+        slot_key: str | None = None,
+    ) -> list[Fact]:
+        clauses = ["agent_id=?"]
+        params = [agent_id]
+        if fact_id is not None:
+            clauses.append("id=?")
+            params.append(fact_id)
+        if slot_key is not None:
+            clauses.append("slot_key=?")
+            params.append(slot_key)
+        query = self._SELECT_COLS + " FROM facts WHERE " + " AND ".join(clauses)
+        rows = conn.execute(query + " ORDER BY created_at", tuple(params)).fetchall()
+        return [self._fact_from_row(row) for row in rows]
+
+    def _save_on_connection(
+        self, conn: sqlite3.Connection, agent_id: str, facts: list[Fact]
+    ) -> None:
+        if len({fact.id for fact in facts}) != len(facts):
+            raise ValueError("duplicate fact IDs")
+        before = self._load_on_connection(conn, agent_id)
         rows = self._build_rows(agent_id, facts)
-        conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level=None)
-        conn.execute("PRAGMA synchronous=NORMAL")
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
-            conn.executemany(_INSERT_FACTS_SQL, rows)
-            conn.execute("COMMIT")
-        except Exception:
-            conn.execute("ROLLBACK")
-            raise
-        finally:
-            conn.close()
-        logger.debug("Atomically saved %d facts for agent '%s'", len(facts), agent_id)
+        # Validate before deleting so serialization cannot leave partial data.
+        session = SQLSession(
+            conn,
+            (agent_id,),
+            write=True,
+            postgres=False,
+            loader=self._load_on_connection,
+            saver=self._save_on_connection,
+        )
+        journal_diff(session, agent_id, before, facts)
+        conn.execute("DELETE FROM facts WHERE agent_id=?", (agent_id,))
+        conn.executemany(_INSERT_FACTS_SQL, rows)
 
     def _build_rows(self, agent_id: str, facts: list[Fact]) -> list[tuple]:  # type: ignore[type-arg]
         return [
@@ -301,20 +338,9 @@ class SQLiteStorage:
             for fact in facts
         ]
 
-    def _execute_save(self, agent_id: str, rows: list[tuple]) -> None:  # type: ignore[type-arg]
-        with self._conn() as conn:
-            conn.execute("DELETE FROM facts WHERE agent_id = ?", (agent_id,))
-            conn.executemany(_INSERT_FACTS_SQL, rows)
-
     def load(self, agent_id: str) -> list[Fact]:
-        """Load all facts for an agent."""
         with self._conn() as conn:
-            rows = conn.execute(
-                f"{self._SELECT_COLS} FROM facts WHERE agent_id = ? ORDER BY created_at",
-                (agent_id,),
-            ).fetchall()
-
-        return [self._fact_from_row(row) for row in rows]
+            return self._load_on_connection(conn, agent_id)
 
     @staticmethod
     def _fact_from_row(row: tuple[Any, ...]) -> Fact:
@@ -338,7 +364,7 @@ class SQLiteStorage:
             origin_agent_id=str(row[15]),
             visibility=str(row[16]),
             source_verbatim=str(row[17]),
-            valid_from=_parse_datetime(row[18]) if row[18] else datetime.now(UTC),
+            valid_from=_parse_datetime(row[18] or row[7]),
             valid_until=_parse_datetime(row[19]) if row[19] else None,
             entity=str(row[20]) if row[20] else "",
             attribute=str(row[21]) if row[21] else "",
@@ -359,12 +385,7 @@ class SQLiteStorage:
         )
 
     def delete(self, agent_id: str, fact_id: str) -> None:
-        """Remove a single fact by id."""
-        with self._conn() as conn:
-            conn.execute(
-                "DELETE FROM facts WHERE agent_id = ? AND id = ?",
-                (agent_id, fact_id),
-            )
+        self.atomic_update(agent_id, lambda facts: [fact for fact in facts if fact.id != fact_id])
 
     def list_agents(self) -> list[str]:
         """Return all agent_ids that have stored facts."""
@@ -514,14 +535,20 @@ class SQLiteStorage:
     def save_grant(
         self, agent_id: str, scope: str, *, granted_at: str, granted_by: str = ""
     ) -> None:
-        """Persist a read-scope grant (upsert on ``agent_id`` + ``scope``)."""
-        with self._conn() as conn:
-            conn.execute(
-                "INSERT INTO acl_grants (agent_id, scope, granted_at, granted_by) "
-                "VALUES (?, ?, ?, ?) ON CONFLICT(agent_id, scope) DO UPDATE SET "
-                "granted_at = excluded.granted_at, granted_by = excluded.granted_by",
+        with self.always_on_transaction(("__shared__",), write=True) as session:
+            prior = session.fetch_one(
+                sql("SELECT scope FROM acl_grants WHERE agent_id=? AND scope=?"), (agent_id, scope)
+            )
+            session.execute(
+                sql(
+                    "INSERT INTO acl_grants(agent_id,scope,granted_at,granted_by) VALUES(?,"
+                    "?,?,?) ON CONFLICT(agent_id,scope) DO UPDATE SET granted_at=EXCLUDED.g"
+                    "ranted_at,granted_by=EXCLUDED.granted_by"
+                ),
                 (agent_id, scope, granted_at, granted_by),
             )
+            if prior is None:
+                append_event(session, "__shared__", kind="acl_changed", acl_subject=agent_id)
 
     def load_grants(self) -> dict[str, set[str]]:
         """Load all read-scope grants as ``{agent_id: {scope, ...}}``."""
@@ -533,12 +560,12 @@ class SQLiteStorage:
         return grants
 
     def revoke_grant(self, agent_id: str, scope: str) -> None:
-        """Remove a read-scope grant (no-op if absent)."""
-        with self._conn() as conn:
-            conn.execute(
-                "DELETE FROM acl_grants WHERE agent_id = ? AND scope = ?",
-                (agent_id, scope),
+        with self.always_on_transaction(("__shared__",), write=True) as session:
+            count = session.execute(
+                sql("DELETE FROM acl_grants WHERE agent_id=? AND scope=?"), (agent_id, scope)
             )
+            if count:
+                append_event(session, "__shared__", kind="acl_changed", acl_subject=agent_id)
 
     # ------------------------------------------------------------------
     # EventLedgerCapable implementation
@@ -630,6 +657,8 @@ class SQLiteStorage:
                 "state_confidence": f.state_confidence,
                 "topic_channel": f.topic_channel,
                 "visibility_scope": f.visibility_scope,
+                "claim_key": f.claim_key,
+                "memory_tier": f.memory_tier,
             }
             for f in facts
         ]
@@ -679,7 +708,7 @@ class SQLiteStorage:
                 source_verbatim=str(entry.get("source_verbatim", "")),
                 valid_from=_parse_datetime(str(entry["valid_from"]))
                 if entry.get("valid_from")
-                else datetime.now(UTC),
+                else _parse_datetime(str(entry["created_at"])),
                 valid_until=_parse_datetime(str(entry["valid_until"]))
                 if entry.get("valid_until")
                 else None,
@@ -699,6 +728,8 @@ class SQLiteStorage:
                 state_confidence=float(entry.get("state_confidence", 1.0)),
                 topic_channel=str(entry.get("topic_channel", "")),
                 visibility_scope=str(entry.get("visibility_scope", "global")),
+                claim_key=str(entry.get("claim_key", "")),
+                memory_tier=str(entry.get("memory_tier", "private")),
             )
             for entry in raw
         ]

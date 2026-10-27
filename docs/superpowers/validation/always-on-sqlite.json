@@ -1,0 +1,336 @@
+{
+  "setup": {
+    "storage": "sqlite",
+    "postgres_required": false,
+    "offline": true
+  },
+  "scenarios": [
+    {
+      "name": "after_poll",
+      "passed": true,
+      "latency_seconds": 0.4407076659845188,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_checkpoint",
+      "passed": true,
+      "latency_seconds": 0.5306924589676782,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_begin",
+      "passed": true,
+      "latency_seconds": 0.738532334100455,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_external",
+      "passed": true,
+      "latency_seconds": 0.6778043750673532,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "after_finish",
+      "passed": true,
+      "latency_seconds": 0.6655095419846475,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": true,
+        "unknown_actions": 0,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "owner_and_scope_isolation",
+      "passed": true,
+      "latency_seconds": 0.04288662504404783,
+      "result": {
+        "cross_owner_scope_leaks": 0,
+        "replay_identity_preserved": true,
+        "revoked_resync": true
+      }
+    },
+    {
+      "name": "consolidation_race",
+      "passed": true,
+      "latency_seconds": 0.04275195789523423,
+      "result": {
+        "consolidated": 0,
+        "foreground_preserved": true,
+        "source_preserved": true,
+        "stale_summary_absent": true
+      }
+    },
+    {
+      "name": "unknown_without_proof",
+      "passed": true,
+      "latency_seconds": 0.44789695797953755,
+      "result": {
+        "missing_committed_changes": 0,
+        "unintended_duplicate_effects": 0,
+        "accepted_stale_lease_mutations": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "completed": false,
+        "unknown_actions": 1,
+        "external_effects": 1
+      }
+    },
+    {
+      "name": "snapshot_restore",
+      "passed": true,
+      "latency_seconds": 0.05842566699720919,
+      "result": {
+        "action_survived": true,
+        "old_ack_noop": true,
+        "restore_change_delivered": true
+      }
+    },
+    {
+      "name": "stale_plan",
+      "passed": true,
+      "latency_seconds": 0.04039137496147305,
+      "result": {
+        "stale_action_starts": 0,
+        "blocked": true
+      }
+    },
+    {
+      "name": "deleted_basis",
+      "passed": true,
+      "latency_seconds": 0.03825562505517155,
+      "result": {
+        "stale_action_starts": 0,
+        "blocked": true
+      }
+    },
+    {
+      "name": "verifier_outage",
+      "passed": true,
+      "latency_seconds": 0.018644292023964226,
+      "result": {
+        "fact_preserved": true,
+        "validity_not_extended": true,
+        "outcome": "unavailable",
+        "failure_count": 1
+      }
+    }
+  ],
+  "aggregate": {
+    "passed": true,
+    "passed_scenarios": 12,
+    "total_scenarios": 12,
+    "invariants": {
+      "missing_committed_changes": 0,
+      "stale_action_starts": 0,
+      "accepted_stale_lease_mutations": 0,
+      "unintended_duplicate_effects": 0,
+      "false_auto_retries_unknown_actions": 0,
+      "cross_owner_scope_leaks": 0
+    }
+  },
+  "benchmarks": [
+    {
+      "facts": 1000,
+      "subscriptions": 1,
+      "write_p50": 0.08767279202584177,
+      "write_p95": 0.10511445894371718,
+      "poll_p50": 0.005512207979336381,
+      "poll_p95": 0.013772833975963295,
+      "resume_p50": 0.004978374927304685,
+      "resume_p95": 0.007670416962355375,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 5,
+      "receipt_token_bytes": 160,
+      "receipt_logical_bytes": 390,
+      "raw_events_scanned": 5,
+      "largest_scan": 1,
+      "delivered_batches": 5,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH ao_changes USING INDEX sqlite_autoindex_ao_changes_1 (namespace=? AND seq>?)"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 1000,
+      "subscriptions": 10,
+      "write_p50": 0.10481337504461408,
+      "write_p95": 0.15372004196979105,
+      "poll_p50": 0.006541250040754676,
+      "poll_p95": 0.021998916985467076,
+      "resume_p50": 0.005915667046792805,
+      "resume_p95": 0.010773292044177651,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 50,
+      "receipt_token_bytes": 1600,
+      "receipt_logical_bytes": 3950,
+      "raw_events_scanned": 50,
+      "largest_scan": 1,
+      "delivered_batches": 50,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH ao_changes USING INDEX sqlite_autoindex_ao_changes_1 (namespace=? AND seq>?)"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 1000,
+      "subscriptions": 100,
+      "write_p50": 0.08634266699664295,
+      "write_p95": 0.3052413749974221,
+      "poll_p50": 0.002487500023562461,
+      "poll_p95": 0.0045204589841887355,
+      "resume_p50": 0.0021656249882653356,
+      "resume_p95": 0.006612249999307096,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 500,
+      "receipt_token_bytes": 16000,
+      "receipt_logical_bytes": 40450,
+      "raw_events_scanned": 500,
+      "largest_scan": 1,
+      "delivered_batches": 500,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH ao_changes USING INDEX sqlite_autoindex_ao_changes_1 (namespace=? AND seq>?)"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 10000,
+      "subscriptions": 1,
+      "write_p50": 0.5517282499931753,
+      "write_p95": 0.6323864579899237,
+      "poll_p50": 0.0024246660759672523,
+      "poll_p95": 0.00922041607555002,
+      "resume_p50": 0.001752207987010479,
+      "resume_p95": 0.004493749933317304,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 5,
+      "receipt_token_bytes": 160,
+      "receipt_logical_bytes": 395,
+      "raw_events_scanned": 5,
+      "largest_scan": 1,
+      "delivered_batches": 5,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH ao_changes USING INDEX sqlite_autoindex_ao_changes_1 (namespace=? AND seq>?)"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 10000,
+      "subscriptions": 10,
+      "write_p50": 0.6842637920053676,
+      "write_p95": 0.8201738330535591,
+      "poll_p50": 0.0022445835056714714,
+      "poll_p95": 0.006834332947619259,
+      "resume_p50": 0.002666249987669289,
+      "resume_p95": 0.0038957089418545365,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 50,
+      "receipt_token_bytes": 1600,
+      "receipt_logical_bytes": 4000,
+      "raw_events_scanned": 50,
+      "largest_scan": 1,
+      "delivered_batches": 50,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH ao_changes USING INDEX sqlite_autoindex_ao_changes_1 (namespace=? AND seq>?)"
+        }
+      ],
+      "large_replay_events": 0
+    },
+    {
+      "facts": 10000,
+      "subscriptions": 100,
+      "write_p50": 0.6656095830257982,
+      "write_p95": 1.2854522080160677,
+      "poll_p50": 0.002050791517831385,
+      "poll_p95": 0.004824750008992851,
+      "resume_p50": 0.0015378750395029783,
+      "resume_p95": 0.005651417071931064,
+      "journal_rows": 6,
+      "journal_logical_bytes": 1855,
+      "receipt_rows": 500,
+      "receipt_token_bytes": 16000,
+      "receipt_logical_bytes": 40950,
+      "raw_events_scanned": 500,
+      "largest_scan": 1,
+      "delivered_batches": 500,
+      "scan_limit": 1000,
+      "query_plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH ao_changes USING INDEX sqlite_autoindex_ao_changes_1 (namespace=? AND seq>?)"
+        }
+      ],
+      "large_replay_events": 0
+    }
+  ]
+}

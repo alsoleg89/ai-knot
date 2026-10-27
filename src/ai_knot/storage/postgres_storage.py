@@ -12,9 +12,20 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
+from ai_knot.always_on.storage import (
+    AlwaysOnSession,
+    SQLSession,
+    append_event,
+    journal_diff,
+    migrate,
+    namespace_lock_key,
+    sql,
+)
 from ai_knot.storage.base import parse_datetime as _parse_datetime
 from ai_knot.types import Fact, MemoryType, MESIState
 
@@ -131,13 +142,31 @@ class PostgresStorage:
 
     def _init_db(self) -> None:
         with self._get_conn() as conn:
+            schema = conn.execute("SELECT current_schema()").fetchone()[0]
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(%s)", (namespace_lock_key("__schema__:" + schema),)
+            )
             conn.execute(_CREATE_TABLE)
             conn.execute(_CREATE_POOL_STATS_TABLE)
             conn.execute(_CREATE_ACL_GRANTS_TABLE)
             conn.execute(_CREATE_TRUST_EVENTS_TABLE)
             conn.execute(_CREATE_USAGE_EVENTS_TABLE)
-            conn.commit()
-        self._migrate_db()
+            conn.execute(
+                'CREATE TABLE IF NOT EXISTS "ai-knot_snapshots" (agent_id TEXT NOT NULL'
+                ", name TEXT NOT NULL, created_at TEXT NOT NULL, facts_json TEXT NOT NU"
+                "LL, PRIMARY KEY(agent_id,name))"
+            )
+            self._migrate_on_connection(conn)
+            migrate(
+                SQLSession(
+                    conn,
+                    ("__migration__",),
+                    write=True,
+                    postgres=True,
+                    loader=self._load_on_connection,
+                    saver=self._save_on_connection,
+                )
+            )
 
     def save_pool_stats(self, stats: dict[str, Any]) -> None:
         """Persist shared-pool trust/usage telemetry (single-row upsert)."""
@@ -167,15 +196,20 @@ class PostgresStorage:
     def save_grant(
         self, agent_id: str, scope: str, *, granted_at: str, granted_by: str = ""
     ) -> None:
-        """Persist a read-scope grant (upsert on ``agent_id`` + ``scope``)."""
-        with self._get_conn() as conn:
-            conn.execute(
-                'INSERT INTO "ai-knot_acl_grants" (agent_id, scope, granted_at, granted_by) '
-                "VALUES (%s, %s, %s, %s) ON CONFLICT (agent_id, scope) DO UPDATE SET "
-                "granted_at = EXCLUDED.granted_at, granted_by = EXCLUDED.granted_by",
+        with self.always_on_transaction(("__shared__",), write=True) as session:
+            prior = session.fetch_one(
+                sql("SELECT scope FROM acl_grants WHERE agent_id=? AND scope=?"), (agent_id, scope)
+            )
+            session.execute(
+                sql(
+                    "INSERT INTO acl_grants(agent_id,scope,granted_at,granted_by) VALUES(?,"
+                    "?,?,?) ON CONFLICT(agent_id,scope) DO UPDATE SET granted_at=EXCLUDED.g"
+                    "ranted_at,granted_by=EXCLUDED.granted_by"
+                ),
                 (agent_id, scope, granted_at, granted_by),
             )
-            conn.commit()
+            if prior is None:
+                append_event(session, "__shared__", kind="acl_changed", acl_subject=agent_id)
 
     def load_grants(self) -> dict[str, set[str]]:
         """Load all read-scope grants as ``{agent_id: {scope, ...}}``."""
@@ -188,13 +222,12 @@ class PostgresStorage:
         return grants
 
     def revoke_grant(self, agent_id: str, scope: str) -> None:
-        """Remove a read-scope grant (no-op if absent)."""
-        with self._get_conn() as conn:
-            conn.execute(
-                'DELETE FROM "ai-knot_acl_grants" WHERE agent_id = %s AND scope = %s',
-                (agent_id, scope),
+        with self.always_on_transaction(("__shared__",), write=True) as session:
+            count = session.execute(
+                sql("DELETE FROM acl_grants WHERE agent_id=? AND scope=?"), (agent_id, scope)
             )
-            conn.commit()
+            if count:
+                append_event(session, "__shared__", kind="acl_changed", acl_subject=agent_id)
 
     # ------------------------------------------------------------------
     # EventLedgerCapable implementation
@@ -252,7 +285,7 @@ class PostgresStorage:
             rows = cur.fetchall()
         return [dict(zip(cols, row, strict=True)) for row in rows]
 
-    def _migrate_db(self) -> None:
+    def _migrate_on_connection(self, conn: Any) -> None:
         """Add new columns to existing databases (backward compat)."""
         new_columns = {
             "source_snippets": "TEXT NOT NULL DEFAULT '[]'",
@@ -283,33 +316,49 @@ class PostgresStorage:
             "memory_tier": "TEXT NOT NULL DEFAULT 'private'",
             "event_time": "TEXT",
         }
+        cur = conn.execute(
+            """SELECT column_name FROM information_schema.columns
+               WHERE table_name = 'ai-knot_facts' AND table_schema=current_schema()"""
+        )
+        existing_cols = {row[0] for row in cur.fetchall()}
+        for col, definition in new_columns.items():
+            if col not in existing_cols:
+                conn.execute(f'ALTER TABLE "ai-knot_facts" ADD COLUMN {col} {definition}')
+
+        conn.execute('UPDATE "ai-knot_facts" SET valid_from=created_at WHERE valid_from=%s', ("",))
+
+    @contextmanager
+    def always_on_transaction(
+        self, namespaces: tuple[str, ...], *, write: bool
+    ) -> Iterator[AlwaysOnSession]:
+        scopes = tuple(sorted(set(namespaces)))
+        if not scopes or any(not name for name in scopes):
+            raise ValueError("nonempty transaction namespaces required")
         with self._get_conn() as conn:
-            cur = conn.execute(
-                """SELECT column_name FROM information_schema.columns
-                   WHERE table_name = 'ai-knot_facts'"""
+            if write:
+                for name in scopes:
+                    conn.execute("SELECT pg_advisory_xact_lock(%s)", (namespace_lock_key(name),))
+            else:
+                conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            yield SQLSession(
+                conn,
+                scopes,
+                write=write,
+                postgres=True,
+                loader=self._load_on_connection,
+                saver=self._save_on_connection,
             )
-            existing_cols = {row[0] for row in cur.fetchall()}
-            for col, definition in new_columns.items():
-                if col not in existing_cols:
-                    conn.execute(f'ALTER TABLE "ai-knot_facts" ADD COLUMN {col} {definition}')
-            conn.commit()
 
     def save(self, agent_id: str, facts: list[Fact]) -> None:
-        """Replace all facts for an agent."""
-        rows = self._build_rows(facts, agent_id)
-        self._execute_save(agent_id, rows)
-        logger.debug("Saved %d facts for agent '%s'", len(facts), agent_id)
+        with self.always_on_transaction((agent_id,), write=True) as session:
+            session.replace_facts(agent_id, facts)
+
+    def atomic_update(self, agent_id: str, fn: Callable[[list[Fact]], list[Fact]]) -> None:
+        with self.always_on_transaction((agent_id,), write=True) as session:
+            session.replace_facts(agent_id, fn(session.load_facts(agent_id)))
 
     def save_atomic(self, agent_id: str, facts: list[Fact]) -> None:
-        """Atomically replace facts within a single PostgreSQL transaction (READ COMMITTED).
-
-        Provides statement-level atomicity for single-process writers. Does not
-        enforce SERIALIZABLE isolation — concurrent cross-process writers may
-        interleave. Use advisory locks externally if cross-process CAS is needed.
-        """
-        rows = self._build_rows(facts, agent_id)
-        self._execute_save(agent_id, rows)
-        logger.debug("Atomically saved %d facts for agent '%s'", len(facts), agent_id)
+        self.save(agent_id, facts)
 
     def _build_rows(self, facts: list[Fact], agent_id: str) -> list[tuple]:  # type: ignore[type-arg]
         return [
@@ -355,53 +404,64 @@ class PostgresStorage:
             for fact in facts
         ]
 
-    def _execute_save(self, agent_id: str, rows: list[tuple]) -> None:  # type: ignore[type-arg]
-        with self._get_conn() as conn:
-            conn.execute('DELETE FROM "ai-knot_facts" WHERE agent_id = %s', (agent_id,))
-            # executemany is a Cursor method in psycopg3 (Connection has execute but
-            # not executemany). An empty save is just the DELETE above (clear agent).
-            if rows:
-                with conn.cursor() as cur:
-                    cur.executemany(
-                        """INSERT INTO "ai-knot_facts"
-                           (id, agent_id, content, type, importance, retention,
-                            access_count, tags, created_at, last_accessed,
-                            source_snippets, source_spans, supported,
-                            support_confidence, verification_source,
-                            access_intervals, origin_agent_id, visibility,
-                            source_verbatim, valid_from, valid_until,
-                            entity, attribute, version, mesi_state,
-                            canonical_surface, witness_surface, prompt_surface,
-                            slot_key, value_text, qualifiers, state_confidence,
-                            topic_channel, visibility_scope,
-                            claim_key, memory_tier, event_time)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                   %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                   %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                   %s, %s, %s, %s, %s, %s, %s)""",
-                        rows,
-                    )
-            conn.commit()
+    def _save_on_connection(self, conn: Any, agent_id: str, facts: list[Fact]) -> None:
+        if len({fact.id for fact in facts}) != len(facts):
+            raise ValueError("duplicate fact IDs")
+        before = self._load_on_connection(conn, agent_id)
+        rows = self._build_rows(facts, agent_id)
+        session = SQLSession(
+            conn,
+            (agent_id,),
+            write=True,
+            postgres=True,
+            loader=self._load_on_connection,
+            saver=self._save_on_connection,
+        )
+        journal_diff(session, agent_id, before, facts)
+        conn.execute('DELETE FROM "ai-knot_facts" WHERE agent_id = %s', (agent_id,))
+        if rows:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """INSERT INTO "ai-knot_facts"
+                       (id, agent_id, content, type, importance, retention,
+                        access_count, tags, created_at, last_accessed,
+                        source_snippets, source_spans, supported,
+                        support_confidence, verification_source,
+                        access_intervals, origin_agent_id, visibility,
+                        source_verbatim, valid_from, valid_until,
+                        entity, attribute, version, mesi_state,
+                        canonical_surface, witness_surface, prompt_surface,
+                        slot_key, value_text, qualifiers, state_confidence,
+                        topic_channel, visibility_scope,
+                        claim_key, memory_tier, event_time)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                               %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                               %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                               %s, %s, %s, %s, %s, %s, %s)""",
+                    rows,
+                )
 
-    def load(self, agent_id: str) -> list[Fact]:
-        """Load all facts for an agent."""
-        with self._get_conn() as conn:
-            cur = conn.execute(
-                f'{self._SELECT_COLS} FROM "ai-knot_facts" WHERE agent_id = %s ORDER BY created_at',
-                (agent_id,),
-            )
-            rows = cur.fetchall()
-
+    def _load_on_connection(
+        self, conn: Any, agent_id: str, *, fact_id: str | None = None, slot_key: str | None = None
+    ) -> list[Fact]:
+        clauses = ["agent_id=%s"]
+        params = [agent_id]
+        if fact_id is not None:
+            clauses.append("id=%s")
+            params.append(fact_id)
+        if slot_key is not None:
+            clauses.append("slot_key=%s")
+            params.append(slot_key)
+        query = self._SELECT_COLS + ' FROM "ai-knot_facts" WHERE ' + " AND ".join(clauses)
+        rows = conn.execute(query + " ORDER BY created_at", tuple(params)).fetchall()
         return [self._fact_from_row(row) for row in rows]
 
-    def delete(self, agent_id: str, fact_id: str) -> None:
-        """Remove a single fact by id."""
+    def load(self, agent_id: str) -> list[Fact]:
         with self._get_conn() as conn:
-            conn.execute(
-                'DELETE FROM "ai-knot_facts" WHERE agent_id = %s AND id = %s',
-                (agent_id, fact_id),
-            )
-            conn.commit()
+            return self._load_on_connection(conn, agent_id)
+
+    def delete(self, agent_id: str, fact_id: str) -> None:
+        self.atomic_update(agent_id, lambda facts: [fact for fact in facts if fact.id != fact_id])
 
     def list_agents(self) -> list[str]:
         """Return all agent_ids that have stored facts."""
@@ -446,7 +506,7 @@ class PostgresStorage:
             origin_agent_id=str(row[15]),
             visibility=str(row[16]),
             source_verbatim=str(row[17]),
-            valid_from=_parse_datetime(row[18]) if row[18] else datetime.now(UTC),
+            valid_from=_parse_datetime(row[18] or row[7]),
             valid_until=_parse_datetime(row[19]) if row[19] else None,
             entity=str(row[20]) if row[20] else "",
             attribute=str(row[21]) if row[21] else "",
@@ -494,3 +554,41 @@ class PostgresStorage:
             )
             rows = cur.fetchall()
         return [self._fact_from_row(row) for row in rows]
+
+    def save_snapshot(self, agent_id: str, name: str, facts: list[Fact]) -> None:
+        """Persist facts only; action history and delivery state remain independent."""
+        payload = json.dumps(self._build_rows(facts, agent_id), allow_nan=False)
+        with self._get_conn() as conn:
+            conn.execute(
+                (
+                    'INSERT INTO "ai-knot_snapshots"(agent_id,name,created_at,facts_json) V'
+                    "ALUES(%s,%s,%s,%s) ON CONFLICT(agent_id,name) DO UPDATE SET created_at"
+                    "=EXCLUDED.created_at,facts_json=EXCLUDED.facts_json"
+                ),
+                (agent_id, name, datetime.now(UTC).isoformat(), payload),
+            )
+
+    def load_snapshot(self, agent_id: str, name: str) -> list[Fact]:
+        with self._get_conn() as conn:
+            row = conn.execute(
+                'SELECT facts_json FROM "ai-knot_snapshots" WHERE agent_id=%s AND name=%s',
+                (agent_id, name),
+            ).fetchone()
+        if row is None:
+            raise KeyError("snapshot unavailable")
+        rows: list[list[Any]] = json.loads(row[0])
+        return [self._fact_from_row(tuple(values[:1] + values[2:])) for values in rows]
+
+    def list_snapshots(self, agent_id: str) -> list[str]:
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                'SELECT name FROM "ai-knot_snapshots" WHERE agent_id=%s ORDER BY created_at',
+                (agent_id,),
+            ).fetchall()
+        return [str(row[0]) for row in rows]
+
+    def delete_snapshot(self, agent_id: str, name: str) -> None:
+        with self._get_conn() as conn:
+            conn.execute(
+                'DELETE FROM "ai-knot_snapshots" WHERE agent_id=%s AND name=%s', (agent_id, name)
+            )

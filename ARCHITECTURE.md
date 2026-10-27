@@ -20,6 +20,7 @@
 ├──────────────────────────────────────────────────────────────────────┤
 │  KnowledgeBase  ←→  SharedMemoryPool                                 │  ← public API
 │  (learn/recall)      (publish/recall/promote/gc_pool)                │
+│  AlwaysOnMemory (opt-in durable work state, SQLite/PostgreSQL)       │
 ├──────────┬───────────────────┬───────────────────────────────────────┤
 │ Extractor│ Retrievers        │ Forgetting + ConflictPolicy            │
 │ (LLM+ATC)│ BM25Retriever    │ apply_decay (power-law)                │
@@ -207,7 +208,9 @@ def delete(agent_id, id)   -> None
 def list_agents()          -> list[str]
 ```
 
-`save` is a **full replace** — the caller always loads, mutates, then saves.
+`save` is an intentional **full replace**. Managed read-modify-write operations
+use `atomic_update` when available, so concurrent writers cannot overwrite each
+other with stale snapshots.
 Backends namespace by `agent_id`; no two agents share rows.
 
 ### `TemporalStorageCapable` (optional)
@@ -231,11 +234,41 @@ def atomic_update(agent_id, fn: Callable[[list[Fact]], list[Fact]]) -> None
 ```
 
 `SharedMemoryPool._publish_locked()` checks `isinstance(storage, AtomicUpdateCapable)` at
-runtime and dispatches to `atomic_update()` when available. `SQLiteStorage` implements this
-using `BEGIN EXCLUSIVE` — the entire load→merge→save cycle holds a database-level exclusive
-lock, preventing lost updates from concurrent processes sharing the same `.db` file.
+runtime and dispatches to `atomic_update()` when available. `SQLiteStorage` uses
+`BEGIN IMMEDIATE`; `PostgresStorage` acquires a stable namespace advisory
+transaction lock before loading current facts. The callback and replacement commit
+in that same transaction.
 
-YAML and PostgreSQL backends fall back to `save_atomic()` (statement-level only).
+YAML retains its legacy load/save fallback and does not provide the new durable
+always-on guarantees.
+
+### Always-on state (`ai_knot.always_on`, opt-in)
+
+`AlwaysOnMemory(kb)` explicitly enables the namespace's durable change stream.
+Ordinary `KnowledgeBase` construction starts no journal, worker or model call.
+The facade stores intentions and fenced leases, subscriptions with acknowledgment,
+evidence references, action outcomes, freshness policies and maintenance budgets.
+The host schedules batches and executes external tools.
+
+The optional internal `AlwaysOnStorageCapable` seam provides one SQL session for
+fact reads/replacement and state queries. SQLite uses one write transaction;
+PostgreSQL locks all participating namespaces in sorted order and reads after
+locking under READ COMMITTED. Fact changes, journal events and stream head commit
+together. Evidence uses a semantic digest independent of `Fact.version` and recall
+telemetry. Read snapshots use a single transaction.
+
+`storage`, `models` and `changes` hold the lower-level seam and pure types; the
+`memory` facade depends on `KnowledgeBase`. Package exports are lazy to preserve
+the storage/knowledge dependency boundary. Maintenance prepares provider results
+outside SQL locks and guards their commit against current fact and policy
+revisions. An action permit commits `started` before the host calls a remote API;
+unknown outcomes require reconciliation and are never blindly retried.
+
+Additive schema version 6 contains streams, changes, subscriptions, delivery
+receipts, intents, actions, freshness and maintenance runs. These tables are
+separate from named fact snapshots: restoring facts emits new changes without
+rewinding action or delivery history. See [always-on operations](docs/always-on.md)
+and [verification evidence](docs/superpowers/implementation-final.md).
 
 ### `SnapshotCapable` (optional)
 
@@ -330,15 +363,16 @@ CREATE TABLE snapshots (
 ```
 
 Implements `TemporalStorageCapable`, `AtomicUpdateCapable`, and `SnapshotCapable`.
-`atomic_update()` opens a dedicated connection with `BEGIN EXCLUSIVE`, runs the
+`atomic_update()` opens a dedicated connection with `BEGIN IMMEDIATE`, runs the
 callback, then commits — independent of the pool's normal read connections.
 
 ### PostgresStorage
 
 Stores facts in a single `"ai-knot_facts"` table (same schema as SQLite, adapted for PG types).
-Implements `TemporalStorageCapable`. `save_atomic()` uses a single PostgreSQL transaction
-(`READ COMMITTED` isolation — statement-level atomicity, not cross-process CAS).
-For cross-process serializable writes, use advisory locks externally.
+Implements `TemporalStorageCapable`, `AtomicUpdateCapable`, `SnapshotCapable` and
+the internal always-on SQL seam. Namespace advisory transaction locks serialize
+managed read-modify-write operations across processes. Snapshot reads use
+REPEATABLE READ; fact snapshot restore preserves durable work and delivery state.
 
 ---
 

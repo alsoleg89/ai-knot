@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from html import escape
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -37,6 +37,9 @@ from pydantic import BaseModel, Field
 from ai_knot import __version__
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.types import ConversationTurn, Fact, MemoryOp, MemoryType
+
+if TYPE_CHECKING:
+    from ai_knot.always_on.memory import AlwaysOnMemory
 
 _MAX_TOP_K = 200
 _DEFAULT_LIST_LIMIT = 100
@@ -558,7 +561,9 @@ def _render_inspector_html(
 """
 
 
-def create_app(kb: KnowledgeBase, *, token: str | None = None) -> FastAPI:
+def create_app(
+    kb: KnowledgeBase, *, token: str | None = None, always_on: AlwaysOnMemory | None = None
+) -> FastAPI:
     """Build the FastAPI app over *kb*.
 
     Args:
@@ -732,5 +737,10 @@ def create_app(kb: KnowledgeBase, *, token: str | None = None) -> FastAPI:
                 anchor=anchor,
             )
         )
+
+    if always_on is not None:
+        from ai_knot.server.always_on import build_always_on_router
+
+        app.include_router(build_always_on_router(always_on, require_auth))
 
     return app

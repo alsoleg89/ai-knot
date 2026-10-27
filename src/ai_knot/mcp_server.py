@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import builtins
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ai_knot._mcp_tools import (
     tool_add,
@@ -49,6 +49,9 @@ from ai_knot._mcp_tools import (
 from ai_knot.config import AIKnotConfig
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.storage import create_storage
+
+if TYPE_CHECKING:
+    from ai_knot.always_on.memory import AlwaysOnMemory
 
 _MCP_TRANSPORTS = {"stdio", "sse", "streamable-http"}
 
@@ -97,6 +100,7 @@ def _make_server(
     sse_path: str | None = None,
     message_path: str | None = None,
     streamable_http_path: str | None = None,
+    always_on: AlwaysOnMemory | None = None,
 ) -> Any:
     """Build and return the FastMCP application.
 
@@ -345,8 +349,23 @@ def _make_server(
     @app.tool()
     def capabilities() -> str:
         """Return the list of available tools as a JSON array."""
-        return tool_capabilities()
+        if always_on is None:
+            return tool_capabilities()
+        import json
 
+        from ai_knot._always_on_tools import TOOL_METHODS
+
+        entries = json.loads(tool_capabilities())
+        entries.extend(
+            {"name": name, "description": "Durable memory; SQLite/PostgreSQL"}
+            for name in TOOL_METHODS
+        )
+        return json.dumps(entries)
+
+    if always_on is not None:
+        from ai_knot._always_on_tools import register_always_on_tools
+
+        register_always_on_tools(app, always_on)
     return app
 
 
@@ -378,7 +397,10 @@ def main() -> None:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(2)
     kb = _build_kb()
-    app = _make_server(kb)
+    from ai_knot.always_on import AlwaysOnMemory
+
+    enabled = AIKnotConfig.from_env().always_on_enabled
+    app = _make_server(kb, always_on=AlwaysOnMemory(kb)) if enabled else _make_server(kb)
     app.run(transport)
 
 
