@@ -1,6 +1,6 @@
 # OpenAI decision-quality evaluation
 
-The broader product goal remains active. User steering on 2026-10-28 selects GPT-4.1 mini and OpenAI embeddings instead of local Ollama. Use `gpt-4.1-mini` (record the returned snapshot) and `text-embedding-3-small`; no model substitution. Official model pages were fetched through OpenAI Docs. The user says a key existed previously; its current configuration location is being resolved. Never log/persist the key.
+The broader product goal remains active. User steering on 2026-10-28 selects GPT-4.1 mini and OpenAI embeddings instead of local Ollama. Use `gpt-4.1-mini` (record the returned snapshot) and `text-embedding-3-small`; no model substitution. Official model pages were fetched through OpenAI Docs. An authorized runtime credential is now available through the host OS credential store. Never log it or put it in repository files.
 
 ## First implementation slice
 
@@ -19,6 +19,12 @@ All ordinary correctness tests remain local; live OpenAI evaluation is explicitl
 ## Runtime preparation and limits
 
 - [Usage configuration](../../usage.md#multi-agent) passes the OpenAI endpoint, model and key to both private KB and shared pool. The host's chat call separately selects `gpt-4.1-mini`. `select_context()` and `review_context()` remain model-free; configuring an embedding provider does not make those selectors use dense vectors.
-- A temporary S9 diagnostic driver at `/tmp/ai-knot-product-quality/run_openai_probe.py` compares full raw history, BM25 and explicitly configured pool async retrieval. Its offline HTTP wiring check made nine mocked reader calls and four mocked embedding calls, verified model/authentication/usage recording, and rejected embedding failure instead of reporting a successful hybrid run. These are mocked results, not OpenAI quality/latency measurements. The three-question pilot cannot establish end-task benefit.
+- A temporary S9 diagnostic driver at `/tmp/ai-knot-product-quality/run_openai_probe.py` compares full raw history, BM25 and explicitly configured pool async retrieval. Its offline HTTP wiring check made nine mocked reader calls and four mocked embedding calls, verified model/authentication/usage recording, and rejected embedding failure instead of reporting a successful hybrid run. The subsequent [live pilot](../../performance/openai-reader-pilot.json) used the requested models and returned 3/3 correct choices in every arm. The three-question pilot cannot establish end-task benefit.
 - The historical benchmark runner still defaults to Ollama. Do not claim its defaults changed or run it with a cloud URL alone. The live driver uses explicit `SharedMemoryPool` settings; a broader metered task runner remains the next evaluation step.
 - Named-model references: [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), [text-embedding-3-small](https://developers.openai.com/api/docs/models/text-embedding-3-small).
+
+## Live diagnostic result and next action
+
+The provider returned `gpt-4.1-mini-2025-04-14` and `text-embedding-3-small`. Full history used 929 reader input tokens, BM25 392, hybrid 410; every arm used three reader calls and 45 output tokens. Hybrid additionally used four embedding requests and 246 embedding input tokens, including document formation. No response cache or retries were used. Each arm had the same seven-request/20,000-request-body-byte ceiling and three 64-token reader outputs; this is a bounded diagnostic envelope, not the final total-token task-evaluation protocol.
+
+All nine reader choices were correct. This weakens the case for changing retrieval merely to remove the old S9 stale-keyword advisories: on these three questions the reader already resolves the conflict. It does not prove equivalence, a latency improvement, or a quality gain from embeddings. Candidate choices were literal; no external task was executed, evidence indices were range-checked rather than semantically judged, and the temporary diagnostic driver is not a reusable public benchmark. The next evaluation must score decisions across sleep/handoff/source correction and actual simulated outcomes, with a strong scoped existing-memory control and all formation/retrieval/reader tokens charged to the same ceiling. Keep the product goal active.
