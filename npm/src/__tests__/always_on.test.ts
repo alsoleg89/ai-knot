@@ -1,7 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 import { AlwaysOnError, HttpAlwaysOnMemory, HttpKnowledgeBase, KnowledgeBase, McpAlwaysOnMemory } from "../index.js";
+import type { HttpKnowledgeBaseOptions } from "../types.js";
 
 describe("always-on adapters", () => {
+  it("loads a queryless task snapshot through HTTP and MCP", async () => {
+    const calls: unknown[] = [];
+    const facts = [{ ref: { namespace: "owner", fact_id: "receipt", revision: "r1" }, content: "Receipt verified", slot_key: "" }];
+    const request = { task_key: "restore", max_facts: 3, max_chars: 600 };
+    const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return JSON.stringify(facts); });
+    const fetch = vi.fn<NonNullable<HttpKnowledgeBaseOptions["fetch"]>>(async (url, options) => { calls.push([url, options]); return { ok: true, status: 200, statusText: "OK", json: async () => facts, text: async () => "" }; });
+    const http = new HttpKnowledgeBase({ baseUrl: "http://localhost", token: "secret", fetch });
+    expect(await mcp.taskSnapshot(request)).toEqual(facts);
+    expect(await http.alwaysOn.taskSnapshot(request)).toEqual(facts);
+    expect(calls).toEqual([
+      ["memory_context_snapshot", request],
+      ["http://localhost/v1/always-on/evidence/snapshot", {
+        method: "POST", headers: { Authorization: "Bearer secret", "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      }],
+    ]);
+  });
+  it("preserves task snapshot overflow errors in both transports", async () => {
+    const payload = { error: { code: "SnapshotTooLarge", message: "The complete snapshot exceeds the limit." } };
+    const fetch = vi.fn(async () => ({ ok: false, status: 413, statusText: "Content Too Large", json: async () => payload, text: async () => "" }));
+    const http = new HttpKnowledgeBase({ baseUrl: "http://localhost", fetch });
+    await expect(http.alwaysOn.taskSnapshot({ task_key: "restore" })).rejects.toMatchObject({ code: "SnapshotTooLarge", status: 413 });
+    const mcp = new McpAlwaysOnMemory(async () => JSON.stringify(payload));
+    await expect(mcp.taskSnapshot({ task_key: "restore" })).rejects.toMatchObject({ code: "SnapshotTooLarge" });
+  });
   it("records revision-bound experience through HTTP and MCP", async () => {
     const calls: unknown[] = [];
     const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return "{}"; });
@@ -88,8 +114,9 @@ describe("always-on adapters", () => {
       await client.setFreshness({ ref, source_ref: "connector", recheck_after_seconds: 60 });
       await client.dueVerifications(); await client.recordVerification({ ref, result: { outcome: "confirmed", evidence: {}, source_version: "1" } });
       await client.runMaintenance({ run_key: "run", budget: {} });
+      await client.taskSnapshot({ task_key: "restore" });
     }
-    expect(httpCalls).toHaveLength(20); expect(mcpCalls).toHaveLength(20);
+    expect(httpCalls).toHaveLength(21); expect(mcpCalls).toHaveLength(21);
     expect(mcpCalls[10]).toEqual(["memory_ack", { subscription_id: "s", delivery_id: "d" }]);
     expect(httpCalls[2]).toEqual(["/v1/always-on/intents?limit=100", { method: "GET" }]);
   });

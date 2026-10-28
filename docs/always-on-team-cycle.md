@@ -46,6 +46,30 @@ Do not mark a work item handled just because its memory delivery was acknowledge
 
 For `replan`, the host claims the blocked intent, records its new plan with fresh basis through `checkpoint(..., state=READY, basis=...)`, then claims before execution. The example shows this sequence and a source change between preparation and `begin_action`. Keep the existing guarded action path even after successful inspection/context review: neither read is an action permit.
 
+## Load a small task corpus
+
+An event handler can use the model-free [task snapshot](task-snapshot.md) before inventing lexical requirements for acquisition. It returns all current readable task/generic facts when they fit; overflow returns no partial bundle. This is an explicit host policy and does not change `inspect_turn` or its scheduling/coverage decisions.
+
+```python
+from ai_knot.always_on import SnapshotTooLarge
+
+# In the relevant-event handler, after ordinary catch-up/scheduling checks:
+selected = None
+try:
+    facts = memory.task_snapshot(task_key="rollout42", max_facts=8, max_chars=12000)
+except SnapshotTooLarge:
+    selected = memory.select_context(
+        requirements, task_key="rollout42", max_facts=3, max_chars=600,
+    )
+    facts = selected.facts
+
+# Keep requirements and selected.missing_requirements (when available).
+# The host still claims, reviews chosen refs, and guards any later action.
+refs = tuple(item.ref for item in facts)
+```
+
+A fitting snapshot reports available evidence, including an empty tuple; it supplies no entailment or task-ready verdict. Keep the original requirements for the host's decision. On overflow, narrower task applicability, a justified larger output budget or explicit ranked selection are host choices. No inference is triggered by this branch itself, and no subscription receipt is acknowledged by the read.
+
 ## Opt in to semantic candidates
 
 The recipe also provides async `acquire_missing_context(turn, selector, ...)`. It calls the explicit semantic selector only when the lexical turn is `missing_context` and the host supplies `relevant_event=True`. The host must set that flag only for a new relevant event or a deliberate bounded retry. Unchanged idle checks use `False`; every other turn status returns `None` without acquisition. The default scripted example remains model-free.

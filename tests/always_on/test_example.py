@@ -54,5 +54,7 @@ def test_recipient_roles_and_outcome_retraction_example():
         "operator_role_fit": True,
         "reviewer_role_fit": True,
         "retracted_source_blocks_reuse": True,
+        "snapshot_facts": 6,
+        "snapshot_overflow_handled": True,
         "model_calls": 0,
     }

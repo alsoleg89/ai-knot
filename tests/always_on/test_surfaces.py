@@ -113,6 +113,49 @@ def test_http_task_context_returns_truthful_bounded_requirements(ao_factory, kb)
     )
 
 
+def test_http_task_snapshot_is_queryless_strict_and_never_returns_a_partial_bundle(ao_factory, kb):
+    memory = ao_factory()
+    fact = kb.add("Backup receipt verified")
+    client = TestClient(create_app(kb, token="secret", always_on=memory))
+    path = "/v1/always-on/evidence/snapshot"
+    request = {"task_key": "restore", "max_facts": 1, "max_chars": len(fact.content)}
+    assert client.post(path, json=request).status_code == 401
+    headers = {"Authorization": "Bearer secret"}
+    response = client.post(path, headers=headers, json=request)
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {
+            "ref": {
+                "namespace": "owner",
+                "fact_id": fact.id,
+                "revision": memory.capture_evidence((("owner", fact.id),))[0].revision,
+            },
+            "content": fact.content,
+            "slot_key": "",
+        }
+    ]
+    for invalid in (
+        {},
+        {"task_key": True},
+        {"task_key": "restore", "max_facts": True},
+        {"task_key": "restore", "max_chars": "100"},
+        {"task_key": "restore", "owner_agent_id": "foreign"},
+        {"task_key": "restore", "requirements": ["backup"]},
+    ):
+        invalid_response = client.post(path, headers=headers, json=invalid)
+        assert invalid_response.status_code == 422
+        assert invalid_response.json()["error"]["code"] == "InvalidInput"
+    assert (
+        client.post(path, headers=headers, content='{"task_key":"a","task_key":"b"}').status_code
+        == 422
+    )
+    kb.add("Another complete observation")
+    overflow = client.post(path, headers=headers, json=request)
+    assert overflow.status_code == 413
+    assert overflow.json()["error"]["code"] == "SnapshotTooLarge"
+    assert "facts" not in overflow.json() and fact.content not in overflow.text
+
+
 def test_actor_cannot_be_spoofed(ao_factory, kb):
     client = TestClient(create_app(kb, token="secret", always_on=ao_factory()))
     path = "/v1/always-on/intents"

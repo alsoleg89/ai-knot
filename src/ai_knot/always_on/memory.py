@@ -758,6 +758,18 @@ class AlwaysOnMemory(SubscriptionsMixin):
             max_chars=max_chars,
         )
 
+    def task_snapshot(
+        self,
+        *,
+        task_key: str,
+        max_facts: int = 8,
+        max_chars: int = 12000,
+    ) -> tuple[ContextFact, ...]:
+        """Read all current task evidence, or raise SnapshotTooLarge without a prefix."""
+        from .context import task_snapshot
+
+        return task_snapshot(self, task_key=task_key, max_facts=max_facts, max_chars=max_chars)
+
     def derive_fact(
         self,
         content: str,

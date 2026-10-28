@@ -13,9 +13,10 @@ from typing import Literal
 
 from ai_knot.multi_agent.assembly import CoverageAwareAssembler
 from ai_knot.multi_agent.models import CandidateFact
-from ai_knot.types import Fact, MemoryType
+from ai_knot.types import Fact
 
 from .changes import canonical, evidence_revision
+from .context import task_applicable, task_scopes, task_sources
 from .memory import AlwaysOnMemory
 from .models import (
     BasisIssue,
@@ -102,39 +103,15 @@ class SemanticContext:
         self._queries: tuple[tuple[str, ...], list[list[float]]] | None = None
         self._dimension: int | None = None
 
-    def _scopes(self) -> tuple[str, ...]:
-        memory = self._memory
-        if memory._pool is not None and memory._pool._persist_stats:
-            memory._check_namespace("__shared__")
-            return memory._owner, "__shared__"
-        return (memory._owner,)
-
-    @staticmethod
-    def _applicable(fact: Fact, task_key: str) -> bool:
-        return fact.type != MemoryType.EPISODIC and fact.qualifiers.get("task_key", "") in (
-            "",
-            task_key,
-        )
-
     def _snapshot(self, task_key: str, limit: int) -> tuple[datetime, dict[str, Source]]:
         memory = self._memory
-        with memory._transaction(self._scopes(), write=False) as session:
+        with memory._transaction(task_scopes(memory), write=False) as session:
             now = memory._now()
             sources = {}
-            for namespace in self._scopes():
-                for fact in session.load_facts(namespace):
-                    if (
-                        not self._applicable(fact, task_key)
-                        or not fact.supported
-                        or not fact.is_active(now)
-                    ):
-                        continue
-                    ref = EvidenceRef(namespace, fact.id, evidence_revision(fact))
-                    if memory._validate_basis(session, (ref,), now):
-                        continue
-                    sources[canonical([namespace, fact.id])] = (ref, fact)
-                    if len(sources) > limit:
-                        return now, sources  # Reject the universe, never embed this prefix.
+            for ref, fact in task_sources(memory, session, task_key, now):
+                sources[canonical([ref.namespace, fact.id])] = (ref, fact)
+                if len(sources) > limit:
+                    return now, sources  # Reject the universe, never embed this prefix.
             return now, sources
 
     async def acquire(
@@ -226,7 +203,7 @@ class SemanticContext:
             self._dimension = len(vectors[0])
             self._queries = requirements, query_vectors
 
-        with memory._transaction(self._scopes(), write=False) as session:
+        with memory._transaction(task_scopes(memory), write=False) as session:
             now = memory._now()
             valid: dict[str, Source] = {}
             issues: list[BasisIssue] = []
@@ -236,7 +213,7 @@ class SemanticContext:
                     issues.extend(problems)
                     continue
                 fact = session.load_facts(ref.namespace, fact_id=ref.fact_id)[0]
-                if not self._applicable(fact, task_key) or evidence_revision(fact) != ref.revision:
+                if not task_applicable(fact, task_key) or evidence_revision(fact) != ref.revision:
                     issues.append(BasisIssue("context_changed", ref))
                     continue
                 valid[key] = ref, fact

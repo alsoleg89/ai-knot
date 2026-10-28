@@ -35,6 +35,7 @@ ROUTES = (
     ("POST", "/evidence/capture", "capture_evidence", None),
     ("POST", "/evidence/review", "review_context", None),
     ("POST", "/evidence/select", "select_context", None),
+    ("POST", "/evidence/snapshot", "task_snapshot", None),
     ("POST", "/freshness", "set_freshness", None),
     ("GET", "/freshness/due", "due_verifications", None),
     ("POST", "/freshness/record", "record_verification", None),

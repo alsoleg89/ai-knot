@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from ai_knot import KnowledgeBase, SharedMemoryPool
-from ai_knot.always_on import AlwaysOnMemory, WorkspaceMemory
+from ai_knot.always_on import AlwaysOnMemory, SnapshotTooLarge, WorkspaceMemory
 from ai_knot.storage.sqlite_storage import SQLiteStorage
 from ai_knot.types import Fact, MemoryType
 
@@ -78,6 +78,16 @@ def example(directory: Path) -> dict[str, object]:
         assert views[role].complete
         assert expected[role] <= {entry.ref.fact_id for entry in views[role].facts}
 
+    # A fitting task corpus can be loaded without inventing search requirements.
+    snapshot = readers["operator"].task_snapshot(task_key="release42")
+    assert len(snapshot) == 6
+    try:
+        readers["operator"].task_snapshot(task_key="release42", max_facts=3)
+    except SnapshotTooLarge:
+        overflow_handled = True  # The host can use the explicit selector above.
+    else:
+        raise AssertionError("A partial task snapshot must not be returned")
+
     # A corrected shared receipt retracts every projection tied to its old revision.
     receipt("withdrawn")
     rejected = readers["operator"].review_context(
@@ -89,6 +99,8 @@ def example(directory: Path) -> dict[str, object]:
         "operator_role_fit": True,
         "reviewer_role_fit": True,
         "retracted_source_blocks_reuse": True,
+        "snapshot_facts": len(snapshot),
+        "snapshot_overflow_handled": overflow_handled,
         "model_calls": 0,
     }
 

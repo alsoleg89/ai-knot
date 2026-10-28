@@ -193,7 +193,9 @@ def error_response(exc: Exception) -> tuple[int, dict[str, object]]:
         "LeaseLost": "The lease is no longer current.",
         "AccessDenied": "The requested object is not accessible.",
         "InvalidInput": "The request is invalid.",
-        "SnapshotTooLarge": "The complete snapshot exceeds the limit. Narrow the subscription.",
+        "SnapshotTooLarge": (
+            "The complete snapshot exceeds the limit. Narrow its scope or increase the budget."
+        ),
         "UnsupportedAlwaysOnBackend": "Always-on memory requires SQLite or PostgreSQL.",
     }
     message = messages.get(code, "The operation conflicts with current memory state.")

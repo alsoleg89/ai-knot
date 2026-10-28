@@ -89,6 +89,7 @@ export interface AlwaysOnClient {
   resync(subscriptionId: string, limit?: number): Promise<ChangeBatch>;
   reviewContext(refs: EvidenceRef[], maxChars?: number): Promise<ContextReview>;
   selectContext(input: { requirements: string[]; task_key?: string; role?: string; max_facts?: number; max_chars?: number }): Promise<TaskContext>;
+  taskSnapshot(input: { task_key: string; max_facts?: number; max_chars?: number }): Promise<ContextFact[]>;
   ack(subscriptionId: string, deliveryId: string): Promise<void>;
   unsubscribe(subscriptionId: string): Promise<void>;
   prepareAction(input: { intent_id: string; lease_token: string; action_key: string; request: JsonObject; basis?: EvidenceRef[] }): Promise<ActionRecord>;
@@ -131,6 +132,7 @@ const operations: Record<string, Operation> = {
   resync: { tool: "memory_resync", path: "/subscriptions/{id}/resync", id: "subscription_id" },
   reviewContext: { tool: "memory_context_review", path: "/evidence/review" },
   selectContext: { tool: "memory_context_select", path: "/evidence/select" },
+  taskSnapshot: { tool: "memory_context_snapshot", path: "/evidence/snapshot" },
   ack: { tool: "memory_ack", path: "/subscriptions/{id}/ack", id: "subscription_id" },
   unsubscribe: { tool: "memory_unsubscribe", path: "/subscriptions/{id}", verb: "DELETE", id: "subscription_id" },
   prepareAction: { tool: "action_prepare", path: "/actions" },
@@ -158,6 +160,7 @@ abstract class AlwaysOnMethods implements AlwaysOnClient {
   resync(id: string, limit = 500): Promise<ChangeBatch> { return this.invoke("resync", { limit }, id); }
   reviewContext(refs: EvidenceRef[], maxChars = 12000): Promise<ContextReview> { return this.invoke("reviewContext", { refs, max_chars: maxChars }); }
   selectContext(input: Parameters<AlwaysOnClient["selectContext"]>[0]): Promise<TaskContext> { return this.invoke("selectContext", input); }
+  taskSnapshot(input: Parameters<AlwaysOnClient["taskSnapshot"]>[0]): Promise<ContextFact[]> { return this.invoke("taskSnapshot", input); }
   async ack(id: string, deliveryId: string): Promise<void> { await this.invoke("ack", { delivery_id: deliveryId }, id); }
   async unsubscribe(id: string): Promise<void> { await this.invoke("unsubscribe", {}, id); }
   prepareAction(input: Parameters<AlwaysOnClient["prepareAction"]>[0]): Promise<ActionRecord> { return this.invoke("prepareAction", input); }

@@ -32,7 +32,7 @@ def test_mcp_strict_owner_and_capabilities(ao_factory, kb):
         )
 
     asyncio.run(calls())
-    assert len(ROUTES) == 24
+    assert len(ROUTES) == 25
 
 
 def test_mcp_experience_records_exact_outcome_and_rejects_spoofing(ao_factory, kb):

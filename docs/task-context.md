@@ -14,6 +14,8 @@ print(context.missing_requirements)
 
 Requirements are supplied by the host rather than inferred from punctuation or expanded by a model. Return values contain exact namespaced revision references, selected text, covered/missing requirement strings, a budget-pressure flag and check time. Selection makes no model/embedding call, changes no counters or intent state and starts no worker. SQLite/PostgreSQL use one read-only snapshot for the private/shared corpus, grants, source revisions and freshness checks.
 
+For a small whole task corpus, use the queryless [task snapshot](task-snapshot.md): all current admissible facts or an explicit overflow error, with no lexical coverage claim. This avoids constructing search words merely to load known task-scoped memory.
+
 ## Applicability before role preference
 
 Task applicability uses `Fact.qualifiers["task_key"]`. An unlabelled record is a generic candidate; a labelled record must exactly match the requested task. With no task key, only generic records are eligible. Use stable business keys that identify the task/environment/version boundary you actually need.

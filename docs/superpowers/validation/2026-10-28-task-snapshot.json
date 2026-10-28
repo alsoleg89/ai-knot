@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-28",
+  "base_commit": "813daa5fe332359eb98461336a96b84cc825c356",
+  "scope": "Additive all-or-error model-free task read on existing storage/transport; broad product goal remains active",
+  "contract": {
+    "python": "task_snapshot(*,task_key,max_facts=8,max_chars=12000) -> tuple[ContextFact,...]",
+    "http": "POST /v1/always-on/evidence/snapshot",
+    "mcp": "memory_context_snapshot",
+    "typescript": "alwaysOn.taskSnapshot -> ContextFact[]",
+    "overflow": "SnapshotTooLarge, no partial result",
+    "new_storage_dependency_worker_or_version": "none"
+  },
+  "python312_postgres_required": {
+    "passed": 2335,
+    "skipped": 2,
+    "seconds": 83.79,
+    "coverage_percent": 89.92,
+    "command": "python -m pytest -n 4 --timeout=20 -m 'not slow' --cov=ai_knot --cov-report=term-missing -p no:cacheprovider",
+    "skip_reasons": [
+      "Concurrent empty PostgreSQL initialization SQLite parameter",
+      "Missing-psycopg branch when psycopg is installed"
+    ],
+    "warning": "Existing model-free OpenClaw multi-turn adapter warning",
+    "slow_tests": "Excluded by standard CI selection"
+  },
+  "focused_sql": {
+    "passed": 193,
+    "skipped": 0,
+    "seconds": 21.7,
+    "scope": "Snapshot, exact archived semantic equivalence, lexical/semantic context and HTTP/MCP surfaces"
+  },
+  "compatibility": {
+    "python311": {
+      "passed": 104,
+      "pg_deselected": 92,
+      "seconds": 3.69
+    },
+    "python313": {
+      "passed": 104,
+      "pg_deselected": 92,
+      "seconds": 3.68
+    }
+  },
+  "typescript": {
+    "tests_passed": 61,
+    "test_files": 7,
+    "typecheck": "pass",
+    "esm_cjs_build": "pass",
+    "source_bytes_match_worktree": true,
+    "workspace": "Temporary copy with existing read-only dependencies; final runs disable Vitest cache",
+    "initial_incident": "Initial symlinked-dependency run wrote only an ignored original Vitest cache. Final cache-disabled runs left it unchanged; protected sources/manifests untouched."
+  },
+  "static": {
+    "ruff": "pass",
+    "format_files": 295,
+    "strict_mypy_source_files": 79,
+    "diff_check": "pass"
+  },
+  "equivalence": {
+    "reference_semantic_sha256": "bac58b11b6153bbda26b5a130b92dbdd05e8c7a3306bbdcf51545ff1b47faf06",
+    "sql_cases_passed": 36,
+    "scope": "16 frozen editorial cases plus2generic/private/shared fixtures each backend; exact deterministic source refs/results/callback inputs/cache/limit behavior",
+    "current_shared_dependencies": "Used in both arms to isolate extraction; no claim about arbitrary future validator changes"
+  },
+  "independent_review": {
+    "model": "gpt-6-astra",
+    "reasoning": "xhigh",
+    "skill": "Ponytail review",
+    "all_22_reviewed_hashes_verified_before_acceptance": true,
+    "gate_failures_found": 2,
+    "unresolved_findings": 0,
+    "evidence": "../reviews/2026-10-28-task-snapshot-astra-ponytail.md",
+    "other_independent_finding": "Duplicate scopes for configured owner __shared__; RED regression, scope deduplication fixed"
+  },
+  "quality_and_load": {
+    "new_paid_calls": 0,
+    "new_accuracy_claim": "none",
+    "previous_fixtures_or_gold_modified": false,
+    "prior15_of16": "Canonical-prefix control is not this all-or-error API and remains explicitly limited",
+    "new_capacity_claim": "none; output limits do not bound namespace scanning",
+    "ma_benchmark": "Not rerun: no pool/MA benchmark callers of changed context helper; legacy targets unchanged, full regression CI passed"
+  },
+  "protected_original": {
+    "files_sha256_unchanged": 30,
+    "head_and_status_unchanged": true,
+    "python_version": "0.12.0",
+    "npm_version": "0.12.0",
+    "push_merge_release": "none"
+  },
+  "source_test_sha256": {
+    "examples/task_context.py": "a1a8849e048d5971a2db6e2a6aa94f1ebd00c8720169f99fee26037206eaf4e2",
+    "npm/src/__tests__/always_on.test.ts": "ec5bd77202989f3bfb120240ef4a89b883e83421c2ed6a5e449006d8a1669835",
+    "npm/src/always_on.ts": "db972bec2944f7c161827c8577c7ec29e5b070828112340f05ed1203b33a9b9a",
+    "src/ai_knot/_always_on_tools.py": "1e67cdb33ad9a95a94c0c9155bb228cead9c38d45656c1a978710d73e658f1ee",
+    "src/ai_knot/always_on/codec.py": "b774c448cf3dc072583f2c7076bbc09a254adde8b8c51ad77a7a57f0d0d522d5",
+    "src/ai_knot/always_on/context.py": "c419532530ddf226de2390760ff78436c1e35e2fab3be517502a58fe3d2db21d",
+    "src/ai_knot/always_on/memory.py": "e2958caa58ddea30bc566e97e32d263b69b6641535d32cbd05e3f72c24170194",
+    "src/ai_knot/always_on/semantic.py": "b28234582cba9d8a975854fd70830e305a172ab88d187efd758bff03613925e2",
+    "src/ai_knot/server/always_on.py": "a9829c1ee8481f3aa4fa1ec814c56a89ffb3f637008b7d011db5d9ec3f5a7f0d",
+    "tests/always_on/test_example.py": "7ab85fa6434a59b194bbf9aa60a30752e5738b2ac2c615cbbda233cd7e15bdc5",
+    "tests/always_on/test_mcp_surface.py": "989cb4cc8cfddc508f83dc780d983899a05d170d9dcb59b1688a1b6ccaa165eb",
+    "tests/always_on/test_surfaces.py": "c2270958e62ffeb1d3336418eb308b74f2f4c78c6328f8b27be31e4bb24af02b",
+    "tests/always_on/test_task_snapshot.py": "9524781334623de27579935ba7b7f3f6f411ca33c5aa22af5f0a7b27313aa513",
+    "tests/always_on/test_task_snapshot_equivalence.py": "94acada3ae11b4963981a6a788cf8bf94d75ce0b4d2ff623b97a1a083354d174",
+    "tests/always_on/test_task_snapshot_surface.py": "4c7412b67947aa6bcf070b16b562afd7f7d1b076249653cda9b831c72d6d1a67"
+  }
+}

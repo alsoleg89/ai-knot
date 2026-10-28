@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import replace
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from ai_knot._inverted_index import InvertedIndex
@@ -13,10 +15,68 @@ from ai_knot.types import Fact, MemoryType
 
 from .changes import access_projection, canonical, evidence_revision, visible
 from .lineage import lineage_status
-from .models import ContextFact, EvidenceRef, TaskContext, context_label, positive_integer
+from .models import (
+    ContextFact,
+    EvidenceRef,
+    SnapshotTooLarge,
+    TaskContext,
+    context_label,
+    positive_integer,
+)
 
 if TYPE_CHECKING:
     from .memory import AlwaysOnMemory
+    from .storage import AlwaysOnSession
+
+
+def task_scopes(memory: AlwaysOnMemory) -> tuple[str, ...]:
+    if memory._pool is not None and memory._pool._persist_stats:
+        memory._check_namespace("__shared__")
+        return tuple(dict.fromkeys((memory._owner, "__shared__")))
+    return (memory._owner,)
+
+
+def task_applicable(fact: Fact, task_key: str) -> bool:
+    return fact.type != MemoryType.EPISODIC and fact.qualifiers.get("task_key", "") in (
+        "",
+        task_key,
+    )
+
+
+def task_sources(
+    memory: AlwaysOnMemory,
+    session: AlwaysOnSession,
+    task_key: str,
+    now: datetime,
+) -> Iterator[tuple[EvidenceRef, Fact]]:
+    for namespace in task_scopes(memory):
+        for fact in session.load_facts(namespace):
+            if not task_applicable(fact, task_key) or not fact.supported or not fact.is_active(now):
+                continue
+            ref = EvidenceRef(namespace, fact.id, evidence_revision(fact))
+            if not memory._validate_basis(session, (ref,), now):
+                yield ref, fact
+
+
+def task_snapshot(
+    memory: AlwaysOnMemory,
+    *,
+    task_key: str,
+    max_facts: int,
+    max_chars: int,
+) -> tuple[ContextFact, ...]:
+    context_label(task_key, "task_key")
+    positive_integer(max_facts, "max_facts", 128)
+    positive_integer(max_chars, "max_chars", 65536)
+    with memory._transaction(task_scopes(memory), write=False) as session:
+        result: list[ContextFact] = []
+        remaining = max_chars
+        for ref, fact in task_sources(memory, session, task_key, memory._now()):
+            if len(result) == max_facts or len(fact.content) > remaining:
+                raise SnapshotTooLarge("Task snapshot exceeds the output budget")
+            result.append(ContextFact(ref, fact.content, fact.slot_key))
+            remaining -= len(fact.content)
+        return tuple(sorted(result, key=lambda item: (item.ref.namespace, item.ref.fact_id)))
 
 
 def select_context(
@@ -42,10 +102,8 @@ def select_context(
     context_label(role, "role")
     positive_integer(max_facts, "max_facts", 128)
     positive_integer(max_chars, "max_chars", 65536)
-    shared = memory._pool is not None and memory._pool._persist_stats
-    if shared:
-        memory._check_namespace("__shared__")
-    scopes = (memory._owner, "__shared__") if shared else (memory._owner,)
+    scopes = task_scopes(memory)
+    shared = "__shared__" in scopes
     with memory._transaction(scopes, write=False) as session:
         now = memory._now()
         all_facts = {
@@ -65,8 +123,7 @@ def select_context(
                 if (
                     not fact.supported
                     or not fact.is_active(now)
-                    or fact.type == MemoryType.EPISODIC
-                    or fact.qualifiers.get("task_key", "") not in ("", task_key)
+                    or not task_applicable(fact, task_key)
                 ):
                     continue
                 if namespace != memory._owner and not visible(
