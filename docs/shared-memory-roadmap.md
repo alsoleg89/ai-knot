@@ -39,9 +39,12 @@ The [continued repository study](team-repository-evaluation.md) now includes rea
 
 [Transaction-local read reuse](context-read-performance.md) now reduces repeated root/grant/freshness lookups in the four context read paths. A 64-fact/16-root snapshot fell from 3,330 to 99 backing reads while returning identical public results on both SQL backends. Local latency gains vary substantially; namespace scanning and admission CPU remain. This improves a measured operational cost without adding inference or claiming a task-quality gain.
 
+The [quality diagnosis](research/2026-10-28-memory-quality-diagnosis.md) separates the five old advisory misses from actual source loss. It repairs a binding S26 false positive that credited generic notes as implementation coverage. Fresh ranked traces on both SQL backends confirm actual implementation coverage of all requested facets at the default scales; arbitrary exact-peer identity and row surplus remain separate metrics. S9's legacy presence probe is documented as no proof of CAS, and S19's variable-length keyword precision has no universal 0.60 ceiling. Numeric gates, fixtures and earlier paid results are preserved.
+
 - Measure decision/task benefit for long-lived teams against strong existing memory and no-shared-memory controls, with the same observations and total inference budgets. Synthetic lexical coverage alone is insufficient.
 - Control source order and researcher-output variation before interpreting acquisition differences; evaluate accumulating context and existing repository tasks rather than tuning the three retained synthetic cases.
-- Diagnose the five retained advisory retrieval misses before choosing fixes; distinguish bad retrieval from ambiguous/incorrect labels. Keep explicit applicability and provenance intact.
+- Use the diagnosed source/metric boundaries when choosing quality changes; inspect ranked-source evidence and query-specific constraints rather than tuning to ambiguous exact-peer labels or shrinking top-k blindly. Keep applicability and provenance intact.
+- Exercise a bounded end-to-end host decision when scoped evidence is available but lexical requirements differ in wording. Availability/coverage flags must neither certify readiness nor silently suppress planning forever.
 - Test sustained accumulation, retrieval/context preparation cost and useful-update/idle work under realistic workloads. Set deployment-relevant targets before capacity claims.
 - Turn demonstrated gaps into small product changes and verify them on both SQL backends. Maintain the source/ACL/revision/action guarantees already implemented.
 

@@ -31,11 +31,9 @@ class GateThreshold:
     """One acceptance threshold: ``(scenario_id, metric) op target``.
 
     ``advisory`` thresholds are reported but do not bind the pass/fail verdict:
-    they track a target that is structurally unreachable by construction (a
-    fixed-``k`` precision, a needle among identical peers) or that depends on an
-    optional component (the semantic resolver).  Keeping them visible — with a
-    ``note`` pointing at the calibration record — means a "pass" never hides a
-    real failure while a structural cap is not counted as one.
+    they track diagnostic targets affected by source ambiguity, result length,
+    runtime environment or an optional semantic resolver. Notes explain those
+    limitations without turning an observed score into a universal bound.
     """
 
     scenario_id: str
@@ -59,8 +57,7 @@ class GateResult:
 
 
 # Acceptance thresholds.  Binding entries are achievable targets / no-regression
-# guards; advisory entries track structurally-capped or resolver-dependent
-# targets (see the calibration notes).
+# guards; advisory entries retain diagnostic targets and their limitations.
 _CALIB = "calibration notes"
 GATE: tuple[GateThreshold, ...] = (
     # Protocol correctness — no regression (currently all 1.00).
@@ -73,7 +70,7 @@ GATE: tuple[GateThreshold, ...] = (
     # Conflict safety (S9).  The system must SURFACE the correct answer (binding);
     # SUPPRESSING the lexically-divergent stale rival is a semantic value-conflict
     # the deterministic resolver cannot reach (advisory — needs the opt-in
-    # semantic resolver; deterministic ceiling ~0.33).
+    # semantic resolver; the observed 0.33 is not a universal ceiling).
     GateThreshold("s9_ma_pool_publish", "correct_at_3", ">=", 0.90, "conflict"),
     GateThreshold(
         "s9_ma_pool_publish",
@@ -82,7 +79,7 @@ GATE: tuple[GateThreshold, ...] = (
         0.80,
         "conflict",
         advisory=True,
-        note=f"deterministic ceiling ~0.33; >=0.80 is the with-resolver target ({_CALIB} S4)",
+        note=f"cross-source suppression target; observed deterministic score ~0.33 ({_CALIB} S4)",
     ),
     GateThreshold(
         "s9_ma_pool_publish",
@@ -93,8 +90,8 @@ GATE: tuple[GateThreshold, ...] = (
         advisory=True,
         note=f"semantic value-conflict; needs the opt-in resolver ({_CALIB} S4)",
     ),
-    # Evidence precision (S19) — structurally capped at 0.60 (3 evidence facts,
-    # top_k=5; distractors lexically outscore the weakest evidence).
+    # Evidence precision (S19) counts keyword-positive returned rows. top_k is
+    # a maximum; variable result length prevents a universal 3/5 ceiling.
     GateThreshold(
         "s19_incident_reconstruction",
         "evidence_precision",
@@ -102,7 +99,8 @@ GATE: tuple[GateThreshold, ...] = (
         0.70,
         "evidence",
         advisory=True,
-        note=f"structural ceiling 0.60: 3 evidence facts at top_k=5 ({_CALIB} S2)",
+        note="keyword precision with variable result length, not an entailment score "
+        f"({_CALIB} S2)",
     ),
     # Adversarial suppression + trust penalty (S23) — binding.
     GateThreshold("s23_adversarial_noise", "free_standing_suppression", ">=", 0.85, "adversarial"),
@@ -136,8 +134,8 @@ GATE: tuple[GateThreshold, ...] = (
         note=f"domain-coverage gate replacing exact-agent recall@1000 ({_CALIB} S3)",
     ),
     # Advisory: at N=1000 each target has ~49 identical-content peers and the
-    # markerless query cannot name it — exact recall is information-theory bound
-    # (~0.33) and the distractor rate has a 0.70 floor at top_k=10 / 3 targets.
+    # markerless query cannot name it. Observed 0.33 is not a universal bound;
+    # non-target rows include equivalent shards and returned count can be <10.
     GateThreshold(
         "s26_sparse_assembly",
         "target_shard_recall_at_1000",
@@ -145,7 +143,7 @@ GATE: tuple[GateThreshold, ...] = (
         0.60,
         "scale",
         advisory=True,
-        note=f"information-theoretic cap ~0.33 ({_CALIB} S3)",
+        note=f"markerless peer ambiguity; observed exact recall ~0.33 is not a cap ({_CALIB} S3)",
     ),
     GateThreshold(
         "s26_sparse_assembly",
@@ -154,7 +152,7 @@ GATE: tuple[GateThreshold, ...] = (
         0.50,
         "scale",
         advisory=True,
-        note=f"structural floor 0.70 at top_k=10 / 3 targets ({_CALIB} S3)",
+        note=f"exact-target surplus includes useful peers; result length varies ({_CALIB} S3)",
     ),
 )
 

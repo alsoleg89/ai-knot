@@ -1,0 +1,135 @@
+{
+  "date": "2026-10-28",
+  "base_commit": "987f885eba075d22aa43bbcbf4dba32bad4cf32a",
+  "scope": "Quality-diagnostic/scorer repair; production source, fixture text, numeric gates and package versions unchanged",
+  "product_goal_status": "active",
+  "tdd": {
+    "source_identity": "7failed7passed before repair",
+    "duplicate_first_hit_rank": "2failed before repair",
+    "connect_ex_guard": "1failed before repair; final failedstatus and retained partialprogress verified",
+    "repeated_domain_N60": "1failed before repair; final equivalence1 with exact1/3"
+  },
+  "focused": {
+    "final_passed": 49,
+    "seconds": 0.18,
+    "modules": [
+      "test_s26_ambiguity_metrics",
+      "test_ma_gate_failures",
+      "test_sparse_source_diagnostic"
+    ]
+  },
+  "python312_postgres_required": {
+    "passed": 2476,
+    "skipped": 5,
+    "seconds": 187.85,
+    "coverage_percent": 89.97,
+    "command": "python -m pytest -n4 --timeout=20 -m 'not slow' --cov=ai_knot --cov-report=term-missing -p no:cacheprovider",
+    "environment": [
+      "PYTHONPATH=src",
+      "feature-source CLI wrappers on PATH",
+      "AI_KNOT_TEST_PG_DSN=owned local PostgreSQL16 loopback55441",
+      "AI_KNOT_REQUIRE_POSTGRES=1",
+      "COVERAGE_FILE=temporary path"
+    ],
+    "skip_reasons": [
+      "SQLite parameter of PostgreSQL-only initialization test",
+      "Missing-psycopg branch when installed",
+      "Three unrelated Docker evaluator opt-in cases, previously separately passed"
+    ],
+    "warnings": [
+      "Existing OpenClaw no-LLM multi-turn warning",
+      "Coverage cannot parse archived semantic synthetic source filename"
+    ],
+    "slow_tests": "Excluded by standard CI selection",
+    "log_sha256": "31e94d077da10e84fa450ce973c2745ffbf782f636da807b38ecebb2d1c08660"
+  },
+  "compatibility": {
+    "python311": {
+      "passed": 49,
+      "seconds": 0.34
+    },
+    "python313": {
+      "passed": 49,
+      "seconds": 0.3
+    }
+  },
+  "static": {
+    "ruff": "pass",
+    "formatted_files": 312,
+    "strict_mypy_source_files": 80,
+    "diff_check": "pass"
+  },
+  "diagnostics": {
+    "selected_scenarios": [
+      "s9_ma_pool_publish",
+      "s19_incident_reconstruction",
+      "s26_sparse_assembly"
+    ],
+    "binding_checks_per_backend": "3/3 selected3; not all19 or all11",
+    "backends": [
+      "sqlite",
+      "postgres"
+    ],
+    "provider_calls": 0,
+    "source_population": "Sequential publishers, not concurrent model agents",
+    "source_counts_at1000_eachSQL": {
+      "conceptual_rows": 50,
+      "exact_implementation_bodies": 47,
+      "requested_domain_implementation_rows": 36,
+      "exact_target_rows": 5,
+      "covered_required_facets": "15/15",
+      "marker_named_exact_targets": "15/15"
+    },
+    "summary": "../../performance/memory-quality-diagnostic.json",
+    "raw_archive_sha256": "a536d9f34629e7e91156238fa38d677dc462cc779be79652fb2eb420220a46d1",
+    "old_runs_rescored": false,
+    "replay": "All6default checkpoints match final/measured/pinnedlegacy non-timing scores on identical fresh rows",
+    "native_scores_or_facet_attribution": false,
+    "timing": "Instrumented capture/deepcopy included; no comparison to old product latency"
+  },
+  "guard": {
+    "initial_sqlite": "Missing connect_ex interception disclosed;0attempts means0intercepted calls; exact initial script retained",
+    "final_postgres": "Python create_connection/connect/connect_ex/httpxsend guarded; explicit local libpq SQL allowed",
+    "regression": "Nonzero exit,failedstatus,1intercepted attempt retains completedscenario"
+  },
+  "provenance": {
+    "corpus_proof": {
+      "base_commit": "987f885eba075d22aa43bbcbf4dba32bad4cf32a",
+      "s26_generated_data_and_queries_unchanged": true,
+      "s26_generated_data_sha256": "3f6e537bdbe737992c9ed63f97663330de884f0bcff4d0307076999be1e5e00d",
+      "gate_numeric_roles_operators_unchanged": true,
+      "gate_numeric_sha256": "6f91902eb027d50ade77db2188b1a85347805d22280b25be3f21485b234b38f8"
+    },
+    "measured_sqlite_overrides": 4,
+    "measured_postgres_hashes": 85,
+    "final_hashes_verified": 85,
+    "reconstruction": "Pinned base plus archived overrides; every hash verified",
+    "post_measurement_fix": "N60 per-facet sum/version/descriptions; recorded default results unchanged"
+  },
+  "review": {
+    "file": "../reviews/2026-10-28-sparse-source-scoring-astra-ponytail.md",
+    "sha256": "f9b36159c0bde0d12eac308507bceb4fdeb1c28b443a38fbdfe839145e5031b6",
+    "unresolved_findings": 0,
+    "independent_pytest": "14passed0.15s before final overlap correction; final closure used source/hash checks, all6saved-row replays and direct N60 function comparison",
+    "full_CI": "Read parent log, not independently repeated"
+  },
+  "original_checkout": {
+    "head": "01aad887846364541da8428d7e3d6c4b4ad57ed2",
+    "status_exactly_preserved": true,
+    "protected_file_hashes_unchanged": 30
+  },
+  "versions": {
+    "python": "0.12.0",
+    "npm": "0.12.0"
+  },
+  "cleanup": {
+    "owned_postgres_id": "e44b2c18c59b234a18fad42377a290fb1f2136e068d5322dbe3f7883123a32fd",
+    "ownership_label_verified": true,
+    "running_after_cleanup": false,
+    "other_containers_modified": false
+  },
+  "git": {
+    "branch": "codex/always-on-memory-return",
+    "push_pr_merge_release": false
+  }
+}

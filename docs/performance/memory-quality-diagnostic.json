@@ -1,0 +1,182 @@
+{
+  "scope": "New offline instrumented S9/S19/S26 diagnostics, not old traces or real-model quality",
+  "backends": {
+    "sqlite": {
+      "selected_scenarios": 3,
+      "binding_passed": 3,
+      "binding_total": 3,
+      "intercepted_network_attempts": 0,
+      "provider_calls": 0,
+      "source_scoring_default_pairs": [
+        {
+          "agents": 10,
+          "queries": 5,
+          "conceptual_rows": 21,
+          "exact_generated_implementation_rows": 18,
+          "same_target_domain_implementation_rows": 15,
+          "exact_target_rows": 15,
+          "required_facets_with_actual_implementation": 15,
+          "required_facets": 15,
+          "final_source_metrics_equal_measured_and_legacy_on_same_rows": true,
+          "marker_in_query_recall": 1.0
+        },
+        {
+          "agents": 100,
+          "queries": 5,
+          "conceptual_rows": 50,
+          "exact_generated_implementation_rows": 50,
+          "same_target_domain_implementation_rows": 50,
+          "exact_target_rows": 10,
+          "required_facets_with_actual_implementation": 15,
+          "required_facets": 15,
+          "final_source_metrics_equal_measured_and_legacy_on_same_rows": true,
+          "marker_in_query_recall": 1.0
+        },
+        {
+          "agents": 1000,
+          "queries": 5,
+          "conceptual_rows": 50,
+          "exact_generated_implementation_rows": 47,
+          "same_target_domain_implementation_rows": 36,
+          "exact_target_rows": 5,
+          "required_facets_with_actual_implementation": 15,
+          "required_facets": 15,
+          "final_source_metrics_equal_measured_and_legacy_on_same_rows": true,
+          "marker_in_query_recall": 1.0
+        }
+      ],
+      "s9_ma_pool_publish": {
+        "conflict_resolution": [
+          0.3333333333333333
+        ],
+        "correct_at_3": [
+          1.0
+        ],
+        "wrong_suppression": [
+          0.3333333333333333
+        ],
+        "supersession_propagation": [
+          1.0
+        ],
+        "precision_at_3": [
+          0.5
+        ]
+      },
+      "s19_incident_reconstruction": {
+        "alert_recall": [
+          1.0
+        ],
+        "deploy_recall": [
+          1.0
+        ],
+        "migration_recall": [
+          1.0
+        ],
+        "evidence_recall": [
+          1.0
+        ],
+        "evidence_precision": [
+          0.6153846153846154
+        ]
+      }
+    },
+    "postgres": {
+      "selected_scenarios": 3,
+      "binding_passed": 3,
+      "binding_total": 3,
+      "intercepted_network_attempts": 0,
+      "provider_calls": 0,
+      "source_scoring_default_pairs": [
+        {
+          "agents": 10,
+          "queries": 5,
+          "conceptual_rows": 21,
+          "exact_generated_implementation_rows": 18,
+          "same_target_domain_implementation_rows": 15,
+          "exact_target_rows": 15,
+          "required_facets_with_actual_implementation": 15,
+          "required_facets": 15,
+          "final_source_metrics_equal_measured_and_legacy_on_same_rows": true,
+          "marker_in_query_recall": 1.0
+        },
+        {
+          "agents": 100,
+          "queries": 5,
+          "conceptual_rows": 50,
+          "exact_generated_implementation_rows": 50,
+          "same_target_domain_implementation_rows": 50,
+          "exact_target_rows": 10,
+          "required_facets_with_actual_implementation": 15,
+          "required_facets": 15,
+          "final_source_metrics_equal_measured_and_legacy_on_same_rows": true,
+          "marker_in_query_recall": 1.0
+        },
+        {
+          "agents": 1000,
+          "queries": 5,
+          "conceptual_rows": 50,
+          "exact_generated_implementation_rows": 47,
+          "same_target_domain_implementation_rows": 36,
+          "exact_target_rows": 5,
+          "required_facets_with_actual_implementation": 15,
+          "required_facets": 15,
+          "final_source_metrics_equal_measured_and_legacy_on_same_rows": true,
+          "marker_in_query_recall": 1.0
+        }
+      ],
+      "s9_ma_pool_publish": {
+        "conflict_resolution": [
+          0.3333333333333333
+        ],
+        "correct_at_3": [
+          1.0
+        ],
+        "wrong_suppression": [
+          0.3333333333333333
+        ],
+        "supersession_propagation": [
+          1.0
+        ],
+        "precision_at_3": [
+          0.5
+        ]
+      },
+      "s19_incident_reconstruction": {
+        "alert_recall": [
+          1.0
+        ],
+        "deploy_recall": [
+          1.0
+        ],
+        "migration_recall": [
+          1.0
+        ],
+        "evidence_recall": [
+          1.0
+        ],
+        "evidence_precision": [
+          0.6153846153846154
+        ]
+      }
+    }
+  },
+  "final_default_metrics_match_measured_rows": true,
+  "whole_source_body_check": "Exact generated implementation text plus matching publisher, independent of marker token helper",
+  "timing": "Instrumented traces include capture/deepcopy overhead; replay timings excluded; not a product latency comparison",
+  "original_runs_overwritten_or_rescored": false,
+  "initial_sqlite_guard_limit": "First SQLite script did not intercept socket.connect_ex. Its0network_attempts means0intercepted calls, not a universal network-seal proof. Provider ports were stubbed/HTTPblocked. Gap later fixed with a failing-then-passing loopback guard regression; original SQLite report/runtime retained, no rerun.",
+  "postgres_guard": "Final script intercepts Python create_connection/connect/connect_ex and HTTPsend; explicit local PostgreSQL libpq connection is allowed.",
+  "base_commit": "987f885eba075d22aa43bbcbf4dba32bad4cf32a",
+  "raw_archive": "memory-quality-diagnostic-raw.json.gz",
+  "raw_archive_sha256": "a536d9f34629e7e91156238fa38d677dc462cc779be79652fb2eb420220a46d1",
+  "scoring_version": 2,
+  "corpus_and_gate_proof": {
+    "base_commit": "987f885eba075d22aa43bbcbf4dba32bad4cf32a",
+    "s26_generated_data_and_queries_unchanged": true,
+    "s26_generated_data_sha256": "3f6e537bdbe737992c9ed63f97663330de884f0bcff4d0307076999be1e5e00d",
+    "gate_numeric_roles_operators_unchanged": true,
+    "gate_numeric_sha256": "6f91902eb027d50ade77db2188b1a85347805d22280b25be3f21485b234b38f8"
+  },
+  "post_measurement_correction": "Per-facet counting handles repeated domains such as N60; regression redthen green. All default10/100/1000 fresh traces replay to identical measured scores. Version annotation/descriptions also updated; measured and final source states retained separately.",
+  "native_scores_or_facet_attribution_retained": false
+}

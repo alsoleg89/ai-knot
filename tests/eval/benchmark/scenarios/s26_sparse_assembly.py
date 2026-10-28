@@ -5,8 +5,8 @@ Tests fan-in retrieval across N specialist agents (N configurable, default
 markers and 1 distractor fact with generic vocabulary.  10% of agents are
 hub agents with an extra near-miss fact that partially overlaps query facets.
 
-Each query requires assembling 3 shards from 3 different agents chosen
-from distinct domain clusters.  Evaluation uses both origin_agent_id
+Each query requests 3 source identities from different agents. Default scales
+use distinct domains; other checkpoints can repeat a domain. Evaluation uses origin_agent_id
 from retrieved Fact objects and rare-marker text matching.
 
 Metrics (per scale point N):
@@ -32,13 +32,15 @@ Only runs against MultiAgentMemoryBackend.
 
 from __future__ import annotations
 
+import re
 import time
 
 from tests.eval.benchmark._eval_utils import percentile
-from tests.eval.benchmark.base import MultiAgentMemoryBackend, ScenarioResult
+from tests.eval.benchmark.base import MultiAgentMemoryBackend, RetrievalResult, ScenarioResult
 from tests.eval.benchmark.judge import BaseJudge
 
 SCENARIO_ID = "s26_sparse_assembly"
+SCORING_VERSION = 2
 TOP_K = 10
 _DEFAULT_SCALE_POINTS = [10, 100, 1000]
 _DEFAULT_NUM_QUERIES = 5
@@ -48,8 +50,8 @@ _QUERIER = "querier"
 # 20 technical domains: (domain_name, shard_concept, query_concept)
 #
 # shard_concept  — appears verbatim in the agent's shard fact.
-# query_concept  — used in queries; shares the TOPIC but differs in LEXICAL form
-#                  to prevent trivial BM25 shortcuts.
+# query_concept  — used in queries AND in each shard's "enabling" clause. This
+#                  fixture exercises fan-in/identity ambiguity, not pure paraphrase recall.
 # ---------------------------------------------------------------------------
 _DOMAINS: list[tuple[str, str, str]] = [
     (
@@ -292,6 +294,28 @@ def _domain_class_size(target_idx: int, current_n: int) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _retrieved_shards(result: RetrievalResult, markers: dict[str, int]) -> list[set[int]]:
+    """Resolve known whole-word source markers, checking publisher when available.
+
+    Only implementation shards carry their marker in this generated corpus.
+    Marker presence identifies a source here; it is not an entailment check.
+    """
+    records = (
+        [(fact.content, fact.origin_agent_id or "") for fact in result.facts]
+        if result.facts
+        else [(text, None) for text in result.texts]
+    )
+    found = []
+    for text, publisher in records:
+        indices = set()
+        for token in re.findall(r"\b[A-Za-z]+\d+\b", text):
+            index = markers.get(token)
+            if index is not None and (publisher is None or publisher == _agent_id(index)):
+                indices.add(index)
+        found.append(indices)
+    return found
+
+
 async def _measure_at_checkpoint(
     backend: MultiAgentMemoryBackend,
     current_n: int,
@@ -299,6 +323,7 @@ async def _measure_at_checkpoint(
 ) -> dict[str, float]:
     """Run queries against the current pool state and return metric values."""
     queries_targets: list[tuple[str, list[int]]] = []
+    markers = {_rare_marker(i): i for i in range(current_n)}
     for q in range(num_queries):
         targets = _select_targets(current_n, q)
         queries_targets.append((_build_query(targets), targets))
@@ -313,41 +338,29 @@ async def _measure_at_checkpoint(
     total_retrieved = 0
 
     for query, targets in queries_targets:
-        target_markers = {_rare_marker(t) for t in targets}
-        target_agent_ids = {_agent_id(t) for t in targets}
-        target_domains = {_domain(t)[0] for t in targets}
+        target_indices = set(targets)
 
         t0 = time.perf_counter()
         result = await backend.pool_retrieve(_QUERIER, query, top_k=TOP_K)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         latencies_ms.append(elapsed_ms)
 
-        targets_found: set[str] = set()
+        targets_found: set[int] = set()
         retrieved_domains: set[str] = set()
         last_rank = 0
         n_distractors = 0
 
-        if result.facts:
-            total_retrieved += len(result.facts)
-            for rank_0, fact in enumerate(result.facts):
-                is_target = fact.origin_agent_id in target_agent_ids
-                has_marker = any(m in fact.content for m in target_markers)
-                dom = _agent_domain(fact.origin_agent_id)
-                if dom is not None:
-                    retrieved_domains.add(dom)
-                if is_target and has_marker:
-                    targets_found.add(fact.origin_agent_id)
+        rows = _retrieved_shards(result, markers)
+        total_retrieved += len(rows)
+        for rank_0, shards in enumerate(rows):
+            retrieved_domains.update(_domain(i)[0] for i in shards)
+            exact = shards & target_indices
+            if exact:
+                if exact - targets_found:
                     last_rank = rank_0 + 1
-                else:
-                    n_distractors += 1
-        else:
-            total_retrieved += len(result.texts)
-            for rank_0, text in enumerate(result.texts):
-                if any(m in text for m in target_markers):
-                    targets_found.add(f"text_hit_{rank_0}")
-                    last_rank = rank_0 + 1
-                else:
-                    n_distractors += 1
+                targets_found.update(exact)
+            else:
+                n_distractors += 1
 
         n_found = len(targets_found)
         shard_hits_per_query.append(n_found)
@@ -356,7 +369,7 @@ async def _measure_at_checkpoint(
         last_ranks.append(last_rank if n_found > 0 else TOP_K + 1)
         # Equivalence-class recall: did we retrieve the right technical domains
         # (any same-domain shard), independent of the exact agent identity?
-        equiv_hits_per_query.append(sum(1 for d in target_domains if d in retrieved_domains))
+        equiv_hits_per_query.append(sum(_domain(t)[0] in retrieved_domains for t in targets))
         class_sizes.append(sum(_domain_class_size(t, current_n) for t in targets) / len(targets))
 
     # Identifiable variant: re-query with the rare marker named in each facet.
@@ -364,21 +377,9 @@ async def _measure_at_checkpoint(
     # conceptual one (where the target is indistinguishable from its peers).
     marker_hits_per_query: list[int] = []
     for _query, targets in queries_targets:
-        target_markers = {_rare_marker(t) for t in targets}
-        target_agent_ids = {_agent_id(t) for t in targets}
         mq = _build_query_with_markers(targets)
         result = await backend.pool_retrieve(_QUERIER, mq, top_k=TOP_K)
-        found: set[str] = set()
-        if result.facts:
-            for fact in result.facts:
-                if fact.origin_agent_id in target_agent_ids and any(
-                    m in fact.content for m in target_markers
-                ):
-                    found.add(fact.origin_agent_id)
-        else:
-            for rank_0, text in enumerate(result.texts):
-                if any(m in text for m in target_markers):
-                    found.add(f"text_hit_{rank_0}")
+        found = set().union(*_retrieved_shards(result, markers)) & set(targets)
         marker_hits_per_query.append(len(found))
 
     nq = num_queries
@@ -486,7 +487,8 @@ async def _run_scale_points(
 
     first, last = points[0], points[-1]
     notes = (
-        f"mode=scale_points, points={points}, queries={num_queries}, "
+        f"source_scoring=v{SCORING_VERSION}, mode=scale_points, "
+        f"points={points}, queries={num_queries}, "
         f"top_k={TOP_K}, "
         f"recall@{first}="
         f"{judge_scores.get(f'target_shard_recall_at_{first}', [0])[0]:.2f}, "
@@ -544,7 +546,8 @@ async def _run_duration(
     first, last = checkpoints[0], checkpoints[-1]
     total_wall = time.perf_counter() - start_wall
     notes = (
-        f"mode=duration, budget={duration_s}s, wall={total_wall:.1f}s, "
+        f"source_scoring=v{SCORING_VERSION}, mode=duration, "
+        f"budget={duration_s}s, wall={total_wall:.1f}s, "
         f"agents={last}, checkpoints={len(checkpoints)}, "
         f"recall@{first}="
         f"{judge_scores.get(f'target_shard_recall_at_{first}', [0])[0]:.2f}, "

@@ -1,13 +1,16 @@
-"""S9 — Competing Documentation Sources (Pool with Conflicts + Supersession).
+"""S9 — Competing Documentation Sources (Pool with Conflicts + Structured Value).
 
-Verifies that the shared pool handles conflicting facts from multiple agents
-and that CAS supersession surfaces the most current information.
+Measures whether the shared pool surfaces current claims beside conflicting
+unstructured documentation from several agents.
 
 Three agents publish documentation with deliberate conflicts:
   - Agent A publishes 4 facts (some outdated).
   - Agent B publishes 4 facts (includes corrections to A's outdated claims).
   - Agent C publishes 4 facts (includes deprecation notices).
-  - Agent A then self-corrects one fact via add_structured (CAS supersession).
+  - Agent A then adds the current alert value via add_structured.
+
+The initial structured slot value is not inserted in this fixture, so that
+last write creates a slot rather than testing CAS replacement. S10 covers CAS.
 
 Agent D queries the pool — must find the NEWEST/correct answer for each topic.
 
@@ -15,7 +18,8 @@ Metrics:
   conflict_resolution      — correct present AND stale rival absent in top-3
   correct_at_3             — correct answer present in top-3 (retrieval/reader)
   wrong_suppression        — stale rival absent from top-3 (semantics-bound)
-  supersession_propagation — 1.0 if the CAS-updated slot surfaces the corrected value
+  supersession_propagation — legacy name: current-value keyword is present;
+                             this alone does not prove slot replacement
   precision_at_3           — exact-keyword precision of top-3 (reported, not gated)
 
 Only runs against MultiAgentMemoryBackend.
@@ -53,7 +57,7 @@ async def run(
         await backend.insert_for_agent("agent_c", fact)
     await backend.publish_to_pool("agent_c")
 
-    # Phase 2: Agent A self-corrects one fact via CAS supersession.
+    # Phase 2: Add the current structured value; unslotted rival facts remain.
     await backend.add_structured(
         "agent_a",
         fixture.competing_slot_v2,
@@ -97,7 +101,7 @@ async def run(
     correct_at_3 = correct_hits / n_queries
     wrong_suppression = suppression_hits / n_queries
 
-    # Check supersession: the CAS-updated slot must surface v2 keyword.
+    # Legacy presence probe: another publisher already contains this keyword.
     r_slot = await backend.pool_retrieve(_QUERIER, fixture.competing_slot_v2[:40], top_k=3)
     supersession_propagation = 1.0 if any("4 minutes" in t.lower() for t in r_slot.texts) else 0.0
 
@@ -107,7 +111,7 @@ async def run(
     precision_at_3 = precision_relevant / max(precision_total, 1)
 
     notes = (
-        f"agents=3+supersession, facts=12+1, queries={n_queries}, "
+        f"agents=3+structured-value, facts=12+1, queries={n_queries}, "
         f"conflict_resolution={conflict_resolution:.0%}, "
         f"correct_at_3={correct_at_3:.0%}, wrong_suppression={wrong_suppression:.0%}, "
         f"supersession_propagation={supersession_propagation:.0%}, "

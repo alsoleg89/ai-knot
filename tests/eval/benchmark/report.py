@@ -400,7 +400,7 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
             )
         if advisory_notes:
             lines.append("")
-            lines.append("_Advisory (structurally capped / resolver-dependent — not binding):_")
+            lines.append("_Advisory (diagnostic targets — not binding):_")
             lines.extend(advisory_notes)
     return lines
 
