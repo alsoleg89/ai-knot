@@ -1,0 +1,278 @@
+{
+  "scope": "Exploratory fixed-five-proposal simulation; three authored traces, not a held-out production accuracy result",
+  "runs": {
+    "pilot-v1-sqlite": {
+      "status": "failed",
+      "protocol_sha256": "1ca3faeb5654fb0f0740da13ba035d24550e143b592ad876f369e8696c48a280",
+      "raw_file": "team-decisions-pilot-v1-sqlite.json.gz",
+      "raw_sha256": "d15bc962a9918a4f8b5f2ac1ece24001450eff29fd842873bbea5384e2feb412",
+      "gzip_sha256": "a2fed5b73d1bc5f427b8f605157697edd3b55e034290e0d21a43867167d30249",
+      "arms": {
+        "raw_history": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 0,
+          "unsafe_proposals": 0,
+          "action_target_agreement": 2,
+          "reader_errors": 0,
+          "aborted_evaluations": 3,
+          "calls": 6,
+          "tokens": 6976,
+          "embedding_tokens": 0
+        },
+        "scoped_pool": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 0,
+          "unsafe_proposals": 0,
+          "action_target_agreement": 3,
+          "reader_errors": 0,
+          "aborted_evaluations": 3,
+          "calls": 12,
+          "tokens": 9812,
+          "embedding_tokens": 0
+        },
+        "scoped_flat_pool": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 1,
+          "unsafe_proposals": 2,
+          "action_target_agreement": 8,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 12435,
+          "embedding_tokens": 0
+        },
+        "task_context": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 0,
+          "unsafe_proposals": 2,
+          "action_target_agreement": 3,
+          "reader_errors": 0,
+          "aborted_evaluations": 1,
+          "calls": 13,
+          "tokens": 10846,
+          "embedding_tokens": 0
+        },
+        "hybrid_scoped_pool": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 1,
+          "unsafe_proposals": 0,
+          "action_target_agreement": 7,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 45,
+          "tokens": 15634,
+          "embedding_tokens": 1999
+        }
+      }
+    },
+    "pilot-v2-sqlite": {
+      "status": "complete",
+      "protocol_sha256": "30ae75abf85cca803e054e68a7cdb70f37ee2b39680f5b7bbfb0def22f570d62",
+      "raw_file": "team-decisions-pilot-v2-sqlite.json.gz",
+      "raw_sha256": "c25536f4187b0515ccb7d8091c1993d09462285784106047473ec2bf5658da11",
+      "gzip_sha256": "4148b04f74a2100f495fc8d87b665c5378fa06e1313c93db28f0d63984705fea",
+      "arms": {
+        "raw_history": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 0,
+          "unsafe_proposals": 12,
+          "action_target_agreement": 3,
+          "reader_errors": 12,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 21706,
+          "embedding_tokens": 0
+        },
+        "scoped_pool": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 2,
+          "unsafe_proposals": 3,
+          "action_target_agreement": 9,
+          "reader_errors": 3,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 13573,
+          "embedding_tokens": 0
+        },
+        "scoped_flat_pool": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 2,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 10,
+          "reader_errors": 1,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 13583,
+          "embedding_tokens": 0
+        },
+        "task_context": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 2,
+          "unsafe_proposals": 2,
+          "action_target_agreement": 10,
+          "reader_errors": 2,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 13583,
+          "embedding_tokens": 0
+        },
+        "hybrid_scoped_pool": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 2,
+          "unsafe_proposals": 2,
+          "action_target_agreement": 8,
+          "reader_errors": 2,
+          "aborted_evaluations": 0,
+          "calls": 45,
+          "tokens": 16669,
+          "embedding_tokens": 1999
+        }
+      }
+    },
+    "v3-sqlite": {
+      "status": "complete",
+      "protocol_sha256": "f3ddea2a84a999d1e850f3f7de5c9918ea0f920430f48b169e736cff80f15d80",
+      "raw_file": "team-decisions-v3-sqlite.json.gz",
+      "raw_sha256": "258d714f5bd85e9e86b064fe471689461c9b5907a2f06b6f1f5f7c7fe686e99e",
+      "gzip_sha256": "5eda446d57ec5093f6180b4181aace6d452cdb084b7b10c8e972ce3632d3dcc1",
+      "arms": {
+        "raw_history": {
+          "completed_tasks": 2,
+          "confirmed_destinations": 5,
+          "unsafe_proposals": 2,
+          "action_target_agreement": 12,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 24076,
+          "embedding_tokens": 0
+        },
+        "scoped_pool": {
+          "completed_tasks": 1,
+          "confirmed_destinations": 3,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 11,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 14998,
+          "embedding_tokens": 0
+        },
+        "scoped_flat_pool": {
+          "completed_tasks": 1,
+          "confirmed_destinations": 3,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 11,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 14958,
+          "embedding_tokens": 0
+        },
+        "task_context": {
+          "completed_tasks": 2,
+          "confirmed_destinations": 4,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 11,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 14961,
+          "embedding_tokens": 0
+        },
+        "hybrid_scoped_pool": {
+          "completed_tasks": 2,
+          "confirmed_destinations": 5,
+          "unsafe_proposals": 0,
+          "action_target_agreement": 12,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 45,
+          "tokens": 18256,
+          "embedding_tokens": 1999
+        }
+      }
+    },
+    "v3-postgres": {
+      "status": "complete",
+      "protocol_sha256": "f3ddea2a84a999d1e850f3f7de5c9918ea0f920430f48b169e736cff80f15d80",
+      "raw_file": "team-decisions-v3-postgres.json.gz",
+      "raw_sha256": "8a9ff2834e7e275f7e5a0ad2ee504522251fc810c2ff5ee7770ce5adeb3d9fa5",
+      "gzip_sha256": "2919a7f0d824b86b53bb2811aaede9c426267eb6da36a8db896a29b28e8a2bf8",
+      "arms": {
+        "raw_history": {
+          "completed_tasks": 3,
+          "confirmed_destinations": 6,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 13,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 24073,
+          "embedding_tokens": 0
+        },
+        "scoped_pool": {
+          "completed_tasks": 1,
+          "confirmed_destinations": 3,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 11,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 14998,
+          "embedding_tokens": 0
+        },
+        "scoped_flat_pool": {
+          "completed_tasks": 0,
+          "confirmed_destinations": 2,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 11,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 14975,
+          "embedding_tokens": 0
+        },
+        "task_context": {
+          "completed_tasks": 1,
+          "confirmed_destinations": 3,
+          "unsafe_proposals": 1,
+          "action_target_agreement": 11,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 15,
+          "tokens": 14963,
+          "embedding_tokens": 0
+        },
+        "hybrid_scoped_pool": {
+          "completed_tasks": 2,
+          "confirmed_destinations": 5,
+          "unsafe_proposals": 0,
+          "action_target_agreement": 12,
+          "reader_errors": 0,
+          "aborted_evaluations": 0,
+          "calls": 45,
+          "tokens": 18266,
+          "embedding_tokens": 1999
+        }
+      }
+    }
+  },
+  "all_multi_step_runs": {
+    "calls": 406,
+    "tokens": 309341
+  },
+  "protocol_repairs_are_not_memory_gains": true,
+  "v3_backend_controls": {
+    "identical_contexts": 75,
+    "identical_runtime_source_hashes": true,
+    "identical_protocol": true,
+    "live_sources_match_final_product": true,
+    "source_manifest_sha256": "e4453f9db922bcb521cf6106e0d25a221676e919f0e67c850c82047da3eb300d"
+  },
+  "runtime_archive": {
+    "file": "team-decisions-v3-runtime.json.gz",
+    "sha256": "fbf9f27e79b6c6c0b0b96093442b37bd6b61a0c257a39eb917816c34f1108746",
+    "note": "Exact six runtime overrides at measured source hashes over base commit. Final runner adds only canonical redaction for credential-like JSON text; no observed input/output matches this guard."
+  }
+}

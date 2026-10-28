@@ -29,6 +29,8 @@ independent review of that implementation batch are recorded in the [engineering
 
 ## Continuing product work
 
+The [decision study](team-decision-evaluation.md) now records real GPT-4.1 mini actions, simulated receipts and all OpenAI embedding/reader tokens on both SQL backends. It found a same-ID vector-cache defect (fixed) and a remaining semantic selection gap, with a strong full-history control and explicit post-pilot protocol limits.
+
 - Measure decision/task benefit for long-lived teams against strong existing memory and no-shared-memory controls, with the same observations and total inference budgets. Synthetic lexical coverage alone is insufficient.
 - Diagnose the five retained advisory retrieval misses before choosing fixes; distinguish bad retrieval from ambiguous/incorrect labels. Keep explicit applicability and provenance intact.
 - Test sustained accumulation, retrieval/context preparation cost and useful-update/idle work under realistic workloads. Set deployment-relevant targets before capacity claims.
