@@ -108,13 +108,17 @@ class MeteredOpenAI:
         *,
         max_calls: int = 20,
         max_tokens: int = 20000,
+        max_output_tokens_per_call: int = 128,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._api_key = _key(api_key)
         if not _integer(max_calls) or not _integer(max_tokens):
             raise EvaluationError("Invalid OpenAI evaluation budget")
+        if not _integer(max_output_tokens_per_call) or not 1 <= max_output_tokens_per_call <= 4096:
+            raise EvaluationError("Invalid OpenAI output authority")
         self._max_calls = max_calls
         self._max_tokens = max_tokens
+        self._max_output_tokens_per_call = max_output_tokens_per_call
         self._transport = transport
         self._client: httpx.AsyncClient | None = None
         self._calls: list[dict[str, Any]] = []
@@ -151,7 +155,10 @@ class MeteredOpenAI:
         max_output_tokens: int = 128,
         response_schema: dict[str, Any] | None = None,
     ) -> str:
-        if not _integer(max_output_tokens) or not 1 <= max_output_tokens <= 128:
+        if (
+            not _integer(max_output_tokens)
+            or not 1 <= max_output_tokens <= self._max_output_tokens_per_call
+        ):
             raise EvaluationError("Invalid OpenAI output token ceiling")
         if response_schema is not None and not isinstance(response_schema, dict):
             raise EvaluationError("Invalid OpenAI response schema")

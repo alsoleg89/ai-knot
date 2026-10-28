@@ -1,0 +1,409 @@
+{
+  "manifest_sha256": "148d2368d1c841fd5005879118b041d6d4ce7b9cfe574c8038a4c65af1ffc656",
+  "image": "sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a",
+  "scope": "Trusted authored feasibility controls in the exact candidate Docker harness; no provider calls or model-score changes",
+  "rows": [
+    {
+      "case": "parcel-ledger",
+      "stage": 0,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.441919,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "parcel-ledger",
+      "stage": 0,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "ParcelChecks.test_identity_and_purity",
+          "ParcelChecks.test_routing_and_boundary"
+        ],
+        "elapsed_seconds": 0.559979,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "parcel-ledger",
+      "stage": 1,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.500335,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "parcel-ledger",
+      "stage": 1,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "ParcelChecks.test_current_policy",
+          "ParcelChecks.test_deferral_identity_and_purity"
+        ],
+        "elapsed_seconds": 0.665624,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "parcel-ledger",
+      "stage": 1,
+      "kind": "previous_reference",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "ParcelChecks.test_current_policy",
+          "ParcelChecks.test_deferral_identity_and_purity"
+        ],
+        "elapsed_seconds": 0.659611,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "parcel-ledger",
+      "stage": 2,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.816915,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "parcel-ledger",
+      "stage": 2,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "ParcelChecks.test_current_zones_and_limits",
+          "ParcelChecks.test_ledger_and_purity"
+        ],
+        "elapsed_seconds": 0.654715,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "parcel-ledger",
+      "stage": 2,
+      "kind": "previous_reference",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "ParcelChecks.test_current_zones_and_limits",
+          "ParcelChecks.test_ledger_and_purity"
+        ],
+        "elapsed_seconds": 0.714744,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 0,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.705949,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 0,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "DigestChecks.test_grouping_limits_and_purity",
+          "DigestChecks.test_selection_and_layout"
+        ],
+        "elapsed_seconds": 0.911788,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 1,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.653398,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 1,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "DigestChecks.test_current_selection_and_layout",
+          "DigestChecks.test_grouping_limits_and_purity"
+        ],
+        "elapsed_seconds": 0.709802,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 1,
+      "kind": "previous_reference",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 1,
+        "errors": 0,
+        "failed_test_names": [
+          "DigestChecks.test_current_selection_and_layout"
+        ],
+        "elapsed_seconds": 0.706677,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 2,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.868415,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 2,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "DigestChecks.test_current_selection_and_order",
+          "DigestChecks.test_limits_dedup_and_purity"
+        ],
+        "elapsed_seconds": 0.665016,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "notes-digest",
+      "stage": 2,
+      "kind": "previous_reference",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 1,
+        "errors": 0,
+        "failed_test_names": [
+          "DigestChecks.test_limits_dedup_and_purity"
+        ],
+        "elapsed_seconds": 0.812025,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 0,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.655674,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 0,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "RequestChecks.test_headers_and_purity",
+          "RequestChecks.test_query_policy"
+        ],
+        "elapsed_seconds": 0.715434,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 1,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.817589,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 1,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "RequestChecks.test_current_query_policy",
+          "RequestChecks.test_headers_and_purity"
+        ],
+        "elapsed_seconds": 0.82503,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 1,
+      "kind": "previous_reference",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 1,
+        "errors": 0,
+        "failed_test_names": [
+          "RequestChecks.test_current_query_policy"
+        ],
+        "elapsed_seconds": 0.775525,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 2,
+      "kind": "reference",
+      "expected": true,
+      "receipt": {
+        "status": "pass",
+        "tests_run": 2,
+        "failures": 0,
+        "errors": 0,
+        "failed_test_names": [],
+        "elapsed_seconds": 0.877281,
+        "exit_code": 0
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 2,
+      "kind": "initial",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "RequestChecks.test_current_query_boundaries",
+          "RequestChecks.test_headers_and_purity"
+        ],
+        "elapsed_seconds": 0.929263,
+        "exit_code": 1
+      }
+    },
+    {
+      "case": "catalog-pages",
+      "stage": 2,
+      "kind": "previous_reference",
+      "expected": true,
+      "receipt": {
+        "status": "fail",
+        "tests_run": 2,
+        "failures": 2,
+        "errors": 0,
+        "failed_test_names": [
+          "RequestChecks.test_current_query_boundaries",
+          "RequestChecks.test_headers_and_purity"
+        ],
+        "elapsed_seconds": 0.708808,
+        "exit_code": 1
+      }
+    }
+  ]
+}

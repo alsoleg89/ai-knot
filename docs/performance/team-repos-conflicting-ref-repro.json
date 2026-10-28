@@ -1,0 +1,7 @@
+{
+  "old_alone_accepted": 0,
+  "current_alone_accepted": 1,
+  "combined_read_error": "StaleEvidence",
+  "combined_action_error": "StaleEvidence",
+  "memory_source_sha256": "e2958caa58ddea30bc566e97e32d263b69b6641535d32cbd05e3f72c24170194"
+}
