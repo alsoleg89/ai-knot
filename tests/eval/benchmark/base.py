@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import abc
+import math
 from dataclasses import dataclass, field
 
 from ai_knot.types import Fact
+
+
+def valid_scores(scores: list[float]) -> bool:
+    """Measurements must contain finite numbers, including every repeated sample."""
+    return bool(scores) and all(
+        type(value) in (int, float) and math.isfinite(value) for value in scores
+    )
 
 
 @dataclass
@@ -61,6 +69,23 @@ class BenchmarkMetrics:
     backend_name: str
     language: str = "en"  # fixture language used for this run ("en" | "ru")
     scenario_results: list[ScenarioResult] = field(default_factory=list)
+    selected_scenarios: list[str] = field(default_factory=list)
+    scenario_errors: dict[str, str] = field(default_factory=dict)
+
+    def scenario_failures(self) -> dict[str, str]:
+        """Execution errors, missing selected results and unusable measurements."""
+        completed = {r.scenario_id for r in self.scenario_results}
+        failures = {
+            **{sid: "Missing result" for sid in self.selected_scenarios if sid not in completed},
+            **self.scenario_errors,
+        }
+        for result in self.scenario_results:
+            measurements = [values for values in result.judge_scores.values() if values]
+            if not measurements:
+                failures.setdefault(result.scenario_id, "Missing metrics")
+            elif not all(valid_scores(values) for values in measurements):
+                failures.setdefault(result.scenario_id, "Invalid metric samples")
+        return failures
 
     def median_score(self, scenario_id: str, metric: str) -> float:
         """Return median judge score for a scenario + metric pair."""

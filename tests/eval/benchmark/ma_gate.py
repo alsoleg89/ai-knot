@@ -3,9 +3,9 @@
 Encodes the acceptance thresholds for the multi-agent benchmark suite.
 Each threshold reads one ``(scenario, metric)`` median from a backend's
 ``BenchmarkMetrics`` and compares it against a target with a comparison
-operator.  Thresholds whose metric is absent from a run are marked
-non-applicable so a partial run (a subset of scenarios) is not penalised for
-what it did not measure.  Pure logic — markdown rendering lives in ``report.py``.
+operator. Unselected, absent scenarios are non-applicable; missing evidence
+from a selected or present scenario fails verification. Pure logic — markdown
+rendering lives in ``report.py``.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import operator
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from tests.eval.benchmark.base import BenchmarkMetrics
+from tests.eval.benchmark.base import BenchmarkMetrics, valid_scores
 
 # Comparison operators keyed by their symbol for readable threshold declarations.
 # Protocol "no regression" guards use ">=" 1.0 (the metrics cannot exceed 1.0,
@@ -55,6 +55,7 @@ class GateResult:
     value: float
     applicable: bool
     passed: bool
+    missing: bool = False
 
 
 # Acceptance thresholds.  Binding entries are achievable targets / no-regression
@@ -159,10 +160,10 @@ GATE: tuple[GateThreshold, ...] = (
 
 
 def _metric_present(metrics: BenchmarkMetrics, scenario_id: str, metric: str) -> bool:
-    """Return True if *metrics* actually carries scores for *scenario_id*/*metric*."""
+    """Return True if *metrics* carries usable scores for *scenario_id*/*metric*."""
     for r in metrics.scenario_results:
         if r.scenario_id == scenario_id:
-            return bool(r.judge_scores.get(metric))
+            return valid_scores(r.judge_scores.get(metric, []))
     return False
 
 
@@ -171,24 +172,33 @@ def evaluate_gate(
 ) -> list[GateResult]:
     """Evaluate every threshold against *metrics*.
 
-    A threshold whose metric is absent from this run is marked non-applicable
-    (``applicable=False``) and does not count toward pass/fail — a partial run
-    is not penalised for scenarios it did not execute.
+    Only absent, unselected scenarios are non-applicable. A selected or present
+    scenario must supply its expected metrics, including advisory measurements.
     """
     out: list[GateResult] = []
+    expected = set(metrics.selected_scenarios) | {r.scenario_id for r in metrics.scenario_results}
     for t in thresholds:
         present = _metric_present(metrics, t.scenario_id, t.metric)
+        applicable = present or t.scenario_id in expected
         value = metrics.median_score(t.scenario_id, t.metric) if present else 0.0
         passed = present and _OPS[t.op](value, t.target)
-        out.append(GateResult(threshold=t, value=value, applicable=present, passed=passed))
+        out.append(
+            GateResult(
+                threshold=t,
+                value=value,
+                applicable=applicable,
+                passed=passed,
+                missing=applicable and not present,
+            )
+        )
     return out
 
 
 def gate_passed(results: list[GateResult]) -> bool:
     """True if at least one binding threshold applied and every binding one passed.
 
-    Advisory thresholds (structurally-capped or resolver-dependent) are reported
-    by :func:`evaluate_gate` but never bind the verdict.
+    Advisory values never bind the verdict, but missing expected measurements
+    invalidate verification. Execution failures are checked separately by callers.
     """
     binding = [r for r in results if r.applicable and not r.threshold.advisory]
-    return bool(binding) and all(r.passed for r in binding)
+    return bool(binding) and all(r.passed for r in binding) and not any(r.missing for r in results)
