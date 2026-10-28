@@ -105,6 +105,9 @@ class _PoolRecallMixin:
     _storage: StorageBackend
     _bm25: BM25Retriever
     _dense: DenseRetriever
+    _embed_url: str
+    _embed_model: str
+    _embed_api_key: str | None
     _retriever: HybridRetriever
     _embedded_ids: set[str]
     _query_vector: list[float] | None
@@ -512,9 +515,9 @@ class _PoolRecallMixin:
     async def embed_pool_facts(self) -> int:
         """Embed all active pool facts that haven't been embedded yet.
 
-        Fetches facts from storage, embeds new ones via Ollama, and loads
+        Fetches facts from storage, embeds new ones via the configured provider, and loads
         the vectors into the DenseRetriever.  Returns the number of newly
-        embedded facts.  Returns 0 (no-op) if Ollama is unreachable.
+        embedded facts. Returns 0 if the provider is disabled/unavailable.
         """
         from ai_knot.embedder import embed_texts
 
@@ -529,9 +532,11 @@ class _PoolRecallMixin:
             return 0
 
         texts = [f.content for f in new_facts]
-        vectors = await embed_texts(texts)
+        vectors = await embed_texts(
+            texts, base_url=self._embed_url, model=self._embed_model, api_key=self._embed_api_key
+        )
         if not vectors:
-            return 0  # Ollama unavailable — BM25-only fallback.
+            return 0  # Provider unavailable — BM25-only fallback.
 
         new_vectors = {f.id: vec for f, vec in zip(new_facts, vectors, strict=True)}
         self._dense.add_embeddings(new_vectors)
@@ -551,7 +556,7 @@ class _PoolRecallMixin:
 
         Embeds any new pool facts, embeds the query, then delegates to the
         synchronous ``recall()`` with the dense signal available.  Falls back
-        to BM25-only if Ollama is unreachable.
+        to BM25-only if the configured provider is unavailable.
         """
         from ai_knot.embedder import embed_texts
 
@@ -560,7 +565,12 @@ class _PoolRecallMixin:
 
         # Embed the query.
         if self._dense.has_embeddings():
-            qvecs = await embed_texts([query])
+            qvecs = await embed_texts(
+                [query],
+                base_url=self._embed_url,
+                model=self._embed_model,
+                api_key=self._embed_api_key,
+            )
             self._query_vector = qvecs[0] if qvecs else None
         else:
             self._query_vector = None

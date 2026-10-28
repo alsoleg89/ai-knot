@@ -1,8 +1,8 @@
-# Shared-memory program acceptance
+# Shared-memory engineering batch acceptance
 
-Verified on **2026-10-28** against the local feature branch `codex/always-on-memory-return`, starting at `3618bfb` (merged grounding/context baseline). This audit preserves the original objective: research current primary sources, implement useful lightweight memory for independently running always-on teams, test locally including PostgreSQL, preserve deferred release work, update documentation and obtain independent review. It covers the four stages recorded before implementation in the [roadmap](shared-memory-roadmap.md).
+Verified on **2026-10-28** against the local feature branch `codex/always-on-memory-return`, starting at `3618bfb` (merged grounding/context baseline). This record covers the first four engineering stages in the [roadmap](shared-memory-roadmap.md). The user's broader goal of a useful, convenient shared memory for always-on teams remains active; the earlier conclusion that this batch completed that goal was premature.
 
-The engineering program is complete in source. This is not a package publication, a claim of market reception/GitHub stars, or proof of paid-model answer accuracy. Existing ordinary KB usage remains available; the new coordination/context/experience operations are opt-in.
+The implementation batch is complete in source. Its tests establish protocol, selection and consistency properties. Useful decision/task benefit, realistic sustained operation and product adoption still need evidence. Existing ordinary KB usage remains available; the new coordination/context/experience operations are opt-in.
 
 ## Requirement-to-evidence audit
 
@@ -47,4 +47,4 @@ The correctly maintained receipt baseline matches outcome retraction after the h
 
 A final full run also exposed a preexisting policy-fencing race using the default one-second maintenance wall budget under concurrent test load. `budget_exhausted` was a legitimate result; this test checks policy generation, not elapsed-time scheduling. Its explicit test budget is now100seconds, matching other non-timing race tests. Production default1second, pytest20second timeouts and the separate wall-budget regression remain unchanged. The26policy/wall focused cases and final1993-test suite pass.
 
-Required work for this development program has current evidence. Future work such as real-model studies, deployment-specific SLO/HA testing, richer automatic experience formation, package release and adoption/market outcomes is not silently claimed as complete.
+The listed engineering results remain valid. They do not close the broader product goal. Real-model decision/task evaluation, sustained-workload investigation and demonstrated product improvements continue in the roadmap; package release remains deferred.

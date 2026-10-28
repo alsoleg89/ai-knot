@@ -9,7 +9,7 @@ Product goal: a lightweight shared-memory layer for long-lived teams of agents.
 | Reusable team experience | Grounded procedures and failure lessons with recorded outcomes | Equal-budget evaluation, retraction and independent-evidence checks |
 | Operational adoption | Simple schedules/events recipes and diagnostics | Executable examples, recovery and reproducible load reports |
 
-All four stages are implemented and locally accepted in the source feature branch; package publication remains separate. The [completion audit](shared-memory-completion.md) maps the original program to current evidence and limits. Keep ordinary KnowledgeBase use simple and always-on coordination optional. New mechanisms must beat the existing path at equal data and total inference budget before becoming defaults. No graph service or permanent model worker is required.
+The product goal remains active. These four engineering stages are implemented and locally accepted; they establish mechanisms, not completion of the product goal. The [engineering acceptance record](shared-memory-completion.md) maps that first implementation batch to its evidence and limits. Keep ordinary KnowledgeBase use simple and always-on coordination optional. New mechanisms must beat the existing path at equal data and total inference budget before becoming defaults. No graph service or permanent model worker is required.
 
 Track useful knowledge retained, invalid knowledge rejected, missed updates, redundant work, unnecessary model wakes, model calls/tokens per useful update, context bytes and p50/p95 latency separately. Green deterministic tests do not establish real-model answer quality.
 
@@ -25,4 +25,13 @@ lessons to action revisions and source observations, with idempotent writes and
 automatic retraction. Host-authored procedural memory does not establish
 automatic learning or verified external success. The [operational host recipe](always-on-team-cycle.md)
 connects return/context/guarded work/experience. Final whole-program acceptance and
-independent review are recorded in the [completion audit](shared-memory-completion.md).
+independent review of that implementation batch are recorded in the [engineering acceptance record](shared-memory-completion.md).
+
+## Continuing product work
+
+- Measure decision/task benefit for long-lived teams against strong existing memory and no-shared-memory controls, with the same observations and total inference budgets. Synthetic lexical coverage alone is insufficient.
+- Diagnose the five retained advisory retrieval misses before choosing fixes; distinguish bad retrieval from ambiguous/incorrect labels. Keep explicit applicability and provenance intact.
+- Test sustained accumulation, retrieval/context preparation cost and useful-update/idle work under realistic workloads. Set deployment-relevant targets before capacity claims.
+- Turn demonstrated gaps into small product changes and verify them on both SQL backends. Maintain the source/ACL/revision/action guarantees already implemented.
+
+Completing another batch, passing contract tests or writing an acceptance report is progress. Product readiness still requires evidence of useful memory in real always-on team decisions and a convenient adoption path; release/market outcomes remain separate work.

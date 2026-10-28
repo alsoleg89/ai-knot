@@ -326,7 +326,8 @@ async def test_budget_across_subjects_and_reconfiguration_does_not_reset(sql_sto
             return VerificationResult(VerificationOutcome.CONFIRMED, {"ok": True}, "v1")
 
     provider = Provider()
-    budget = MaintenanceBudget(max_model_calls=10)
+    # This checks the shared call quota, independently of local SQL latency.
+    budget = MaintenanceBudget(max_model_calls=10, max_wall_seconds=10)
     assert (
         await run_maintenance(one, run_key="first", budget=budget, verifier=provider)
     ).verified == 1
