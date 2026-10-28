@@ -77,6 +77,36 @@ async def same_acquisition(old, current, calls, reference, requirements, *, limi
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("reverse", [False, True])
+async def test_equal_timestamp_nonmonotonic_ids_keep_embedding_input_order(
+    sql_storage, clock, reference_semantic, reverse
+):
+    facts = [
+        Fact("Recovery copy available", id="z-first", qualifiers={"task_key": "restore"}),
+        Fact("Receipt is retained", id="a-second", qualifiers={"task_key": "restore"}),
+        Fact("Route is current", id="m-third", qualifiers={"task_key": "restore"}),
+        *[
+            Fact(f"Inventory {i}", id=f"noise-{i:03d}", qualifiers={"task_key": "other"})
+            for i in range(150)
+        ],
+    ]
+    sql_storage.save("owner", list(reversed(facts)) if reverse else facts)
+    memory = AlwaysOnMemory(KnowledgeBase("owner", storage=sql_storage, embed_url=""), clock=clock)
+    old, current, calls = selectors(memory, reference_semantic)
+    await same_acquisition(
+        old,
+        current,
+        calls,
+        reference_semantic,
+        ("restore readiness",),
+        limits={"max_provider_calls": 1},
+        task_key="restore",
+        max_facts=1,
+    )
+    assert len(calls[0]) == len(calls[1]) == 1
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case.id)
 async def test_frozen_cases_keep_admission_inputs_cache_and_limits(
     sql_storage,

@@ -6,7 +6,7 @@ read-only admission code; public results contain immutable text/ref projections.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 from ai_knot.types import Fact
 
@@ -20,6 +20,31 @@ class ReadCache:
         self._ids: dict[str, dict[str, Fact]] = {}
         self._slots: dict[str, dict[str, list[Fact]]] = {}
         self._rows: dict[tuple[SQLStatement, tuple[SQLScalar, ...]], list[SQLRow]] = {}
+
+    def load_task_facts(self, namespace: str, *, task_key: str) -> Iterator[Fact]:
+        facts = list(self._session.load_task_facts(namespace, task_key=task_key))
+        total = self._session.fetch_one(
+            SQLStatement(
+                "SELECT COUNT(*) AS n FROM facts WHERE agent_id=?",
+                'SELECT COUNT(*) AS n FROM "ai-knot_facts" WHERE agent_id=%s',
+            ),
+            (namespace,),
+        )
+        if total is not None and int(total["n"] or 0) == len(facts):
+            # Same SQL snapshot: equality proves the task filter omitted no row.
+            self._remember_namespace(namespace, facts)
+            self._facts[namespace, None, None] = facts
+        for fact in facts:
+            # A task subset cannot answer complete namespace or slot lookups.
+            self._facts[namespace, fact.id, None] = [fact]
+            yield fact
+
+    def _remember_namespace(self, namespace: str, facts: list[Fact]) -> None:
+        self._ids[namespace] = {fact.id: fact for fact in facts}
+        slots: dict[str, list[Fact]] = {}
+        for fact in facts:
+            slots.setdefault(fact.slot_key, []).append(fact)
+        self._slots[namespace] = slots
 
     def load_facts(
         self, namespace: str, *, fact_id: str | None = None, slot_key: str | None = None
@@ -39,11 +64,7 @@ class ReadCache:
             facts = self._session.load_facts(namespace, fact_id=fact_id, slot_key=slot_key)
             self._facts[key] = facts
             if fact_id is None and slot_key is None:
-                self._ids[namespace] = {fact.id: fact for fact in facts}
-                slots: dict[str, list[Fact]] = {}
-                for fact in facts:
-                    slots.setdefault(fact.slot_key, []).append(fact)
-                self._slots[namespace] = slots
+                self._remember_namespace(namespace, facts)
         return list(self._facts[key])
 
     def fetch_all(self, statement: SQLStatement, params: Sequence[SQLScalar] = ()) -> list[SQLRow]:

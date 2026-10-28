@@ -25,6 +25,7 @@ from ai_knot.always_on.storage import (
     migrate,
     namespace_lock_key,
     sql,
+    task_row_applicable,
 )
 from ai_knot.storage.base import parse_datetime as _parse_datetime
 from ai_knot.types import Fact, MemoryType, MESIState
@@ -452,7 +453,13 @@ class PostgresStorage:
                 )
 
     def _load_on_connection(
-        self, conn: Any, agent_id: str, *, fact_id: str | None = None, slot_key: str | None = None
+        self,
+        conn: Any,
+        agent_id: str,
+        *,
+        fact_id: str | None = None,
+        slot_key: str | None = None,
+        task_key: str | None = None,
     ) -> list[Fact]:
         clauses = ["agent_id=%s"]
         params = [agent_id]
@@ -463,8 +470,13 @@ class PostgresStorage:
             clauses.append("slot_key=%s")
             params.append(slot_key)
         query = self._SELECT_COLS + ' FROM "ai-knot_facts" WHERE ' + " AND ".join(clauses)
-        rows = conn.execute(query + " ORDER BY created_at", tuple(params)).fetchall()
-        return [self._fact_from_row(row) for row in rows]
+        cursor = conn.execute(query + " ORDER BY created_at", tuple(params))
+        rows = cursor.fetchall() if task_key is None else cursor
+        return [
+            self._fact_from_row(row)
+            for row in rows
+            if task_key is None or task_row_applicable(row[2], row[29], task_key)
+        ]
 
     def load(self, agent_id: str) -> list[Fact]:
         with self._get_conn() as conn:

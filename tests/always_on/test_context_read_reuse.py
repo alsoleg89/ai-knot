@@ -59,9 +59,9 @@ def test_concurrent_commit_keeps_one_snapshot_then_next_read_rechecks(
                 "__shared__", lambda facts: [replace(f, content="Changed source") for f in facts]
             )
 
-    def during(self, conn, namespace, *, fact_id=None, slot_key=None):
+    def during(self, conn, namespace, *, fact_id=None, slot_key=None, **kwargs):
         nonlocal injected
-        rows = loader(self, conn, namespace, fact_id=fact_id, slot_key=slot_key)
+        rows = loader(self, conn, namespace, fact_id=fact_id, slot_key=slot_key, **kwargs)
         if not injected and namespace == "reader" and fact_id is None and slot_key is None:
             injected = True
             with ThreadPoolExecutor(max_workers=1) as worker:

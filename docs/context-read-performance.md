@@ -2,6 +2,8 @@
 
 Task snapshot, lexical task selection, saved-context review and semantic acquisition now reuse repeated database reads within their existing read-only SQL transaction. Public APIs, ranking, output budgets, source guards and provider spending are unchanged. This reduces repeated work when many team lessons depend on the same source observations.
 
+The later [task-source decoder optimization](task-source-performance.md) retains that reuse while skipping full decoding of unrelated task records. Its same-snapshot completeness check adds one COUNT per namespace: the shared-root profile uses 101 reads versus this earlier implementation's 99. These are separate measured revisions; the historical results below are unchanged.
+
 The motivating workload has 64 task facts and 16 common shared roots. Previously, loading a fact for the task corpus did not prevent `_view` from loading it again; each descendant also reread shared roots, grants and freshness rows. A complete snapshot needed 3,330 backing reads even though its returned context was small.
 
 ## Lifetime and admission

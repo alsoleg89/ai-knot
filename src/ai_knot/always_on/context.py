@@ -52,7 +52,7 @@ def task_sources(
 ) -> Iterator[tuple[EvidenceRef, Fact]]:
     session = ReadCache(session)
     for namespace in task_scopes(memory):
-        for fact in session.load_facts(namespace):
+        for fact in session.load_task_facts(namespace, task_key=task_key):
             if not task_applicable(fact, task_key) or not fact.supported or not fact.is_active(now):
                 continue
             ref = EvidenceRef(namespace, fact.id, evidence_revision(fact))

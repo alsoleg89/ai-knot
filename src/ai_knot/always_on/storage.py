@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -15,6 +16,14 @@ from ai_knot.types import Fact
 
 SQLScalar: TypeAlias = str | int | float | bytes | None
 SQLRow: TypeAlias = dict[str, SQLScalar]
+
+
+def task_row_applicable(memory_type: str, qualifiers_json: str | None, task_key: str) -> bool:
+    """Cheap candidate check before full decoding; keep admission in context.py."""
+    if memory_type == "episodic":
+        return False
+    qualifiers = json.loads(qualifiers_json) if qualifiers_json else {}
+    return qualifiers.get("task_key", "") in ("", task_key)
 
 
 @dataclass(frozen=True)
@@ -31,6 +40,7 @@ def sql(statement: str) -> SQLStatement:
 
 
 class AlwaysOnSession(Protocol):
+    def load_task_facts(self, namespace: str, *, task_key: str) -> Iterable[Fact]: ...
     def load_facts(
         self, namespace: str, *, fact_id: str | None = None, slot_key: str | None = None
     ) -> list[Fact]: ...
@@ -88,6 +98,10 @@ class SQLSession:
         if fact_id is None and slot_key is None:
             return self._loader(self._connection, namespace)
         return self._loader(self._connection, namespace, fact_id=fact_id, slot_key=slot_key)
+
+    def load_task_facts(self, namespace: str, *, task_key: str) -> list[Fact]:
+        self._check(namespace)
+        return self._loader(self._connection, namespace, task_key=task_key)
 
     def replace_facts(self, namespace: str, facts: list[Fact]) -> None:
         self._check(namespace)

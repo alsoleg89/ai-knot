@@ -1,0 +1,887 @@
+{
+  "format_version": 1,
+  "base": "53d72fbc290486060bad6c052f6c353516f43993",
+  "scope": "task/type metadata prefilter before full Fact decoding; unchanged SQL",
+  "provider_calls": 0,
+  "embedding_calls": 0,
+  "pairs": 32,
+  "public_pairs_identical": true,
+  "samples_per_timing": 5,
+  "rows": [
+    {
+      "backend": "sqlite",
+      "kind": "other_tasks",
+      "noise": 0,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 15958,
+        "median_ms": 0.9340420365333557
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 16852,
+        "median_ms": 1.0666250018402934
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "other_tasks",
+      "noise": 0,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 16638,
+        "median_ms": 1.0818750597536564
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 17633,
+        "median_ms": 0.9046670747920871
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "other_tasks",
+      "noise": 1000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 3643855,
+        "median_ms": 14.153750031255186
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 15682,
+        "median_ms": 6.308500072918832
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "other_tasks",
+      "noise": 1000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 3645437,
+        "median_ms": 13.991541927680373
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 17338,
+        "median_ms": 7.303875056095421
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "other_tasks",
+      "noise": 10000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 36493751,
+        "median_ms": 146.5257500531152
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 17384,
+        "median_ms": 55.83783402107656
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "other_tasks",
+      "noise": 10000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 36495175,
+        "median_ms": 143.38066696655005
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 17091,
+        "median_ms": 53.46229195129126
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "same_task_overflow",
+      "noise": 0,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 14208,
+        "median_ms": 1.109542092308402
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 15361,
+        "median_ms": 0.9270000737160444
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "same_task_overflow",
+      "noise": 0,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 15526,
+        "median_ms": 1.0175000643357635
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 16737,
+        "median_ms": 0.8505829609930515
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "same_task_overflow",
+      "noise": 1000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 9
+        },
+        "peak_python_bytes": 3639679,
+        "median_ms": 13.290375005453825
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 10
+        },
+        "peak_python_bytes": 2856124,
+        "median_ms": 13.574459007941186
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "same_task_overflow",
+      "noise": 1000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 129
+        },
+        "peak_python_bytes": 3641183,
+        "median_ms": 17.583917011506855
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 130
+        },
+        "peak_python_bytes": 2998993,
+        "median_ms": 17.272792058065534
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "same_task_overflow",
+      "noise": 10000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 9
+        },
+        "peak_python_bytes": 36456935,
+        "median_ms": 149.58287496119738
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 10
+        },
+        "peak_python_bytes": 28491080,
+        "median_ms": 148.19045807234943
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "same_task_overflow",
+      "noise": 10000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 129
+        },
+        "peak_python_bytes": 36454791,
+        "median_ms": 155.63116606790572
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 130
+        },
+        "peak_python_bytes": 28629281,
+        "median_ms": 153.29654200468212
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "slotted_shared_roots",
+      "noise": 0,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 96,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 777010,
+        "median_ms": 32.37058292143047
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 609232,
+        "median_ms": 30.962249962612987
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "slotted_shared_roots",
+      "noise": 0,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 96,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 778282,
+        "median_ms": 32.52883302047849
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 600082,
+        "median_ms": 31.156416051089764
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "slotted_shared_roots",
+      "noise": 2000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 2096,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 7684640,
+        "median_ms": 70.77649992424995
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 598232,
+        "median_ms": 43.35225000977516
+      }
+    },
+    {
+      "backend": "sqlite",
+      "kind": "slotted_shared_roots",
+      "noise": 2000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 2096,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 7689892,
+        "median_ms": 60.91150001157075
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 600982,
+        "median_ms": 41.114166961051524
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "other_tasks",
+      "noise": 0,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 22428,
+        "median_ms": 11.692375061102211
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 23613,
+        "median_ms": 10.93687501270324
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "other_tasks",
+      "noise": 0,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 21162,
+        "median_ms": 11.566292028874159
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 21618,
+        "median_ms": 11.23066688887775
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "other_tasks",
+      "noise": 1000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 3644672,
+        "median_ms": 24.790833005681634
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 20268,
+        "median_ms": 16.9291669735685
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "other_tasks",
+      "noise": 1000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 3645928,
+        "median_ms": 25.852124905213714
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 20966,
+        "median_ms": 15.46962489373982
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "other_tasks",
+      "noise": 10000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 36489752,
+        "median_ms": 185.5972909834236
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 20126,
+        "median_ms": 65.95291697885841
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "other_tasks",
+      "noise": 10000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 36491208,
+        "median_ms": 163.6318750679493
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 20600,
+        "median_ms": 60.88191596791148
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "same_task_overflow",
+      "noise": 0,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 18532,
+        "median_ms": 10.479125077836215
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 18838,
+        "median_ms": 11.150041944347322
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "same_task_overflow",
+      "noise": 0,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 2
+        },
+        "peak_python_bytes": 19850,
+        "median_ms": 10.870250058360398
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 2,
+          "raw_fact_rows": 2,
+          "other_sql_reads": 3
+        },
+        "peak_python_bytes": 19956,
+        "median_ms": 11.78366702515632
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "same_task_overflow",
+      "noise": 1000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 9
+        },
+        "peak_python_bytes": 3640048,
+        "median_ms": 30.413499916903675
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 10
+        },
+        "peak_python_bytes": 2859445,
+        "median_ms": 28.99995807092637
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "same_task_overflow",
+      "noise": 1000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 129
+        },
+        "peak_python_bytes": 3641344,
+        "median_ms": 88.59879104420543
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 1002,
+          "raw_fact_rows": 1002,
+          "other_sql_reads": 130
+        },
+        "peak_python_bytes": 2991878,
+        "median_ms": 82.72629196289927
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "same_task_overflow",
+      "noise": 10000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 9
+        },
+        "peak_python_bytes": 36449696,
+        "median_ms": 173.6064589349553
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 10
+        },
+        "peak_python_bytes": 28493026,
+        "median_ms": 163.95808407105505
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "same_task_overflow",
+      "noise": 10000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 129
+        },
+        "peak_python_bytes": 36450840,
+        "median_ms": 245.0076249660924
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 1,
+          "decoded_facts": 10002,
+          "raw_fact_rows": 10002,
+          "other_sql_reads": 130
+        },
+        "peak_python_bytes": 28621446,
+        "median_ms": 225.77649995218962
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "slotted_shared_roots",
+      "noise": 0,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 96,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 778403,
+        "median_ms": 109.19329093303531
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 605626,
+        "median_ms": 90.32645903062075
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "slotted_shared_roots",
+      "noise": 0,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 96,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 779747,
+        "median_ms": 114.51583297457546
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 96,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 590355,
+        "median_ms": 100.9177080122754
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "slotted_shared_roots",
+      "noise": 2000,
+      "operation": "snapshot",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 2096,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 7674002,
+        "median_ms": 119.30104100611061
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 594383,
+        "median_ms": 98.42445806134492
+      }
+    },
+    {
+      "backend": "postgres",
+      "kind": "slotted_shared_roots",
+      "noise": 2000,
+      "operation": "semantic",
+      "public_outputs_identical": true,
+      "before": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 2096,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 81
+        },
+        "peak_python_bytes": 7679904,
+        "median_ms": 112.96958301682025
+      },
+      "after": {
+        "counts": {
+          "fact_loads": 18,
+          "decoded_facts": 80,
+          "raw_fact_rows": 2096,
+          "other_sql_reads": 83
+        },
+        "peak_python_bytes": 589783,
+        "median_ms": 99.64899998158216
+      }
+    }
+  ],
+  "driver_sha256": "e0ef9109ce1af8fd680c08401b7cbb171e999298fc3bd8873e3b22e5cd58f2c3",
+  "raw": {
+    "path": "docs/performance/task-source-scan-raw.json.gz",
+    "sha256": "cef7b5ce7a3cf05ba56e615bcc5a9984b11ebf1cb86bf19135a5b5bdcb1013c8"
+  },
+  "limits": [
+    "not totalprocess/RSS memory; nativePG buffers unmeasured",
+    "all SQL/raw rows still read",
+    "same-task/genericoverflow remains",
+    "no quality/context-sufficiency/capacity claim"
+  ]
+}
