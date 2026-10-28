@@ -72,6 +72,8 @@ A fitting snapshot reports available evidence, including an empty tuple; it supp
 
 ## Opt in to semantic candidates
 
+For a complete bounded callback/checkpoint path over a fitting task corpus, use the [planning-turn recipe](bounded-planning.md). It can assess paraphrased evidence under explicit event/model budgets while retaining the original lexical diagnostics, authority checks and action guards. It also provides a runnable wait/restart/plan/reconcile example.
+
 The recipe also provides async `acquire_missing_context(turn, selector, ...)`. It calls the explicit semantic selector only when the lexical turn is `missing_context` and the host supplies `relevant_event=True`. The host must set that flag only for a new relevant event or a deliberate bounded retry. Unchanged idle checks use `False`; every other turn status returns `None` without acquisition. The default scripted example remains model-free.
 
 Create one selector per owner and fixed embedding space, and reuse it within its event loop. `host_embed_once` is an explicit host callback that makes at most one embedding request per invocation, without retries; the host owns provider configuration and aggregate metering.
@@ -110,7 +112,7 @@ Keep `turn.context`, `turn.status` and the original requirements. The returned `
 | `snapshot_too_large` | Narrow/split the subscription and recover a complete selected manifest; no partial snapshot was acknowledged |
 | `waiting` | Sleep until the host's next relevant event or timer |
 | `verification_due` | Run the existing trusted-host verifier/maintenance under its budget, then inspect again |
-| `missing_context` | Supply the missing observations, adjust applicability, or increase a justified budget; incomplete lexical coverage does not authorize inference/actions in this recipe |
+| `missing_context` | Supply observations, adjust applicability/bounds, or explicitly invoke the bounded planning recipe over current task evidence; inspection alone grants no model/action authority |
 | `lease_busy` | Another invocation still owns the intent; do not replace its live lease |
 | `reconcile` | Query the external connector/receipt; unknown does not prove success or safe retry |
 | `blocked`, `deadline_exceeded` | Preserve the block for host intervention; source changes do not override a manual block |

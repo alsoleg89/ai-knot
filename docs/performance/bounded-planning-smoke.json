@@ -1,0 +1,119 @@
+{
+  "format_version": 1,
+  "base": "abe8be8",
+  "protocol": "bounded-planning-smoke-v1",
+  "scope": "one constructed two-event adoption smoke,3host arms×2SQL, virtual time/scripted effects",
+  "offered_per_arm": {
+    "max_calls": 2,
+    "max_tokens": 20000,
+    "max_output_tokens": 512
+  },
+  "model": "gpt-4.1-mini",
+  "embedding_requests": 0,
+  "actual_requests": 8,
+  "actual_tokens": 1850,
+  "paired_bundle_helper_inputs_identical": true,
+  "cases": [
+    {
+      "backend": "sqlite",
+      "arm": "strict_lexical",
+      "requests": 0,
+      "tokens": 0,
+      "sequence": [
+        "lexical_gate_closed",
+        "lexical_gate_closed"
+      ],
+      "scripted_effects": 0,
+      "final_state": "ready",
+      "quiet_model_calls_reserved": 0,
+      "replay_model_calls_reserved": 0,
+      "reconciliation_status": null
+    },
+    {
+      "backend": "sqlite",
+      "arm": "current_task_bundle",
+      "requests": 2,
+      "tokens": 465,
+      "sequence": [
+        "waiting",
+        "planned"
+      ],
+      "scripted_effects": 1,
+      "final_state": "completed",
+      "quiet_model_calls_reserved": 0,
+      "replay_model_calls_reserved": 0,
+      "reconciliation_status": "reconcile"
+    },
+    {
+      "backend": "sqlite",
+      "arm": "bounded_planner",
+      "requests": 2,
+      "tokens": 459,
+      "sequence": [
+        "waiting",
+        "planned"
+      ],
+      "scripted_effects": 1,
+      "final_state": "completed",
+      "quiet_model_calls_reserved": 0,
+      "replay_model_calls_reserved": 0,
+      "reconciliation_status": "reconcile"
+    },
+    {
+      "backend": "postgres",
+      "arm": "strict_lexical",
+      "requests": 0,
+      "tokens": 0,
+      "sequence": [
+        "lexical_gate_closed",
+        "lexical_gate_closed"
+      ],
+      "scripted_effects": 0,
+      "final_state": "ready",
+      "quiet_model_calls_reserved": 0,
+      "replay_model_calls_reserved": 0,
+      "reconciliation_status": null
+    },
+    {
+      "backend": "postgres",
+      "arm": "current_task_bundle",
+      "requests": 2,
+      "tokens": 466,
+      "sequence": [
+        "waiting",
+        "planned"
+      ],
+      "scripted_effects": 1,
+      "final_state": "completed",
+      "quiet_model_calls_reserved": 0,
+      "replay_model_calls_reserved": 0,
+      "reconciliation_status": "reconcile"
+    },
+    {
+      "backend": "postgres",
+      "arm": "bounded_planner",
+      "requests": 2,
+      "tokens": 460,
+      "sequence": [
+        "waiting",
+        "planned"
+      ],
+      "scripted_effects": 1,
+      "final_state": "completed",
+      "quiet_model_calls_reserved": 0,
+      "replay_model_calls_reserved": 0,
+      "reconciliation_status": "reconcile"
+    }
+  ],
+  "driver_sha256": "03efff376bf3de7004b531fd9cb9d25bc2646d10c32c022b92d243266b99b817",
+  "source_sha256": {
+    "examples/always_on_team.py": "fb3d135be8626afe961d914512d2065358b9abe56426214dcefe1db2a86dedef",
+    "examples/always_on_planning.py": "a4b81b53d5a593f2f5036a9440ea28492f13cebac84eedfd8b8e54bd367b4324",
+    "tests/eval/team_decisions/openai.py": "58ab9cb4e31f6f28e18057ad1582fdb8c254b1f49df11f9c54d8362965628ba4"
+  },
+  "raw": {
+    "path": "docs/performance/bounded-planning-smoke-raw.json.gz",
+    "sha256": "a0d839f6ef7a928d65818313a748d34d6d9274efc9f26e5f2bc5a1141dd7cd05"
+  },
+  "conclusion": "Helper progresses on available evidence despite lexical mismatch and matches the simple bundle control. No memory-specific accuracy, latency, fleet-scale or real external-effect claim."
+}

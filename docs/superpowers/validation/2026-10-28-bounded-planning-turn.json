@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-28",
+  "base": "abe8be8",
+  "scope": "bounded planning host example; stable library/transport/storage/dependency/release behavior unchanged",
+  "checks": {
+    "full_python312_postgres_required": {
+      "passed": 2602,
+      "skipped": 5,
+      "warnings": 1,
+      "coverage_percent": 89.97,
+      "seconds": 132.87,
+      "log": "planning-full-pg-final.log"
+    },
+    "compatibility311_postgres_required": {
+      "passed": 197,
+      "seconds": 67.37,
+      "log": "planning-py311.log"
+    },
+    "compatibility313_postgres_required": {
+      "passed": 197,
+      "seconds": 69.61,
+      "log": "planning-py313.log"
+    },
+    "ruff": "check and format passed,316files including changed examples",
+    "mypy": "strict passed,80sourcefiles",
+    "documented_cli": "model-free module command exit0 and completed scripted workflow",
+    "live_openai": {
+      "calls": 8,
+      "tokens": 1850,
+      "provider_errors": 0,
+      "embeddings": 0
+    },
+    "original_checkout": {
+      "head_unchanged": true,
+      "status_unchanged": true,
+      "protected_sha256_files": 30
+    },
+    "release_changes": false
+  },
+  "initial_full_ci": {
+    "failed": 4,
+    "passed": 2557,
+    "skipped": 5,
+    "errors": 45,
+    "seconds": 73.7,
+    "result": "PostgreSQL server-closed connection errors; no container restart/OOM;20fresh connections passed; unchanged full suite repeated separately. Cause not established."
+  },
+  "skips": [
+    "SQLite parametrization of PostgreSQL-only schema initialization",
+    "3opt-in real Docker sandbox cases (not enabled in this gate)",
+    "storage factory test requiring separate environment variable"
+  ],
+  "warning": "Existing coverage warning for semantic source compiled from archived runtime filename; retained in full log.",
+  "tests": "124new helper SQL cases +2workflow SQL cases in full gate; existing team-cycle unchanged. New tests cover replay, cancellation, provider failures, bounds, corpus/ACL/freshness changes, pending/unknown work, deadline/manual/CAS/lease races and action-time evidence.",
+  "review": {
+    "path": "docs/superpowers/reviews/2026-10-28-bounded-planning-turn.md",
+    "scope": "independent Astra/Ponytail source/method/artifact audit; owner executed tests"
+  },
+  "evidence": {
+    "summary": "docs/performance/bounded-planning-smoke.json",
+    "raw": "docs/performance/bounded-planning-smoke-raw.json.gz",
+    "sha256": "a0d839f6ef7a928d65818313a748d34d6d9274efc9f26e5f2bc5a1141dd7cd05"
+  },
+  "limits": [
+    "exclusive controller per lease token; same-token PREPARED race is outside contract",
+    "post-snapshot corpus additions are not an atomic completeness frontier",
+    "cooperative async timeout; local callback count is not provider/global billing",
+    "latest marker only; crashes or A→B→A can repeat inference",
+    "one inspected synthetic task with scripted effects; no accuracy superiority over bundle control"
+  ],
+  "broad_product_goal": "active"
+}
