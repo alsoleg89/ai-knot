@@ -23,6 +23,7 @@ from .models import (
     context_label,
     positive_integer,
 )
+from .reads import ReadCache
 
 if TYPE_CHECKING:
     from .memory import AlwaysOnMemory
@@ -49,6 +50,7 @@ def task_sources(
     task_key: str,
     now: datetime,
 ) -> Iterator[tuple[EvidenceRef, Fact]]:
+    session = ReadCache(session)
     for namespace in task_scopes(memory):
         for fact in session.load_facts(namespace):
             if not task_applicable(fact, task_key) or not fact.supported or not fact.is_active(now):
@@ -105,6 +107,7 @@ def select_context(
     scopes = task_scopes(memory)
     shared = "__shared__" in scopes
     with memory._transaction(scopes, write=False) as session:
+        session = ReadCache(session)
         now = memory._now()
         all_facts = {
             namespace: {fact.id: fact for fact in session.load_facts(namespace)}

@@ -206,6 +206,9 @@ class SemanticContext:
         with memory._transaction(task_scopes(memory), write=False) as session:
             now = memory._now()
             valid: dict[str, Source] = {}
+            from .reads import ReadCache
+
+            session = ReadCache(session)
             issues: list[BasisIssue] = []
             for key, (ref, _) in sources.items():
                 problems = memory._validate_basis(session, (ref,), now)

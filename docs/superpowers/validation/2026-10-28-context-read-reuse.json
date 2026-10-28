@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-28",
+  "base_commit": "48b99d549bf8610dba8ecb047789033b1dc3a88c",
+  "scope": "Internal transaction-local context read reuse; public contracts, ranking, source guards, provider spending, storage schema and package versions unchanged",
+  "product_goal_status": "active",
+  "tdd": {
+    "backing_read_budgets_before": "6failed on both SQL backends before implementation",
+    "after": "Passing within fullCI; whole reads<200, point review<300",
+    "red_log_sha256": "516fbfc98a5066786e39cad47e9c473d89280953083906812628f0e3d6e5ea39"
+  },
+  "focused_sql": [
+    {
+      "passed": 61,
+      "seconds": 6.95,
+      "scope": "Read budgets/concurrent commits, task snapshot, context review"
+    },
+    {
+      "passed": 135,
+      "seconds": 15.6,
+      "scope": "Reuse filter matrix, semantic acquisition/withdrawals, archived semantic equivalence, lexical contexts"
+    }
+  ],
+  "python312_postgres_required": {
+    "passed": 2464,
+    "skipped": 5,
+    "seconds": 91.48,
+    "coverage_percent": 89.97,
+    "command": "python -m pytest -n4 --timeout=20 -m 'not slow' --cov=ai_knot --cov-report=term-missing -p no:cacheprovider",
+    "environment": [
+      "PYTHONPATH=src",
+      "feature-source CLI wrappers on PATH",
+      "AI_KNOT_TEST_PG_DSN=owned local PostgreSQL16 loopback55441",
+      "AI_KNOT_REQUIRE_POSTGRES=1",
+      "COVERAGE_FILE=temporary path"
+    ],
+    "skip_reasons": [
+      "SQLite parameter of PostgreSQL-only initialization regression",
+      "Missing-psycopg branch while installed",
+      "Three real-Docker evaluator tests opt-in; unrelated evaluator code unchanged from prior accepted29pass batch"
+    ],
+    "warnings": [
+      "Existing OpenClaw no-LLM multi-turn warning",
+      "Coverage cannot parse archived semantic function synthetic source filename"
+    ],
+    "slow_tests": "Excluded by standard CI selection",
+    "log_sha256": "3fd94e63ef4b9ee15fd841288efd12e9e2145fa4ee7a2fc74b2dd59bfcfefc1f"
+  },
+  "compatibility": {
+    "python311": {
+      "passed": 97,
+      "postgres_deselected": 89,
+      "scope": "All six context read/semantic/snapshot/lexical/review/equivalence modules, SQLite only"
+    },
+    "python313": {
+      "passed": 97,
+      "postgres_deselected": 89,
+      "scope": "All six context read/semantic/snapshot/lexical/review/equivalence modules, SQLite only"
+    }
+  },
+  "static": {
+    "ruff": "pass",
+    "format_files": 310,
+    "strict_mypy_source_files": 80,
+    "diff_check": "pass"
+  },
+  "clients": "No TypeScript/HTTP/MCP interface or transport changes; existing Python surface tests included in fullCI, TypeScript not rerun",
+  "profile": {
+    "summary": "../../performance/context-read-reuse.json",
+    "raw_archive_sha256": "d8d3c88657fbe9bde2851d17bc703f1f440791ddaedf3e3cdceb703e31ab1598",
+    "exact_raw_reports": 8,
+    "matched_public_operation_pairs": 24,
+    "samples_per_side_per_operation": 5,
+    "backing_reads_shared_roots": {
+      "snapshot": [
+        3330,
+        99
+      ],
+      "lexical": [
+        3331,
+        83
+      ],
+      "review": [
+        3392,
+        225
+      ]
+    },
+    "latency_goal": "2x not reached by5of6 SQLite shared-root operations; all original samples retained",
+    "model_or_embedding_calls": 0,
+    "source_manifest": "Embedded in raw profile archive;81current product/profiler hashes verified unchanged",
+    "reviewed_sources": {
+      "src/ai_knot/always_on/context.py": "07ee7e6fe23385f9b28073a87666c8c88fb6154e70173483e9abf644b9154f08",
+      "src/ai_knot/always_on/memory.py": "942598d88151ec61e30975b8e7bdbfd8389180f318b736c8ea6440588ef20954",
+      "src/ai_knot/always_on/reads.py": "2a892316ede07bbe5c4b2ee20f997f50328eea07076ba71f17d95348f85f86d0",
+      "src/ai_knot/always_on/semantic.py": "34dc1f00b7539c780bde82666eaa90d36e981558790a2fc759a75a2ebef435d8",
+      "tests/eval/context_read_profile.py": "6efa67e6c0d86b24a56e61232c8c28f34893f8a15f6681e29a103b30f86abe7c"
+    },
+    "limits": [
+      "Synthetic reuse-heavy source checks and a flat control; not answer-quality or a real-agent throughput study",
+      "Full namespace scans and per-ref hashing/admission CPU remain; no retained-corpus index added",
+      "Local loopback PostgreSQL16 container and host SQLite; connection and host/cache noise affect timing",
+      "No concurrent workload during profiles; five observations do not establish stable tail latency",
+      "Fact instances remain internal and are not mutated; read caches are discarded before provider I/O and revalidation uses a new SQL snapshot",
+      "Common action/write guards receive original sessions, no admission cache; every provider await gets a new read snapshot"
+    ]
+  },
+  "review": {
+    "file": "../reviews/2026-10-28-context-read-reuse-astra-ponytail.md",
+    "sha256": "117a0ebad8030d227c335ee6bee44802658e138bdbf254c7d7526c67e4694a67",
+    "scope": "Independent Astra/Ponytail source, minimality,81sourcehashes and24profile-pair audit; fullCI read from parent log, no reviewer API requests",
+    "unresolved_findings": 0,
+    "clarification": "Captured Fact objects may remain internal across provider await; no lookup cache/admission decision is reused across it"
+  },
+  "original_checkout": {
+    "head": "01aad887846364541da8428d7e3d6c4b4ad57ed2",
+    "status_exactly_preserved": true,
+    "protected_file_hashes_unchanged": 30
+  },
+  "previous_quality_artifacts": "All pre-existing performance artifact bytes unchanged from base commit; no paid rerun or quality rescoring",
+  "versions": {
+    "python": "0.12.0",
+    "npm": "0.12.0"
+  },
+  "cleanup": {
+    "owned_postgres_id": "5e44d611d43791e339de1bc7d2d1622946bd68bca0803719e2bfc63466f2d4da",
+    "ownership_label_verified": true,
+    "running_after_cleanup": false,
+    "other_containers_modified": false
+  },
+  "git": {
+    "branch": "codex/always-on-memory-return",
+    "push_pr_merge_release": false
+  }
+}

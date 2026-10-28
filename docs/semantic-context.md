@@ -40,6 +40,8 @@ If the entire admissible corpus fits the output count and whole-fact character l
 
 The helper retains only currently admitted unchanged document vectors and the most recent requirements tuple. It serializes concurrent acquisitions to avoid duplicate cold calls. Caches are local to the helper, so separate processes or a restart can pay again. The 128-candidate cap bounds paid work; source admission still scans retained namespaces and validates evidence. This is a bounded working-set path, not a large-corpus index or fleet capacity guarantee.
 
+Database read reuse is separate from that vector cache: each source-admission/revalidation transaction has its own short-lived row cache. It is discarded before provider I/O and recreated for the post-await read, preserving source and permission rechecks. See the [local SQL profile](context-read-performance.md).
+
 `review.accepted` contains whole facts and exact refs. `review.issues` reports rejected captured evidence; access failures redact its identity. `review.omitted` lists positive-score candidates excluded by output/rank selection. Its `complete` flag means there were no admission issues or such omissions. An empty review can be complete; neither this field nor `status="ok"` certifies that task requirements are satisfied. Preserve the original requirements and lexical coverage separately. Recheck chosen refs before use and retain `claim`, checkpointed basis and `begin_action` for effects.
 
 For an event/timer host, the [always-on team recipe](always-on-team-cycle.md#opt-in-to-semantic-candidates) invokes this helper only for missing lexical context after an explicit relevant event or bounded retry. Idle checks never trigger paid work automatically.

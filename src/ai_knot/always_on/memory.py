@@ -703,6 +703,9 @@ class AlwaysOnMemory(SubscriptionsMixin):
         transitions.union_basis(refs)
         scopes = (self._owner, "__shared__") if self._pool is not None else (self._owner,)
         with self._transaction(scopes, write=False) as session:
+            from .reads import ReadCache
+
+            session = ReadCache(session)
             now = self._now()
             accepted: list[ContextFact] = []
             issues: list[BasisIssue] = []

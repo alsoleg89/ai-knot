@@ -33,6 +33,8 @@ This read does not update usage counters, intents, leases, subscriptions or deli
 
 The bounds limit the output, not namespace scanning or inherited-source SQL checks. Large retained corpora still need explicit applicability/selection; no large-corpus or concurrent-fleet performance claim follows.
 
+Repeated fact/root/permission/policy reads are now reused within this operation's SQL snapshot. Every new operation reads fresh state; no cache survives a transaction or substitutes for action-time checks. The [local profile](context-read-performance.md) records lower SQL work, unchanged returned results and the remaining full-scan/CPU costs.
+
 ## The same read through each client
 
 | Surface | Operation |
