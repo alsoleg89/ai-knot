@@ -26,7 +26,6 @@ from ai_knot.retriever import BM25Retriever, DenseRetriever, HybridRetriever
 from ai_knot.storage.base import (
     ACLStoreCapable,
     StorageBackend,
-    TemporalStorageCapable,
     mutate_facts,
 )
 from ai_knot.types import Fact, MemoryType
@@ -94,7 +93,7 @@ class _PoolRecallMixin:
     """Mixin providing recall, arecall, and embed_pool_facts to SharedMemoryPool.
 
     Depends on the following attributes being set by SharedMemoryPool.__init__:
-        _storage, _bm25, _dense, _retriever, _embedded_ids, _query_vector,
+        _storage, _bm25, _dense, _retriever, _embedded_texts, _query_vector,
         _last_recall_meta, _fact_consumers, _used_count, _recall_service,
         _claim_resolver, _query_router, _known_version,
         _AUTO_PROMOTE_THRESHOLD, _TIER_BOOST
@@ -109,7 +108,7 @@ class _PoolRecallMixin:
     _embed_model: str
     _embed_api_key: str | None
     _retriever: HybridRetriever
-    _embedded_ids: set[str]
+    _embedded_texts: dict[str, str]
     _query_vector: list[float] | None
     _last_recall_meta: _RecallMeta | None
     _fact_consumers: dict[str, set[str]]
@@ -208,6 +207,7 @@ class _PoolRecallMixin:
         # validity window: it drops still-valid expiring rows and ignores now.
         now_dt = now or datetime.now(UTC)
         active = [f for f in self._storage.load(_SHARED_NAMESPACE) if f.is_active(now_dt)]
+        self._prune_pool_embeddings(active)
 
         # Topic channel filter: include global facts (no channel) + matching channel.
         if topic_channel:
@@ -512,36 +512,56 @@ class _PoolRecallMixin:
 
         return top_results
 
-    async def embed_pool_facts(self) -> int:
-        """Embed all active pool facts that haven't been embedded yet.
+    def _prune_pool_embeddings(self, active: list[Fact]) -> dict[str, str]:
+        """Discard stale vectors against the same source snapshot used for ranking."""
+        current = {f.id: f.content for f in active}
+        stale = {fid for fid, text in self._embedded_texts.items() if current.get(fid) != text}
+        self._dense.remove_embeddings(stale)
+        for fid in stale:
+            del self._embedded_texts[fid]
+        return current
+
+    async def embed_pool_facts(self, *, now: datetime | None = None) -> int:
+        """Embed active pool facts whose current text has no cached vector.
 
         Fetches facts from storage, embeds new ones via the configured provider, and loads
         the vectors into the DenseRetriever.  Returns the number of newly
         embedded facts. Returns 0 if the provider is disabled/unavailable.
+        ``now`` selects the same validity window as :meth:`recall` (default: UTC now).
         """
         from ai_knot.embedder import embed_texts
 
-        if isinstance(self._storage, TemporalStorageCapable):
-            active = self._storage.load_active(_SHARED_NAMESPACE)
-        else:
-            all_shared = self._storage.load(_SHARED_NAMESPACE)
-            active = [f for f in all_shared if f.is_active()]
-
-        new_facts = [f for f in active if f.id not in self._embedded_ids]
-        if not new_facts:
+        now_dt = now or datetime.now(UTC)
+        with self._publish_lock:
+            active = [f for f in self._storage.load(_SHARED_NAMESPACE) if f.is_active(now_dt)]
+            current = self._prune_pool_embeddings(active)
+            new_texts = {
+                fid: text for fid, text in current.items() if self._embedded_texts.get(fid) != text
+            }
+        if not new_texts:
             return 0
 
-        texts = [f.content for f in new_facts]
         vectors = await embed_texts(
-            texts, base_url=self._embed_url, model=self._embed_model, api_key=self._embed_api_key
+            list(new_texts.values()),
+            base_url=self._embed_url,
+            model=self._embed_model,
+            api_key=self._embed_api_key,
         )
-        if not vectors:
+        if len(vectors) != len(new_texts) or any(not vec for vec in vectors):
             return 0  # Provider unavailable — BM25-only fallback.
 
-        new_vectors = {f.id: vec for f, vec in zip(new_facts, vectors, strict=True)}
-        self._dense.add_embeddings(new_vectors)
-        self._embedded_ids.update(new_vectors.keys())
-        return len(new_vectors)
+        with self._publish_lock:
+            active = [f for f in self._storage.load(_SHARED_NAMESPACE) if f.is_active(now_dt)]
+            current = self._prune_pool_embeddings(active)
+            # A source may change while the provider request is in flight.
+            new_vectors = {
+                fid: vec
+                for (fid, text), vec in zip(new_texts.items(), vectors, strict=True)
+                if current.get(fid) == text
+            }
+            self._dense.add_embeddings(new_vectors)
+            self._embedded_texts.update({fid: new_texts[fid] for fid in new_vectors})
+            return len(new_vectors)
 
     async def arecall(
         self,
@@ -561,7 +581,7 @@ class _PoolRecallMixin:
         from ai_knot.embedder import embed_texts
 
         # Embed new pool facts (incremental — skips already-embedded).
-        await self.embed_pool_facts()
+        await self.embed_pool_facts(now=now)
 
         # Embed the query.
         if self._dense.has_embeddings():

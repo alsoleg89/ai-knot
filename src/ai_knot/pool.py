@@ -167,8 +167,8 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._last_recall_meta: _RecallMeta | None = None
         # Per-fact usage tracking: fact_id -> set of agent_ids that recalled it.
         self._fact_consumers: dict[str, set[str]] = {}
-        # Tracks which fact IDs have been embedded to avoid re-embedding.
-        self._embedded_ids: set[str] = set()
+        # Reuse vectors only for the exact text sent to the embedding provider.
+        self._embedded_texts: dict[str, str] = {}
         # Transient query vector set by arecall() for hybrid search.
         self._query_vector: list[float] | None = None
         self._recall_service = SharedPoolRecallService()
