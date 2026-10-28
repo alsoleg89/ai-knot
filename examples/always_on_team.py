@@ -24,6 +24,9 @@ from ai_knot.always_on import (
     EvidenceRef,
     IntentState,
     ResumePacket,
+    SemanticBudget,
+    SemanticCandidates,
+    SemanticContext,
     SnapshotTooLarge,
     StaleEvidence,
     TaskContext,
@@ -191,6 +194,30 @@ def inspect_turn(
         len(saved.issues),
         last.through_seq,
         last.head_seq,
+    )
+
+
+async def acquire_missing_context(
+    turn: TurnObservation,
+    selector: SemanticContext,
+    *,
+    relevant_event: bool,
+    budget: SemanticBudget,
+    task_key: str = "",
+    role: str = "",
+    max_facts: int = 3,
+    max_chars: int = 600,
+) -> SemanticCandidates | None:
+    """Opt-in candidates only; preserve lexical context, status and action guards."""
+    if turn.status != "missing_context" or relevant_event is not True:
+        return None
+    return await selector.acquire(
+        turn.context.missing_requirements,
+        budget=budget,
+        task_key=task_key,
+        role=role,
+        max_facts=max_facts,
+        max_chars=max_chars,
     )
 
 

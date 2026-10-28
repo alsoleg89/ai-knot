@@ -46,6 +46,36 @@ Do not mark a work item handled just because its memory delivery was acknowledge
 
 For `replan`, the host claims the blocked intent, records its new plan with fresh basis through `checkpoint(..., state=READY, basis=...)`, then claims before execution. The example shows this sequence and a source change between preparation and `begin_action`. Keep the existing guarded action path even after successful inspection/context review: neither read is an action permit.
 
+## Opt in to semantic candidates
+
+The recipe also provides async `acquire_missing_context(turn, selector, ...)`. It calls the explicit semantic selector only when the lexical turn is `missing_context` and the host supplies `relevant_event=True`. The host must set that flag only for a new relevant event or a deliberate bounded retry. Unchanged idle checks use `False`; every other turn status returns `None` without acquisition. The default scripted example remains model-free.
+
+Create one selector per owner and fixed embedding space, and reuse it within its event loop. `host_embed_once` is an explicit host callback that makes at most one embedding request per invocation, without retries; the host owns provider configuration and aggregate metering.
+
+```python
+from ai_knot.always_on import SemanticBudget, SemanticContext
+from examples.always_on_team import acquire_missing_context
+
+selector = SemanticContext(memory, embed=host_embed_once)
+
+# Inside your async event handler, after inspect_turn:
+candidates = await acquire_missing_context(
+    turn, selector,
+    relevant_event=new_relevant_event,
+    budget=SemanticBudget(max_candidates=128, max_input_bytes=65536,
+                          max_provider_calls=1, timeout=5.0),
+    task_key="rollout42", role="operator", max_facts=3, max_chars=600,
+)
+if candidates is not None:
+    logger.info("semantic_candidates", extra={
+        "status": candidates.status,
+        "provider_calls_reserved": candidates.provider_calls_reserved,
+        "input_bytes_reserved": candidates.input_bytes_reserved,
+    })
+```
+
+Keep `turn.context`, `turn.status` and the original requirements. The returned `review` contains source-checked candidates; its `complete` field describes that review, not whether the task requirements have been satisfied. Candidate availability never promotes the turn to `ready` or authorizes inference or effects. Budget exhaustion, unavailable embeddings and source changes remain acquisition statuses for the host to handle under its retry policy. A host decision to proceed still requires the existing successful claim, fresh `review_context` of the chosen refs, checkpointed basis and guarded action path.
+
 ## Act on the diagnostic state
 
 | Status | Host response |

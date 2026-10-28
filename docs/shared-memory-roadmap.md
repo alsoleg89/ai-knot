@@ -31,6 +31,8 @@ independent review of that implementation batch are recorded in the [engineering
 
 The [decision study](team-decision-evaluation.md) now records real GPT-4.1 mini actions, simulated receipts and all OpenAI embedding/reader tokens on both SQL backends. It found a same-ID vector-cache defect (fixed) and a remaining semantic selection gap, with a strong full-history control and explicit post-pilot protocol limits.
 
+An [opt-in semantic acquisition path](semantic-context.md) now checks source/ACL/task/lineage/freshness before and after budgeted embeddings, with a zero-call complete-task snapshot and quiet event-driven host recipe. The [first independently authored case batch](semantic-context-evaluation.md) recovered more required evidence than lexical task search but did not beat a cheap scoped task bundle on reader correctness. It stays optional. The legacy MA verification now fails closed on missing/invalid selected evidence; raw reader-format failures and all paid work remain in the evaluation artifacts.
+
 - Measure decision/task benefit for long-lived teams against strong existing memory and no-shared-memory controls, with the same observations and total inference budgets. Synthetic lexical coverage alone is insufficient.
 - Diagnose the five retained advisory retrieval misses before choosing fixes; distinguish bad retrieval from ambiguous/incorrect labels. Keep explicit applicability and provenance intact.
 - Test sustained accumulation, retrieval/context preparation cost and useful-update/idle work under realistic workloads. Set deployment-relevant targets before capacity claims.

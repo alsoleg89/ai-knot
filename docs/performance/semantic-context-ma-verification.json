@@ -1,0 +1,88 @@
+{
+  "source_raw_sha256": "75b8170f8e10ee6c1a425625857577f3870f648a71e7d239e10e3c7eb9b177af",
+  "scope": "Complete structural run, mock judge/deterministic embeddings, all HTTP blocked. Single metric sample per scenario; final fail-closed evaluator applied to all 19 returned results. No threshold changes.",
+  "backends": [
+    {
+      "backend": "ai_knot_multi_agent",
+      "scenarios": 19,
+      "binding_passed": 11,
+      "binding_total": 11,
+      "advisory_misses": [
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "conflict_resolution",
+          "value": 0.3333333333333333,
+          "target": 0.8
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "wrong_suppression",
+          "value": 0.3333333333333333,
+          "target": 0.8
+        },
+        {
+          "scenario": "s19_incident_reconstruction",
+          "metric": "evidence_precision",
+          "value": 0.6153846153846154,
+          "target": 0.7
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "target_shard_recall_at_1000",
+          "value": 0.3333333333333333,
+          "target": 0.6
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "distractor_rate_at_1000",
+          "value": 0.9,
+          "target": 0.5
+        }
+      ]
+    },
+    {
+      "backend": "ai_knot_multi_agent_postgres",
+      "scenarios": 19,
+      "binding_passed": 11,
+      "binding_total": 11,
+      "advisory_misses": [
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "conflict_resolution",
+          "value": 0.3333333333333333,
+          "target": 0.8
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "wrong_suppression",
+          "value": 0.3333333333333333,
+          "target": 0.8
+        },
+        {
+          "scenario": "s19_incident_reconstruction",
+          "metric": "evidence_precision",
+          "value": 0.6153846153846154,
+          "target": 0.7
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "p95_retrieve_ms_at_1000",
+          "value": 173.01406699698418,
+          "target": 150.0
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "target_shard_recall_at_1000",
+          "value": 0.3333333333333333,
+          "target": 0.6
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "distractor_rate_at_1000",
+          "value": 0.9,
+          "target": 0.5
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,974 @@
+{
+  "scope": "Five sequential microprofile repetitions, deterministic 2D vectors, no network or fleet/capacity/semantic-quality claim. Includes source admission and revalidation SQL. No concurrent CI.",
+  "source_sha256": "bac58b11b6153bbda26b5a130b92dbdd05e8c7a3306bbdcf51545ff1b47faf06",
+  "records": [
+    {
+      "backend": "sqlite",
+      "corpus_count": 3,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 1.0030840057879686,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 0.7165418937802315,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 0.734040979295969,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 0.8253339910879731,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 0.7247920148074627,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 1.838000025600195,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 0.900916988030076,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 0.6393749499693513,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 0.8226670324802399,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 0.688083004206419,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 0.8226670324802399,
+          "max_ms": 1.0030840057879686
+        },
+        "warm": {
+          "median_ms": 0.7165418937802315,
+          "max_ms": 1.838000025600195
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "corpus_count": 32,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 4.4680420542135835,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 4.421916091814637,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 3.93649993930012,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 5.6602079421281815,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 5.5397499818354845,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 4.727041930891573,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 4.786124918609858,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 4.561334033496678,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 4.439834039658308,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 3.9172499673441052,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 4.4680420542135835,
+          "max_ms": 5.5397499818354845
+        },
+        "warm": {
+          "median_ms": 4.561334033496678,
+          "max_ms": 5.6602079421281815
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "corpus_count": 128,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 13.236250029876828,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 12.52462505362928,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 12.600957998074591,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 12.6394999679178,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 12.498874915763736,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 14.876874978654087,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 13.11583409551531,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 14.177166973240674,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 12.802207958884537,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 17.922749975696206,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 12.802207958884537,
+          "max_ms": 13.236250029876828
+        },
+        "warm": {
+          "median_ms": 14.177166973240674,
+          "max_ms": 17.922749975696206
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "corpus_count": 129,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 5.773709039203823,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 5.51379204262048,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 5.746375070884824,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 5.509625072591007,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 5.597749957814813,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 5.563749931752682,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 5.664916010573506,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 5.92737493570894,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 5.7590840151533484,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 6.041374988853931,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 5.746375070884824,
+          "max_ms": 5.773709039203823
+        },
+        "warm": {
+          "median_ms": 5.563749931752682,
+          "max_ms": 6.041374988853931
+        }
+      }
+    },
+    {
+      "backend": "postgres",
+      "corpus_count": 3,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 12.510707951150835,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 10.656042024493217,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 9.980208007618785,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 10.065666981972754,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 12.385917012579739,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 9.94979206006974,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 10.254250024445355,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 10.145834065042436,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 9.928416926413774,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 9.962999960407615,
+            "status": "snapshot",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 0
+          },
+          "callback_batches": []
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 10.254250024445355,
+          "max_ms": 12.510707951150835
+        },
+        "warm": {
+          "median_ms": 10.065666981972754,
+          "max_ms": 10.656042024493217
+        }
+      }
+    },
+    {
+      "backend": "postgres",
+      "corpus_count": 32,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 93.40541705023497,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 90.42324998881668,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 122.6132910232991,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 128.48408403806388,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 102.86225005984306,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 73.80395906511694,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 69.23879194073379,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 73.295583948493,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 74.90616594441235,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 1518,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "warm": {
+            "ms": 88.31787505187094,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 29
+          },
+          "callback_batches": [
+            33
+          ]
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 93.40541705023497,
+          "max_ms": 122.6132910232991
+        },
+        "warm": {
+          "median_ms": 88.31787505187094,
+          "max_ms": 128.48408403806388
+        }
+      }
+    },
+    {
+      "backend": "postgres",
+      "corpus_count": 128,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 280.0154580036178,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 274.48233298491687,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 234.80991704855114,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 287.70166693720967,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 257.1247910382226,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 278.92654191236943,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 259.9099579965696,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 312.5992499990389,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 370.72749994695187,
+            "status": "ok",
+            "calls_reserved": 1,
+            "input_bytes": 6058,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "warm": {
+            "ms": 257.1447079535574,
+            "status": "ok",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 3,
+            "omitted": 125
+          },
+          "callback_batches": [
+            129
+          ]
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 259.9099579965696,
+          "max_ms": 370.72749994695187
+        },
+        "warm": {
+          "median_ms": 278.92654191236943,
+          "max_ms": 312.5992499990389
+        }
+      }
+    },
+    {
+      "backend": "postgres",
+      "corpus_count": 129,
+      "samples": [
+        {
+          "repetition": 0,
+          "cold": {
+            "ms": 114.39912498462945,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 124.26125002093613,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 1,
+          "cold": {
+            "ms": 115.19058304838836,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 118.64933301694691,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 2,
+          "cold": {
+            "ms": 106.79791704751551,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 114.77054189890623,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 3,
+          "cold": {
+            "ms": 100.59004102367908,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 105.76974996365607,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        },
+        {
+          "repetition": 4,
+          "cold": {
+            "ms": 132.5770829571411,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "warm": {
+            "ms": 117.42554197553545,
+            "status": "input_limit",
+            "calls_reserved": 0,
+            "input_bytes": 0,
+            "accepted": 0,
+            "omitted": 0
+          },
+          "callback_batches": []
+        }
+      ],
+      "timing": {
+        "cold": {
+          "median_ms": 114.39912498462945,
+          "max_ms": 132.5770829571411
+        },
+        "warm": {
+          "median_ms": 117.42554197553545,
+          "max_ms": 124.26125002093613
+        }
+      }
+    }
+  ]
+}

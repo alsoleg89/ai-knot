@@ -12,7 +12,10 @@ from ai_knot import KnowledgeBase
 from ai_knot.always_on import (
     AlwaysOnMemory,
     IntentState,
+    LeaseLost,
     RevisionConflict,
+    SemanticBudget,
+    SemanticContext,
     VerificationOutcome,
     VerificationResult,
     WaitUntil,
@@ -316,3 +319,124 @@ def test_manual_block_survives_source_changes(recipe, sql_storage, clock, tmp_pa
     assert view.context.complete and view.packet.stale_basis
     assert "host_blocked" in view.packet.reasons
     assert view.status == "blocked" and not view.wake_model
+
+
+def semantic_setup(recipe, sql_storage, clock, tmp_path):
+    kb, memory, source, intent, _, inspect = setup(recipe, sql_storage, clock, tmp_path)
+    kb.forget(source.id)
+    candidate = kb.add("A validated recovery copy is available")
+    kb.add("Office heating repaired")
+    view = inspect()
+    assert view.status == "missing_context" and not view.context.complete
+    calls = []
+
+    async def embed(texts):
+        calls.append(list(texts))
+        return [
+            [1.0, 0.0] if text in ("backup receipt", candidate.content) else [0.0, 1.0]
+            for text in texts
+        ]
+
+    return kb, memory, candidate, intent, view, calls, SemanticContext(memory, embed=embed)
+
+
+@pytest.mark.anyio
+async def test_opt_in_semantic_candidates_preserve_missing_turn_and_guards(
+    recipe, sql_storage, clock, tmp_path
+):
+    kb, memory, candidate, intent, view, calls, selector = semantic_setup(
+        recipe, sql_storage, clock, tmp_path
+    )
+    kb.replace_facts(
+        [
+            replace(fact, qualifiers={"task_key": "restore", "for_role": "operator"})
+            if fact.id == candidate.id
+            else fact
+            for fact in kb.list_facts()
+        ]
+    )
+    lexical = view.context
+    result = await recipe.acquire_missing_context(
+        view,
+        selector,
+        relevant_event=True,
+        budget=SemanticBudget(max_provider_calls=1),
+        task_key="restore",
+        role="operator",
+        max_facts=1,
+        max_chars=80,
+    )
+    assert result.status == "ok"
+    assert [fact.ref.fact_id for fact in result.review.accepted] == [candidate.id]
+    assert result.provider_calls_reserved == 1 and result.input_bytes_reserved > 0
+    assert len(calls) == 1 and calls[0][0] == "backup receipt"
+    assert view.context is lexical and not lexical.complete
+    assert view.status == "missing_context" and not view.wake_model
+    assert memory.get_intent(intent.id).lease is None
+    with pytest.raises(LeaseLost):
+        memory.prepare_action(intent.id, lease_token="unclaimed", action_key="restore", request={})
+    kb.forget(candidate.id)
+    checked = memory.review_context(tuple(f.ref for f in result.review.accepted))
+    assert not checked.complete and not checked.accepted
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "status,relevant_event",
+    [
+        ("missing_context", False),
+        *[
+            (status, True)
+            for status in (
+                "ready",
+                "replan",
+                "catching_up",
+                "debounced",
+                "snapshot_too_large",
+                "waiting",
+                "verification_due",
+                "lease_busy",
+                "reconcile",
+                "blocked",
+                "deadline_exceeded",
+                "completed",
+                "cancelled",
+            )
+        ],
+    ],
+)
+async def test_other_turns_and_unchanged_missing_context_do_not_acquire(
+    recipe, sql_storage, clock, tmp_path, status, relevant_event
+):
+    _, _, _, _, view, calls, selector = semantic_setup(recipe, sql_storage, clock, tmp_path)
+    result = await recipe.acquire_missing_context(
+        replace(view, status=status),
+        selector,
+        relevant_event=relevant_event,
+        budget=SemanticBudget(max_provider_calls=1),
+        max_facts=1,
+    )
+    assert result is None and not calls
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_calls", [0, 1])
+async def test_semantic_acquisition_failure_does_not_change_host_status(
+    recipe, sql_storage, clock, tmp_path, provider_calls
+):
+    _, memory, _, intent, view, _, _ = semantic_setup(recipe, sql_storage, clock, tmp_path)
+
+    async def unavailable(texts):
+        raise OSError("Offline embedding callback")
+
+    result = await recipe.acquire_missing_context(
+        view,
+        SemanticContext(memory, embed=unavailable),
+        relevant_event=True,
+        budget=SemanticBudget(max_provider_calls=provider_calls),
+        max_facts=1,
+    )
+    assert result.status == ("unavailable" if provider_calls else "budget_exhausted")
+    assert not result.review.accepted
+    assert view.status == "missing_context" and not view.wake_model
+    assert memory.get_intent(intent.id).lease is None

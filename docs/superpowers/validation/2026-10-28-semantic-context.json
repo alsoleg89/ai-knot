@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-28",
+  "base_commit": "cf5c21062f21aaf398214f6acfbb21098f7cb964",
+  "scope": "Opt-in bounded semantic candidates, quiet host recipe and fail-closed evaluation; broad product goal active",
+  "python312_postgres_required": {
+    "passed": 2252,
+    "skipped": 2,
+    "coverage_percent": 89.9,
+    "seconds": 96.62,
+    "command": "python -m pytest -n 4 --timeout=20 -m 'not slow' --cov=ai_knot --cov-report=term-missing -p no:cacheprovider",
+    "slow_tests": "Excluded by standard CI selection",
+    "skip_reasons": [
+      "PostgreSQL initialization regression SQLite parameter",
+      "Missing-psycopg branch while psycopg installed"
+    ],
+    "warnings": "Existing model-free OpenClaw adapter warning for multi-turn history"
+  },
+  "compatibility": {
+    "python311_passed": 137,
+    "python313_passed": 137,
+    "scope": "Semantic/host/gate/fixture/runner focused offline cases; 57 PG variants deselected each"
+  },
+  "static": {
+    "ruff": "pass",
+    "format_files": 292,
+    "strict_mypy_source_files": 79,
+    "diff_check": "pass"
+  },
+  "ma_gate": {
+    "evidence": "../../performance/semantic-context-ma-verification.json",
+    "sqlite": {
+      "scenarios": 19,
+      "binding_passed": 11,
+      "advisory_misses": 5
+    },
+    "postgres": {
+      "scenarios": 19,
+      "binding_passed": 11,
+      "advisory_misses": 6
+    },
+    "note": "Full structural run with HTTP blocked. Final fail-closed evaluator reapplied to all returned results; targets unchanged. PG latency advisory measured173.014ms over150ms target, retained."
+  },
+  "live_evaluation": {
+    "evidence": "../../performance/semantic-context-summary.json",
+    "models": [
+      "gpt-4.1-mini",
+      "text-embedding-3-small"
+    ],
+    "served_reader": "gpt-4.1-mini-2025-04-14",
+    "cases": 16,
+    "arms": 3,
+    "backends": 2,
+    "requests": 112,
+    "tokens": 31416,
+    "run_statuses": [
+      "failed",
+      "failed"
+    ],
+    "reader_format_failures": 2,
+    "reruns": 0
+  },
+  "profile": {
+    "evidence": "../../performance/semantic-context-profile.json",
+    "scope": "Five sequential cold/warm repetitions, 3/32/128/129 facts, deterministic vectors, no HTTP"
+  },
+  "independent_review": {
+    "model": "gpt-6-astra",
+    "reasoning": "xhigh",
+    "skill": "Ponytail review",
+    "focused_passed": 84,
+    "host_subset_passed": 17,
+    "material_findings": 3,
+    "unresolved": 0,
+    "evidence": "../reviews/2026-10-28-semantic-context-astra-ponytail.md"
+  },
+  "protected_original": {
+    "sha256_files_unchanged": 30,
+    "head_and_status_unchanged": true,
+    "feature_version": "0.12.0",
+    "push_merge_release": "none"
+  },
+  "source_test_sha256": {
+    "src/ai_knot/always_on/semantic.py": "bac58b11b6153bbda26b5a130b92dbdd05e8c7a3306bbdcf51545ff1b47faf06",
+    "src/ai_knot/always_on/__init__.py": "5ea2da7e4ed86e263539957ee2888ecdc19412b3368f99f120383c1846d2ee44",
+    "examples/always_on_team.py": "bfc9eee61f13fd6bea71eff334cf39ca625a4044a10b975654668881315ba162",
+    "tests/always_on/test_semantic_context.py": "dba5575b0b76ec4439afc11b487b7f4a151b804fdafeb0d5375d070f50a660c0",
+    "tests/always_on/test_team_cycle.py": "e95a71187a7c37fe06aa69731a00c4dd537f44050ae2ebcc33e4b29b2156d5df",
+    "tests/eval/semantic_context_runner.py": "0311d5dd3979eecde881955341ed62587cbd95a5ba5ca169bf01d7b835ad6f76",
+    "tests/eval/semantic_context_cases.py": "7ffc0b91db717026ac18602e74e189d99cec090221cfbeeeb5eda5bdb816562c",
+    "tests/eval/test_semantic_context_runner.py": "1c0febaa7a5522754abdca6d48ef6e9652e7a7fd08c7e784eb26e4617bbbd5ff",
+    "tests/eval/test_semantic_context_cases.py": "7b6d1502d89bb768d796fd038e803278bd311cafc8c66579ad9905075de31b1f",
+    "tests/eval/benchmark/base.py": "74affcca88457b551a7f182401bca35e2fd59ba197c4d53725856f3f305ebb12",
+    "tests/eval/benchmark/ma_gate.py": "a35d1e5d165d029fbc9e10603dd75cbe7a2b8485b6f1c3c8b30e2d556623646e",
+    "tests/eval/benchmark/report.py": "2c631aae9f475982c6dffb0cb6043b2f2668dbd0decd394e2012ff90590d2ca6",
+    "tests/eval/benchmark/runner.py": "6b3e4f46bc7c62e8201dbbc347141714e29f5850b14369cfd8c372e8277f1972",
+    "tests/test_ma_gate_failures.py": "65b614e9a0300d723d690aa274d888981dbd3fec411c2c8d8b7a0c7bdfc1c405"
+  }
+}

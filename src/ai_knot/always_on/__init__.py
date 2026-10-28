@@ -60,6 +60,9 @@ __all__ = [
     "WorkspaceActionPermit",
     "configure_workspace_budget",
     "AlwaysOnMemory",
+    "SemanticContext",
+    "SemanticBudget",
+    "SemanticCandidates",
     "MaintenanceBudget",
     "MaintenanceReport",
     "ConsolidationProposal",
@@ -106,6 +109,10 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {"SemanticContext", "SemanticBudget", "SemanticCandidates"}:
+        from . import semantic
+
+        return getattr(semantic, name)
     if name == "AlwaysOnMemory":
         from .memory import AlwaysOnMemory
 
