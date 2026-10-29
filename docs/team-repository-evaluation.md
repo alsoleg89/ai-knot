@@ -66,6 +66,8 @@ The final case manifest is `148d2368d1c841fd5005879118b041d6d4ce7b9cfe574c8038a4
 
 ## Reproduction and records
 
+The later [team-work foundation](team-work-foundation.md) prepares new independent tasks, incremental publication without producer-side intent reset and equal-order context controls. Its Docker/SQL results are preflight evidence only; no new paid quality result replaces the experiment above.
+
 [Summary and artifact hashes](performance/team-repos-summary.json), original [SQLite](performance/team-repos-live-sqlite.json.gz) and [PostgreSQL](performance/team-repos-live-postgres.json.gz) reports retain complete validated candidate code, costs, context and receipts. [Docker controls](performance/team-repos-docker-feasibility.json), [metadata repair proof](performance/team-repos-metadata-repair.json) and [contradictory-ref reproduction](performance/team-repos-conflicting-ref-repro.json) are separate records.
 
 The [measured-runtime archive](performance/team-repos-measured-runtime.json.gz) contains base commit `0dc11976dc563182e4185697fa43a0ced5880485`, seven source overrides, all 86 source hashes, both freezes and the original pre-adapter fixture source/manifest. Reconstruct measured sources from that base plus overrides; the current caller and sandbox include the later repairs above. The [independent Astra/Ponytail review](superpowers/reviews/2026-10-28-team-repositories-astra-ponytail.md) and [local validation record](superpowers/validation/2026-10-28-team-repositories.json) distinguish those states.

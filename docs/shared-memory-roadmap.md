@@ -29,6 +29,8 @@ independent review of that implementation batch are recorded in the [engineering
 
 ## Continuing product work
 
+The [team-work evaluation foundation](team-work-foundation.md) now supplies three new staged code tasks, incremental observer publication, fresh-process stale-basis checks and equal-order current-context rendering. Independent review found two private-contract gaps; identical semantic mutants demonstrate their repair. Paid researcher/coder execution and memory-quality comparison on this corpus remain open.
+
 Opt-in [required context](required-context.md) now reserves host-known exact observations before relevance ranking, rejects stale/hidden/wrong-task groups and preserves the same count/character bounds. The planning helper binds these refs into input identity and checkpoint basis. This supplies a missing adoption primitive; it does not infer obligations or establish a paid accuracy improvement. Fresh independent quality evaluation remains necessary.
 
 An opt-in [task-context guard](task-context-guard.md) now checks the admissible task set atomically when saving a decision and explicitly admitting its action. The [planning helper](bounded-planning.md) captures it before acquisition and can use budgeted semantic candidates on whole-task overflow. This closes an unselected-update race; it does not prove candidate completeness or improve model accuracy by itself. The [independent growing-context study](growing-context-evaluation.md) found 17/20 correct full-context decisions versus 15/20 for each selected arm; semantic selection did not improve over lexical selection and cost more. Complete prerequisite selection remains product work.
