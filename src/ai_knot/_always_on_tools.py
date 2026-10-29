@@ -24,6 +24,7 @@ TOOL_METHODS = {
     "memory_context_review": "review_context",
     "memory_context_select": "select_context",
     "memory_context_snapshot": "task_snapshot",
+    "memory_context_guard": "task_guard",
     "memory_ack": "ack",
     "memory_unsubscribe": "unsubscribe",
     "action_prepare": "prepare_action",

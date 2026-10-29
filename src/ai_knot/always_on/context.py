@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import datetime
@@ -20,6 +21,7 @@ from .models import (
     EvidenceRef,
     SnapshotTooLarge,
     TaskContext,
+    TaskContextGuard,
     context_label,
     positive_integer,
 )
@@ -79,6 +81,32 @@ def task_snapshot(
             result.append(ContextFact(ref, fact.content, fact.slot_key))
             remaining -= len(fact.content)
         return tuple(sorted(result, key=lambda item: (item.ref.namespace, item.ref.fact_id)))
+
+
+def task_guard(
+    memory: AlwaysOnMemory,
+    session: AlwaysOnSession,
+    *,
+    task_key: str,
+    max_facts: int,
+    now: datetime,
+) -> TaskContextGuard:
+    refs: list[tuple[str, str, str]] = []
+    for ref, _ in task_sources(memory, session, task_key, now):
+        if len(refs) == max_facts:
+            raise SnapshotTooLarge("Task guard exceeds the candidate limit")
+        refs.append((ref.namespace, ref.fact_id, ref.revision))
+    identity = {
+        "policy": "task-context-v1",
+        "owner": memory._owner,
+        "scopes": task_scopes(memory),
+        "task_key": task_key,
+        "max_facts": max_facts,
+        "refs": sorted(refs),
+    }
+    return TaskContextGuard(
+        task_key, hashlib.sha256(canonical(identity).encode()).hexdigest(), max_facts
+    )
 
 
 def select_context(

@@ -34,6 +34,7 @@ from ai_knot.always_on import (
     SnapshotTooLarge,
     StaleEvidence,
     TaskContext,
+    TaskContextGuard,
     WaitUntil,
     WatchSelector,
     WorkspaceMemory,
@@ -232,6 +233,8 @@ class PlanningReport:
     model_calls_reserved: int = 0
     proposal: dict[str, object] | None = None
     error_type: str | None = None
+    context_guard: TaskContextGuard | None = None
+    acquisition_calls_reserved: int = 0
 
 
 _PLANNING = "_ai_knot_planning"
@@ -302,6 +305,8 @@ async def plan_once(
     max_facts: int = 8,
     max_chars: int = 12000,
     timeout_seconds: float = 30,
+    selector: SemanticContext | None = None,
+    semantic_budget: SemanticBudget | None = None,
 ) -> PlanningReport:
     """Persist one proposed step, never an effect or a semantic-readiness verdict.
 
@@ -319,6 +324,11 @@ async def plan_once(
     positive_integer(max_facts, "max_facts", 128)
     positive_integer(max_chars, "max_chars", 65536)
     context_label(task_key, "task_key")
+    if selector is not None and not isinstance(selector, SemanticContext):
+        raise ValueError("selector must be SemanticContext")
+    semantic_budget = SemanticBudget() if semantic_budget is None else semantic_budget
+    if not isinstance(semantic_budget, SemanticBudget) or semantic_budget.timeout > 60:
+        raise ValueError("SemanticBudget with timeout at most60seconds required")
     if (
         not isinstance(requirements, (tuple, list))
         or not 1 <= len(requirements) <= 5
@@ -345,41 +355,81 @@ async def plan_once(
     except RevisionConflict:
         return PlanningReport("lease_busy")
     reserved = 0
+    acquired = 0
     input_key = None
+    guard = None
 
     async def work() -> PlanningReport:
-        nonlocal reserved, input_key
+        nonlocal reserved, acquired, input_key, guard
         current = memory.resume(intent_id)
         if not _planning_allowed(current, lease.token):
             return PlanningReport("blocked")
+        try:
+            guard = memory.task_guard(task_key=task_key)
+        except SnapshotTooLarge:
+            return PlanningReport("snapshot_too_large")
+        progress = {k: v for k, v in current.intent.progress.items() if k != _PLANNING}
+        identity = {
+            "policy": "guarded-planning-v2",
+            "goal": current.intent.goal,
+            "requirements": list(requirements),
+            "progress": progress,
+            "guard": guard,
+            "trigger": trigger_key,
+            "selection": selector is not None,
+            "max_facts": max_facts,
+            "max_chars": max_chars,
+        }
+        input_key = hashlib.sha256(canonical_json(identity).encode()).hexdigest()
+        previous = current.intent.progress.get(_PLANNING)
+        if isinstance(previous, dict) and previous.get("input_key") == input_key:
+            return PlanningReport("unchanged")
         try:
             facts = memory.task_snapshot(
                 task_key=task_key, max_facts=max_facts, max_chars=max_chars
             )
         except SnapshotTooLarge:
-            return PlanningReport("snapshot_too_large")
+            if selector is None:
+                return PlanningReport("snapshot_too_large")
+            if not _planning_allowed(memory.resume(intent_id), lease.token):
+                return PlanningReport("blocked")
+            # Unknown cancellation keeps this conservative reservation. A normal
+            # return replaces it with the selector's actual local reservation.
+            acquired = int(semantic_budget.max_provider_calls > 0)
+            candidates = await selector.acquire(
+                requirements,
+                budget=semantic_budget,
+                task_key=task_key,
+                max_facts=max_facts,
+                max_chars=max_chars,
+            )
+            acquired = candidates.provider_calls_reserved
+            if candidates.status not in ("snapshot", "ok") or candidates.review.issues:
+                if not acquired:
+                    input_key = None  # A zero-call refusal did not spend the event.
+                return PlanningReport(
+                    "context_changed"
+                    if candidates.status == "changed"
+                    else "acquisition_" + candidates.status
+                )
+            try:
+                if memory.task_guard(task_key=task_key) != guard:
+                    return PlanningReport("context_changed")
+            except SnapshotTooLarge:
+                return PlanningReport("context_changed")
+            facts = candidates.review.accepted
         if not facts:
             return PlanningReport("no_context")
         checked = memory.review_context(tuple(f.ref for f in facts), max_chars=max_chars)
         if not checked.complete:
             return PlanningReport("context_changed")
-        progress = {k: v for k, v in current.intent.progress.items() if k != _PLANNING}
+        facts = checked.accepted
         payload = {
             "goal": current.intent.goal,
             "requirements": list(requirements),
             "progress": progress,
             "facts": [{"index": i + 1, "content": f.content} for i, f in enumerate(facts)],
         }
-        identity = {
-            "input": payload,
-            "refs": tuple(f.ref for f in facts),
-            "trigger": trigger_key,
-            "task_key": task_key,
-        }
-        input_key = hashlib.sha256(canonical_json(identity).encode()).hexdigest()
-        previous = current.intent.progress.get(_PLANNING)
-        if isinstance(previous, dict) and previous.get("input_key") == input_key:
-            return PlanningReport("unchanged")
         if len(canonical_json(payload).encode("utf-8")) > 65536:
             return PlanningReport("input_limit")
         if not _planning_allowed(memory.resume(intent_id), lease.token):
@@ -398,16 +448,7 @@ async def plan_once(
         current = memory.resume(intent_id)
         if not _planning_allowed(current, lease.token):
             return PlanningReport("blocked", reserved)
-        try:
-            after = memory.task_snapshot(
-                task_key=task_key, max_facts=max_facts, max_chars=max_chars
-            )
-        except SnapshotTooLarge:
-            return PlanningReport("context_changed", reserved)
-        if (
-            after != facts
-            or {k: v for k, v in current.intent.progress.items() if k != _PLANNING} != progress
-        ):
+        if {k: v for k, v in current.intent.progress.items() if k != _PLANNING} != progress:
             return PlanningReport("context_changed", reserved)
         checked = memory.review_context(refs, max_chars=max_chars)
         if not checked.complete:
@@ -417,19 +458,28 @@ async def plan_once(
             "input_key": input_key,
             "trigger_key": trigger_key,
             "proposal": proposal,
+            "context_guard": encode_always_on(guard),
         }
         waiting = proposal["action"] == "wait"
-        memory.checkpoint(
-            intent_id,
-            lease_token=lease.token,
-            expected_revision=current.intent.revision,
-            state=IntentState.WAITING if waiting else IntentState.READY,
-            progress=progress,
-            next_step=proposal["next_step"],
-            basis=refs,
-            waiting_for=WaitUntil(checked.checked_at + timedelta(seconds=60)) if waiting else None,
+        try:
+            memory.checkpoint(
+                intent_id,
+                lease_token=lease.token,
+                expected_revision=current.intent.revision,
+                state=IntentState.WAITING if waiting else IntentState.READY,
+                progress=progress,
+                next_step=proposal["next_step"],
+                basis=refs,
+                waiting_for=WaitUntil(checked.checked_at + timedelta(seconds=60))
+                if waiting
+                else None,
+                context_guard=guard,
+            )
+        except StaleEvidence:
+            return PlanningReport("context_changed", reserved)
+        return PlanningReport(
+            "waiting" if waiting else "planned", reserved, proposal, context_guard=guard
         )
-        return PlanningReport("waiting" if waiting else "planned", reserved, proposal)
 
     def settle(report: PlanningReport) -> PlanningReport:
         if report.status in ("planned", "waiting"):
@@ -446,6 +496,7 @@ async def plan_once(
                     "trigger_key": trigger_key,
                     "status": report.status,
                     "model_calls_reserved": reserved,
+                    "acquisition_calls_reserved": acquired,
                 }
             memory.checkpoint(
                 intent_id,
@@ -455,6 +506,7 @@ async def plan_once(
                 progress=progress,
                 next_step=current.intent.next_step if unchanged else "",
                 basis=current.intent.basis if unchanged else (),
+                context_guard=guard if unchanged else None,
             )
         except Exception as exc:
             return PlanningReport("failed", reserved, error_type=type(exc).__name__)
@@ -463,11 +515,15 @@ async def plan_once(
     try:
         report = await work()
     except asyncio.CancelledError:
+        if not reserved and not acquired:
+            input_key = None
         settle(PlanningReport("cancelled", reserved))
         raise
     except Exception as exc:
+        if not reserved and not acquired:
+            input_key = None
         report = PlanningReport("failed", reserved, error_type=type(exc).__name__)
-    return settle(report)
+    return replace(settle(report), acquisition_calls_reserved=acquired)
 
 
 def example(

@@ -132,6 +132,8 @@ Use timers even with event notifications. Future activation, expiry, freshness d
 
 ## Preserve experience and adoption boundaries
 
+For model-assisted decisions, the [bounded planning helper](bounded-planning.md) captures a [task-context guard](task-context-guard.md) before acquisition. It detects changes to admissible unselected conditions at checkpoint; preserve and explicitly pass the returned guard again at action admission. This adds a set/revision check, while task association, sufficient evidence and connector policy remain host responsibilities.
+
 After a connector provides a known recorded result, use [record_experience](team-experience.md) for a current-outcome lesson with retained observation refs and a stable experience key. Unknown outcomes require reconciliation first. A separate historical attempt warning derives from its own retained receipt. Shared lessons require maintain authority and readable roots; they do not grant execute permission. Copies count the original observations, not agents or repeated summaries.
 
 The library keeps ordinary KB use simple and these operations opt-in. There is no default reflection prompt, graph service, paid idle loop or inference-capable scheduler. Framework-specific integrations can call the same HTTP/MCP/TypeScript operations described in the [return](shared-memory-return.md), [task context](task-context.md) and [team experience](team-experience.md) guides. Published package versions remain unchanged; the new operations require the matching source engine/client until a separate release.

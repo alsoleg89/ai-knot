@@ -29,6 +29,8 @@ independent review of that implementation batch are recorded in the [engineering
 
 ## Continuing product work
 
+An opt-in [task-context guard](task-context-guard.md) now checks the admissible task set atomically when saving a decision and explicitly admitting its action. The [planning helper](bounded-planning.md) captures it before acquisition and can use budgeted semantic candidates on whole-task overflow. This closes an unselected-update race; it does not prove candidate completeness or improve model accuracy by itself. The [independent growing-context study](growing-context-evaluation.md) found 17/20 correct full-context decisions versus 15/20 for each selected arm; semantic selection did not improve over lexical selection and cost more. Complete prerequisite selection remains product work.
+
 The [decision study](team-decision-evaluation.md) now records real GPT-4.1 mini actions, simulated receipts and all OpenAI embedding/reader tokens on both SQL backends. It found a same-ID vector-cache defect (fixed) and a remaining semantic selection gap, with a strong full-history control and explicit post-pilot protocol limits.
 
 An [opt-in semantic acquisition path](semantic-context.md) now checks source/ACL/task/lineage/freshness before and after budgeted embeddings, with a zero-call complete-task snapshot and quiet event-driven host recipe. The [first independently authored case batch](semantic-context-evaluation.md) recovered more required evidence than lexical task search but did not beat a cheap scoped task bundle on reader correctness. It stays optional. The legacy MA verification now fails closed on missing/invalid selected evidence; raw reader-format failures and all paid work remain in the evaluation artifacts.

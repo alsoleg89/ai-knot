@@ -257,6 +257,23 @@ class ContextFact:
 
 
 @dataclass(frozen=True)
+class TaskContextGuard:
+    task_key: str
+    digest: str
+    max_facts: int = 128
+
+    def __post_init__(self) -> None:
+        context_label(self.task_key, "task_key")
+        positive_integer(self.max_facts, "max_facts", 128)
+        if (
+            not isinstance(self.digest, str)
+            or len(self.digest) != 64
+            or any(c not in "0123456789abcdef" for c in self.digest)
+        ):
+            raise ValueError("digest must be a lowercase SHA256 value")
+
+
+@dataclass(frozen=True)
 class ContextReview:
     accepted: tuple[ContextFact, ...]
     issues: tuple[BasisIssue, ...]

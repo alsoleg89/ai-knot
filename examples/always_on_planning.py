@@ -158,7 +158,7 @@ async def example(
         action_key="activate",
         request=data,
     )
-    memory.begin_action(action.id, lease_token=lease.token)
+    memory.begin_action(action.id, lease_token=lease.token, context_guard=second.context_guard)
     # A scripted connector loses its response after one effect. Do not infer success.
     result["effect_count"] = 1
     memory.finish_action(action.id, lease_token=lease.token, outcome="unknown", result={})

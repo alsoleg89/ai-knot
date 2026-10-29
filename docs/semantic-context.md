@@ -4,6 +4,8 @@
 
 To load an entire small task corpus without query/model configuration, use [task_snapshot](task-snapshot.md). It shares source admission with this helper and returns all facts or explicit overflow; semantic acquisition remains a separate budgeted choice.
 
+When another agent can add applicable conditions during retrieval or inference, capture a [task-context guard](task-context-guard.md) first and pass it to checkpoint and explicitly to action admission. Reviewing only the selected refs cannot detect a new unselected prerequisite. The [bounded planning helper](bounded-planning.md) supports an explicit semantic overflow path with this guard; selection still does not establish semantic completeness.
+
 ```python
 from ai_knot.always_on import SemanticBudget, SemanticContext
 

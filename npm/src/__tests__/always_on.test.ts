@@ -3,6 +3,26 @@ import { AlwaysOnError, HttpAlwaysOnMemory, HttpKnowledgeBase, KnowledgeBase, Mc
 import type { HttpKnowledgeBaseOptions } from "../types.js";
 
 describe("always-on adapters", () => {
+  it("captures and passes optional task guards through both transports", async () => {
+    const guard = { task_key: "rollout", digest: "a".repeat(64), max_facts: 128 };
+    const calls: unknown[] = [];
+    const http = new HttpAlwaysOnMemory(async (path, options) => { calls.push([path, options]); return guard as never; }, async () => {});
+    const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return JSON.stringify(guard); });
+    const checkpoint = { lease_token: "t", expected_revision: 1, state: "ready" as const, progress: {}, context_guard: guard };
+    for (const client of [http, mcp]) {
+      expect(await client.taskGuard({ task_key: "rollout" })).toEqual(guard);
+      await client.checkpoint("intent", checkpoint);
+      await client.beginAction("action", "t", guard);
+    }
+    expect(calls).toEqual([
+      ["/v1/always-on/evidence/guard", { method: "POST", body: { task_key: "rollout" } }],
+      ["/v1/always-on/intents/intent/checkpoint", { method: "POST", body: checkpoint }],
+      ["/v1/always-on/actions/action/begin", { method: "POST", body: { lease_token: "t", context_guard: guard } }],
+      ["memory_context_guard", { task_key: "rollout" }],
+      ["intent_checkpoint", { ...checkpoint, intent_id: "intent" }],
+      ["action_begin", { action_id: "action", lease_token: "t", context_guard: guard }],
+    ]);
+  });
   it("loads a queryless task snapshot through HTTP and MCP", async () => {
     const calls: unknown[] = [];
     const facts = [{ ref: { namespace: "owner", fact_id: "receipt", revision: "r1" }, content: "Receipt verified", slot_key: "" }];

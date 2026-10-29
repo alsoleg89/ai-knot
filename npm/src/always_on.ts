@@ -41,6 +41,7 @@ export interface ChangeBatch {
   through_seq: number; head_seq: number; has_more: boolean; is_snapshot: boolean;
 }
 export interface ContextFact { ref: EvidenceRef; content: string; slot_key: string }
+export interface TaskContextGuard { task_key: string; digest: string; max_facts: number }
 export interface ContextReview {
   accepted: ContextFact[]; issues: BasisIssue[]; omitted: EvidenceRef[];
   checked_at: string; complete: boolean;
@@ -74,6 +75,7 @@ export interface MaintenanceReport {
 export interface CheckpointInput {
   lease_token: string; expected_revision: number; state: IntentState; progress: JsonObject;
   next_step?: string; waiting_for?: WaitCondition | null; basis?: EvidenceRef[];
+  context_guard?: TaskContextGuard | null;
 }
 export interface AlwaysOnClient {
   createIntent(input: { client_key: string; goal: string; next_step?: string; deadline?: string | null }): Promise<Intent>;
@@ -90,10 +92,11 @@ export interface AlwaysOnClient {
   reviewContext(refs: EvidenceRef[], maxChars?: number): Promise<ContextReview>;
   selectContext(input: { requirements: string[]; task_key?: string; role?: string; max_facts?: number; max_chars?: number }): Promise<TaskContext>;
   taskSnapshot(input: { task_key: string; max_facts?: number; max_chars?: number }): Promise<ContextFact[]>;
+  taskGuard(input: { task_key: string; max_facts?: number }): Promise<TaskContextGuard>;
   ack(subscriptionId: string, deliveryId: string): Promise<void>;
   unsubscribe(subscriptionId: string): Promise<void>;
   prepareAction(input: { intent_id: string; lease_token: string; action_key: string; request: JsonObject; basis?: EvidenceRef[] }): Promise<ActionRecord>;
-  beginAction(actionId: string, leaseToken: string): Promise<ActionPermit>;
+  beginAction(actionId: string, leaseToken: string, contextGuard?: TaskContextGuard | null): Promise<ActionPermit>;
   finishAction(actionId: string, input: { lease_token: string; outcome: "succeeded" | "failed" | "unknown"; result: JsonObject }): Promise<ActionRecord>;
   reconcileAction(actionId: string, input: { lease_token: string; outcome: "succeeded" | "failed" | "retryable"; evidence: JsonObject }): Promise<ActionRecord>;
   recordExperience(actionId: string, input: { expected_action_revision: number; experience_key: string; content: string; basis: EvidenceRef[]; namespace?: string | null; visibility_scope?: string; task_key?: string; for_role?: string }): Promise<RecordedExperience>;
@@ -133,6 +136,7 @@ const operations: Record<string, Operation> = {
   reviewContext: { tool: "memory_context_review", path: "/evidence/review" },
   selectContext: { tool: "memory_context_select", path: "/evidence/select" },
   taskSnapshot: { tool: "memory_context_snapshot", path: "/evidence/snapshot" },
+  taskGuard: { tool: "memory_context_guard", path: "/evidence/guard" },
   ack: { tool: "memory_ack", path: "/subscriptions/{id}/ack", id: "subscription_id" },
   unsubscribe: { tool: "memory_unsubscribe", path: "/subscriptions/{id}", verb: "DELETE", id: "subscription_id" },
   prepareAction: { tool: "action_prepare", path: "/actions" },
@@ -161,10 +165,13 @@ abstract class AlwaysOnMethods implements AlwaysOnClient {
   reviewContext(refs: EvidenceRef[], maxChars = 12000): Promise<ContextReview> { return this.invoke("reviewContext", { refs, max_chars: maxChars }); }
   selectContext(input: Parameters<AlwaysOnClient["selectContext"]>[0]): Promise<TaskContext> { return this.invoke("selectContext", input); }
   taskSnapshot(input: Parameters<AlwaysOnClient["taskSnapshot"]>[0]): Promise<ContextFact[]> { return this.invoke("taskSnapshot", input); }
+  taskGuard(input: Parameters<AlwaysOnClient["taskGuard"]>[0]): Promise<TaskContextGuard> { return this.invoke("taskGuard", input); }
   async ack(id: string, deliveryId: string): Promise<void> { await this.invoke("ack", { delivery_id: deliveryId }, id); }
   async unsubscribe(id: string): Promise<void> { await this.invoke("unsubscribe", {}, id); }
   prepareAction(input: Parameters<AlwaysOnClient["prepareAction"]>[0]): Promise<ActionRecord> { return this.invoke("prepareAction", input); }
-  beginAction(id: string, leaseToken: string): Promise<ActionPermit> { return this.invoke("beginAction", { lease_token: leaseToken }, id); }
+  beginAction(id: string, leaseToken: string, contextGuard?: TaskContextGuard | null): Promise<ActionPermit> {
+    return this.invoke("beginAction", { lease_token: leaseToken, ...(contextGuard === undefined ? {} : { context_guard: contextGuard }) }, id);
+  }
   finishAction(id: string, input: Parameters<AlwaysOnClient["finishAction"]>[1]): Promise<ActionRecord> { return this.invoke("finishAction", input, id); }
   reconcileAction(id: string, input: Parameters<AlwaysOnClient["reconcileAction"]>[1]): Promise<ActionRecord> { return this.invoke("reconcileAction", input, id); }
   recordExperience(id: string, input: Parameters<AlwaysOnClient["recordExperience"]>[1]): Promise<RecordedExperience> { return this.invoke("recordExperience", input, id); }

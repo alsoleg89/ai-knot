@@ -143,6 +143,7 @@ class PostgresStorage:
 
     def _init_db(self) -> None:
         with self._get_conn() as conn:
+            conn.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
             schema = conn.execute("SELECT current_schema()").fetchone()[0]
             conn.execute(
                 "SELECT pg_advisory_xact_lock(%s)", (namespace_lock_key("__schema__:" + schema),)
@@ -344,6 +345,8 @@ class PostgresStorage:
             raise ValueError("nonempty transaction namespaces required")
         with self._get_conn() as conn:
             if write:
+                # A lock-wait SELECT must not establish an older RR snapshot.
+                conn.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
                 for name in scopes:
                     conn.execute("SELECT pg_advisory_xact_lock(%s)", (namespace_lock_key(name),))
             else:

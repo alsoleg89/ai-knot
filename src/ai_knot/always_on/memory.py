@@ -48,6 +48,7 @@ from .models import (
     SnapshotTooLarge,
     StaleEvidence,
     TaskContext,
+    TaskContextGuard,
     UnsupportedAlwaysOnBackend,
     VerificationRequest,
     VerificationResult,
@@ -488,6 +489,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
         next_step: str = "",
         waiting_for: WaitCondition | None = None,
         basis: tuple[EvidenceRef, ...] = (),
+        context_guard: TaskContextGuard | None = None,
     ) -> Intent:
         state = IntentState(state)
         positive_integer(expected_revision, "expected_revision")
@@ -506,7 +508,12 @@ class AlwaysOnMemory(SubscriptionsMixin):
             extra.append(waiting_for.ref)
         elif waiting_for is not None:
             raise ValueError("unknown wait condition")
-        with self._intent_transaction(intent_id, tuple(extra)) as (session, intent, actions):
+        guard_scopes = self._task_guard_scopes(context_guard)
+        with self._intent_transaction(intent_id, tuple(extra), extra_namespaces=guard_scopes) as (
+            session,
+            intent,
+            actions,
+        ):
             now = self._now()
             current = transitions.checkpoint(
                 intent,
@@ -521,6 +528,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 views=self._views(session, refs, now),
                 now=now,
             )
+            if context_guard is not None:
+                self._check_task_guard(session, context_guard, now)
             save_intent(session, intent, current)
             return current
 
@@ -773,6 +782,38 @@ class AlwaysOnMemory(SubscriptionsMixin):
 
         return task_snapshot(self, task_key=task_key, max_facts=max_facts, max_chars=max_chars)
 
+    def task_guard(self, *, task_key: str, max_facts: int = 128) -> TaskContextGuard:
+        """Capture the admissible universe before selection; not semantic completeness."""
+        from .context import task_guard, task_scopes
+
+        context_label(task_key, "task_key")
+        positive_integer(max_facts, "max_facts", 128)
+        with self._transaction(task_scopes(self), write=False) as session:
+            return task_guard(
+                self, session, task_key=task_key, max_facts=max_facts, now=self._now()
+            )
+
+    def _task_guard_scopes(self, guard: TaskContextGuard | None) -> tuple[str, ...]:
+        from .context import task_scopes
+
+        if guard is not None and not isinstance(guard, TaskContextGuard):
+            raise ValueError("context_guard must be TaskContextGuard")
+        return task_scopes(self) if guard is not None else ()
+
+    def _check_task_guard(
+        self, session: AlwaysOnSession, guard: TaskContextGuard, now: datetime
+    ) -> None:
+        from .context import task_guard
+
+        try:
+            current = task_guard(
+                self, session, task_key=guard.task_key, max_facts=guard.max_facts, now=now
+            )
+        except SnapshotTooLarge:
+            raise StaleEvidence("task context no longer matches") from None
+        if current != guard:
+            raise StaleEvidence("task context no longer matches")
+
     def derive_fact(
         self,
         content: str,
@@ -922,10 +963,21 @@ class AlwaysOnMemory(SubscriptionsMixin):
         with self._transaction(write=False) as session:
             return self._action(session, action_id).intent_id
 
-    def begin_action(self, action_id: str, *, lease_token: str) -> ActionPermit:
+    def begin_action(
+        self,
+        action_id: str,
+        *,
+        lease_token: str,
+        context_guard: TaskContextGuard | None = None,
+    ) -> ActionPermit:
+        guard_scopes = self._task_guard_scopes(context_guard)
         intent_id = self._action_intent_id(action_id)
         error = None
-        with self._intent_transaction(intent_id) as (session, intent, actions):
+        with self._intent_transaction(intent_id, extra_namespaces=guard_scopes) as (
+            session,
+            intent,
+            actions,
+        ):
             action = self._action(session, action_id)
             if self._workspace is not None:
                 self._workspace.check(session, self._owner, action)
@@ -933,6 +985,11 @@ class AlwaysOnMemory(SubscriptionsMixin):
             transitions.require_lease(intent, lease_token, now)
             refs = transitions.union_basis(intent.basis, action.basis)
             issues = self._validate_basis(session, refs, now)
+            if context_guard is not None and not issues:
+                try:
+                    self._check_task_guard(session, context_guard, now)
+                except StaleEvidence:
+                    issues = (BasisIssue("changed", None),)
             if issues:
                 reasons = tuple(
                     sorted(set(intent.blocked_reasons) | {issue.reason for issue in issues})

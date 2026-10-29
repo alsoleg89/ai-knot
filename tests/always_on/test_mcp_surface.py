@@ -20,7 +20,7 @@ def test_mcp_strict_owner_and_capabilities(ao_factory, kb):
         )
         assert json.loads(result)["error"]["code"] == "InvalidInput"
         entries = json.loads(await app._tool_manager.call_tool("capabilities", {}))
-        assert {"intent_create", "memory_maintenance", "recall"} <= {
+        assert {"intent_create", "memory_maintenance", "memory_context_guard", "recall"} <= {
             entry["name"] for entry in entries
         }
         intent = json.loads(
@@ -32,7 +32,8 @@ def test_mcp_strict_owner_and_capabilities(ao_factory, kb):
         )
 
     asyncio.run(calls())
-    assert len(ROUTES) == 25
+    assert len(ROUTES) == 26
+    assert ("POST", "/evidence/guard", "task_guard", None) in ROUTES
 
 
 def test_mcp_experience_records_exact_outcome_and_rejects_spoofing(ao_factory, kb):
