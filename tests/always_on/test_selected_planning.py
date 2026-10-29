@@ -31,6 +31,76 @@ def vectors(texts):
 
 
 @pytest.mark.anyio
+async def test_required_refs_change_planning_identity_and_remain_in_checkpoint_basis(
+    recipe, sql_storage, clock, tmp_path
+):
+    _, memory, _, intent, view = growing(recipe, sql_storage, clock, tmp_path)
+    calls = []
+
+    async def embed(texts):
+        return vectors(texts)
+
+    async def decide(payload):
+        calls.append(payload)
+        return proposal(basis=[2])
+
+    selector = SemanticContext(memory, embed=embed)
+    first = memory.capture_evidence((("owner", "noise-0"),))
+    second = memory.capture_evidence((("owner", "noise-1"),))
+
+    async def run(refs):
+        return await invoke(
+            recipe,
+            memory,
+            view,
+            decide,
+            max_model_calls=1,
+            max_facts=2,
+            selector=selector,
+            semantic_budget=SemanticBudget(max_provider_calls=1),
+            required_refs=refs,
+        )
+
+    assert (await run(first)).status == "planned"
+    assert calls[0]["facts"][0]["content"] == "Inventory note 0"
+    assert set(first) <= set(memory.get_intent(intent.id).basis)
+    assert (await run(first)).status == "unchanged"
+    assert (await run(second)).status == "planned"
+    assert len(calls) == 2 and calls[1]["facts"][0]["content"] == "Inventory note 1"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("limit", [2, 12])
+async def test_stale_required_refs_block_planner_before_paid_acquisition(
+    recipe, sql_storage, clock, tmp_path, limit
+):
+    from dataclasses import replace
+
+    kb, memory, facts, _, view = growing(recipe, sql_storage, clock, tmp_path)
+    refs = memory.capture_evidence((("owner", "noise-0"),))
+    kb.replace_facts(
+        [replace(f, content="Changed condition") if f.id == "noise-0" else f for f in facts]
+    )
+
+    async def forbidden(*args):
+        raise AssertionError("Stale required context reached provider")
+
+    result = await invoke(
+        recipe,
+        memory,
+        view,
+        forbidden,
+        max_model_calls=1,
+        max_facts=limit,
+        selector=SemanticContext(memory, embed=forbidden),
+        semantic_budget=SemanticBudget(max_provider_calls=1),
+        required_refs=refs,
+    )
+    assert result.status == "context_changed"
+    assert result.model_calls_reserved == result.acquisition_calls_reserved == 0
+
+
+@pytest.mark.anyio
 async def test_selected_plan_retains_guard_and_suppresses_reopened_paid_acquisition(
     recipe, sql_storage, clock, tmp_path
 ):

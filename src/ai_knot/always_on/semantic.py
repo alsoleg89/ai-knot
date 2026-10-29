@@ -16,13 +16,20 @@ from ai_knot.multi_agent.models import CandidateFact
 from ai_knot.types import Fact
 
 from .changes import canonical, evidence_revision
-from .context import task_applicable, task_scopes, task_sources
+from .context import (
+    required_context,
+    task_applicable,
+    task_scopes,
+    task_sources,
+    validate_required_refs,
+)
 from .memory import AlwaysOnMemory
 from .models import (
     BasisIssue,
     ContextFact,
     ContextReview,
     EvidenceRef,
+    StaleEvidence,
     context_label,
     positive_integer,
 )
@@ -123,6 +130,7 @@ class SemanticContext:
         role: str = "",
         max_facts: int = 8,
         max_chars: int = 12000,
+        required_refs: tuple[EvidenceRef, ...] = (),
     ) -> SemanticCandidates:
         if (
             not isinstance(requirements, (tuple, list))
@@ -138,8 +146,11 @@ class SemanticContext:
         context_label(role, "role")
         positive_integer(max_facts, "max_facts", 128)
         positive_integer(max_chars, "max_chars", 65536)
+        required_refs = validate_required_refs(required_refs)
         async with self._lock:
-            return await self._acquire(requirements, budget, task_key, role, max_facts, max_chars)
+            return await self._acquire(
+                requirements, budget, task_key, role, max_facts, max_chars, required_refs
+            )
 
     async def _acquire(
         self,
@@ -149,6 +160,7 @@ class SemanticContext:
         role: str,
         max_facts: int,
         max_chars: int,
+        required_refs: tuple[EvidenceRef, ...],
     ) -> SemanticCandidates:
         memory = self._memory
         checked, sources = self._snapshot(task_key, budget.max_candidates)
@@ -162,18 +174,31 @@ class SemanticContext:
             for key, value in self._documents.items()
             if fingerprints.get(key) == value[0]
         }
+        required = required_context(required_refs, sources, max_facts, max_chars)
+        required_keys = {canonical([ref.namespace, ref.fact_id]) for ref in required_refs}
+        remaining_chars = max_chars - sum(len(f.content) for f in required)
+        if required and (len(required) == max_facts or remaining_chars == 0):
+            omitted = tuple(
+                ref for key, (ref, _) in sorted(sources.items()) if key not in required_keys
+            )
+            return SemanticCandidates(
+                "ok", ContextReview(required, (), omitted, checked, not omitted)
+            )
         if (
             len(sources) <= max_facts
             and sum(len(f.content) for _, f in sources.values()) <= max_chars
         ):
-            accepted = tuple(
+            accepted = required + tuple(
                 ContextFact(ref, fact.content, fact.slot_key)
                 for _, (ref, fact) in sorted(sources.items())
+                if ref not in required_refs
             )
             return SemanticCandidates("snapshot", ContextReview(accepted, (), (), checked, True))
 
         missing = {
-            key: fact.content for key, (_, fact) in sources.items() if key not in self._documents
+            key: fact.content
+            for key, (_, fact) in sources.items()
+            if key not in self._documents and key not in required_keys
         }
         query_vectors = (
             self._queries[1] if self._queries and self._queries[0] == requirements else []
@@ -223,12 +248,25 @@ class SemanticContext:
                 if key in fresh:
                     self._documents[key] = fingerprints[key], fresh[key]
             self._documents = {key: value for key, value in self._documents.items() if key in valid}
+            try:
+                required = required_context(required_refs, valid, max_facts, max_chars)
+            except StaleEvidence:
+                return SemanticCandidates(
+                    "changed",
+                    ContextReview(
+                        (), tuple(issues) or (BasisIssue("context_changed", None),), (), now, False
+                    ),
+                    calls,
+                    size,
+                )
             facets: dict[str, list[CandidateFact]] = {}
             candidates: dict[str, CandidateFact] = {}
             for i, query in enumerate(query_vectors):
                 facet = f"q{i}"
                 facets[facet] = []
                 for key, (_, fact) in valid.items():
+                    if key in required_keys:
+                        continue
                     vector = self._documents[key][1]
                     # Unit-normalized vectors make their dot product cosine similarity.
                     score = sum(q * v for q, v in zip(query, vector, strict=True))
@@ -243,15 +281,15 @@ class SemanticContext:
                 CoverageAwareAssembler()
                 .assemble(
                     candidates_by_facet=facets,
-                    top_k=max_facts,
-                    max_chars=max_chars,
+                    top_k=max_facts - len(required),
+                    max_chars=remaining_chars,
                     n_publishers=1,
                     min_backfill_score_frac=0.25,
                 )
                 .selected
             )
-            selected_keys = {candidate.fact.id for candidate in selected}
-            accepted = tuple(
+            selected_keys = {candidate.fact.id for candidate in selected} | required_keys
+            accepted = required + tuple(
                 ContextFact(
                     valid[c.fact.id][0], valid[c.fact.id][1].content, valid[c.fact.id][1].slot_key
                 )

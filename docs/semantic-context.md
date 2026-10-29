@@ -1,5 +1,7 @@
 # Source-checked semantic candidates
 
+Opt-in [required_refs](required-context.md) preserve host-known conditions within the same output budget. They cannot bypass source admission and do not discover missing prerequisites.
+
 `SemanticContext` is an opt-in async Python helper for a host whose task requirements miss paraphrased or cross-language observations. It uses the same SQLite/PostgreSQL evidence checks as always-on memory. Ordinary `select_context` remains synchronous and model-free.
 
 To load an entire small task corpus without query/model configuration, use [task_snapshot](task-snapshot.md). It shares source admission with this helper and returns all facts or explicit overflow; semantic acquisition remains a separate budgeted choice.

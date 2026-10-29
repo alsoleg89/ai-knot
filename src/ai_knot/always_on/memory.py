@@ -757,6 +757,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
         role: str = "",
         max_facts: int = 8,
         max_chars: int = 12000,
+        required_refs: tuple[EvidenceRef, ...] = (),
     ) -> TaskContext:
         """Select current task evidence within a whole-fact context budget."""
         from .context import select_context
@@ -768,6 +769,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
             role=role,
             max_facts=max_facts,
             max_chars=max_chars,
+            required_refs=required_refs,
         )
 
     def task_snapshot(

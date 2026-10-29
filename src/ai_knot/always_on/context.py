@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from ai_knot._inverted_index import InvertedIndex
 from ai_knot.multi_agent.assembly import CoverageAwareAssembler
 from ai_knot.multi_agent.facets import _content_tokens
-from ai_knot.multi_agent.models import CandidateFact
+from ai_knot.multi_agent.models import AssemblyResult, CandidateFact
 from ai_knot.types import Fact, MemoryType
 
 from .changes import access_projection, canonical, evidence_revision, visible
@@ -20,6 +20,7 @@ from .models import (
     ContextFact,
     EvidenceRef,
     SnapshotTooLarge,
+    StaleEvidence,
     TaskContext,
     TaskContextGuard,
     context_label,
@@ -117,6 +118,7 @@ def select_context(
     role: str,
     max_facts: int,
     max_chars: int,
+    required_refs: tuple[EvidenceRef, ...] = (),
 ) -> TaskContext:
     if (
         not isinstance(requirements, (tuple, list))
@@ -132,6 +134,7 @@ def select_context(
     context_label(role, "role")
     positive_integer(max_facts, "max_facts", 128)
     positive_integer(max_chars, "max_chars", 65536)
+    required_refs = validate_required_refs(required_refs)
     scopes = task_scopes(memory)
     shared = "__shared__" in scopes
     with memory._transaction(scopes, write=False) as session:
@@ -169,6 +172,12 @@ def select_context(
                 originals[key] = EvidenceRef(namespace, fact.id, evidence_revision(fact)), fact
                 indexed.append(replace(fact, id=key))
 
+        for ref in required_refs:
+            key = canonical([ref.namespace, ref.fact_id])
+            if key not in originals or memory._validate_basis(session, (ref,), now):
+                raise StaleEvidence("Required task context unavailable")
+        required = required_context(required_refs, originals, max_facts, max_chars)
+        required_keys = {canonical([ref.namespace, ref.fact_id]) for ref in required_refs}
         index = InvertedIndex(indexed)
         by_id = {fact.id: fact for fact in indexed}
         content_terms = {fact.id: set(_content_tokens(fact.content)) for fact in indexed}
@@ -211,16 +220,35 @@ def select_context(
                 admissible[key] = not memory._validate_basis(session, (ref,), now)
             return admissible[key]
 
-        assembled = CoverageAwareAssembler().assemble(
-            candidates_by_facet=facets,
-            top_k=max_facts,
-            # Explicit task prerequisites take priority over publisher quotas.
-            n_publishers=1,
-            max_chars=max_chars,
-            admit=admit,
-            min_backfill_score_frac=0.25,
+        remaining_chars = max_chars - sum(len(f.content) for f in required)
+        assembled = (
+            CoverageAwareAssembler().assemble(
+                candidates_by_facet={
+                    fid: [c for c in group if c.fact.id not in required_keys]
+                    for fid, group in facets.items()
+                },
+                top_k=max_facts - len(required),
+                # Explicit task prerequisites take priority over publisher quotas.
+                n_publishers=1,
+                max_chars=remaining_chars,
+                admit=admit,
+                min_backfill_score_frac=0.25,
+            )
+            if remaining_chars and len(required) < max_facts
+            else AssemblyResult(
+                budget_limited=not remaining_chars
+                and len(required) < max_facts
+                and any(key not in required_keys and admit(c) for key, c in candidates.items())
+            )
         )
-        selected = tuple(
+        assembled.covered_facets.update(
+            facet
+            for key in required_keys
+            if key in candidates
+            for facet, score in candidates[key].facet_scores.items()
+            if score > 0
+        )
+        selected = required + tuple(
             ContextFact(
                 originals[item.fact.id][0],
                 originals[item.fact.id][1].content,
@@ -235,3 +263,33 @@ def select_context(
             text for i, text in enumerate(requirements) if f"f{i}" not in assembled.covered_facets
         )
         return TaskContext(selected, covered, missing, assembled.budget_limited, now, not missing)
+
+
+def validate_required_refs(refs: tuple[EvidenceRef, ...]) -> tuple[EvidenceRef, ...]:
+    from ._state import union_basis
+
+    if (
+        not isinstance(refs, (tuple, list))
+        or len(refs) > 128
+        or any(not isinstance(ref, EvidenceRef) for ref in refs)
+    ):
+        raise ValueError("required_refs requires at most 128 evidence references")
+    union_basis(tuple(refs))
+    return tuple(dict.fromkeys(refs))
+
+
+def required_context(
+    refs: tuple[EvidenceRef, ...],
+    sources: dict[str, tuple[EvidenceRef, Fact]],
+    max_facts: int,
+    max_chars: int,
+) -> tuple[ContextFact, ...]:
+    result = []
+    for ref in refs:
+        source = sources.get(canonical([ref.namespace, ref.fact_id]))
+        if source is None or source[0] != ref:
+            raise StaleEvidence("Required task context unavailable")
+        result.append(ContextFact(ref, source[1].content, source[1].slot_key))
+    if len(result) > max_facts or sum(len(f.content) for f in result) > max_chars:
+        raise SnapshotTooLarge("Required task context exceeds output budget")
+    return tuple(result)

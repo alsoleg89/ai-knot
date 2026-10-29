@@ -1,5 +1,7 @@
 # One planning turn over current shared memory
 
+Optional [required_refs](required-context.md) preserve host-known conditions in selected context and checkpoint basis. They enter the input fingerprint when supplied; this is not automatic prerequisite discovery.
+
 The opt-in `plan_once` host recipe connects current task observations to one persisted proposal. It is useful when evidence is available but the lexical requirements use different wording: a missing keyword match need not leave an always-on team silent indefinitely. Existing inspection and its coverage diagnostics stay unchanged.
 
 Run the complete model-free workflow:

@@ -1,5 +1,7 @@
 # Task working sets for always-on teams
 
+Use opt-in [required_refs](required-context.md) when the host already knows observations that must survive selection. They share the same output budget and source checks; lexical coverage still reflects original query matches.
+
 When several agents share memory, a relevant-looking procedure can still belong to another environment, and a generic role query can displace an older prerequisite. `AlwaysOnMemory.select_context` is an opt-in read-only selector for explicit task requirements. Start with the existing [team configuration](multi-agent-always-on.md). Ordinary `KnowledgeBase`/pool recall keeps its interface and routing; shared-assembler fixes can change tied or multi-facet selections under tight caps.
 
 ```python

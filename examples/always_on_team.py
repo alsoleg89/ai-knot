@@ -307,6 +307,7 @@ async def plan_once(
     timeout_seconds: float = 30,
     selector: SemanticContext | None = None,
     semantic_budget: SemanticBudget | None = None,
+    required_refs: tuple[EvidenceRef, ...] = (),
 ) -> PlanningReport:
     """Persist one proposed step, never an effect or a semantic-readiness verdict.
 
@@ -329,6 +330,9 @@ async def plan_once(
     semantic_budget = SemanticBudget() if semantic_budget is None else semantic_budget
     if not isinstance(semantic_budget, SemanticBudget) or semantic_budget.timeout > 60:
         raise ValueError("SemanticBudget with timeout at most60seconds required")
+    from ai_knot.always_on.context import validate_required_refs
+
+    required_refs = validate_required_refs(required_refs)
     if (
         not isinstance(requirements, (tuple, list))
         or not 1 <= len(requirements) <= 5
@@ -380,6 +384,8 @@ async def plan_once(
             "max_facts": max_facts,
             "max_chars": max_chars,
         }
+        if required_refs:
+            identity["required_refs"] = required_refs
         input_key = hashlib.sha256(canonical_json(identity).encode()).hexdigest()
         previous = current.intent.progress.get(_PLANNING)
         if isinstance(previous, dict) and previous.get("input_key") == input_key:
@@ -396,13 +402,22 @@ async def plan_once(
             # Unknown cancellation keeps this conservative reservation. A normal
             # return replaces it with the selector's actual local reservation.
             acquired = int(semantic_budget.max_provider_calls > 0)
-            candidates = await selector.acquire(
-                requirements,
-                budget=semantic_budget,
-                task_key=task_key,
-                max_facts=max_facts,
-                max_chars=max_chars,
-            )
+            try:
+                candidates = await selector.acquire(
+                    requirements,
+                    budget=semantic_budget,
+                    task_key=task_key,
+                    max_facts=max_facts,
+                    max_chars=max_chars,
+                    required_refs=required_refs,
+                )
+            except (StaleEvidence, SnapshotTooLarge) as exc:
+                # Native selector raises these required-input refusals before I/O.
+                acquired = 0
+                input_key = None
+                return PlanningReport(
+                    "context_changed" if isinstance(exc, StaleEvidence) else "snapshot_too_large"
+                )
             acquired = candidates.provider_calls_reserved
             if candidates.status not in ("snapshot", "ok") or candidates.review.issues:
                 if not acquired:
@@ -418,6 +433,9 @@ async def plan_once(
             except SnapshotTooLarge:
                 return PlanningReport("context_changed")
             facts = candidates.review.accepted
+        if any(ref not in {f.ref for f in facts} for ref in required_refs):
+            input_key = None
+            return PlanningReport("context_changed")
         if not facts:
             return PlanningReport("no_context")
         checked = memory.review_context(tuple(f.ref for f in facts), max_chars=max_chars)
@@ -443,6 +461,7 @@ async def plan_once(
             return PlanningReport("unavailable", reserved, error_type=type(exc).__name__)
         try:
             proposal, refs = _planning_proposal(raw, facts)
+            refs = tuple(dict.fromkeys((*required_refs, *refs)))
         except (ValueError, UnicodeError) as exc:
             return PlanningReport("invalid_proposal", reserved, error_type=type(exc).__name__)
         current = memory.resume(intent_id)

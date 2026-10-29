@@ -3,6 +3,18 @@ import { AlwaysOnError, HttpAlwaysOnMemory, HttpKnowledgeBase, KnowledgeBase, Mc
 import type { HttpKnowledgeBaseOptions } from "../types.js";
 
 describe("always-on adapters", () => {
+  it("preserves required exact references through both selection transports", async () => {
+    const calls: unknown[] = [];
+    const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return "{}"; });
+    const http = new HttpAlwaysOnMemory(async (path, options) => { calls.push([path, options]); return {} as never; }, async () => {});
+    const refs = [{ namespace: "owner", fact_id: "permission", revision: "r1" }];
+    await mcp.selectContext({ requirements: ["rollout"], required_refs: refs });
+    await http.selectContext({ requirements: ["rollout"], required_refs: refs });
+    expect(calls).toEqual([
+      ["memory_context_select", { requirements: ["rollout"], required_refs: refs }],
+      ["/v1/always-on/evidence/select", { method: "POST", body: { requirements: ["rollout"], required_refs: refs } }],
+    ]);
+  });
   it("captures and passes optional task guards through both transports", async () => {
     const guard = { task_key: "rollout", digest: "a".repeat(64), max_facts: 128 };
     const calls: unknown[] = [];
