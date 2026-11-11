@@ -175,7 +175,37 @@
   },
   "raw": {
     "path": "docs/performance/release-0.13.0-local.json.gz",
-    "bytes": 180959,
-    "sha256": "1cfd24474f16a69e2c3f7abcba50f53fa45b3194e85237f0038ec2ed7a7074b3"
+    "bytes": 182153,
+    "sha256": "725ad421e7dcf0231f6663ab9b69a165cc17f87cbcdc4c334022115a5f8f064c"
+  },
+  "postinstall_followup": {
+    "typescript_passed": 66,
+    "checks": [
+      {
+        "step": "postinstall-typecheck",
+        "exit_code": 0
+      },
+      {
+        "step": "postinstall-test",
+        "exit_code": 0
+      },
+      {
+        "step": "postinstall-build",
+        "exit_code": 0
+      },
+      {
+        "step": "postinstall-package-audit",
+        "exit_code": 0
+      },
+      {
+        "step": "postinstall-preflight",
+        "exit_code": 0
+      },
+      {
+        "step": "postinstall-diff-check",
+        "exit_code": 0
+      }
+    ],
+    "reason": "Request the exact matching Python bridge so pip does not keep a satisfiable older engine"
   }
 }

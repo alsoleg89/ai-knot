@@ -39,6 +39,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Fail closed on incomplete verification, preserve embedding-budget refusal
   semantics and reject replay traces with unconsumed provider requests.
 - Synchronize MCP manifest versions with Python and npm releases.
+- Pin npm's optional Python bridge to the matching client version during install.
 
 ### Upgrade notes
 

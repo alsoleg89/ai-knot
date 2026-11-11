@@ -159,7 +159,8 @@ HTTP services and you do not want a Node process to spawn Python itself.
 ## Always-on agent state
 
 Version **0.13.0** adds `client.alwaysOn` on both HTTP and MCP clients.
-Install the matching engine when using the local subprocess or serving HTTP:
+The optional postinstall bridge requests this same Python version. Install it
+explicitly when using a separate engine or serving HTTP:
 
 ```bash
 npm install ai-knot@0.13.0
