@@ -56,5 +56,6 @@ def test_recipient_roles_and_outcome_retraction_example():
         "retracted_source_blocks_reuse": True,
         "snapshot_facts": 6,
         "snapshot_overflow_handled": True,
+        "source_only_facts": 1,
         "model_calls": 0,
     }

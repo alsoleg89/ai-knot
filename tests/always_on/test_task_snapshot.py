@@ -35,8 +35,9 @@ def source(clock, text="Verified recovery copy", *, fact_id="one", task="restore
     )
 
 
+@pytest.mark.parametrize("include_derived", [True, False])
 def test_snapshot_discovers_scoped_sources_without_a_query_or_inference(
-    sql_storage, clock, monkeypatch
+    sql_storage, clock, monkeypatch, include_derived
 ):
     kb, pool, memory = team(sql_storage, clock)
     own = source(clock)
@@ -60,7 +61,7 @@ def test_snapshot_discovers_scoped_sources_without_a_query_or_inference(
     monkeypatch.setattr("ai_knot.embedder.embed_texts", forbidden)
     monkeypatch.setattr("httpx.Client.send", forbidden)
     monkeypatch.setattr("httpx.AsyncClient.send", forbidden)
-    result = memory.task_snapshot(task_key="restore")
+    result = memory.task_snapshot(task_key="restore", include_derived=include_derived)
     assert [(f.ref.namespace, f.ref.fact_id) for f in result] == [
         ("__shared__", "one"),
         ("owner", "generic"),
@@ -87,7 +88,45 @@ def test_overflow_returns_no_partial_prefix_and_unicode_limits_are_exact(
     assert len(memory.task_snapshot(task_key="restore", max_facts=2, max_chars=4)) == 2
 
 
-def test_snapshot_is_read_only_and_does_not_ack_delivery(sql_storage, clock):
+def test_non_derived_snapshot_filters_before_output_bounds_without_deleting_memory(
+    sql_storage, clock
+):
+    kb, _, memory = team(sql_storage, clock)
+    root = source(clock, "Current receipt")
+    kb.replace_facts([root])
+    basis = memory.capture_evidence((("owner", root.id),))
+    note = memory.derive_fact("Long handoff " * 100, basis=basis, task_key="restore")
+    assert {f.ref.fact_id for f in memory.task_snapshot(task_key="restore")} == {root.id, note.id}
+    with pytest.raises(SnapshotTooLarge):
+        memory.task_snapshot(task_key="restore", max_facts=1, max_chars=len(root.content))
+    before = canonical_json(sql_storage.load("owner"))
+    result = memory.task_snapshot(
+        task_key="restore", include_derived=False, max_facts=1, max_chars=len(root.content)
+    )
+    assert result[0].ref == basis[0] and result[0].content == root.content
+    assert len(result) == 1 and canonical_json(sql_storage.load("owner")) == before
+    second = source(clock, "Another current receipt", fact_id="two")
+    kb.replace_facts([root, note, second])
+    with pytest.raises(SnapshotTooLarge):
+        memory.task_snapshot(task_key="restore", include_derived=False, max_facts=1)
+
+
+def test_non_derived_read_does_not_narrow_task_guard(sql_storage, clock):
+    kb, _, memory = team(sql_storage, clock)
+    root = source(clock)
+    kb.replace_facts([root])
+    basis = memory.capture_evidence((("owner", root.id),))
+    note = memory.derive_fact("A current handoff", basis=basis, task_key="restore")
+    guard = memory.task_guard(task_key="restore")
+    current = memory.task_snapshot(task_key="restore", include_derived=False)
+    assert memory.task_guard(task_key="restore") == guard
+    kb.replace_facts([root, replace(note, content="A revised handoff", version=note.version + 1)])
+    assert memory.task_snapshot(task_key="restore", include_derived=False) == current
+    assert memory.task_guard(task_key="restore") != guard
+
+
+@pytest.mark.parametrize("include_derived", [True, False])
+def test_snapshot_is_read_only_and_does_not_ack_delivery(sql_storage, clock, include_derived):
     kb, _, memory = team(sql_storage, clock)
     memory.subscribe(subscription_id="watch", selector=WatchSelector("owner"), start="beginning")
     kb.replace_facts([source(clock)])
@@ -107,7 +146,7 @@ def test_snapshot_is_read_only_and_does_not_ack_delivery(sql_storage, clock):
         )
 
     before = state()
-    refs = memory.task_snapshot(task_key="restore")
+    refs = memory.task_snapshot(task_key="restore", include_derived=include_derived)
     assert refs and state() == before
     assert memory.poll("watch") == pending
     assert memory.get_intent(intent.id).lease is None
@@ -206,6 +245,7 @@ def test_runnable_task_example_handles_snapshot_overflow_without_inference(tmp_p
     monkeypatch.setattr("httpx.AsyncClient.send", forbidden)
     result = example(tmp_path)
     assert result["snapshot_facts"] == 6 and result["snapshot_overflow_handled"]
+    assert result["source_only_facts"] == 1
     assert result["model_calls"] == 0
 
 
@@ -221,6 +261,10 @@ def test_runnable_task_example_handles_snapshot_overflow_without_inference(tmp_p
         {"max_chars": 0},
         {"max_chars": 65537},
         {"max_chars": 2.5},
+        {"include_derived": 0},
+        {"include_derived": 1},
+        {"include_derived": "false"},
+        {"include_derived": None},
     ],
 )
 def test_snapshot_validates_before_reading(sql_storage, clock, kwargs):

@@ -38,7 +38,7 @@ describe("always-on adapters", () => {
   it("loads a queryless task snapshot through HTTP and MCP", async () => {
     const calls: unknown[] = [];
     const facts = [{ ref: { namespace: "owner", fact_id: "receipt", revision: "r1" }, content: "Receipt verified", slot_key: "" }];
-    const request = { task_key: "restore", max_facts: 3, max_chars: 600 };
+    const request: Parameters<McpAlwaysOnMemory["taskSnapshot"]>[0] = { task_key: "restore", max_facts: 3, max_chars: 600, include_derived: false };
     const mcp = new McpAlwaysOnMemory(async (name, args) => { calls.push([name, args]); return JSON.stringify(facts); });
     const fetch = vi.fn<NonNullable<HttpKnowledgeBaseOptions["fetch"]>>(async (url, options) => { calls.push([url, options]); return { ok: true, status: 200, statusText: "OK", json: async () => facts, text: async () => "" }; });
     const http = new HttpKnowledgeBase({ baseUrl: "http://localhost", token: "secret", fetch });

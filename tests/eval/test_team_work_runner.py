@@ -149,6 +149,46 @@ def test_truncation_is_rejected_even_if_the_partial_json_happens_to_parse(backen
     assert memory_for(backend, 0).get_intent(intent_id).progress["code"] == case.initial_code
 
 
+def test_embedding_budget_refusal_keeps_its_type_for_arm_isolation(backend):
+    from dataclasses import replace
+
+    import httpx
+
+    from tests.eval.team_decisions.openai import MeteredOpenAI
+    from tests.eval.team_work.provider import RecordingClient
+    from tests.eval.team_work.runner import run_stage
+
+    case = sample()
+    intent_id = initial(backend, case)
+    root = source_facts(case, 0)[0]
+    backend.atomic_update(
+        "__shared__",
+        lambda rows: (
+            rows
+            + [replace(root, id="large", content="Large source " + "x" * 2100, slot_key="large")]
+        ),
+    )
+    sandbox = Sandbox()
+
+    def forbidden(request):
+        raise AssertionError("Budget refusal reached HTTP")
+
+    async def run():
+        client = RecordingClient(
+            MeteredOpenAI("offline", max_calls=0, transport=httpx.MockTransport(forbidden)),
+            on_update=lambda snapshot: None,
+        )
+        async with client:
+            result = await run_stage(backend, case, 0, "semantic", intent_id, None, client, sandbox)
+        assert result["error_type"] == "BudgetExceeded"
+        assert client.snapshot()["requests"][0]["error_type"] == "BudgetExceeded"
+        assert client.spent_tokens == client.actual_provider_calls == 0
+        assert not sandbox.codes
+        assert memory_for(backend, 0).get_intent(intent_id).progress["code"] == case.initial_code
+
+    asyncio.run(run())
+
+
 def test_history_survives_invalid_proposals_without_replacing_saved_basis(backend):
     from tests.eval.team_work.runner import run_stage
 

@@ -88,6 +88,13 @@ def example(directory: Path) -> dict[str, object]:
     else:
         raise AssertionError("A partial task snapshot must not be returned")
 
+    # A host rebuilding from observations can omit generated lessons explicitly.
+    source_only = readers["operator"].task_snapshot(
+        task_key="release42", include_derived=False, max_facts=3, max_chars=600
+    )
+    assert tuple(item.ref for item in source_only) == basis
+    assert readers["operator"].review_context(tuple(item.ref for item in source_only)).complete
+
     # A corrected shared receipt retracts every projection tied to its old revision.
     receipt("withdrawn")
     rejected = readers["operator"].review_context(
@@ -101,6 +108,7 @@ def example(directory: Path) -> dict[str, object]:
         "retracted_source_blocks_reuse": True,
         "snapshot_facts": len(snapshot),
         "snapshot_overflow_handled": overflow_handled,
+        "source_only_facts": len(source_only),
         "model_calls": 0,
     }
 

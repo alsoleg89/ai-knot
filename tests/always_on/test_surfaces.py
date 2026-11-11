@@ -134,6 +134,14 @@ def test_http_task_snapshot_is_queryless_strict_and_never_returns_a_partial_bund
             "slot_key": "",
         }
     ]
+    memory.derive_fact(
+        "Derived handoff " * 100,
+        basis=memory.capture_evidence((("owner", fact.id),)),
+        task_key="restore",
+    )
+    source_only = client.post(path, headers=headers, json={**request, "include_derived": False})
+    assert source_only.status_code == 200 and source_only.json() == response.json()
+    assert client.post(path, headers=headers, json=request).status_code == 413
     for invalid in (
         {},
         {"task_key": True},
@@ -141,6 +149,9 @@ def test_http_task_snapshot_is_queryless_strict_and_never_returns_a_partial_bund
         {"task_key": "restore", "max_chars": "100"},
         {"task_key": "restore", "owner_agent_id": "foreign"},
         {"task_key": "restore", "requirements": ["backup"]},
+        {"task_key": "restore", "include_derived": "false"},
+        {"task_key": "restore", "include_derived": 0},
+        {"task_key": "restore", "include_derived": None},
     ):
         invalid_response = client.post(path, headers=headers, json=invalid)
         assert invalid_response.status_code == 422

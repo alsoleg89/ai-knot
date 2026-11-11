@@ -20,6 +20,7 @@ from ai_knot.always_on.codec import canonical_json
 from ai_knot.always_on.context import task_applicable
 from ai_knot.always_on.lineage import derivation_qualifiers
 from ai_knot.types import Fact, MemoryType
+from tests.eval.team_decisions.openai import BudgetExceeded
 from tests.eval.team_repos.protocol import (
     coder_messages,
     context_chars,
@@ -144,7 +145,17 @@ async def acquire(storage, memory, case, arm, note, client, history):
         )
         selected = [by_ref[f.ref] for f in result.facts]
     elif arm in ("semantic", "cited_sources"):
-        result = await SemanticContext(memory, embed=client.embed).acquire(
+        budget_error = None
+
+        async def embed(texts):
+            nonlocal budget_error
+            try:
+                return await client.embed(texts)
+            except BudgetExceeded as exc:
+                budget_error = exc
+                raise
+
+        result = await SemanticContext(memory, embed=embed).acquire(
             case.requirements,
             task_key=case.task_key,
             required_refs=required,
@@ -154,6 +165,8 @@ async def acquire(storage, memory, case, arm, note, client, history):
                 max_candidates=128, max_provider_calls=1, max_input_bytes=65536, timeout=30
             ),
         )
+        if budget_error is not None:
+            raise budget_error
         if result.status not in ("ok", "snapshot") or result.review.issues:
             raise ValueError("Semantic context unavailable")
         selected = [by_ref[f.ref] for f in result.review.accepted]

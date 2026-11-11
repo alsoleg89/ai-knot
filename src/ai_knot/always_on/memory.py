@@ -778,11 +778,18 @@ class AlwaysOnMemory(SubscriptionsMixin):
         task_key: str,
         max_facts: int = 8,
         max_chars: int = 12000,
+        include_derived: bool = True,
     ) -> tuple[ContextFact, ...]:
         """Read all current task evidence, or raise SnapshotTooLarge without a prefix."""
         from .context import task_snapshot
 
-        return task_snapshot(self, task_key=task_key, max_facts=max_facts, max_chars=max_chars)
+        return task_snapshot(
+            self,
+            task_key=task_key,
+            max_facts=max_facts,
+            max_chars=max_chars,
+            include_derived=include_derived,
+        )
 
     def task_guard(self, *, task_key: str, max_facts: int = 128) -> TaskContextGuard:
         """Capture the admissible universe before selection; not semantic completeness."""

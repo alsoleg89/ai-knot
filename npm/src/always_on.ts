@@ -91,7 +91,7 @@ export interface AlwaysOnClient {
   resync(subscriptionId: string, limit?: number): Promise<ChangeBatch>;
   reviewContext(refs: EvidenceRef[], maxChars?: number): Promise<ContextReview>;
   selectContext(input: { requirements: string[]; task_key?: string; role?: string; max_facts?: number; max_chars?: number; required_refs?: EvidenceRef[] }): Promise<TaskContext>;
-  taskSnapshot(input: { task_key: string; max_facts?: number; max_chars?: number }): Promise<ContextFact[]>;
+  taskSnapshot(input: { task_key: string; max_facts?: number; max_chars?: number; include_derived?: boolean }): Promise<ContextFact[]>;
   taskGuard(input: { task_key: string; max_facts?: number }): Promise<TaskContextGuard>;
   ack(subscriptionId: string, deliveryId: string): Promise<void>;
   unsubscribe(subscriptionId: string): Promise<void>;

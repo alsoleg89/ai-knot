@@ -15,7 +15,7 @@ from ai_knot.multi_agent.models import AssemblyResult, CandidateFact
 from ai_knot.types import Fact, MemoryType
 
 from .changes import access_projection, canonical, evidence_revision, visible
-from .lineage import lineage_status
+from .lineage import is_derived, lineage_status
 from .models import (
     ContextFact,
     EvidenceRef,
@@ -52,11 +52,15 @@ def task_sources(
     session: AlwaysOnSession,
     task_key: str,
     now: datetime,
+    *,
+    include_derived: bool = True,
 ) -> Iterator[tuple[EvidenceRef, Fact]]:
     session = ReadCache(session)
     for namespace in task_scopes(memory):
         for fact in session.load_task_facts(namespace, task_key=task_key):
             if not task_applicable(fact, task_key) or not fact.supported or not fact.is_active(now):
+                continue
+            if not include_derived and is_derived(fact):
                 continue
             ref = EvidenceRef(namespace, fact.id, evidence_revision(fact))
             if not memory._validate_basis(session, (ref,), now):
@@ -69,14 +73,19 @@ def task_snapshot(
     task_key: str,
     max_facts: int,
     max_chars: int,
+    include_derived: bool = True,
 ) -> tuple[ContextFact, ...]:
     context_label(task_key, "task_key")
     positive_integer(max_facts, "max_facts", 128)
     positive_integer(max_chars, "max_chars", 65536)
+    if type(include_derived) is not bool:
+        raise ValueError("include_derived must be a boolean")
     with memory._transaction(task_scopes(memory), write=False) as session:
         result: list[ContextFact] = []
         remaining = max_chars
-        for ref, fact in task_sources(memory, session, task_key, memory._now()):
+        for ref, fact in task_sources(
+            memory, session, task_key, memory._now(), include_derived=include_derived
+        ):
             if len(result) == max_facts or len(fact.content) > remaining:
                 raise SnapshotTooLarge("Task snapshot exceeds the output budget")
             result.append(ContextFact(ref, fact.content, fact.slot_key))

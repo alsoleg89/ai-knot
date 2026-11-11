@@ -21,6 +21,23 @@ def test_mcp_task_snapshot_is_queryless_strict_and_all_or_error(ao_factory, kb):
         assert len(result) == 1 and result[0]["content"] == fact.content
         assert result[0]["ref"]["namespace"] == "owner"
         assert result[0]["ref"]["fact_id"] == fact.id
+        memory.derive_fact(
+            "Derived handoff " * 100,
+            basis=memory.capture_evidence((("owner", fact.id),)),
+            task_key="restore",
+        )
+        source_only = await call(
+            {
+                "task_key": "restore",
+                "max_facts": 1,
+                "max_chars": len(fact.content),
+                "include_derived": False,
+            }
+        )
+        assert source_only == result
+        assert (await call({"task_key": "restore", "max_facts": 1}))["error"][
+            "code"
+        ] == "SnapshotTooLarge"
         for invalid in (
             {},
             {"task_key": False},
@@ -28,6 +45,9 @@ def test_mcp_task_snapshot_is_queryless_strict_and_all_or_error(ao_factory, kb):
             {"task_key": "restore", "max_chars": True},
             {"task_key": "restore", "owner_agent_id": "foreign"},
             {"task_key": "restore", "requirements": []},
+            {"task_key": "restore", "include_derived": "false"},
+            {"task_key": "restore", "include_derived": 0},
+            {"task_key": "restore", "include_derived": None},
         ):
             assert (await call(invalid))["error"]["code"] == "InvalidInput"
         kb.add("Another complete observation")

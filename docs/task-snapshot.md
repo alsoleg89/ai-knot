@@ -35,6 +35,39 @@ The bounds limit the output, not namespace scanning or inherited-source SQL chec
 
 Repeated fact/root/permission/policy reads are now reused within this operation's SQL snapshot. Every new operation reads fresh state; no cache survives a transaction or substitutes for action-time checks. The [local profile](context-read-performance.md) records lower SQL work, unchanged returned results and the remaining full-scan/CPU costs.
 
+## Rebuild context from non-derived facts
+
+If the host rejects a generated handoff or wants to reconstruct context directly
+from current observations, it can request:
+
+```python
+facts = memory.task_snapshot(
+    task_key="release42", include_derived=False, max_facts=32, max_chars=6000,
+)
+```
+
+The default `include_derived=True` retains the existing whole-corpus behavior.
+False omits facts recognized by the existing derivation/projection metadata,
+including grounded summaries and recorded lessons. The filter runs before output
+bounds and inherited-lineage work. Every returned fact still passes currentness,
+ACL, freshness, supported/active, ambiguity and task checks. If the non-derived set
+does not fit, the same all-or-error `SnapshotTooLarge` contract applies. No text is
+clipped, no model is called, and no stored memory is deleted or reclassified.
+
+Non-derived is a provenance category, not proof of truth or human authorship.
+Useful learned procedures can be omitted. The host keeps its original requirements
+and domain checks; this is not an automatic retry or permission to execute. A
+separately captured `task_guard` still covers the full admitted universe, including
+derived facts. A filtered read never weakens that guard.
+
+HTTP/MCP accept `"include_derived": false`; TypeScript accepts
+`taskSnapshot({task_key: "release42", include_derived: false})`. The flag must be a
+real boolean: strings, integers and null are rejected by the shared decoder. The
+runnable example below also demonstrates a six-fact mixed snapshot reducing to
+one current observation under this explicit policy, without claiming that one
+observation contains the task's complete procedure. See the
+[design evidence](research/2026-11-11-source-context.md).
+
 ## The same read through each client
 
 | Surface | Operation |
@@ -44,7 +77,7 @@ Repeated fact/root/permission/policy reads are now reused within this operation'
 | MCP | `memory_context_snapshot` with the same fields |
 | TypeScript | `await client.alwaysOn.taskSnapshot({task_key: "release42"})` |
 
-HTTP/MCP return an array of existing context-fact objects; TypeScript returns `ContextFact[]`. All transports accept the same optional count/character limits and retain configured-owner identity, authentication and strict input decoding. Missing `task_key`, unknown fields, bool/string count coercions and owner overrides are rejected. Overflow uses existing `SnapshotTooLarge` (HTTP 413 / structured MCP error / `AlwaysOnError`), with no context array.
+HTTP/MCP return an array of existing context-fact objects; TypeScript returns `ContextFact[]`. All transports accept the same optional count/character limits and `include_derived` boolean, and retain configured-owner identity, authentication and strict input decoding. Missing `task_key`, unknown fields, bool/string count coercions and owner overrides are rejected. Overflow uses existing `SnapshotTooLarge` (HTTP 413 / structured MCP error / `AlwaysOnError`), with no context array.
 
 This is an additive source-engine/client API; package versions and release files remain unchanged. See the [host flow](always-on-team-cycle.md#load-a-small-task-corpus), [task selection](task-context.md), and [semantic candidates](semantic-context.md) when a fitting whole task corpus is not the desired context.
 
@@ -57,3 +90,10 @@ PYTHONPATH=src python examples/task_context.py
 The [adoption research](research/2026-10-28-task-bundle-adoption.md) records the API gap and primary sources. The earlier [15/16 canonical-prefix control](semantic-context-evaluation.md) is not an accuracy result for this all-or-error operation. This change makes source-checked acquisition simpler; improved real-world decisions still need naturally ordered longitudinal evaluation at equal aggregate budgets.
 
 Local acceptance: 2,335 Python tests passed with PostgreSQL required (two expected skips, 89.92% coverage), plus 61 TypeScript tests, typecheck and ESM/CJS builds. Exact prior/current semantic acquisition matched in 36 deterministic SQL cases. See [validation](superpowers/validation/2026-10-28-task-snapshot.json) and [Astra/Ponytail review](superpowers/reviews/2026-10-28-task-snapshot-astra-ponytail.md). These establish the API/source-admission contract, not model quality or fleet capacity.
+
+The 2026-11-11 non-derived-view addendum passed 2,889 Python tests with PostgreSQL
+required (9 skips, 90.16% coverage), 63 TypeScript tests, typing/formatting and both
+builds. It adds no paid study or new quality score. See the
+[independent reviews](superpowers/reviews/2026-11-11-source-context-independent.md)
+and [validation](superpowers/validation/2026-11-11-source-context.json). No Astra was
+used for this addendum; the older review above is historical.

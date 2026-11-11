@@ -135,7 +135,9 @@ For paid-free reproduction, extract `reports["v5-live-sqlite.json"]` from the ar
 and run the same module with
 `--mode replay --backend postgres --replay RECORDING --output NEW_REPORT --work NEW_DIRECTORY`.
 Set `AI_KNOT_TEST_PG_DSN` to a disposable database; the runner owns a temporary
-schema. Exact runtime hashes must match. Replay uses no credential/live fallback.
+schema. Use the frozen source commit **`fd6a2e2`** for this historical trace; later
+review fixes/features deliberately change runtime hashes. Exact hashes must match.
+Replay uses no credential/live fallback.
 Live mode uses an explicit macOS Keychain service for this local research tool;
 the production library does not acquire that requirement.
 

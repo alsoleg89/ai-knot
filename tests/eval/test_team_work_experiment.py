@@ -285,3 +285,70 @@ def test_reported_overspend_is_not_mistaken_for_a_zero_charge_budget_refusal(tmp
     assert report["status"] == "incomplete" and report["quality"] is None
     assert report["accounting"]["accounted_tokens"] == 60004
     assert sum(r["status"] == "not_run" for r in report["stages"]) == 17
+
+
+def test_invalid_formation_replay_rejects_unconsumed_trailing_request(tmp_path):
+    from tests.eval.team_work.experiment import (
+        InvalidHandoff,
+        OfflineClient,
+        empty_meter,
+        form_notes,
+        run_experiment,
+        source_hashes,
+    )
+    from tests.eval.team_work.provider import RecordingClient
+
+    case = sample()
+
+    class BadSummary(OfflineClient):
+        async def complete(self, *args, **kwargs):
+            self.charge("complete")
+            return json.dumps({"summary": "x" * 1201, "basis": [1]})
+
+    async def recording():
+        client = RecordingClient(BadSummary(max_calls=3), on_update=lambda snapshot: None)
+        with pytest.raises(InvalidHandoff):
+            await form_notes(case, client, lambda: None)
+        # A well-formed extra source request must not disappear when local
+        # formation parsing rejects the first successful provider response.
+        first = client.snapshot()["requests"][0]
+        async with client:
+            await client.complete(
+                first["inputs"],
+                max_output_tokens=first["max_output_tokens"],
+                response_schema=first["response_schema"],
+            )
+        return client.snapshot()
+
+    source = asyncio.run(recording())
+    replay = dict(
+        status="complete",
+        mode="live",
+        source_sha256=source_hashes(),
+        formations=[dict(provider=source)],
+        stages=[
+            dict(case=case.id, arm="direct_sources", index=i, worker=dict(provider=empty_meter()))
+            for i in range(3)
+        ],
+    )
+
+    def worker(job):
+        return dict(
+            status="complete",
+            provider=empty_meter(),
+            result=dict(status="complete", source_unchanged=True, tests_passed=True, attempts=[]),
+        )
+
+    result = asyncio.run(
+        run_experiment(
+            (case,),
+            tmp_path / "work",
+            tmp_path / "report.json",
+            mode="replay",
+            replay=replay,
+            worker=worker,
+        )
+    )
+    assert result["status"] == "incomplete" and result["quality"] is None
+    assert result["error_type"] == "ValueError"
+    assert result["accounting"]["actual_provider_calls"] == 0

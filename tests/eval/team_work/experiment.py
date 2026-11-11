@@ -499,8 +499,6 @@ async def run_experiment(
                         transport = factory(**limits)
                     client = RecordingClient(transport, on_update=save_common)
                 common["notes"] = await form_notes(case, client, update)
-                if mode == "replay":
-                    client.assert_consumed()
                 common["status"] = "complete"
             except InvalidHandoff:
                 common.update(status="failed", error_type="InvalidHandoff")
@@ -511,6 +509,8 @@ async def run_experiment(
                 if client is not None:
                     common["provider"] = client.snapshot()
                 update()
+                if mode == "replay" and client is not None:
+                    client.assert_consumed()
             for arm in ARMS:
                 directory = work / case.id / arm
                 directory.mkdir(parents=True, exist_ok=True)
