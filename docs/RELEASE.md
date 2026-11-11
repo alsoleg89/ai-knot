@@ -10,6 +10,8 @@ One version must stay in sync across:
 - `pyproject.toml`
 - `src/ai_knot/__init__.py`
 - `npm/package.json`
+- `npm/package-lock.json` (top-level and root package entries)
+- `server.json` (manifest and PyPI package entries)
 
 The repo has tests that fail if these drift.
 
@@ -54,6 +56,40 @@ If you also want to confirm the public registries / repo state after release:
 python scripts/check_public_release.py
 python scripts/check_public_release.py --require-pages
 ```
+
+## Local publication when Actions is unavailable
+
+Run all checks and publication commands locally when GitHub Actions cannot start.
+Keep credentials in the package managers' normal local configuration: `~/.pypirc`
+for PyPI and `npm login` for npm. Never commit credentials or include them in
+release notes.
+
+1. Update the five version sources above and add a dated `CHANGELOG.md` entry.
+2. Run the local gates, including the Python matrix, a real PostgreSQL service,
+   MCP subprocess tests, the npm build/tests/package audit, and release preflight.
+3. Build wheel and sdist from a clean export of the release commit. Build and pack
+   the npm client from that same revision. Inspect package contents and run
+   `python -m twine check` before upload.
+4. Install those artifacts into clean temporary environments and test the CLI,
+   always-on state, and both npm exports before publishing.
+5. Publish **PyPI first**, then npm, so the optional Python bridge is available
+   when npm's postinstall runs:
+
+   ```bash
+   python -m twine upload --non-interactive /path/to/artifacts/ai_knot-X.Y.Z*
+   npm publish /path/to/artifacts/ai-knot-X.Y.Z.tgz --access public
+   ```
+
+6. Push the release commit and matching `vX.Y.Z` tag, then create the GitHub
+   Release using the rendered changelog notes. Registry publication and GitHub
+   tag/release state must point to the same tested revision.
+7. Install `ai-knot[mcp,server]==X.Y.Z` from PyPI and `ai-knot@X.Y.Z` from npm in
+   new environments outside the checkout. Check exact versions, ESM/CJS imports,
+   a real MCP round trip, and persistent SQLite intent/replay behavior. Finally
+   run `scripts/check_public_release.py` against the public registries.
+
+Do not treat local artifact installation as proof that registry publication
+succeeded. Preserve registry checksums and compare them with the uploaded files.
 
 ## Release notes
 

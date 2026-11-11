@@ -62,7 +62,7 @@ This historical warning survives a change to the current action outcome. Correct
 | MCP | `action_experience_record`, including `action_id` |
 | TypeScript | `client.alwaysOn.recordExperience(actionId, input)` |
 
-Configured-owner authentication and strict decoding reject actor spoofing, unknown fields and coercion. No new CLI flag, dependency, model worker or automatic reflection loop is required. One SQL binding table retains replay digests/output identities after lesson deletion, without retaining the lesson text there. Initialization upgrades existing stores to always-on schema 8; package versions remain unchanged. Older clients that support only schema 7 reject the upgraded store. Keep database backups when upgrading clients.
+Configured-owner authentication and strict decoding reject actor spoofing, unknown fields and coercion. No new CLI flag, dependency, model worker or automatic reflection loop is required. One SQL binding table retains replay digests/output identities after lesson deletion, without retaining the lesson text there. Initialization upgrades existing stores to always-on schema 8; these operations are available since 0.13.0. Older clients that support only schema 7 reject the upgraded store. Keep database backups when upgrading clients.
 
 Run the executable model-free two-role example:
 

@@ -53,6 +53,6 @@ No lock stops wall-clock expiry or the external world after validation/permit. N
 | MCP | `memory_context_guard` with the same fields |
 | TypeScript | `memory.alwaysOn.taskGuard({task_key:"rollout"})` |
 
-HTTP/MCP checkpoint/begin accept an optional nested `context_guard`. TypeScript checkpoint takes `context_guard`; `beginAction(actionId, leaseToken, guard)` appends an optional third argument, preserving old two-argument calls. Configured-owner authentication, strict scalar decoding/unknown-field rejection, `SnapshotTooLarge` capture and `StaleEvidence` conflict codes remain shared across transports. Release versions/schema/dependencies are unchanged.
+HTTP/MCP checkpoint/begin accept an optional nested `context_guard`. TypeScript checkpoint takes `context_guard`; `beginAction(actionId, leaseToken, guard)` appends an optional third argument, preserving old two-argument calls. Configured-owner authentication, strict scalar decoding/unknown-field rejection, `SnapshotTooLarge` capture and `StaleEvidence` conflict codes remain shared across transports. Available since 0.13.0; this guard adds no schema or dependency requirement.
 
 The [growing-context study and verification](growing-context-evaluation.md) records the local SQL/transport tests, PostgreSQL lock-wait regression, paid decision results and exact PostgreSQL replay. Guard correctness and candidate quality are reported separately.

@@ -9,6 +9,8 @@ from types import ModuleType
 
 import pytest
 
+from ai_knot import __version__
+
 SCRIPT_PATH = Path(__file__).resolve().parent.parent / "scripts" / "check_local_launch_ready.py"
 NPM_DIST_MARKER = Path(__file__).resolve().parent.parent / "npm" / "dist" / "esm" / "index.js"
 
@@ -74,7 +76,7 @@ def test_main_reports_release_render_failure(
     out = capsys.readouterr().out
 
     assert code == 1
-    assert "[FAIL] release notes render: broken release body for 0.12.0" in out
+    assert f"[FAIL] release notes render: broken release body for {__version__}" in out
 
 
 def test_main_reports_site_article_drift(

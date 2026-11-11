@@ -15,7 +15,7 @@ Track useful knowledge retained, invalid knowledge rejected, missed updates, red
 
 See [primary-source research](research/2026-10-27-shared-memory-direction.md).
 
-Current source progress: [reliable return](shared-memory-return.md) is committed,
+Included in 0.13.0: [reliable return](shared-memory-return.md) is committed,
 and [explicit task working sets](task-context.md) add bounded requirement coverage,
 applicability labels and soft role preference. The latter matches the strongest
 existing scoped retrieval baseline on frozen evidence recall; role preference and
@@ -29,7 +29,7 @@ independent review of that implementation batch are recorded in the [engineering
 
 ## Continuing product work
 
-The [team-work evaluation foundation](team-work-foundation.md) now supplies three new staged code tasks, incremental observer publication, fresh-process stale-basis checks and equal-order current-context rendering. Independent review found two private-contract gaps; identical semantic mutants demonstrate their repair. Paid researcher/coder execution and memory-quality comparison on this corpus remain open.
+The [team-work evaluation foundation](team-work-foundation.md) now supplies three new staged code tasks, incremental observer publication, fresh-process stale-basis checks and equal-order current-context rendering. Independent review found two private-contract gaps; identical semantic mutants demonstrate their repair. The [continued team-work study](team-work-evaluation.md) now executes those roles with equal bounds and frozen OpenAI responses, including failure costs and PostgreSQL replay. On this small corpus, semantic memory did not beat direct current sources or current documents plus the shared handoff; no ranking default is promoted.
 
 Opt-in [required context](required-context.md) now reserves host-known exact observations before relevance ranking, rejects stale/hidden/wrong-task groups and preserves the same count/character bounds. The planning helper binds these refs into input identity and checkpoint basis. This supplies a missing adoption primitive; it does not infer obligations or establish a paid accuracy improvement. Fresh independent quality evaluation remains necessary.
 
@@ -39,7 +39,7 @@ The [decision study](team-decision-evaluation.md) now records real GPT-4.1 mini 
 
 An [opt-in semantic acquisition path](semantic-context.md) now checks source/ACL/task/lineage/freshness before and after budgeted embeddings, with a zero-call complete-task snapshot and quiet event-driven host recipe. The [first independently authored case batch](semantic-context-evaluation.md) recovered more required evidence than lexical task search but did not beat a cheap scoped task bundle on reader correctness. It stays optional. The legacy MA verification now fails closed on missing/invalid selected evidence; raw reader-format failures and all paid work remain in the evaluation artifacts.
 
-A [model-free task snapshot](task-snapshot.md) now exposes whole-corpus scoped loading through Python, HTTP, MCP and TypeScript. It returns all admissible facts or explicit overflow, with no invented search requirement, embedding callback or partial-prefix completeness claim. This is an adoption improvement.
+A [model-free task snapshot](task-snapshot.md) now exposes whole-corpus scoped loading through Python, HTTP, MCP and TypeScript. It returns all admissible facts or explicit overflow, with no invented search requirement, embedding callback or partial-prefix completeness claim. The optional `include_derived=False` view omits generated lessons before budgeting while preserving source admission and the full task guard. This is an adoption improvement, not evidence of task completeness.
 
 The [continued repository study](team-repository-evaluation.md) now includes real researcher/coder roles, their own carried code over three stages, fresh SQL-backed executor processes and isolated Docker tests. Task memory did not beat current documents plus the same researcher handoff: final contracts passed in two of three repositories versus three of three on both backends. All memory contexts used snapshots, with no embeddings. Identical evidence sets arrived in different orders, and handoffs differed across backend runs, so the small result does not identify a retrieval, ordering or database effect. Original failed runs/costs and the measured runtime are retained; later caller recovery and malformed-receipt repairs were tested without rescoring.
 

@@ -79,7 +79,7 @@ observation contains the task's complete procedure. See the
 
 HTTP/MCP return an array of existing context-fact objects; TypeScript returns `ContextFact[]`. All transports accept the same optional count/character limits and `include_derived` boolean, and retain configured-owner identity, authentication and strict input decoding. Missing `task_key`, unknown fields, bool/string count coercions and owner overrides are rejected. Overflow uses existing `SnapshotTooLarge` (HTTP 413 / structured MCP error / `AlwaysOnError`), with no context array.
 
-This is an additive source-engine/client API; package versions and release files remain unchanged. See the [host flow](always-on-team-cycle.md#load-a-small-task-corpus), [task selection](task-context.md), and [semantic candidates](semantic-context.md) when a fitting whole task corpus is not the desired context.
+Available in matching Python and TypeScript packages since 0.13.0. See the [host flow](always-on-team-cycle.md#load-a-small-task-corpus), [task selection](task-context.md), and [semantic candidates](semantic-context.md) when a fitting whole task corpus is not the desired context.
 
 The runnable model-free recipe exercises both whole snapshot and explicit overflow handling:
 

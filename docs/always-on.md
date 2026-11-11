@@ -1,9 +1,11 @@
 # Durable memory for always-on agents
 
-This feature is implemented in the source checkout and is listed under
-**Unreleased**. Install the matching source engine with `pip install -e ".[mcp,server]"`
-and build the TypeScript client in `npm/` before using the new transport methods.
-The published package version remains `0.12.0` until the release workflow runs.
+Available since **0.13.0**. Install matching Python and npm packages:
+
+```sh
+pip install "ai-knot[mcp,server]==0.13.0"
+npm install ai-knot@0.13.0
+```
 
 AI Knot stores unfinished work, acknowledged memory changes, decision evidence,
 external action outcomes and knowledge rechecks. The host runs tools and schedules

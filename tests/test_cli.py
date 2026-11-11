@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from ai_knot import Fact, KnowledgeBase
+from ai_knot import Fact, KnowledgeBase, __version__
 from ai_knot.cli import main
 from ai_knot.storage import create_storage
 
@@ -548,7 +548,7 @@ class TestCLIDoctor:
         import json
 
         payload = json.loads(result.output)
-        assert payload["ai_knot_version"] == "0.12.0"
+        assert payload["ai_knot_version"] == __version__
         assert payload["cli"]["storage_backend"] == "sqlite"
         assert payload["cli"]["data_dir"] == str(pathlib.Path(data_dir).resolve())
         assert "mcp_clients" in payload

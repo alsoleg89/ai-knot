@@ -6,7 +6,7 @@ For a surface-by-surface routing guide, see [integrations.md](integrations.md).
 If you only need the cross-surface `add -> search -> list -> delete` loop, start
 with [memory-commands.md](memory-commands.md).
 For resumable agent work, acknowledged changes and guarded external actions,
-see [always-on memory](always-on.md) (unreleased source feature).
+see [always-on memory](always-on.md) (available since 0.13.0).
 
 - [Initialization — storage + provider](#initialization)
 - [Memory types](#memory-types)

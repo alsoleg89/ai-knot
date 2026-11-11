@@ -74,7 +74,7 @@ On restart, use saved refs with `review_context`, and reselect for the current t
 | MCP | `memory_context_select` |
 | TypeScript | `client.alwaysOn.selectContext({requirements, task_key, role, max_facts, max_chars})` |
 
-HTTP/MCP retain configured-owner identity, strict types, authentication and source ACLs. These additions create no package dependency, storage schema or release/version change. See [research](research/2026-10-27-task-memory-selection.md), [implementation contract](superpowers/specs/2026-10-28-task-context-design.md) and [shared-memory roadmap](shared-memory-roadmap.md).
+HTTP/MCP retain configured-owner identity, strict types, authentication and source ACLs. Available since 0.13.0; these additions require no new dependency or schema beyond the always-on store. See [research](research/2026-10-27-task-memory-selection.md), [implementation contract](superpowers/specs/2026-10-28-task-context-design.md) and [shared-memory roadmap](shared-memory-roadmap.md).
 
 ## Fixed-data comparison
 

@@ -1,0 +1,181 @@
+{
+  "date": "2026-11-11",
+  "version": "0.13.0",
+  "status": "local-source-gates-passed",
+  "source_feature_commit": "e618a51",
+  "python": {
+    "3.11": {
+      "passed": 2308,
+      "skipped": 590,
+      "postgres": false
+    },
+    "3.12": {
+      "passed": 2889,
+      "skipped": 9,
+      "postgres": true,
+      "coverage_percent": 90.16
+    },
+    "3.13": {
+      "passed": 2308,
+      "skipped": 590,
+      "postgres": false
+    }
+  },
+  "typescript_passed": 63,
+  "mcp_e2e": true,
+  "recovery": {
+    "sqlite": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    },
+    "postgres": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    }
+  },
+  "load": {
+    "sqlite": {
+      "consumer_agents": 8,
+      "idle_provider_calls": 0,
+      "permits": 1,
+      "published": 200,
+      "recalled": 200,
+      "refresh_provider_calls": 1,
+      "usage_counter": 200
+    },
+    "postgres": {
+      "consumer_agents": 8,
+      "idle_provider_calls": 0,
+      "permits": 1,
+      "published": 200,
+      "recalled": 200,
+      "refresh_provider_calls": 1,
+      "usage_counter": 200
+    }
+  },
+  "checks": [
+    {
+      "step": "diff-check",
+      "exit_code": 0,
+      "seconds": 0.02
+    },
+    {
+      "step": "ruff",
+      "exit_code": 0,
+      "seconds": 0.07
+    },
+    {
+      "step": "format",
+      "exit_code": 0,
+      "seconds": 0.02
+    },
+    {
+      "step": "mypy",
+      "exit_code": 0,
+      "seconds": 18.62
+    },
+    {
+      "step": "python-3.11",
+      "exit_code": 0,
+      "seconds": 29.96
+    },
+    {
+      "step": "python-3.12",
+      "exit_code": 0,
+      "seconds": 142.27
+    },
+    {
+      "step": "python-3.13",
+      "exit_code": 0,
+      "seconds": 30.51
+    },
+    {
+      "step": "mcp-e2e",
+      "exit_code": 0,
+      "seconds": 4.01
+    },
+    {
+      "step": "recovery-sqlite",
+      "exit_code": 0,
+      "seconds": 1.15
+    },
+    {
+      "step": "load-sqlite",
+      "exit_code": 0,
+      "seconds": 1.73
+    },
+    {
+      "step": "recovery-postgres",
+      "exit_code": 0,
+      "seconds": 5.08
+    },
+    {
+      "step": "load-postgres",
+      "exit_code": 0,
+      "seconds": 7.29
+    },
+    {
+      "step": "npm-typecheck",
+      "exit_code": 0,
+      "seconds": 0.72
+    },
+    {
+      "step": "npm-test",
+      "exit_code": 0,
+      "seconds": 0.76
+    },
+    {
+      "step": "npm-build",
+      "exit_code": 0,
+      "seconds": 1.57
+    },
+    {
+      "step": "npm-package-audit",
+      "exit_code": 0,
+      "seconds": 0.51
+    },
+    {
+      "step": "release-preflight",
+      "exit_code": 0,
+      "seconds": 0.5
+    },
+    {
+      "step": "release-notes",
+      "exit_code": 0,
+      "seconds": 0.04
+    }
+  ],
+  "astra_used": false,
+  "additional_paid_study_calls": 0,
+  "original_checkout_preserved": true,
+  "publication": "pending; artifact builds and fresh installations follow from the clean release commit",
+  "external_auth": {
+    "github": true,
+    "actions": "account billing lock",
+    "pypi_local": false,
+    "npm": "E401"
+  },
+  "raw": {
+    "path": "docs/performance/release-0.13.0-local.json.gz",
+    "bytes": 180959,
+    "sha256": "1cfd24474f16a69e2c3f7abcba50f53fa45b3194e85237f0038ec2ed7a7074b3"
+  }
+}

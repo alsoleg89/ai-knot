@@ -6,7 +6,7 @@
 |---|---|
 | [../README.md](../README.md) | Product overview, quickstart, install-by-surface, integration snippets, and examples. |
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent memory, and bi-temporal recall. |
-| [always-on.md](always-on.md) | Durable intentions, leases, subscriptions with acknowledgment, guarded actions, freshness, maintenance, and recovery. Unreleased source feature for SQLite/PostgreSQL. |
+| [always-on.md](always-on.md) | Durable intentions, leases, subscriptions with acknowledgment, guarded actions, freshness, maintenance, and recovery. SQLite/PostgreSQL support since 0.13.0. |
 | [multi-agent-always-on.md](multi-agent-always-on.md) | Workspace operations, resource fencing, shared maintenance authority/budgets, evidence lineage, and local load checks. |
 | [shared-memory-return.md](shared-memory-return.md) | Catch-up progress, bounded snapshot recovery, checked saved context and an executable two-agent workflow. |
 | [task-context.md](task-context.md) | Explicit task requirements, applicability/role preference, grounded procedures and fixed-data selection comparisons. |

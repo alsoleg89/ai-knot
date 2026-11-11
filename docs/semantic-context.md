@@ -50,4 +50,4 @@ Database read reuse is separate from that vector cache: each source-admission/re
 
 For an event/timer host, the [always-on team recipe](always-on-team-cycle.md#opt-in-to-semantic-candidates) invokes this helper only for missing lexical context after an explicit relevant event or bounded retry. Idle checks never trigger paid work automatically.
 
-The [evaluation and local profile](semantic-context-evaluation.md) records the independent cases, equal context/cost ceilings, actual OpenAI calls and measured SQL overhead. Package versions and release files are unchanged; this API currently requires the matching source checkout.
+The [evaluation and local profile](semantic-context-evaluation.md) records the independent cases, equal context/cost ceilings, actual OpenAI calls and measured SQL overhead. This optional Python API is available since 0.13.0.
