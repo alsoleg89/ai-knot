@@ -44,7 +44,7 @@ def test_larger_outputs_are_opt_in_and_fully_reserved():
     assert len(requests) == 1 and requests[0]["max_completion_tokens"] == 2048
 
 
-@pytest.mark.parametrize("limit", [0, 4097, True, 1.5])
+@pytest.mark.parametrize("limit", [0, 8193, True, 1.5])
 def test_output_authority_is_bounded(limit):
     with pytest.raises(EvaluationError):
         MeteredOpenAI("offline", max_output_tokens_per_call=limit)

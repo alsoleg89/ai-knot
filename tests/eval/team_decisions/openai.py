@@ -109,19 +109,28 @@ class MeteredOpenAI:
         max_calls: int = 20,
         max_tokens: int = 20000,
         max_output_tokens_per_call: int = 128,
+        completion_timeout: float = 30,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._api_key = _key(api_key)
         if not _integer(max_calls) or not _integer(max_tokens):
             raise EvaluationError("Invalid OpenAI evaluation budget")
-        if not _integer(max_output_tokens_per_call) or not 1 <= max_output_tokens_per_call <= 4096:
+        if not _integer(max_output_tokens_per_call) or not 1 <= max_output_tokens_per_call <= 8192:
             raise EvaluationError("Invalid OpenAI output authority")
         self._max_calls = max_calls
         self._max_tokens = max_tokens
         self._max_output_tokens_per_call = max_output_tokens_per_call
+        if (
+            type(completion_timeout) not in (int, float)
+            or not math.isfinite(completion_timeout)
+            or not 0 < completion_timeout <= 120
+        ):
+            raise EvaluationError("Invalid completion timeout")
+        self._completion_timeout = completion_timeout
         self._transport = transport
         self._client: httpx.AsyncClient | None = None
         self._calls: list[dict[str, Any]] = []
+        self._raw_completions: list[dict[str, Any]] = []
         self._spent_tokens = 0
         self._budget_failed = False
 
@@ -134,6 +143,15 @@ class MeteredOpenAI:
     def spent_tokens(self) -> int:
         """Actual tokens plus conservative reservations for pending/unknown calls."""
         return self._spent_tokens
+
+    @property
+    def raw_completions(self) -> list[dict[str, Any]]:
+        """Research-only content, separate from the public metadata ledger.
+
+        Retain partial text before finish/usage validation can reject a response.
+        Do not retain HTTP headers, error bodies or arbitrary provider fields.
+        """
+        return copy.deepcopy(self._raw_completions)
 
     async def __aenter__(self) -> MeteredOpenAI:
         if self._client is not None:
@@ -177,6 +195,7 @@ class MeteredOpenAI:
             messages,
             max_output_tokens=max_output_tokens,
             response_schema=response_schema,
+            timeout=self._completion_timeout,
         )
 
     async def embed(
@@ -254,6 +273,7 @@ class MeteredOpenAI:
             "charged_tokens": reservation,
             "usage": None,
         }
+        call_index = len(self._calls)
         self._calls.append(call)
         started = time.perf_counter()
         error: BaseException | None = None
@@ -275,6 +295,22 @@ class MeteredOpenAI:
             body = response.json()
             if not isinstance(body, dict):
                 raise EvaluationError("Invalid OpenAI response")
+            if kind == "complete" and isinstance(body.get("choices"), list):
+                for choice in body["choices"]:
+                    if not isinstance(choice, dict):
+                        continue
+                    message = choice.get("message")
+                    if isinstance(message, dict) and isinstance(message.get("content"), str):
+                        reason = choice.get("finish_reason")
+                        self._raw_completions.append(
+                            {
+                                "meter_call_index": call_index,
+                                "finish_reason": reason
+                                if reason in ("stop", "length", "content_filter")
+                                else "other",
+                                "content": message["content"],
+                            }
+                        )
             returned_model = body.get("model")
             valid_model = isinstance(returned_model, str) and (
                 returned_model == model
@@ -323,8 +359,10 @@ class MeteredOpenAI:
             if isinstance(exc, BudgetExceeded):
                 self._budget_failed = True
             error = exc
-        except Exception:
+        except Exception as exc:
             call["status"] = "error"
+            if isinstance(exc, httpx.TransportError):
+                call["transport_error_type"] = type(exc).__name__
             error = EvaluationError("OpenAI request or response processing failed")
         finally:
             call["latency_seconds"] = time.perf_counter() - started

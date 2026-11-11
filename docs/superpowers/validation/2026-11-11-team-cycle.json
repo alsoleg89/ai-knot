@@ -1,0 +1,391 @@
+{
+  "date": "2026-11-11",
+  "status": "complete",
+  "summary": {
+    "arms": {
+      "direct_sources": {
+        "passed_stages": 6,
+        "planned_stages": 9,
+        "all_stages_passed": 2,
+        "planned_cases": 3,
+        "final_stage_passed": 2,
+        "allocated_calls": 12,
+        "allocated_tokens": 43099,
+        "attempts": 12,
+        "statuses": {
+          "complete": 9
+        },
+        "mean_context_facts": 13.666666666666666,
+        "mean_content_chars": 2775.1111111111113,
+        "per_case": {
+          "flag-policy-maintenance": [
+            true,
+            true,
+            true
+          ],
+          "retry-dispatch-maintenance": [
+            true,
+            true,
+            true
+          ],
+          "artifact-audit-maintenance": [
+            false,
+            false,
+            false
+          ]
+        }
+      },
+      "current_docs_handoff": {
+        "passed_stages": 6,
+        "planned_stages": 9,
+        "all_stages_passed": 2,
+        "planned_cases": 3,
+        "final_stage_passed": 2,
+        "allocated_calls": 15,
+        "allocated_tokens": 59044,
+        "attempts": 7,
+        "statuses": {
+          "complete": 6,
+          "formation_failed": 3
+        },
+        "mean_context_facts": 14.666666666666666,
+        "mean_content_chars": 3411.1666666666665,
+        "per_case": {
+          "flag-policy-maintenance": [
+            true,
+            true,
+            true
+          ],
+          "retry-dispatch-maintenance": [
+            true,
+            true,
+            true
+          ],
+          "artifact-audit-maintenance": [
+            false,
+            false,
+            false
+          ]
+        }
+      },
+      "raw_team_history": {
+        "passed_stages": 3,
+        "planned_stages": 9,
+        "all_stages_passed": 0,
+        "planned_cases": 3,
+        "final_stage_passed": 0,
+        "allocated_calls": 16,
+        "allocated_tokens": 51725,
+        "attempts": 9,
+        "statuses": {
+          "complete": 6,
+          "formation_failed": 3
+        },
+        "mean_context_facts": 17.666666666666668,
+        "mean_content_chars": 4618.166666666667,
+        "per_case": {
+          "flag-policy-maintenance": [
+            true,
+            true,
+            false
+          ],
+          "retry-dispatch-maintenance": [
+            true,
+            false,
+            false
+          ],
+          "artifact-audit-maintenance": [
+            false,
+            false,
+            false
+          ]
+        }
+      },
+      "lexical": {
+        "passed_stages": 5,
+        "planned_stages": 9,
+        "all_stages_passed": 1,
+        "planned_cases": 3,
+        "final_stage_passed": 2,
+        "allocated_calls": 15,
+        "allocated_tokens": 38495,
+        "attempts": 8,
+        "statuses": {
+          "complete": 6,
+          "formation_failed": 3
+        },
+        "mean_context_facts": 6.833333333333333,
+        "mean_content_chars": 1940.6666666666667,
+        "per_case": {
+          "flag-policy-maintenance": [
+            false,
+            true,
+            true
+          ],
+          "retry-dispatch-maintenance": [
+            true,
+            true,
+            true
+          ],
+          "artifact-audit-maintenance": [
+            false,
+            false,
+            false
+          ]
+        }
+      },
+      "semantic": {
+        "passed_stages": 4,
+        "planned_stages": 9,
+        "all_stages_passed": 0,
+        "planned_cases": 3,
+        "final_stage_passed": 2,
+        "allocated_calls": 22,
+        "allocated_tokens": 53923,
+        "attempts": 9,
+        "statuses": {
+          "complete": 6,
+          "formation_failed": 3
+        },
+        "mean_context_facts": 6.666666666666667,
+        "mean_content_chars": 1914.0,
+        "per_case": {
+          "flag-policy-maintenance": [
+            false,
+            true,
+            true
+          ],
+          "retry-dispatch-maintenance": [
+            true,
+            false,
+            true
+          ],
+          "artifact-audit-maintenance": [
+            false,
+            false,
+            false
+          ]
+        }
+      },
+      "cited_sources": {
+        "passed_stages": 0,
+        "planned_stages": 9,
+        "all_stages_passed": 0,
+        "planned_cases": 3,
+        "final_stage_passed": 0,
+        "allocated_calls": 7,
+        "allocated_tokens": 12903,
+        "attempts": 0,
+        "statuses": {
+          "context_overflow": 6,
+          "formation_failed": 3
+        },
+        "mean_context_facts": null,
+        "mean_content_chars": null,
+        "per_case": {
+          "flag-policy-maintenance": [
+            false,
+            false,
+            false
+          ],
+          "retry-dispatch-maintenance": [
+            false,
+            false,
+            false
+          ],
+          "artifact-audit-maintenance": [
+            false,
+            false,
+            false
+          ]
+        }
+      }
+    },
+    "v1_accounting": {
+      "accounted_tokens": 65252,
+      "actual_provider_calls": 28,
+      "logical_calls": 28,
+      "unknown_worker_count": 0,
+      "actual_provider_calls_complete": true
+    },
+    "v2_accounting": {
+      "accounted_tokens": 89411,
+      "actual_provider_calls": 32,
+      "logical_calls": 32,
+      "unknown_worker_count": 0,
+      "actual_provider_calls_complete": true
+    },
+    "v3_accounting": {
+      "accounted_tokens": 99973,
+      "actual_provider_calls": 1,
+      "logical_calls": 33,
+      "unknown_worker_count": 0,
+      "actual_provider_calls_complete": true
+    },
+    "v4_accounting": {
+      "accounted_tokens": 179963,
+      "actual_provider_calls": 20,
+      "logical_calls": 53,
+      "unknown_worker_count": 0,
+      "actual_provider_calls_complete": true
+    },
+    "v5_accounting": {
+      "accounted_tokens": 207577,
+      "actual_provider_calls": 6,
+      "logical_calls": 59,
+      "unknown_worker_count": 0,
+      "actual_provider_calls_complete": true
+    },
+    "all_attempts_tokens_plus_reservations": 272829,
+    "all_attempts_calls": 87,
+    "call_kinds": {
+      "complete": 53,
+      "embed": 6
+    },
+    "returned_models": [
+      "gpt-4.1-mini-2025-04-14",
+      "text-embedding-3-small"
+    ],
+    "postgres_actual_provider_calls": 0,
+    "parity": true,
+    "stage_workers": 39,
+    "carried_code_and_basis_checks": 26,
+    "passed_receipts_match_authored_test_counts": true,
+    "all_stage_sources_unchanged": true,
+    "corpus_sha256": "0b11a369992ee24052b69c014a8dcc4bf8e1e4bb2cd6b4a7ec40df5d997d782e",
+    "v5_provider_reported_tokens": 189874,
+    "v5_unknown_usage_reserved_tokens": 17703
+  },
+  "tests": {
+    "python_passed": 2870,
+    "python_skipped": 9,
+    "coverage_percent": 90.13,
+    "postgres_required": true,
+    "typescript_passed": 63,
+    "typecheck": true,
+    "build": true,
+    "ruff": true,
+    "mypy": true,
+    "recovery_scenarios": {
+      "sqlite": 12,
+      "postgres": 12
+    }
+  },
+  "documentation_content_tests_passed": 7,
+  "temporary_owned_postgres_removed": true,
+  "review": {
+    "procedure": "Ponytail",
+    "independent": false,
+    "astra_used": false
+  },
+  "release_checkout_unchanged": true,
+  "protected_files": 30,
+  "runtime_sha256": {
+    "src/ai_knot/__init__.py": "8a49e0ae46ff90629c95855b59df4f7101d518258a775363525f2fd2c405b2a7",
+    "src/ai_knot/_always_on_tools.py": "84f333dbae3c14db66614a39d6a9370028147c89bb4f6abf3297226cf29ebf21",
+    "src/ai_knot/_bm25.py": "f1f8005df1589339ceb754a5e529882e8ee9632632e0c671a68af7316c6a8bb6",
+    "src/ai_knot/_date_enrichment.py": "7a67317190bd75a9189ae0dc80900d05dbebb0e1d556442eb62b8ddf845caadb",
+    "src/ai_knot/_inverted_index.py": "580924a766eee8b78ba3251efc0ba693bb0d8c34e43db7859c2d11251dd277d0",
+    "src/ai_knot/_mcp_tools.py": "0a5906738d313ba1be251aa6dda158407c3c5b7b246ab358eeb04b4921faae5c",
+    "src/ai_knot/_pool_helpers.py": "8f37b236b1a88077a228eb7ed83eae718c616a6976fe2fe7546e9d0cb4216745",
+    "src/ai_knot/_pool_recall.py": "284134a95573f5b1d90eb0a2778078c9b0a6a1b8ced08b2325bde8436f37877c",
+    "src/ai_knot/_query_intent.py": "2f4ebfe55c329d35a807bd65ef5daf544056919fea970ec4e76c1688f91771cd",
+    "src/ai_knot/_resolve.py": "d888e70ec9394ed747d5abdba51aa16965b13480a9c5f42d7151883bf1a8a913",
+    "src/ai_knot/_spreading_activation.py": "99c91f028e2a9c31d30e0393602e4c4193ebe8c568d9b0316ce77b2b4c7828d2",
+    "src/ai_knot/_temporal.py": "efecf72dea1f99f015e2e7f9f5b30dc4862c10ef75451cfcd26fda9b12d4eda5",
+    "src/ai_knot/always_on/__init__.py": "c0f5155a0c84cd883465ff905237c50bd4cda85447fa22d0fa3b9529c29f7155",
+    "src/ai_knot/always_on/_state.py": "c238d8a2ccf7f867f39c9e1bb6970fb6be2602cafd79c6176e43093e0b12fb5c",
+    "src/ai_knot/always_on/changes.py": "5a2aaff067694f8af764fc12bba1de970e6bc608612e628052cf3383315aea24",
+    "src/ai_knot/always_on/codec.py": "b774c448cf3dc072583f2c7076bbc09a254adde8b8c51ad77a7a57f0d0d522d5",
+    "src/ai_knot/always_on/context.py": "001976a0d17449f1187fa3ddc83f437fdd1e5a9b35e9f0f20e3e84b2d555782f",
+    "src/ai_knot/always_on/experience.py": "58629db0908ca0d3b8710e1e9e247ebd0dbd6a2b64594fb2caffe38586bfc9e0",
+    "src/ai_knot/always_on/lineage.py": "ab8b91cf3e81457543f9994dce60d22371d3fea8293520662e20f210349fe5a8",
+    "src/ai_knot/always_on/maintenance.py": "e9d122892a7873d137b5f850d0f0386fe022c6ae5ce8e8e7b57e204043b1dfbf",
+    "src/ai_knot/always_on/memory.py": "4c21f817136b35d622d1339eec4e7c4d66d81ccd8b2bb065f7c9389626a0a145",
+    "src/ai_knot/always_on/models.py": "999b26910055defe9c3cc68c8a6461f269c7e2052df0b97908f19a8e6599ee73",
+    "src/ai_knot/always_on/reads.py": "866c701ace372ffc67c830d1aac140126e5cdeb408f920877f7d9ab2c19d0ca3",
+    "src/ai_knot/always_on/semantic.py": "ca537fb3d1a07a32d8fb288eeef3b3e37710d45619a905ba421eef49e8ca91ad",
+    "src/ai_knot/always_on/shared_maintenance.py": "203a1376f973f0bddede84c418f4a6e2be4ccf73b80f2c6f41e3a98b64be1f19",
+    "src/ai_knot/always_on/state_storage.py": "c6020ec56d0086710d5abd9b832423501887b9649735dba6cb2c4b129d5890f8",
+    "src/ai_knot/always_on/storage.py": "9d29e7bc8698494d37ea359e448605a02fffd7de2552c71f600c2ff810183137",
+    "src/ai_knot/always_on/subscriptions.py": "55bc95a94f0468dc62fda1abc1070c60ae754de7a640b0795bada8b930213e82",
+    "src/ai_knot/always_on/workspace.py": "0c202159e0c12775a19c4e9292639a1a38c2326983cd8e76227e3f485d39fc6f",
+    "src/ai_knot/cli.py": "da11534455b3380c6f5b838e98a992b671cb0b6b8c318ee0c4989062b04564e5",
+    "src/ai_knot/config.py": "7fdd83af7f32010ee96c12e4485f2b8c67256582e954ee36f5e49b9ec462615c",
+    "src/ai_knot/embedder.py": "4147f85b73dd008939f93170c652d206cff4b5b27250efbf772ebe0add61e4b2",
+    "src/ai_knot/extractor.py": "6227a0fe9d884959ab0b683c8fdf06dbff1eec91556642d22902f310a4bac208",
+    "src/ai_knot/forgetting.py": "3db98865ff2eeae99c85eefd15c1d875a1d55e7e05b961bdc25086a7281947e0",
+    "src/ai_knot/integrations/__init__.py": "df2132e47ba0e2e08e2a3786f0ec4ecc405c741e07b1434e991827dfe697976b",
+    "src/ai_knot/integrations/_task_context.py": "5f4e7a1a6ae012da2f491e98c5277efed5214c0b865f1a014d00a9359da39235",
+    "src/ai_knot/integrations/autogen.py": "4ed52829a3140e85425df887339561f33c39fe6941e92ffa0acf684e35e1a99e",
+    "src/ai_knot/integrations/crewai.py": "63c661bc8746fa826812c3b36e67598838e3ba1e6f060303012e9e9e5bc2e7df",
+    "src/ai_knot/integrations/langchain.py": "0e6bffd29d6370a5017a4fcdf9ce37eb926e1d23c996598126529967e0f88923",
+    "src/ai_knot/integrations/llamaindex.py": "46ce81a4fe8cd80c242a0f2631c6be5940783e834e2ca31704fc6106dd566522",
+    "src/ai_knot/integrations/openai.py": "934b3df5c8bb14f1b179e56cff54c6faf579723cabbf6b569c55dc15f4d011c8",
+    "src/ai_knot/integrations/openai_agents.py": "fe405eb03f3825c66c2c5f0e56eecd61286d230919bac5f397097d171aa246de",
+    "src/ai_knot/integrations/openclaw.py": "375804e986425718566f3bbcab20e8b43a011264a46b13604588fb74b37cc01d",
+    "src/ai_knot/integrations/pydanticai.py": "a9e2b466e2b68122777107c58450293f564d8305ccf4ffd36fb81d1174f0e8f2",
+    "src/ai_knot/integrations/semantic_resolver_llm.py": "54244da6596cbb4cd68910520602fb51636e429e87be5f19b69ff615f0331f59",
+    "src/ai_knot/knowledge.py": "932a15473961608ef9121a845cd5c06a2d22b3ebefd7e9a1007ecc5d4654717e",
+    "src/ai_knot/learning.py": "1d06412238e014e51951fb86f179621aebe503e9e3b0093c9d8cdd6cef58c1f0",
+    "src/ai_knot/mcp_server.py": "be274df625d47fc96ac1b466eabaf6e2eaad7a6117929eb28574b7328aa3737d",
+    "src/ai_knot/multi_agent/__init__.py": "2cb02df0209d22ccb33cb17bb7d8993396ab0d7fc0d1bf36afc469446dc4bda2",
+    "src/ai_knot/multi_agent/assembly.py": "609ce1a88c2bc488dfd6a1963c6f7be1ea082a5713bc698e9b77df03b7a9b47a",
+    "src/ai_knot/multi_agent/bridge.py": "d18fc0946b1fad7c41fb7939906d47eb3e518a014251bf7dcc7806b204f9c3a3",
+    "src/ai_knot/multi_agent/canonical.py": "58a4c7822e7c6b9ae15489d8d534160f9280dbc71d661e89b2cd9f84a8a60ba5",
+    "src/ai_knot/multi_agent/expertise.py": "7315279122f7a7c641483fcc844f80800636016fc8fe5d496d59f1ff7a60bc88",
+    "src/ai_knot/multi_agent/facets.py": "bd56890ee5b6ad712d8d71d61d5059c1578221441c355fe50448e4e9e7319257",
+    "src/ai_knot/multi_agent/insights.py": "0e75fcab0ec425f287e29d7b050b83d0e9bc2149fed9d749184d868496270a84",
+    "src/ai_knot/multi_agent/models.py": "eb0c79be23d26ca664dd14f5f2b66358e60635bfedbc87a74260f8aeab9cf7a8",
+    "src/ai_knot/multi_agent/recall_service.py": "ada73c56770bb6e73f2c16bdbc1007b67dd30ed3e33a0d9db0e6530e10ba0428",
+    "src/ai_knot/multi_agent/router.py": "e8ccd85bda402fa28604f61547f1c7752ddf12a8be3c0a3585b5d193a9ec2f57",
+    "src/ai_knot/multi_agent/scoring.py": "d8f89247e0df702c78eb703cb1777e39385d68688dcc4e02d9cacbea7c7c5330",
+    "src/ai_knot/pool.py": "3a29bb621983deb370a66ee44630670564dd3b14b34daa5900371b7c8018cdc3",
+    "src/ai_knot/providers/__init__.py": "e8c0ba4b4f569f0d813b549cad655397c2bb8b9613fcddd5c16adefdfbcd884d",
+    "src/ai_knot/providers/anthropic.py": "dbe904e5996cf354989dc9cad473841e1cad0ac541ece4d20e095563b8d57296",
+    "src/ai_knot/providers/base.py": "c2aac460beba40766866d88d76eced98a7a08f120add2015fb4bd7dd5fc7ecea",
+    "src/ai_knot/providers/gigachat.py": "d8fd6776615b36ef2fc25b9c93507fce27f61dcfb61c066544f5e111ce8f9900",
+    "src/ai_knot/providers/ollama.py": "b72d035109faa1b671268e3afcd15e0880eaa9045031103d3eb82f37e773d4ec",
+    "src/ai_knot/providers/openai_compat.py": "bebe39f9f84b7965d0572aab5d79904557b93869bbeb25ab09eae6e8fc32c2c4",
+    "src/ai_knot/providers/yandex.py": "4d6de03310e084f772ff3089e6ec334fc0e4335133aff0d5e70b4d62511f712d",
+    "src/ai_knot/query_expander.py": "5d88b571da8ce114f23552bc3a3d3ec6293525ecd2e4e973f57c3ce6bcbd29a6",
+    "src/ai_knot/retriever.py": "3dee843db0fa0d9ab198a3d29527406317f342f4b0f3243e2b0a10ea0e9e6d31",
+    "src/ai_knot/server/__init__.py": "448cceb0a914e1378c80945822d46c889f0012bed8a01372c1585f38392b9747",
+    "src/ai_knot/server/always_on.py": "cdf3e9e367ad5e908b046bad42d9f4104e237a6ca2851990beec62bb84adbe65",
+    "src/ai_knot/server/app.py": "6efd5c1905cc1405fc6a6516eec6b263d3452f0f48ce4a7da2afb909ea9ae1ad",
+    "src/ai_knot/storage/__init__.py": "362116d0d95cb5dc7b2e4a084e809b51e9dd7b4702516c0c9dadc4fc06cac868",
+    "src/ai_knot/storage/base.py": "ffb578572b1d26e15f921f481a3291626c2a56d1c3055b79f191efc3c677d771",
+    "src/ai_knot/storage/pool_stats.py": "7bea33615136501cce07ec4bbd0284d3d6b4cb7fdfccf9b0ab105ed57d8366dd",
+    "src/ai_knot/storage/postgres_storage.py": "b0496ce8aaa59db51059af561e5d1b9ed0c907a540b0d2c76ebd5050e07fdde6",
+    "src/ai_knot/storage/sqlite_storage.py": "b7ba58eea902603819b6bcdc2e01e1218ca287483fa742d552b74278fd9efb8e",
+    "src/ai_knot/storage/yaml_storage.py": "9fe1f58ac41ff8654592a7eecb30cf55a95454bc2adbbd7a377d70470060c05b",
+    "src/ai_knot/tokenizer.py": "1f46a21b3ef4c11bf53141a64f6e5437b75b9857af55341b24bba7163ee02fb4",
+    "src/ai_knot/types.py": "f8d82dd5cba4d637b6cd7f35f99e91ff93fa7b5dcde8554e80325b3c4b881954",
+    "tests/eval/team_repos/experiment.py": "889355aa6c1454f51bb9f8538a0272611d514c4a9424c54db412a97cce53b581",
+    "tests/eval/team_repos/runner.py": "1126628e7adbbd2fe8e1f7b7371d8085400c12377ea4f01a2bf2e977a27715cd",
+    "tests/eval/team_repos/protocol.py": "edfc765d2c96e8b31feba46bf71ca17fb0e6376c70b169709b00596b277de824",
+    "tests/eval/team_repos/sandbox.py": "91df40df0bfb7769037024c1bc8ea0f7e09e3e98095132321790464109ba8922",
+    "tests/eval/team_repos/cases.py": "57fe134c058690e0bafd22c35e7aac5dfec50e855234bcf35245a36818d581cd",
+    "tests/eval/team_decisions/openai.py": "f7c788a64cb4c779524082a05a87f87741b97eaf4b19edb2cbc559cd0d89048e",
+    "tests/eval/task_context/runner.py": "6e6d90b6b0b248839230ff80ca9048e518b894860e9813f1260985d20f8dc3a3",
+    "tests/eval/team_work/__init__.py": "1cadfd84b6d6774ebc1c4892ec8343eb3fe08fa189830bc1edf848757e2e71cf",
+    "tests/eval/team_work/cases.json": "0b11a369992ee24052b69c014a8dcc4bf8e1e4bb2cd6b4a7ec40df5d997d782e",
+    "tests/eval/team_work/controls.py": "a3a050e727d75e5845da395c5e48a0d6a8765ddb5c73a058c01b6b4dc46df181",
+    "tests/eval/team_work/corpus.py": "8618533062c3753e120322650a5f87927e1cc6a2f280ff23543d66507372efcb",
+    "tests/eval/team_work/experiment.py": "5e819278300e4104829592b605f1512d84a5a6daa7daf68424b74c31ad928cb9",
+    "tests/eval/team_work/provider.py": "2f062e2a0cb7330a77b20f3d24fa3b2174d105ed1d453e4666883f46522b0bb3",
+    "tests/eval/team_work/runner.py": "53a0477cbc5bc1176dffffec330f3c601c0434a005ba92dc8ae309a594e91c17",
+    "tests/eval/team_work/state.py": "339b4b089c9abda626fc18e622e123dbeb1cfeb4aa6df0033c692f6a262df389"
+  },
+  "raw_archive": {
+    "path": "docs/performance/team-cycle-execution-raw.json.gz",
+    "bytes": 8279158,
+    "sha256": "25498628e4d7844f7fa372481f08413e64c45f8f295021806709f788df19f138"
+  },
+  "limitations": [
+    "Three synthetic cases; fixed order; partial blinding.",
+    "Protocol amended after technical/model-generation failures.",
+    "No independent model review; no production/concurrent-factory claim.",
+    "Unknown usage is reserved conservatively; reused prefixes are not billed twice."
+  ]
+}

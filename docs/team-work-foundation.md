@@ -1,6 +1,9 @@
 # Preparing a continued team-work evaluation
 
-This foundation prepares a new task-outcome study. It has **no paid researcher/coder loop or quality result yet**. It does not replace or rescore the [earlier repository experiment](team-repository-evaluation.md).
+This document records the foundation before the paid researcher/coder loop. The
+subsequent [completed continued-work evaluation](team-work-evaluation.md) reports
+its outcomes, protocol amendments and PostgreSQL replay. The foundation does not
+replace or rescore the [earlier repository experiment](team-repository-evaluation.md).
 
 ## Implemented controls
 

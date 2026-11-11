@@ -139,3 +139,15 @@ After a connector provides a known recorded result, use [record_experience](team
 The library keeps ordinary KB use simple and these operations opt-in. There is no default reflection prompt, graph service, paid idle loop or inference-capable scheduler. Framework-specific integrations can call the same HTTP/MCP/TypeScript operations described in the [return](shared-memory-return.md), [task context](task-context.md) and [team experience](team-experience.md) guides. Published package versions remain unchanged; the new operations require the matching source engine/client until a separate release.
 
 Final local acceptance:37recipe SQL/CLIcases and1993fullPython tests passed with PostgreSQL required (two expected skips,89.38%coverage);59TypeScript tests/build/typecheck and all static/recovery/binding-MA gates passed. See the [four-stage completion audit](shared-memory-completion.md) and [source/test validation](superpowers/validation/2026-10-28-shared-memory-program.json). The audit distinguishes the independent review from owner verification of its manual-block repair.
+
+## Continued-task measurement, 2026-11-11
+
+The [continued-work evaluation](team-work-evaluation.md) compares six context policies
+over changing contracts and retained failed code, with GPT-4.1 mini/OpenAI embeddings
+and exact PostgreSQL replay. The fitting current-document controls passed 6/9
+planned stages, lexical 5/9, semantic 4/9. Pinning every cited root refused all six
+stages with valid formation under the fixed context budget. One invalid shared
+summary failed its five consumers in the remaining case. These small exploratory
+results support keeping selection/mandatory retention explicit; they do not justify
+a new default or a general accuracy claim. The report retains every failure,
+continuation, allocation and local check without changing release preparation.

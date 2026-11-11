@@ -18,6 +18,88 @@ MESSAGES = [{"role": "user", "content": "Receipt confirmed"}]
 VECTOR = [1.0] + [0.0] * 1535
 
 
+def test_longer_coder_timeout_is_explicit_and_bounded():
+    def handle(request):
+        assert request.extensions["timeout"]["read"] == 90
+        return httpx.Response(200, json=completion())
+
+    async def run():
+        async with openai.MeteredOpenAI(
+            KEY, completion_timeout=90, transport=httpx.MockTransport(handle)
+        ) as client:
+            await client.complete(MESSAGES)
+        for invalid in (0, True, float("nan"), 121):
+            with pytest.raises(openai.EvaluationError):
+                openai.MeteredOpenAI(KEY, completion_timeout=invalid)
+
+    asyncio.run(run())
+
+
+def test_truncated_completion_is_retained_and_larger_explicit_authority_is_bounded():
+    from tests.eval.team_work.provider import RecordingClient
+
+    def handle(request):
+        assert json.loads(request.content)["max_completion_tokens"] == 8192
+        return httpx.Response(
+            200,
+            json=completion(
+                choices=[{"message": {"content": "partial source"}, "finish_reason": "length"}]
+            ),
+        )
+
+    async def run():
+        provider = openai.MeteredOpenAI(
+            KEY, max_output_tokens_per_call=8192, transport=httpx.MockTransport(handle)
+        )
+        client = RecordingClient(provider, on_update=lambda snapshot: None)
+        async with client:
+            with pytest.raises(openai.EvaluationError):
+                await client.complete(MESSAGES, max_output_tokens=8192)
+        snapshot = client.snapshot()
+        assert snapshot["spent_tokens"] == 31
+        assert snapshot["requests"][0]["status"] == "failed"
+        assert snapshot["raw_completions"] == [
+            dict(meter_call_index=0, finish_reason="length", content="partial source")
+        ]
+        assert KEY not in json.dumps(snapshot)
+        snapshot["raw_completions"].clear()
+        assert len(client.snapshot()["raw_completions"]) == 1
+        with pytest.raises(openai.EvaluationError):
+            openai.MeteredOpenAI(KEY, max_output_tokens_per_call=8193)
+
+    asyncio.run(run())
+
+
+def test_raw_completion_keeps_its_call_index_when_responses_arrive_out_of_order():
+    async def run():
+        second = asyncio.Event()
+
+        async def handle(request):
+            label = json.loads(request.content)["messages"][0]["content"]
+            if label == "first":
+                await second.wait()
+            else:
+                second.set()
+            return httpx.Response(
+                200,
+                json=completion(choices=[{"message": {"content": label}, "finish_reason": "stop"}]),
+            )
+
+        async with openai.MeteredOpenAI(KEY, transport=httpx.MockTransport(handle)) as client:
+            await asyncio.gather(
+                *(
+                    client.complete([{"role": "user", "content": label}])
+                    for label in ("first", "second")
+                )
+            )
+        assert {r["content"]: r["meter_call_index"] for r in client.raw_completions} == {
+            "first": 0,
+            "second": 1,
+        }
+
+    asyncio.run(run())
+
+
 def completion(**changes):
     body = {
         "id": "chatcmpl-offline",
