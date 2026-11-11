@@ -36,7 +36,23 @@ export interface FactChange {
   before_revision: string | null; after_revision: string | null;
   slot_key: string;
 }
-export interface ChangeBatch { delivery_id: string | null; events: FactChange[]; resync_required: boolean }
+export interface ChangeBatch {
+  delivery_id: string | null; events: FactChange[]; resync_required: boolean;
+  through_seq: number; head_seq: number; has_more: boolean; is_snapshot: boolean;
+}
+export interface ContextFact { ref: EvidenceRef; content: string; slot_key: string }
+export interface TaskContextGuard { task_key: string; digest: string; max_facts: number }
+export interface ContextReview {
+  accepted: ContextFact[]; issues: BasisIssue[]; omitted: EvidenceRef[];
+  checked_at: string; complete: boolean;
+}
+export interface TaskContext {
+  facts: ContextFact[]; covered_requirements: string[]; missing_requirements: string[];
+  budget_limited: boolean; checked_at: string; complete: boolean;
+}
+export interface RecordedExperience {
+  lesson: ContextFact; outcome: "succeeded" | "failed"; action_revision: number;
+}
 export type VerificationOutcome = "confirmed" | "changed" | "unavailable";
 export interface VerificationResult {
   outcome: VerificationOutcome; evidence: JsonObject; source_version: string;
@@ -59,6 +75,7 @@ export interface MaintenanceReport {
 export interface CheckpointInput {
   lease_token: string; expected_revision: number; state: IntentState; progress: JsonObject;
   next_step?: string; waiting_for?: WaitCondition | null; basis?: EvidenceRef[];
+  context_guard?: TaskContextGuard | null;
 }
 export interface AlwaysOnClient {
   createIntent(input: { client_key: string; goal: string; next_step?: string; deadline?: string | null }): Promise<Intent>;
@@ -71,12 +88,18 @@ export interface AlwaysOnClient {
   captureEvidence(refs: [string, string][]): Promise<EvidenceRef[]>;
   subscribe(input: { subscription_id: string; selector: WatchSelector; start?: "now" | "beginning"; debounce_seconds?: number }): Promise<Subscription>;
   poll(subscriptionId: string, limit?: number): Promise<ChangeBatch>;
+  resync(subscriptionId: string, limit?: number): Promise<ChangeBatch>;
+  reviewContext(refs: EvidenceRef[], maxChars?: number): Promise<ContextReview>;
+  selectContext(input: { requirements: string[]; task_key?: string; role?: string; max_facts?: number; max_chars?: number; required_refs?: EvidenceRef[] }): Promise<TaskContext>;
+  taskSnapshot(input: { task_key: string; max_facts?: number; max_chars?: number; include_derived?: boolean }): Promise<ContextFact[]>;
+  taskGuard(input: { task_key: string; max_facts?: number }): Promise<TaskContextGuard>;
   ack(subscriptionId: string, deliveryId: string): Promise<void>;
   unsubscribe(subscriptionId: string): Promise<void>;
   prepareAction(input: { intent_id: string; lease_token: string; action_key: string; request: JsonObject; basis?: EvidenceRef[] }): Promise<ActionRecord>;
-  beginAction(actionId: string, leaseToken: string): Promise<ActionPermit>;
+  beginAction(actionId: string, leaseToken: string, contextGuard?: TaskContextGuard | null): Promise<ActionPermit>;
   finishAction(actionId: string, input: { lease_token: string; outcome: "succeeded" | "failed" | "unknown"; result: JsonObject }): Promise<ActionRecord>;
   reconcileAction(actionId: string, input: { lease_token: string; outcome: "succeeded" | "failed" | "retryable"; evidence: JsonObject }): Promise<ActionRecord>;
+  recordExperience(actionId: string, input: { expected_action_revision: number; experience_key: string; content: string; basis: EvidenceRef[]; namespace?: string | null; visibility_scope?: string; task_key?: string; for_role?: string }): Promise<RecordedExperience>;
   setFreshness(input: { ref: EvidenceRef; source_ref: string; recheck_after_seconds: number }): Promise<FreshnessRecord>;
   dueVerifications(limit?: number): Promise<VerificationRequest[]>;
   recordVerification(input: { ref: EvidenceRef; result: VerificationResult }): Promise<FreshnessRecord>;
@@ -109,12 +132,18 @@ const operations: Record<string, Operation> = {
   captureEvidence: { tool: "memory_evidence_capture", path: "/evidence/capture" },
   subscribe: { tool: "memory_subscribe", path: "/subscriptions" },
   poll: { tool: "memory_poll", path: "/subscriptions/{id}/poll", id: "subscription_id" },
+  resync: { tool: "memory_resync", path: "/subscriptions/{id}/resync", id: "subscription_id" },
+  reviewContext: { tool: "memory_context_review", path: "/evidence/review" },
+  selectContext: { tool: "memory_context_select", path: "/evidence/select" },
+  taskSnapshot: { tool: "memory_context_snapshot", path: "/evidence/snapshot" },
+  taskGuard: { tool: "memory_context_guard", path: "/evidence/guard" },
   ack: { tool: "memory_ack", path: "/subscriptions/{id}/ack", id: "subscription_id" },
   unsubscribe: { tool: "memory_unsubscribe", path: "/subscriptions/{id}", verb: "DELETE", id: "subscription_id" },
   prepareAction: { tool: "action_prepare", path: "/actions" },
   beginAction: { tool: "action_begin", path: "/actions/{id}/begin", id: "action_id" },
   finishAction: { tool: "action_finish", path: "/actions/{id}/finish", id: "action_id" },
   reconcileAction: { tool: "action_reconcile", path: "/actions/{id}/reconcile", id: "action_id" },
+  recordExperience: { tool: "action_experience_record", path: "/actions/{id}/experience", id: "action_id" },
   setFreshness: { tool: "memory_freshness_set", path: "/freshness" },
   dueVerifications: { tool: "memory_freshness_due", path: "/freshness/due", verb: "GET" },
   recordVerification: { tool: "memory_freshness_record", path: "/freshness/record" },
@@ -132,12 +161,20 @@ abstract class AlwaysOnMethods implements AlwaysOnClient {
   captureEvidence(refs: [string, string][]): Promise<EvidenceRef[]> { return this.invoke("captureEvidence", { refs }); }
   subscribe(input: Parameters<AlwaysOnClient["subscribe"]>[0]): Promise<Subscription> { return this.invoke("subscribe", input); }
   poll(id: string, limit = 100): Promise<ChangeBatch> { return this.invoke("poll", { limit }, id); }
+  resync(id: string, limit = 500): Promise<ChangeBatch> { return this.invoke("resync", { limit }, id); }
+  reviewContext(refs: EvidenceRef[], maxChars = 12000): Promise<ContextReview> { return this.invoke("reviewContext", { refs, max_chars: maxChars }); }
+  selectContext(input: Parameters<AlwaysOnClient["selectContext"]>[0]): Promise<TaskContext> { return this.invoke("selectContext", input); }
+  taskSnapshot(input: Parameters<AlwaysOnClient["taskSnapshot"]>[0]): Promise<ContextFact[]> { return this.invoke("taskSnapshot", input); }
+  taskGuard(input: Parameters<AlwaysOnClient["taskGuard"]>[0]): Promise<TaskContextGuard> { return this.invoke("taskGuard", input); }
   async ack(id: string, deliveryId: string): Promise<void> { await this.invoke("ack", { delivery_id: deliveryId }, id); }
   async unsubscribe(id: string): Promise<void> { await this.invoke("unsubscribe", {}, id); }
   prepareAction(input: Parameters<AlwaysOnClient["prepareAction"]>[0]): Promise<ActionRecord> { return this.invoke("prepareAction", input); }
-  beginAction(id: string, leaseToken: string): Promise<ActionPermit> { return this.invoke("beginAction", { lease_token: leaseToken }, id); }
+  beginAction(id: string, leaseToken: string, contextGuard?: TaskContextGuard | null): Promise<ActionPermit> {
+    return this.invoke("beginAction", { lease_token: leaseToken, ...(contextGuard === undefined ? {} : { context_guard: contextGuard }) }, id);
+  }
   finishAction(id: string, input: Parameters<AlwaysOnClient["finishAction"]>[1]): Promise<ActionRecord> { return this.invoke("finishAction", input, id); }
   reconcileAction(id: string, input: Parameters<AlwaysOnClient["reconcileAction"]>[1]): Promise<ActionRecord> { return this.invoke("reconcileAction", input, id); }
+  recordExperience(id: string, input: Parameters<AlwaysOnClient["recordExperience"]>[1]): Promise<RecordedExperience> { return this.invoke("recordExperience", input, id); }
   setFreshness(input: Parameters<AlwaysOnClient["setFreshness"]>[0]): Promise<FreshnessRecord> { return this.invoke("setFreshness", input); }
   dueVerifications(limit = 100): Promise<VerificationRequest[]> { return this.invoke("dueVerifications", { limit }); }
   recordVerification(input: Parameters<AlwaysOnClient["recordVerification"]>[0]): Promise<FreshnessRecord> { return this.invoke("recordVerification", input); }

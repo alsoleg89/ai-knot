@@ -1,0 +1,24 @@
+{
+  "base_commit": "ece236a",
+  "research_only": true,
+  "product_source_changed": false,
+  "provider_requests": 0,
+  "sql_operations": 0,
+  "quality_rescored": false,
+  "diagnostic_source_sha256": "d50581ec1866a5984df9722843d3a2709933198fcbdd4cc24da3a5b0e8f5731f",
+  "archive_sha256": "a4c045b7344a8e20bb93e95bf8b5967e6212adb0719bc2f1ef6cfe8a97a0e499",
+  "aggregate": {
+    "stages": 20,
+    "all_facets_positive_for_every_source": 20,
+    "all_facets_reported_covered": 20,
+    "missing_required_despite_covered_facets": 15,
+    "gold_required_set_fits_budget": 20
+  },
+  "negative_checks": {
+    "tampered_selection_rejected": true,
+    "changed_cases_rejected": true,
+    "changed_runtime_rejected": true
+  },
+  "astra_used": false,
+  "goal_status": "active"
+}

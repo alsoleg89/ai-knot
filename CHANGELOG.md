@@ -8,15 +8,45 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-11-11
+
 ### Added
 
-- Add opt-in durable always-on memory for SQLite and PostgreSQL: intentions,
-  leases, acknowledged change subscriptions, evidence guards, action outcome
-  reconciliation, freshness policies and bounded maintenance.
-- Expose the same configured-owner operations through Python, HTTP, MCP, CLI and
-  typed TypeScript HTTP/MCP clients; preserve legacy defaults.
-- Guard foreground/background fact updates and consolidation against concurrent
-  corrections. Add real process recovery and live PostgreSQL acceptance checks.
+- Opt-in durable always-on memory for SQLite and PostgreSQL: resumable intentions,
+  fenced leases, acknowledged change subscriptions, guarded external actions,
+  outcome reconciliation, freshness policies and bounded maintenance.
+- Multi-agent coordination with workspace operations, resource fencing, shared
+  maintenance budgets, and exact evidence lineage for derived memories.
+- Reliable return to shared memory, task/role-aware context with coverage reports,
+  and reusable team experience bound to recorded action outcomes. Source changes
+  withdraw obsolete lessons automatically.
+- Bounded task snapshots, including `include_derived=False` for a source-only
+  view; task-context guards detect newly relevant evidence before work begins.
+- Optional semantic context with explicit embedding callbacks, bounded provider
+  work and revision-aware caching. Ordinary reads remain model-free.
+- Python, HTTP, MCP, CLI and typed TypeScript HTTP/MCP access to durable operations;
+  runnable host recipes for task context, shared experience and recovery.
+- Local process-recovery, concurrency, PostgreSQL and load acceptance checks;
+  replayable task studies using GPT-4.1 mini and OpenAI embeddings. Published
+  measurements describe the observed limits rather than claim a general accuracy gain.
+
+### Fixed
+
+- Validate derived-memory provenance and coverage against current authorized
+  source revisions; reject stale or ambiguous decision evidence.
+- Invalidate shared embedding caches on source changes, correct sparse-source
+  scoring and reuse source checks within each SQL snapshot.
+- Fail closed on incomplete verification, preserve embedding-budget refusal
+  semantics and reject replay traces with unconsumed provider requests.
+- Synchronize MCP manifest versions with Python and npm releases.
+- Pin npm's optional Python bridge to the matching client version during install.
+
+### Upgrade notes
+
+- Always-on features remain opt-in; hosts schedule work and execute external tools.
+- Always-on SQL stores upgrade to schema 8. Back up existing stores before upgrade;
+  older clients limited to schema 7 reject upgraded stores. Use matching engine
+  and client versions. YAML continues to support ordinary memory only.
 
 ## [0.12.0] — 2026-07-07
 
@@ -728,7 +758,9 @@ The single-agent `KnowledgeBase` API is unchanged.
 - `BASE_STABILITY_HOURS` set to 336 (2 weeks retention baseline)
 - TF-IDF tokenizer: camelCase splitting + basic plural stemming
 
-[Unreleased]: https://github.com/alsoleg89/ai-knot/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/alsoleg89/ai-knot/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/alsoleg89/ai-knot/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/alsoleg89/ai-knot/compare/v0.11.0...v0.12.0
 [0.6.0]: https://github.com/alsoleg89/ai-knot/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/alsoleg89/ai-knot/compare/v0.4.0...v0.5.0
 [0.3.0]: https://github.com/alsoleg89/ai-knot/compare/v0.2.0...v0.3.0

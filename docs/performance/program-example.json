@@ -1,0 +1,63 @@
+{
+  "backlog_deferred": true,
+  "completed": true,
+  "diagnostics": [
+    {
+      "budget_limited": false,
+      "context_facts": 2,
+      "head_seq": 1202,
+      "missing_requirements": 0,
+      "pages": 1,
+      "reasons": [
+        "blocked",
+        "changed"
+      ],
+      "rejected_saved": 1,
+      "snapshots": 0,
+      "status": "catching_up",
+      "through_seq": 1001,
+      "wake_model": false
+    },
+    {
+      "budget_limited": false,
+      "context_facts": 2,
+      "head_seq": 1202,
+      "missing_requirements": 0,
+      "pages": 1,
+      "reasons": [
+        "blocked",
+        "changed"
+      ],
+      "rejected_saved": 0,
+      "snapshots": 0,
+      "status": "replan",
+      "through_seq": 1202,
+      "wake_model": true
+    },
+    {
+      "budget_limited": false,
+      "context_facts": 2,
+      "head_seq": 1203,
+      "missing_requirements": 0,
+      "pages": 1,
+      "reasons": [
+        "blocked",
+        "changed"
+      ],
+      "rejected_saved": 1,
+      "snapshots": 1,
+      "status": "replan",
+      "through_seq": 1203,
+      "wake_model": true
+    }
+  ],
+  "idle_model_wakes": 0,
+  "model_calls": 0,
+  "outcome_retraction": true,
+  "peer_experience_reused": true,
+  "quiet_ticks": 5,
+  "resyncs": 1,
+  "scope": "Scripted host decisions; remote effects and model quality unmeasured",
+  "source_retraction": true,
+  "stale_action_rejected": true
+}

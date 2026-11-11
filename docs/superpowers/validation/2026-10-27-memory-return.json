@@ -1,0 +1,169 @@
+{
+  "base_commit": "3618bfb573bedf48c3356e8000847a1ac02d839a",
+  "branch": "codex/always-on-memory-return",
+  "scope": "Reliable return milestone, not the entire shared-memory roadmap",
+  "python312_postgres_required": {
+    "passed": 1833,
+    "skipped": 2,
+    "coverage_percent": 88.93,
+    "warning": "Existing OpenClaw no-LLM multi-turn warning"
+  },
+  "typescript": {
+    "tests_passed": 57,
+    "typecheck": "pass",
+    "esm_cjs_build": "pass"
+  },
+  "static_checks": {
+    "ruff": "pass",
+    "format": "pass",
+    "mypy_source_files": 76
+  },
+  "python_compatibility": {
+    "3.11": {
+      "focused_passed": 27,
+      "skipped_no_pg_dsn": 25
+    },
+    "3.13": {
+      "focused_passed": 27,
+      "skipped_no_pg_dsn": 25
+    },
+    "scope": "New return/context/HTTP/example tests; prior to final added race/MCP cases"
+  },
+  "recovery": {
+    "sqlite": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    },
+    "postgres": {
+      "passed": true,
+      "passed_scenarios": 12,
+      "total_scenarios": 12,
+      "invariants": {
+        "missing_committed_changes": 0,
+        "stale_action_starts": 0,
+        "accepted_stale_lease_mutations": 0,
+        "unintended_duplicate_effects": 0,
+        "false_auto_retries_unknown_actions": 0,
+        "cross_owner_scope_leaks": 0
+      }
+    }
+  },
+  "ma_gate": {
+    "binding_passed": 11,
+    "binding_total": 11,
+    "advisory_misses_unchanged": [
+      "S9 conflict_resolution .333",
+      "S9 wrong_suppression .333",
+      "S19 evidence_precision .615",
+      "S26 target_shard_recall_at1000 .333",
+      "S26 distractor_rate_at1000 .900"
+    ]
+  },
+  "load": {
+    "sqlite": {
+      "agents": 8,
+      "backend": "sqlite",
+      "filtered_empty_pages": 16,
+      "idle_checks": 80,
+      "idle_wake_decisions": 0,
+      "irrelevant_updates": 2500,
+      "missed_target_updates": 0,
+      "model_calls": 0,
+      "platform": "Darwin",
+      "process_model": "spawned processes, independent SQL connections",
+      "python": "3.12.13",
+      "return_seconds_p50": 0.010688042035326362,
+      "return_seconds_p95": 0.13284308405127376,
+      "scope": "Protocol correctness and local timing; scripted host, no LLM accuracy measurement",
+      "snapshots_recovered": 8,
+      "stale_contexts_rejected": 8,
+      "target_observations": 16,
+      "useful_wake_decisions": 16
+    },
+    "postgres": {
+      "agents": 8,
+      "backend": "postgres",
+      "filtered_empty_pages": 16,
+      "idle_checks": 80,
+      "idle_wake_decisions": 0,
+      "irrelevant_updates": 2500,
+      "missed_target_updates": 0,
+      "model_calls": 0,
+      "platform": "Darwin",
+      "process_model": "spawned processes, independent SQL connections",
+      "python": "3.12.13",
+      "return_seconds_p50": 0.15816212503705174,
+      "return_seconds_p95": 0.21354795794468373,
+      "scope": "Protocol correctness and local timing; scripted host, no LLM accuracy measurement",
+      "snapshots_recovered": 8,
+      "stale_contexts_rejected": 8,
+      "target_observations": 16,
+      "useful_wake_decisions": 16
+    }
+  },
+  "review": {
+    "model": "gpt-6-astra",
+    "skill": "Ponytail review",
+    "verdict": "Ship; no unresolved findings",
+    "independent_focused_passed": 27,
+    "independent_mcp_cli_example_passed": 7,
+    "independent_sqlite_noise": 10000
+  },
+  "ddsa_test_correction": {
+    "reason": "Recall mutates access/retention state; deterministic test now compares the same snapshot and time, retaining exact equality and nonempty assertion",
+    "diagnostic": {
+      "mutating_calls_differ": 4,
+      "identical_snapshot_differs": 0,
+      "trials": 80
+    },
+    "production_retrieval_changed": false
+  },
+  "constraints": {
+    "new_dependencies": 0,
+    "versions_unchanged": "0.12.0",
+    "original_checkout_status_unchanged": true,
+    "protected_existing_files_unchanged": 30,
+    "release_published": false,
+    "pushed": false,
+    "merged": false
+  },
+  "source_test_sha256": {
+    "examples/shared_memory_return.py": "06f4670ee0b2d10b7db2a0de30039a647127ab991bb18cf9c3fa40c5bb333624",
+    "npm/src/__tests__/always_on.test.ts": "e8c0643eb1d8ca99ea0a6e8e47197b7a95a41603ee623289f0938a8d2a8a32a6",
+    "npm/src/always_on.ts": "88702766644e5e58443cc30b86d154376bc9978c4226fb7633174fd9f4efb439",
+    "scripts/benchmark_memory_return.py": "e112b84a0c431e97a03350c0c56e7a3a905d8f25e8a34357ca86af6e92d4d3f5",
+    "src/ai_knot/_always_on_tools.py": "1ea0fb613e8d4fb0264fa8b3e266e69674764438f4d97fb24e1c555ed4aba3a9",
+    "src/ai_knot/always_on/__init__.py": "4279289bb52c22225d29ca38ff5972a8c097694185ef252b58175c6e21a72819",
+    "src/ai_knot/always_on/changes.py": "5a2aaff067694f8af764fc12bba1de970e6bc608612e628052cf3383315aea24",
+    "src/ai_knot/always_on/codec.py": "282e71098697b8550f3a437cc14f656c25231172df5f52e5874e406c0ef38a8e",
+    "src/ai_knot/always_on/memory.py": "382a0f6ba0919ea54842a65ab2a869de0ba0af4cbf09456cf13f93e8d778e91f",
+    "src/ai_knot/always_on/models.py": "22ae9f097fce7108ada8fcea25f192bc3b1582d7c5b3f4630cc923946a19b539",
+    "src/ai_knot/always_on/storage.py": "09fa19983ebfe558a819251f7a312e87fe382ac8ce09cdd9c920b6510caf1fc9",
+    "src/ai_knot/always_on/subscriptions.py": "55bc95a94f0468dc62fda1abc1070c60ae754de7a640b0795bada8b930213e82",
+    "src/ai_knot/cli.py": "da11534455b3380c6f5b838e98a992b671cb0b6b8c318ee0c4989062b04564e5",
+    "src/ai_knot/server/always_on.py": "de7f6b4e59ecfc18cca63adfe8a7f11c9dbadee217bb266dfc05e447fc73c965",
+    "tests/always_on/test_cli.py": "617dbe486c84ee1ba3739d02bad014dd1ee1f3834dfbc5d1f833761c57e230d7",
+    "tests/always_on/test_context_review.py": "aa6b3380df6dcf634e2090d686d8f11a7c26c7c57a7fd6f54a4e4339ea3fda79",
+    "tests/always_on/test_example.py": "e1727effce65c3632af648aa248334d0a75572e40c30dcd94ef4fcf468f60cc1",
+    "tests/always_on/test_mcp_surface.py": "cc2ef38a064c631288f1c9c0856222140d321d0e62f2bd500ad2df56ba4aad57",
+    "tests/always_on/test_memory_return.py": "611e70daf9844453a222247b8c3cfc7d07187b717195eb5a2ca17ee94a171027",
+    "tests/always_on/test_state_contracts.py": "522fab66d375ad8df14dc48dc66ce755ff06a16ce552e52a8f4f1525962d3880",
+    "tests/always_on/test_surfaces.py": "5dfa4646f7974789ad46a5cf7f2ae9fdf7feb6f27c7c3569a10204ee500cbded",
+    "tests/test_ddsa_integration.py": "f2fe925dcd420ff5cebe978d65e608662757322fba46a079010242443c7998f2"
+  },
+  "limitations": [
+    "Snapshots are bounded working sets, max500; context review max128 supplied refs and65536characters",
+    "Journal head/backlog does not report time-only activation/expiry",
+    "Context review is point-in-time and is not an action permit or semantic entailment proof",
+    "No real-LLM answer-accuracy improvement measured"
+  ]
+}

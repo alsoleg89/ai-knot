@@ -1,0 +1,71 @@
+{
+  "base_commit": "696a49d",
+  "full_python": {
+    "passed": 2795,
+    "skipped": 8,
+    "coverage": 90.13,
+    "workers": 2,
+    "postgres_required": true,
+    "log": "full-pg-accepted.log"
+  },
+  "compatibility": {
+    "python": [
+      "3.11",
+      "3.13"
+    ],
+    "passed_each": 298,
+    "coverage_disabled_for_focused_subset": true
+  },
+  "typescript": {
+    "passed": 63,
+    "typecheck": "passed",
+    "esm_cjs_build": "passed"
+  },
+  "static": {
+    "ruff_format": "passed",
+    "ruff_lint": "passed",
+    "mypy_strict_source_files": 80,
+    "existing_unused_config_note": true
+  },
+  "manual_shape_checks": {
+    "passed": [
+      "overlong-lexical",
+      "overlong-semantic",
+      "conflicting-lexical",
+      "conflicting-semantic"
+    ],
+    "provider_calls": 0
+  },
+  "review": {
+    "independent": "non-Astra correctness/Ponytail source review",
+    "finding": "cache retention on required-only path",
+    "resolution": "owner RED\u2192GREEN and final full suite",
+    "additional_owner_fix": "exact-character-budget budget_limited diagnostic RED\u2192GREEN"
+  },
+  "archive_sha256": "a72591a0dd2ec105b95bd49bf84d98da946f28160303d0c25c9966a70d296411",
+  "source_sha256": {
+    "examples/always_on_team.py": "527f70ab9c884f8e19ae8a70f8376cdf34684330f0cbeae48202bb79a1513142",
+    "tests/always_on/test_required_context.py": "f6078c240bdc2f14d5b5f52bd57438e460d4015d72dab0f27fd68bd251e27382",
+    "tests/always_on/test_required_context_surface.py": "13d16a835f6796db70205fed828f60fc4add3a6da6b12b9635fb8b7c39db85a0",
+    "tests/always_on/test_selected_planning.py": "2f0e6c60a2e4211970338af2ed205456bf1b61e5403dd5fe82a1c8b7a6f59f7b",
+    "npm/src/always_on.ts": "f88d59366e7ae1dcda77b3c55083154ceb0d48be8515fc9f2e0c507a7a473536",
+    "npm/src/__tests__/always_on.test.ts": "65196af9158e2452d38934c5784baf1696dd1ae07e6f45930a92a9ae0bacc2d5",
+    "docs/required-context.md": "18b54f516685b7b75356b3365ec19bda467d8a79e25f4ee3eb5fcd1632bd4278",
+    "docs/superpowers/plans/2026-10-29-required-context.md": "fd435454e0f9e7f531df6f95fd5133be1f1952260f220d085251792f65376c18"
+  },
+  "retained_failures": [
+    "missing required_refs API",
+    "missing planning-helper parameter",
+    "TypeScript missing required_refs type",
+    "initial npm command wrong directory",
+    "cache retention regression",
+    "exact-character-budget diagnostic",
+    "initial four-worker PostgreSQL connection closures",
+    "initial Ruff import sorting"
+  ],
+  "openai_requests": 0,
+  "astra_used": false,
+  "paid_accuracy_gain_claimed": false,
+  "release_changes": "untouched",
+  "goal_status": "active"
+}

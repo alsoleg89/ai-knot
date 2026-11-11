@@ -48,19 +48,23 @@
 | one memory product across stacks | Python, TypeScript, CLI, MCP, HTTP sidecar, Browser inspector, and framework adapters |
 | memory you can debug and correct | `list`, `get`, `delete`, `lineage`, `learn`, `add_resolved`, and `valid_until` |
 | more than one agent writing to memory | shared memory with trust, provenance, visibility, and fan-in recall |
-| agents that resume work after a crash | opt-in durable intentions, acknowledged changes, evidence guards and action reconciliation ([unreleased source guide](docs/always-on.md)) |
+| agents that resume work after a crash | opt-in durable intentions, acknowledged changes, evidence guards and action reconciliation ([guide](docs/always-on.md)) |
+| teams sharing task and role context | explicit requirements, applicability labels, bounded evidence and missing-context reports ([guide](docs/task-context.md)) |
+| teams retaining action experience | conditional lessons bound to recorded outcomes, exact sources and automatic withdrawal ([guide](docs/team-experience.md)) |
+
+For an event/timer driven team, start with the [runnable host cycle](docs/always-on-team-cycle.md): one source example connects catch-up, task context, guarded work and shared experience.
 
 ```text
 conversation / tool output -> add or learn -> ai-knot -> SQLite | PostgreSQL | YAML
 next question              -> search / recall -> 3-5 relevant facts -> next prompt
 ```
 
-## Always-on agent memory (unreleased)
+## Always-on agent memory
 
 Opt-in SQLite/PostgreSQL support stores resumable intentions, acknowledged memory
 changes, evidence guards, external action reconciliation and bounded maintenance.
-The host schedules work and executes tools. Install from the source checkout to
-use this feature; it is not yet in the published `0.12.0` packages.
+The host schedules work and executes tools. Available in Python and TypeScript
+since version `0.13.0`.
 [Usage, recovery example and operational guarantees](docs/always-on.md).
 
 ## The 2026 memory problem

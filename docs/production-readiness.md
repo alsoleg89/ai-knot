@@ -134,7 +134,7 @@ For how to run it, see [deployment.md](deployment.md). For design rationale, see
 
 ## Always-on memory
 
-Implemented in the source checkout; package release is pending. SQLite and
+Available since version 0.13.0. SQLite and
 PostgreSQL provide durable intentions, fenced leases, acknowledged subscriptions,
 evidence guards, action reconciliation, freshness and bounded maintenance.
 Python/HTTP/MCP/CLI/TypeScript share the same owner-scoped contracts. YAML supports

@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-11",
+  "status": "complete",
+  "feature": "Optional non-derived task snapshot",
+  "tests": {
+    "python_passed": 2889,
+    "python_skipped": 9,
+    "postgres_required": true,
+    "coverage_percent": 90.16,
+    "focused_sql_surface_passed": 106,
+    "typescript_passed": 63,
+    "ruff": true,
+    "format": true,
+    "mypy": true,
+    "typescript_typecheck": true,
+    "typescript_build": true
+  },
+  "independent_reviews": [
+    "independent_team_cycle_review",
+    "source_context_final_review"
+  ],
+  "prior_review_findings": {
+    "embedding_budget_type": "fixed",
+    "invalid_formation_replay_consumption": "fixed"
+  },
+  "astra_used": false,
+  "new_paid_study_calls": 0,
+  "prior_measurements_unchanged": true,
+  "historical_study_commit": "fd6a2e2",
+  "historical_archive_sha256": "25498628e4d7844f7fa372481f08413e64c45f8f295021806709f788df19f138",
+  "release_checkout_unchanged_at_feature_acceptance": true,
+  "protected_files": 30,
+  "note": "User subsequently authorized the 0.13.0 release; release preparation follows separately.",
+  "raw": {
+    "path": "docs/performance/source-context-validation.json.gz",
+    "sha256": "c0d61fb28604148beb8a94a628185ba4fef86d9ca118604c15092a93f62c14d9",
+    "bytes": 123758
+  }
+}

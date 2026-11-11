@@ -1,0 +1,484 @@
+{
+  "status": "complete",
+  "scope": "Three-question S9 reader diagnostic; no task-success claim",
+  "model": "gpt-4.1-mini",
+  "embedding_model": "text-embedding-3-small",
+  "per_arm_budget": {
+    "requests": 7,
+    "request_body_bytes": 20000,
+    "reader_calls": 3,
+    "max_output_tokens_per_call": 64
+  },
+  "cache": "none; document vectors reused in the hybrid pool for its three queries",
+  "calls": [
+    {
+      "arm": "raw_history",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 1678,
+      "input_sha256": "424f0de9ff645d3936f249d94074bb7fa8d8acfdd5df19e634c7e2f1cd4c54c7",
+      "status": 200,
+      "seconds": 3.4161979999626055,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 311,
+        "completion_tokens": 17,
+        "total_tokens": 328,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "raw_history",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 1682,
+      "input_sha256": "528908ab7125aad41cb88f784f7e09bd170d3f8453ca1c03513d8a3e86910e2f",
+      "status": 200,
+      "seconds": 2.620410665986128,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 308,
+        "completion_tokens": 13,
+        "total_tokens": 321,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "raw_history",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 1673,
+      "input_sha256": "292fc45932531a7c7bef4ebae3aac15b424619017d928d6cc7dcf65350dc3dea",
+      "status": 200,
+      "seconds": 2.663520250003785,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 310,
+        "completion_tokens": 15,
+        "total_tokens": 325,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "bm25",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 710,
+      "input_sha256": "7099ba0a337487ba83e03a1e265eef3eccaec3d47921739935efd984cc188c01",
+      "status": 200,
+      "seconds": 3.043341708020307,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 126,
+        "completion_tokens": 17,
+        "total_tokens": 143,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "bm25",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 827,
+      "input_sha256": "2a71fed74cc70180c12314039bffa564179447b0a5842e3768297da4cc74ac25",
+      "status": 200,
+      "seconds": 3.0857718749903142,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 133,
+        "completion_tokens": 13,
+        "total_tokens": 146,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "bm25",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 787,
+      "input_sha256": "5b89dffb898f4cb1565b4baa74c57126a6e9028608a47749ec6124b487f1d4dd",
+      "status": 200,
+      "seconds": 3.3682359169470146,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 133,
+        "completion_tokens": 15,
+        "total_tokens": 148,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "openai_hybrid",
+      "endpoint": "/v1/embeddings",
+      "requested_model": "text-embedding-3-small",
+      "input_bytes": 1146,
+      "input_sha256": "480b95928d1d579a2c96d3cbe97fe3b5ddc3bed2d3548f307dcc7bd0f4911b11",
+      "status": 200,
+      "seconds": 4.899195041973144,
+      "returned_model": "text-embedding-3-small",
+      "usage": {
+        "prompt_tokens": 220,
+        "total_tokens": 220
+      }
+    },
+    {
+      "arm": "openai_hybrid",
+      "endpoint": "/v1/embeddings",
+      "requested_model": "text-embedding-3-small",
+      "input_bytes": 90,
+      "input_sha256": "fa45c57753d6a906d37efdc8beb069a84e521cce191bd993623d4eba5c49ad19",
+      "status": 200,
+      "seconds": 1.9346022920217365,
+      "returned_model": "text-embedding-3-small",
+      "usage": {
+        "prompt_tokens": 11,
+        "total_tokens": 11
+      }
+    },
+    {
+      "arm": "openai_hybrid",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 803,
+      "input_sha256": "77e48cce0b76335a4d4af6fc4b6ed38339986269097e686342c29c07b40bb404",
+      "status": 200,
+      "seconds": 2.467829833040014,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 146,
+        "completion_tokens": 17,
+        "total_tokens": 163,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "openai_hybrid",
+      "endpoint": "/v1/embeddings",
+      "requested_model": "text-embedding-3-small",
+      "input_bytes": 94,
+      "input_sha256": "f98bb2e621881d79bd66250cd5a1ac94d0ef1c459c99725a0df23ace9713cc92",
+      "status": 200,
+      "seconds": 2.8338429169962183,
+      "returned_model": "text-embedding-3-small",
+      "usage": {
+        "prompt_tokens": 8,
+        "total_tokens": 8
+      }
+    },
+    {
+      "arm": "openai_hybrid",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 827,
+      "input_sha256": "0f30d7c83c46a96f6920ac3ded2cd4593bc5457ed6a5151d9b7a09c8f12f52ef",
+      "status": 200,
+      "seconds": 2.5474049169570208,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 133,
+        "completion_tokens": 13,
+        "total_tokens": 146,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    },
+    {
+      "arm": "openai_hybrid",
+      "endpoint": "/v1/embeddings",
+      "requested_model": "text-embedding-3-small",
+      "input_bytes": 92,
+      "input_sha256": "c142110870ba2868bbedafb779a2bfb68027712b90508af38e298a7531f8b4a7",
+      "status": 200,
+      "seconds": 2.1452119579771534,
+      "returned_model": "text-embedding-3-small",
+      "usage": {
+        "prompt_tokens": 7,
+        "total_tokens": 7
+      }
+    },
+    {
+      "arm": "openai_hybrid",
+      "endpoint": "/v1/chat/completions",
+      "requested_model": "gpt-4.1-mini",
+      "input_bytes": 789,
+      "input_sha256": "0c7dd96881f15f8d7e012d8235c506ab2c977c5c340e269a325e552dffcb9725",
+      "status": 200,
+      "seconds": 2.8513693750137463,
+      "returned_model": "gpt-4.1-mini-2025-04-14",
+      "usage": {
+        "prompt_tokens": 131,
+        "completion_tokens": 15,
+        "total_tokens": 146,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      }
+    }
+  ],
+  "results": [
+    {
+      "arm": "raw_history",
+      "question": "What is our Sev1 alert acknowledgement SLA?",
+      "context": [
+        "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page.",
+        "The collector API supports both gRPC and REST endpoints for backward compatibility.",
+        "Incident commander rotation covers weekdays during business hours only.",
+        "Collector config changes require a full restart with a 60-second drain period.",
+        "Sev1 alert acknowledgement SLA is 4 minutes (updated Q1 2025 policy revision).",
+        "Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025 policy update.",
+        "REST collector endpoint introduced throttling at 5000 spans/s; gRPC remains unlimited.",
+        "Incident commander coverage was expanded to 24/7 after the February 2025 weekend outage.",
+        "Collector config changes now apply via hot reload with zero-downtime propagation.",
+        "All config changes require two approvers before promotion (updated from one approver).",
+        "REST collector endpoint has been officially deprecated since April 2025; migration guide in Notion.",
+        "SAST scanning via Semgrep and CodeQL runs on every merge request to the release branch.",
+        "Incident reviews must be published within 72 hours of resolution."
+      ],
+      "gold": "4 minutes",
+      "answer": {
+        "answer": "4 minutes",
+        "evidence": [
+          4,
+          5
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "raw_history",
+      "question": "Is the REST collector endpoint still supported?",
+      "context": [
+        "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page.",
+        "The collector API supports both gRPC and REST endpoints for backward compatibility.",
+        "Incident commander rotation covers weekdays during business hours only.",
+        "Collector config changes require a full restart with a 60-second drain period.",
+        "Sev1 alert acknowledgement SLA is 4 minutes (updated Q1 2025 policy revision).",
+        "Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025 policy update.",
+        "REST collector endpoint introduced throttling at 5000 spans/s; gRPC remains unlimited.",
+        "Incident commander coverage was expanded to 24/7 after the February 2025 weekend outage.",
+        "Collector config changes now apply via hot reload with zero-downtime propagation.",
+        "All config changes require two approvers before promotion (updated from one approver).",
+        "REST collector endpoint has been officially deprecated since April 2025; migration guide in Notion.",
+        "SAST scanning via Semgrep and CodeQL runs on every merge request to the release branch.",
+        "Incident reviews must be published within 72 hours of resolution."
+      ],
+      "gold": "deprecated",
+      "answer": {
+        "answer": "deprecated",
+        "evidence": [
+          10
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "raw_history",
+      "question": "When is incident commander coverage required?",
+      "context": [
+        "Sev1 alert SLA requires acknowledgement within 10 minutes of the initial page.",
+        "The collector API supports both gRPC and REST endpoints for backward compatibility.",
+        "Incident commander rotation covers weekdays during business hours only.",
+        "Collector config changes require a full restart with a 60-second drain period.",
+        "Sev1 alert acknowledgement SLA is 4 minutes (updated Q1 2025 policy revision).",
+        "Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025 policy update.",
+        "REST collector endpoint introduced throttling at 5000 spans/s; gRPC remains unlimited.",
+        "Incident commander coverage was expanded to 24/7 after the February 2025 weekend outage.",
+        "Collector config changes now apply via hot reload with zero-downtime propagation.",
+        "All config changes require two approvers before promotion (updated from one approver).",
+        "REST collector endpoint has been officially deprecated since April 2025; migration guide in Notion.",
+        "SAST scanning via Semgrep and CodeQL runs on every merge request to the release branch.",
+        "Incident reviews must be published within 72 hours of resolution."
+      ],
+      "gold": "24/7",
+      "answer": {
+        "answer": "24/7",
+        "evidence": [
+          7
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "bm25",
+      "question": "What is our Sev1 alert acknowledgement SLA?",
+      "context": [
+        "Sev1 alert acknowledgement SLA is 4 minutes (updated Q1 2025 policy revision).",
+        "Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025 policy update."
+      ],
+      "gold": "4 minutes",
+      "answer": {
+        "answer": "4 minutes",
+        "evidence": [
+          0,
+          1
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "bm25",
+      "question": "Is the REST collector endpoint still supported?",
+      "context": [
+        "The collector API supports both gRPC and REST endpoints for backward compatibility.",
+        "REST collector endpoint introduced throttling at 5000 spans/s; gRPC remains unlimited.",
+        "REST collector endpoint has been officially deprecated since April 2025; migration guide in Notion."
+      ],
+      "gold": "deprecated",
+      "answer": {
+        "answer": "deprecated",
+        "evidence": [
+          2
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "bm25",
+      "question": "When is incident commander coverage required?",
+      "context": [
+        "Incident commander coverage was expanded to 24/7 after the February 2025 weekend outage.",
+        "Incident commander rotation covers weekdays during business hours only.",
+        "Sev1 alert acknowledgement SLA is 4 minutes (updated Q1 2025 policy revision)."
+      ],
+      "gold": "24/7",
+      "answer": {
+        "answer": "24/7",
+        "evidence": [
+          0
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "openai_hybrid",
+      "question": "What is our Sev1 alert acknowledgement SLA?",
+      "context": [
+        "Sev1 alert acknowledgement SLA is 4 minutes (updated Q1 2025 policy revision).",
+        "Sev1 alert SLA was tightened to 4 minutes acknowledgement in Q1 2025 policy update.",
+        "SAST scanning via Semgrep and CodeQL runs on every merge request to the release branch."
+      ],
+      "gold": "4 minutes",
+      "answer": {
+        "answer": "4 minutes",
+        "evidence": [
+          0,
+          1
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "openai_hybrid",
+      "question": "Is the REST collector endpoint still supported?",
+      "context": [
+        "REST collector endpoint has been officially deprecated since April 2025; migration guide in Notion.",
+        "The collector API supports both gRPC and REST endpoints for backward compatibility.",
+        "REST collector endpoint introduced throttling at 5000 spans/s; gRPC remains unlimited."
+      ],
+      "gold": "deprecated",
+      "answer": {
+        "answer": "deprecated",
+        "evidence": [
+          0
+        ]
+      },
+      "correct": true
+    },
+    {
+      "arm": "openai_hybrid",
+      "question": "When is incident commander coverage required?",
+      "context": [
+        "Incident commander coverage was expanded to 24/7 after the February 2025 weekend outage.",
+        "Incident reviews must be published within 72 hours of resolution.",
+        "All config changes require two approvers before promotion (updated from one approver)."
+      ],
+      "gold": "24/7",
+      "answer": {
+        "answer": "24/7",
+        "evidence": [
+          0
+        ]
+      },
+      "correct": true
+    }
+  ],
+  "raw_source_sha256": "4245e166ef4d3ca95d0dc383405c13fd5be67bef4e6bc18ce01e38b1b121c85c"
+}

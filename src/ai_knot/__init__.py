@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from ai_knot.always_on.memory import AlwaysOnMemory
 
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 __all__ = [
     "AlwaysOnMemory",

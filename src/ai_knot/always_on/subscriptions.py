@@ -85,6 +85,9 @@ class SubscriptionsMixin:
             return
         raise AccessDenied("pool must use the same durable store")
 
+    def _snapshot_current(self, session: AlwaysOnSession, event: FactChange, now: datetime) -> bool:
+        raise NotImplementedError
+
     def _subrow(self, session: AlwaysOnSession, subscription_id: str) -> SQLRow:
         row = session.fetch_one(
             sql("SELECT * FROM ao_subscriptions WHERE owner=? AND id=?"),
@@ -228,7 +231,8 @@ class SubscriptionsMixin:
         with self._transaction(write=False) as session:
             namespace = str(self._subrow(session, subscription_id)["namespace"])
         self._subscription_namespace(namespace)
-        with self._transaction((namespace,)) as session:
+        scopes = (namespace, "__shared__") if self._pool is not None else (namespace,)
+        with self._transaction(scopes) as session:
             row = self._subrow(session, subscription_id)
             if row["namespace"] != namespace:
                 raise RevisionConflict("subscription changed")
@@ -236,7 +240,11 @@ class SubscriptionsMixin:
                 sql("SELECT * FROM ao_streams WHERE namespace=?"), (namespace,)
             )
             assert stream is not None
-            if int(row["cursor"] or 0) < int(stream["min_retained_seq"] or 1) - 1:
+            head = int(stream["head_seq"] or 0)
+            frontier = int(
+                (row["inflight_through_seq"] if row["inflight_token"] else row["cursor"]) or 0
+            )
+            if frontier < int(stream["min_retained_seq"] or 1) - 1:
                 raise CursorExpired("subscription history was pruned")
             grants = self._grants(session, namespace)
             acl_digest = hashlib.sha256(canonical(sorted(grants)).encode()).hexdigest()
@@ -246,27 +254,40 @@ class SubscriptionsMixin:
                     FactChange(**event) for event in json.loads(str(row["inflight_events_json"]))
                 )
                 resync = bool(row["inflight_resync"])
+                snapshot = bool(row["inflight_snapshot"])
+                now = self._now()
                 if row["inflight_acl_digest"] != acl_digest or any(
                     not self._current_visible(
                         session, namespace, event.fact_id, projections, grants
                     )
+                    or snapshot
+                    and not self._snapshot_current(session, event, now)
                     for event in events
                 ):
-                    events, resync = (), True
+                    events, resync, snapshot = (), True, False
                     session.execute(
                         sql(
                             "UPDATE ao_subscriptions SET inflight_events_json=?,inflight_resync=1,i"
-                            "nflight_acl_digest=? WHERE owner=? AND id=?"
+                            "nflight_acl_digest=?,inflight_snapshot=0 WHERE owner=? AND id=?"
                         ),
                         ("[]", acl_digest, self._owner, subscription_id),
                     )
-                return ChangeBatch(str(row["inflight_token"]), events, resync)
+                through = int(row["inflight_through_seq"] or 0)
+                return ChangeBatch(
+                    str(row["inflight_token"]),
+                    events,
+                    resync,
+                    through,
+                    head,
+                    through < head,
+                    snapshot,
+                )
             rows = session.fetch_all(
                 sql("SELECT * FROM ao_changes WHERE namespace=? AND seq>? ORDER BY seq LIMIT 1000"),
                 (namespace, row["cursor"]),
             )
             if not rows:
-                return ChangeBatch(None, ())
+                return ChangeBatch(None, (), through_seq=head, head_seq=head)
             selector = self._subscription(row).selector
             events_by_id: dict[str, FactChange] = {}
             resync = False
@@ -330,7 +351,8 @@ class SubscriptionsMixin:
                             ),
                             (now.isoformat(timespec="microseconds"), self._owner, subscription_id),
                         )
-                    return ChangeBatch(None, ())
+                    cursor = int(row["cursor"] or 0)
+                    return ChangeBatch(None, (), through_seq=cursor, head_seq=head, has_more=True)
             events = tuple(events_by_id.values())
             token = uuid.uuid4().hex
             session.execute(
@@ -349,7 +371,7 @@ class SubscriptionsMixin:
                     subscription_id,
                 ),
             )
-            return ChangeBatch(token, events, resync)
+            return ChangeBatch(token, events, resync, through, head, through < head)
 
     def ack(self, subscription_id: str, *, delivery_id: str) -> None:
         key(subscription_id)
@@ -384,7 +406,7 @@ class SubscriptionsMixin:
                 sql(
                     "UPDATE ao_subscriptions SET cursor=inflight_through_seq,inflight_token"
                     "=NULL,inflight_through_seq=NULL,inflight_events_json=NULL,inflight_res"
-                    "ync=NULL,inflight_acl_digest=NULL WHERE owner=? AND id=?"
+                    "ync=NULL,inflight_acl_digest=NULL,inflight_snapshot=0 WHERE owner=? AND id=?"
                 ),
                 (self._owner, subscription_id),
             )

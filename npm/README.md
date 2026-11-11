@@ -156,17 +156,15 @@ HTTP services and you do not want a Node process to spawn Python itself.
 
 ---
 
-## Always-on agent state (unreleased)
+## Always-on agent state
 
-The source checkout includes `client.alwaysOn` on both HTTP and MCP clients.
-Install the matching Python engine from that checkout; this API is not part of
-the published `0.12.0` release yet:
+Version **0.13.0** adds `client.alwaysOn` on both HTTP and MCP clients.
+The optional postinstall bridge requests this same Python version. Install it
+explicitly when using a separate engine or serving HTTP:
 
 ```bash
-pip install -e ".[mcp,server]"
-# Build the TypeScript client from the repository's npm directory.
-npm --prefix npm ci
-npm --prefix npm run build
+npm install ai-knot@0.13.0
+pip install "ai-knot[mcp,server]==0.13.0"
 ```
 
 Explicitly enable durable state on the configured SQLite/PostgreSQL server.
@@ -197,7 +195,7 @@ await kb.alwaysOn.checkpoint(intent.id, {
 await kb.close();
 ```
 
-For HTTP, start the source-built sidecar with
+For HTTP, start the sidecar with
 `AI_KNOT_ALWAYS_ON=true ai-knot --storage sqlite serve deploy-agent`, then use
 the same `alwaysOn` methods on `HttpKnowledgeBase`.
 
@@ -207,8 +205,8 @@ Constructors start no background polling. The host schedules work and executes
 external tools; an unknown outcome requires reconciliation before retry.
 YAML continues to support ordinary memory operations and rejects always-on state.
 
-See the [always-on guide](https://github.com/alsoleg89/ai-knot/blob/codex/always-on-p1-p3/docs/always-on.md)
-and [verified implementation report](https://github.com/alsoleg89/ai-knot/blob/codex/always-on-p1-p3/docs/superpowers/implementation-final.md).
+See the [always-on guide](https://github.com/alsoleg89/ai-knot/blob/main/docs/always-on.md)
+and [verified implementation report](https://github.com/alsoleg89/ai-knot/blob/main/docs/superpowers/implementation-final.md).
 
 ## Quickstart
 

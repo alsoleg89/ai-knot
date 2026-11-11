@@ -1,9 +1,11 @@
 # Durable memory for always-on agents
 
-This feature is implemented in the source checkout and is listed under
-**Unreleased**. Install the matching source engine with `pip install -e ".[mcp,server]"`
-and build the TypeScript client in `npm/` before using the new transport methods.
-The published package version remains `0.12.0` until the release workflow runs.
+Available since **0.13.0**. Install matching Python and npm packages:
+
+```sh
+pip install "ai-knot[mcp,server]==0.13.0"
+npm install ai-knot@0.13.0
+```
 
 AI Knot stores unfinished work, acknowledged memory changes, decision evidence,
 external action outcomes and knowledge rechecks. The host runs tools and schedules
@@ -13,6 +15,8 @@ SQLite and PostgreSQL support these guarantees. YAML remains supported for legac
 memory operations and reports `UnsupportedAlwaysOnBackend` for always-on state.
 
 For multiple logical agents, see [workspace coordination and shared memory](multi-agent-always-on.md).
+For a runnable event/timer host that connects return, task context and experience,
+see the [always-on team cycle](always-on-team-cycle.md).
 
 ```python
 from ai_knot import KnowledgeBase
@@ -132,7 +136,7 @@ branch without external evidence remains blocked.
 Back up the complete SQLite database with a consistent backup API, or the complete
 PostgreSQL schema with a consistent database backup. Fact export and named fact
 snapshots are not backups of agent state. The additive schema marker is
-`ao_schema` version 6 (`ai-knot_ao_schema` on PostgreSQL). State tables are streams,
+`ao_schema` version 7 (`ai-knot_ao_schema` on PostgreSQL). State tables are streams,
 changes, subscriptions, delivery_receipts, intents, actions, freshness and
 maintenance_runs, all prefixed `ao_` (PostgreSQL: `ai-knot_ao_`). A fact snapshot
 restore emits new changes; it does not rewind actions, leases, receipts or jobs.
@@ -149,7 +153,9 @@ host's clock monitoring separately. Local generation fencing still applies, but
 AI Knot does not measure clock skew or fence a remote API that ignores its token.
 
 Automatic pruning stops at the minimum acknowledged cursor. Forced manual pruning
-can cause `CursorExpired` (HTTP 410). Recover by unsubscribing, subscribing at
-`now` with a new incarnation, then reading current authorized memory. Reading a
-snapshot before subscribing can lose intervening changes. Retain receipts until
-unsubscribe; include their growth in capacity estimates.
+can cause `CursorExpired` (HTTP 410). Recover with `resync(subscription_id)`:
+save the complete selected snapshot and a processing receipt, then `ack` its
+delivery ID and poll subsequent changes. Snapshot capture and journal frontier
+share one SQL transaction. See [returning to team memory](shared-memory-return.md)
+for bounds, overflow and context admission. Retain receipts until unsubscribe;
+include their growth in capacity estimates.

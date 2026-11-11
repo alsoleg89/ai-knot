@@ -1,0 +1,20 @@
+{
+  "agents": 8,
+  "backend": "sqlite",
+  "filtered_empty_pages": 16,
+  "idle_checks": 80,
+  "idle_wake_decisions": 0,
+  "irrelevant_updates": 2500,
+  "missed_target_updates": 0,
+  "model_calls": 0,
+  "platform": "Darwin",
+  "process_model": "spawned processes, independent SQL connections",
+  "python": "3.12.13",
+  "return_seconds_p50": 0.010688042035326362,
+  "return_seconds_p95": 0.13284308405127376,
+  "scope": "Protocol correctness and local timing; scripted host, no LLM accuracy measurement",
+  "snapshots_recovered": 8,
+  "stale_contexts_rejected": 8,
+  "target_observations": 16,
+  "useful_wake_decisions": 16
+}

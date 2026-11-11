@@ -1,0 +1,19 @@
+{
+  "authored_assertions": 110,
+  "cases": 3,
+  "changed_existing_case_fields": 0,
+  "documents": 60,
+  "initials_rejected_by_assertion": 9,
+  "integrity_tests_passed": 6,
+  "manifest_sha256": "148d2368d1c841fd5005879118b041d6d4ce7b9cfe574c8038a4c65af1ffc656",
+  "manifest_utf8_bytes": 55554,
+  "old_canonical_manifest_exactly_reproduced_after_removing_only_task_key": true,
+  "pre_adapter_api_calls": 0,
+  "pre_adapter_draft_sha256": "db505790d96c27c3484a3ab77f552bc05010396f552b997bc9b14d0e970b5f03",
+  "previous_references_rejected_by_assertion": 6,
+  "references_passed": 9,
+  "repair": "public Case.task_key metadata only",
+  "ruff_passed": true,
+  "stages": 9,
+  "version": 1
+}

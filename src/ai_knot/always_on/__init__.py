@@ -11,6 +11,8 @@ from .models import (
     ActionRecord,
     ActionState,
     BasisIssue,
+    ContextFact,
+    ContextReview,
     CursorExpired,
     EvidenceRef,
     FreshnessRecord,
@@ -22,9 +24,13 @@ from .models import (
     JSONValue,
     Lease,
     LeaseLost,
+    RecordedExperience,
     ResumePacket,
     RevisionConflict,
+    SnapshotTooLarge,
     StaleEvidence,
+    TaskContext,
+    TaskContextGuard,
     UnsupportedAlwaysOnBackend,
     VerificationOutcome,
     VerificationRequest,
@@ -55,6 +61,9 @@ __all__ = [
     "WorkspaceActionPermit",
     "configure_workspace_budget",
     "AlwaysOnMemory",
+    "SemanticContext",
+    "SemanticBudget",
+    "SemanticCandidates",
     "MaintenanceBudget",
     "MaintenanceReport",
     "ConsolidationProposal",
@@ -66,6 +75,8 @@ __all__ = [
     "ActionRecord",
     "ActionState",
     "BasisIssue",
+    "ContextFact",
+    "ContextReview",
     "ChangeBatch",
     "CursorExpired",
     "EvidenceRef",
@@ -79,9 +90,13 @@ __all__ = [
     "JSONValue",
     "Lease",
     "LeaseLost",
+    "RecordedExperience",
     "ResumePacket",
     "RevisionConflict",
+    "SnapshotTooLarge",
     "StaleEvidence",
+    "TaskContext",
+    "TaskContextGuard",
     "Subscription",
     "UnsupportedAlwaysOnBackend",
     "VerificationOutcome",
@@ -96,6 +111,10 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {"SemanticContext", "SemanticBudget", "SemanticCandidates"}:
+        from . import semantic
+
+        return getattr(semantic, name)
     if name == "AlwaysOnMemory":
         from .memory import AlwaysOnMemory
 

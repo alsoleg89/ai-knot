@@ -1,0 +1,834 @@
+{
+  "format_version": 1,
+  "provenance": {
+    "kind": "synthetic-new-authoring",
+    "authored_on": "2026-10-29",
+    "author_role": "isolated corpus author subagent",
+    "prior_cases_or_results_read": false,
+    "production_repo_benchmark": false,
+    "quality_evidence": false,
+    "reference_or_candidate_execution": false,
+    "exposure_policy": "Parent designs generic harness without case contents; corpus frozen before parent opens it. No tuning after model output."
+  },
+  "cases": [
+    {
+      "id": "flag-policy-maintenance",
+      "task_key": "feature-policy",
+      "title": "Feature policy maintenance",
+      "goal": "Maintain a pure feature-flag evaluator as eligibility policies evolve. Implement evaluate_flag according to current public documents.",
+      "requirements": [
+        "Implement only solution.py using Python standard library. Public function: evaluate_flag(flag, subject, now). Preserve this API through all stages.",
+        "Inputs are structurally valid: flag has bool enabled, kill, staff_bypass; integer start, salt; end is an integer or None; environments, denied_groups, allowed_groups are lists of strings; rollout is an integer from 0 through 100. Subject has nonnegative integer id, string environment, list-of-string groups, and bool staff. now is an integer. start is <= end when end is present.",
+        "Apply the complete current document snapshot, including the explicit absence rule for grants. Return a fresh dictionary and do not mutate inputs. No external I/O or hidden state."
+      ],
+      "initial_code": "def evaluate_flag(flag, subject, now):\n    raise NotImplementedError(\"policy evaluator pending\")\n",
+      "stages": [
+        {
+          "id": "stage-1",
+          "brief": "Complete the policy evaluator against the current rollout and eligibility rules.",
+          "documents": [
+            {
+              "path": "flags/contract.md",
+              "text": "evaluate_flag(flag, subject, now) returns exactly {\"enabled\": bool, \"reason\": str}. Denials return enabled false. Success uses reason \"enabled\", except the staff grant uses \"staff\". Return only the first applicable decision in the documented order.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/order.md",
+              "text": "Evaluate in this order: kill, enabled switch, time window, environment, denied groups, any currently granted staff exception, allowed groups, rollout. Stop at the first denial or exception success.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/kill.md",
+              "text": "When flag[\"kill\"] is true, deny with reason \"kill\" even if another condition would also deny or permit.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/switch.md",
+              "text": "When flag[\"enabled\"] is false, deny with reason \"disabled\". A true value merely permits continuing through later gates.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/window.md",
+              "text": "Require now >= flag[\"start\"]. If flag[\"end\"] is not None, also require now < flag[\"end\"]. Failure gives reason \"window\". All timestamps are integer ticks.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/environment.md",
+              "text": "An empty flag[\"environments\"] list permits every environment. Otherwise subject[\"environment\"] must equal a listed string; failure gives reason \"environment\". Matching is case sensitive.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/denied-groups.md",
+              "text": "If subject[\"groups\"] intersects flag[\"denied_groups\"], deny with reason \"denied_group\". Group matching is exact and case sensitive; duplicate group names have no extra effect.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/allowed-groups.md",
+              "text": "An empty flag[\"allowed_groups\"] imposes no restriction. Otherwise at least one listed group must appear in subject[\"groups\"]. Failure gives reason \"groups\".",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/rollout.md",
+              "text": "Compute bucket = (subject[\"id\"] + flag[\"salt\"]) % 100. Permit only when bucket < flag[\"rollout\"]. Otherwise deny with reason \"rollout\". A rollout of zero permits none; 100 permits every bucket.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/staff-grant.md",
+              "text": "A subject with staff true and a flag with staff_bypass true succeeds with reason \"staff\" after the denied-group gate. This exception bypasses allowed groups and rollout only. It never bypasses earlier gates.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/exceptions.md",
+              "text": "Without a current staff-grant document there is no staff exception, regardless of staff or staff_bypass values. Ordinary gates then apply. No other exception exists.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/operations.md",
+              "text": "The policy powers a preview panel and a service check. Both use the same function. The preview panel may display a friendly message, but this function returns only the specified reason code.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import evaluate_flag\n\n\ndef f(**updates):\n    value = dict(enabled=True, kill=False, staff_bypass=False, start=10, end=20,\n                 environments=[], denied_groups=[], allowed_groups=[], rollout=100, salt=0)\n    value.update(updates)\n    return value\n\n\ndef s(**updates):\n    value = dict(id=0, environment=\"prod\", groups=[], staff=False)\n    value.update(updates)\n    return value\n\n\nclass PolicyChecks(unittest.TestCase):\n    def check(self, flag, subject, now, reason):\n        self.assertEqual(evaluate_flag(flag, subject, now),\n                         {\"enabled\": reason in (\"enabled\", \"staff\"), \"reason\": reason})\n\n    def test_01(self):\n        rows = [\n            (f(kill=True, enabled=False), s(staff=True), 9, \"kill\"),\n            (f(enabled=False), s(), 9, \"disabled\"),\n            (f(), s(), 9, \"window\"),\n            (f(), s(), 10, \"enabled\"),\n            (f(), s(), 20, 'window'),\n            (f(), s(), 21, \"window\"),\n            (f(start=-3, end=None), s(), -3, \"enabled\"),\n            (f(environments=[\"prod\"]), s(environment=\"Prod\"), 15, \"environment\"),\n            (f(denied_groups=[\"red\"], allowed_groups=[\"red\"]), s(groups=[\"red\"]), 15, \"denied_group\"),\n        ]\n        for flag, subject, now, reason in rows:\n            with self.subTest(flag=flag, subject=subject, now=now):\n                self.check(flag, subject, now, reason)\n\n    def test_02(self):\n        rows = [([], [], \"enabled\"), ([\"blue\"], [], \"groups\"),\n                ([\"blue\"], [\"Blue\"], \"groups\"), ([\"blue\"], [\"blue\", \"blue\"], \"enabled\"),\n                ([\"blue\", \"green\"], [\"blue\"], 'enabled'),\n                ([\"blue\", \"green\"], [\"green\", \"blue\"], \"enabled\")]\n        for wanted, actual, reason in rows:\n            with self.subTest(wanted=wanted, actual=actual):\n                self.check(f(allowed_groups=wanted), s(groups=actual), 15, reason)\n        self.check(f(denied_groups=[\"red\"]), s(groups=[\"Red\"]), 15, \"enabled\")\n\n    def test_03(self):\n        for uid, salt, share, enabled in [(0, 0, 0, False), (99, 0, 100, True), (17, 3, 20, False), (17, 3, 21, True), (13, 0, 15, True), (100, 0, 1, True)]:\n            with self.subTest(uid=uid, salt=salt, share=share):\n                self.check(f(salt=salt, rollout=share), s(id=uid), 15,\n                           \"enabled\" if enabled else \"rollout\")\n\n    def test_04(self):\n        self.check(f(staff_bypass=True, allowed_groups=[\"closed\"], rollout=0), s(staff=True), 15, 'staff')\n        self.check(f(staff_bypass=False, allowed_groups=[\"closed\"], rollout=0), s(staff=True), 15, \"groups\")\n        self.check(f(staff_bypass=True, allowed_groups=[\"closed\"]), s(staff=False), 15, \"groups\")\n        self.check(f(staff_bypass=True, rollout=0), s(staff=True), 15, 'staff')\n        self.check(f(staff_bypass=True, denied_groups=[\"blue\"]), s(staff=True, groups=[\"blue\"]), 15, \"denied_group\")\n        self.check(f(staff_bypass=True, environments=[\"test\"]), s(staff=True), 15, \"environment\")\n\n    def test_05(self):\n        flag, subject = f(allowed_groups=[\"a\"]), s(groups=[\"a\"])\n        before = copy.deepcopy((flag, subject))\n        one = evaluate_flag(flag, subject, 15)\n        two = evaluate_flag(flag, subject, 15)\n        self.assertEqual(one, {\"enabled\": True, \"reason\": \"enabled\"})\n        self.assertEqual(two, one)\n        self.assertIsNot(one, two)\n        self.assertEqual((flag, subject), before)\n        self.check(f(), s(environment=\"unlisted\"), 15, \"enabled\")\n",
+          "reference_solution": "def evaluate_flag(flag, subject, now):\n    def deny(reason):\n        return {\"enabled\": False, \"reason\": reason}\n    if flag[\"kill\"]:\n        return deny(\"kill\")\n    if not flag[\"enabled\"]:\n        return deny(\"disabled\")\n    if now < flag[\"start\"] or (flag[\"end\"] is not None and now >= flag[\"end\"]):\n        return deny(\"window\")\n    if flag[\"environments\"] and subject[\"environment\"] not in flag[\"environments\"]:\n        return deny(\"environment\")\n    groups = set(subject[\"groups\"])\n    if groups.intersection(flag[\"denied_groups\"]):\n        return deny(\"denied_group\")\n    if subject[\"staff\"] and flag[\"staff_bypass\"]:\n        return {\"enabled\": True, \"reason\": \"staff\"}\n    if flag[\"allowed_groups\"] and not groups.intersection(flag[\"allowed_groups\"]):\n        return deny(\"groups\")\n    if (subject[\"id\"] + flag[\"salt\"]) % 100 >= flag[\"rollout\"]:\n        return deny(\"rollout\")\n    return {\"enabled\": True, \"reason\": \"enabled\"}\n"
+        },
+        {
+          "id": "stage-2",
+          "brief": "The time-window endpoint and rollout bucket formula have changed. Implement the current snapshot while retaining all other behavior.",
+          "documents": [
+            {
+              "path": "flags/contract.md",
+              "text": "evaluate_flag(flag, subject, now) returns exactly {\"enabled\": bool, \"reason\": str}. Denials return enabled false. Success uses reason \"enabled\", except the staff grant uses \"staff\". Return only the first applicable decision in the documented order.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/order.md",
+              "text": "Evaluate in this order: kill, enabled switch, time window, environment, denied groups, any currently granted staff exception, allowed groups, rollout. Stop at the first denial or exception success.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/kill.md",
+              "text": "When flag[\"kill\"] is true, deny with reason \"kill\" even if another condition would also deny or permit.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/switch.md",
+              "text": "When flag[\"enabled\"] is false, deny with reason \"disabled\". A true value merely permits continuing through later gates.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/window.md",
+              "text": "Require now >= flag[\"start\"]. If flag[\"end\"] is not None, also require now <= flag[\"end\"]. Failure gives reason \"window\". All timestamps are integer ticks.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/environment.md",
+              "text": "An empty flag[\"environments\"] list permits every environment. Otherwise subject[\"environment\"] must equal a listed string; failure gives reason \"environment\". Matching is case sensitive.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/denied-groups.md",
+              "text": "If subject[\"groups\"] intersects flag[\"denied_groups\"], deny with reason \"denied_group\". Group matching is exact and case sensitive; duplicate group names have no extra effect.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/allowed-groups.md",
+              "text": "An empty flag[\"allowed_groups\"] imposes no restriction. Otherwise at least one listed group must appear in subject[\"groups\"]. Failure gives reason \"groups\".",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/rollout.md",
+              "text": "Compute bucket = (subject[\"id\"] * 7 + flag[\"salt\"]) % 100. Permit only when bucket < flag[\"rollout\"]. Otherwise deny with reason \"rollout\". A rollout of zero permits none; 100 permits every bucket.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/staff-grant.md",
+              "text": "A subject with staff true and a flag with staff_bypass true succeeds with reason \"staff\" after the denied-group gate. This exception bypasses allowed groups and rollout only. It never bypasses earlier gates.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/exceptions.md",
+              "text": "Without a current staff-grant document there is no staff exception, regardless of staff or staff_bypass values. Ordinary gates then apply. No other exception exists.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/operations.md",
+              "text": "The policy powers a preview panel and a service check. Both use the same function. The preview panel may display a friendly message, but this function returns only the specified reason code.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import evaluate_flag\n\n\ndef f(**updates):\n    value = dict(enabled=True, kill=False, staff_bypass=False, start=10, end=20,\n                 environments=[], denied_groups=[], allowed_groups=[], rollout=100, salt=0)\n    value.update(updates)\n    return value\n\n\ndef s(**updates):\n    value = dict(id=0, environment=\"prod\", groups=[], staff=False)\n    value.update(updates)\n    return value\n\n\nclass PolicyChecks(unittest.TestCase):\n    def check(self, flag, subject, now, reason):\n        self.assertEqual(evaluate_flag(flag, subject, now),\n                         {\"enabled\": reason in (\"enabled\", \"staff\"), \"reason\": reason})\n\n    def test_01(self):\n        rows = [\n            (f(kill=True, enabled=False), s(staff=True), 9, \"kill\"),\n            (f(enabled=False), s(), 9, \"disabled\"),\n            (f(), s(), 9, \"window\"),\n            (f(), s(), 10, \"enabled\"),\n            (f(), s(), 20, 'enabled'),\n            (f(), s(), 21, \"window\"),\n            (f(start=-3, end=None), s(), -3, \"enabled\"),\n            (f(environments=[\"prod\"]), s(environment=\"Prod\"), 15, \"environment\"),\n            (f(denied_groups=[\"red\"], allowed_groups=[\"red\"]), s(groups=[\"red\"]), 15, \"denied_group\"),\n        ]\n        for flag, subject, now, reason in rows:\n            with self.subTest(flag=flag, subject=subject, now=now):\n                self.check(flag, subject, now, reason)\n\n    def test_02(self):\n        rows = [([], [], \"enabled\"), ([\"blue\"], [], \"groups\"),\n                ([\"blue\"], [\"Blue\"], \"groups\"), ([\"blue\"], [\"blue\", \"blue\"], \"enabled\"),\n                ([\"blue\", \"green\"], [\"blue\"], 'enabled'),\n                ([\"blue\", \"green\"], [\"green\", \"blue\"], \"enabled\")]\n        for wanted, actual, reason in rows:\n            with self.subTest(wanted=wanted, actual=actual):\n                self.check(f(allowed_groups=wanted), s(groups=actual), 15, reason)\n        self.check(f(denied_groups=[\"red\"]), s(groups=[\"Red\"]), 15, \"enabled\")\n\n    def test_03(self):\n        for uid, salt, share, enabled in [(0, 0, 0, False), (99, 0, 100, True), (17, 3, 22, False), (17, 3, 23, True), (13, 0, 15, False), (100, 0, 1, True)]:\n            with self.subTest(uid=uid, salt=salt, share=share):\n                self.check(f(salt=salt, rollout=share), s(id=uid), 15,\n                           \"enabled\" if enabled else \"rollout\")\n\n    def test_04(self):\n        self.check(f(staff_bypass=True, allowed_groups=[\"closed\"], rollout=0), s(staff=True), 15, 'staff')\n        self.check(f(staff_bypass=False, allowed_groups=[\"closed\"], rollout=0), s(staff=True), 15, \"groups\")\n        self.check(f(staff_bypass=True, allowed_groups=[\"closed\"]), s(staff=False), 15, \"groups\")\n        self.check(f(staff_bypass=True, rollout=0), s(staff=True), 15, 'staff')\n        self.check(f(staff_bypass=True, denied_groups=[\"blue\"]), s(staff=True, groups=[\"blue\"]), 15, \"denied_group\")\n        self.check(f(staff_bypass=True, environments=[\"test\"]), s(staff=True), 15, \"environment\")\n\n    def test_05(self):\n        flag, subject = f(allowed_groups=[\"a\"]), s(groups=[\"a\"])\n        before = copy.deepcopy((flag, subject))\n        one = evaluate_flag(flag, subject, 15)\n        two = evaluate_flag(flag, subject, 15)\n        self.assertEqual(one, {\"enabled\": True, \"reason\": \"enabled\"})\n        self.assertEqual(two, one)\n        self.assertIsNot(one, two)\n        self.assertEqual((flag, subject), before)\n        self.check(f(), s(environment=\"unlisted\"), 15, \"enabled\")\n",
+          "reference_solution": "def evaluate_flag(flag, subject, now):\n    def deny(reason):\n        return {\"enabled\": False, \"reason\": reason}\n    if flag[\"kill\"]:\n        return deny(\"kill\")\n    if not flag[\"enabled\"]:\n        return deny(\"disabled\")\n    if now < flag[\"start\"] or (flag[\"end\"] is not None and now > flag[\"end\"]):\n        return deny(\"window\")\n    if flag[\"environments\"] and subject[\"environment\"] not in flag[\"environments\"]:\n        return deny(\"environment\")\n    groups = set(subject[\"groups\"])\n    if groups.intersection(flag[\"denied_groups\"]):\n        return deny(\"denied_group\")\n    if subject[\"staff\"] and flag[\"staff_bypass\"]:\n        return {\"enabled\": True, \"reason\": \"staff\"}\n    if flag[\"allowed_groups\"] and not groups.intersection(flag[\"allowed_groups\"]):\n        return deny(\"groups\")\n    if (subject[\"id\"] * 7 + flag[\"salt\"]) % 100 >= flag[\"rollout\"]:\n        return deny(\"rollout\")\n    return {\"enabled\": True, \"reason\": \"enabled\"}\n"
+        },
+        {
+          "id": "stage-3",
+          "brief": "Allowed groups now require full membership. The staff-grant document has been withdrawn; apply the documented absence semantics.",
+          "documents": [
+            {
+              "path": "flags/contract.md",
+              "text": "evaluate_flag(flag, subject, now) returns exactly {\"enabled\": bool, \"reason\": str}. Denials return enabled false. Success uses reason \"enabled\", except the staff grant uses \"staff\". Return only the first applicable decision in the documented order.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/order.md",
+              "text": "Evaluate in this order: kill, enabled switch, time window, environment, denied groups, any currently granted staff exception, allowed groups, rollout. Stop at the first denial or exception success.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/kill.md",
+              "text": "When flag[\"kill\"] is true, deny with reason \"kill\" even if another condition would also deny or permit.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/switch.md",
+              "text": "When flag[\"enabled\"] is false, deny with reason \"disabled\". A true value merely permits continuing through later gates.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/window.md",
+              "text": "Require now >= flag[\"start\"]. If flag[\"end\"] is not None, also require now <= flag[\"end\"]. Failure gives reason \"window\". All timestamps are integer ticks.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/environment.md",
+              "text": "An empty flag[\"environments\"] list permits every environment. Otherwise subject[\"environment\"] must equal a listed string; failure gives reason \"environment\". Matching is case sensitive.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/denied-groups.md",
+              "text": "If subject[\"groups\"] intersects flag[\"denied_groups\"], deny with reason \"denied_group\". Group matching is exact and case sensitive; duplicate group names have no extra effect.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/allowed-groups.md",
+              "text": "An empty flag[\"allowed_groups\"] imposes no restriction. Otherwise every listed group must appear in subject[\"groups\"]. Failure gives reason \"groups\".",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/rollout.md",
+              "text": "Compute bucket = (subject[\"id\"] * 7 + flag[\"salt\"]) % 100. Permit only when bucket < flag[\"rollout\"]. Otherwise deny with reason \"rollout\". A rollout of zero permits none; 100 permits every bucket.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/exceptions.md",
+              "text": "Without a current staff-grant document there is no staff exception, regardless of staff or staff_bypass values. Ordinary gates then apply. No other exception exists.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "flags/operations.md",
+              "text": "The policy powers a preview panel and a service check. Both use the same function. The preview panel may display a friendly message, but this function returns only the specified reason code.",
+              "task_key": "feature-policy"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import evaluate_flag\n\n\ndef f(**updates):\n    value = dict(enabled=True, kill=False, staff_bypass=False, start=10, end=20,\n                 environments=[], denied_groups=[], allowed_groups=[], rollout=100, salt=0)\n    value.update(updates)\n    return value\n\n\ndef s(**updates):\n    value = dict(id=0, environment=\"prod\", groups=[], staff=False)\n    value.update(updates)\n    return value\n\n\nclass PolicyChecks(unittest.TestCase):\n    def check(self, flag, subject, now, reason):\n        self.assertEqual(evaluate_flag(flag, subject, now),\n                         {\"enabled\": reason in (\"enabled\", \"staff\"), \"reason\": reason})\n\n    def test_01(self):\n        rows = [\n            (f(kill=True, enabled=False), s(staff=True), 9, \"kill\"),\n            (f(enabled=False), s(), 9, \"disabled\"),\n            (f(), s(), 9, \"window\"),\n            (f(), s(), 10, \"enabled\"),\n            (f(), s(), 20, 'enabled'),\n            (f(), s(), 21, \"window\"),\n            (f(start=-3, end=None), s(), -3, \"enabled\"),\n            (f(environments=[\"prod\"]), s(environment=\"Prod\"), 15, \"environment\"),\n            (f(denied_groups=[\"red\"], allowed_groups=[\"red\"]), s(groups=[\"red\"]), 15, \"denied_group\"),\n        ]\n        for flag, subject, now, reason in rows:\n            with self.subTest(flag=flag, subject=subject, now=now):\n                self.check(flag, subject, now, reason)\n\n    def test_02(self):\n        rows = [([], [], \"enabled\"), ([\"blue\"], [], \"groups\"),\n                ([\"blue\"], [\"Blue\"], \"groups\"), ([\"blue\"], [\"blue\", \"blue\"], \"enabled\"),\n                ([\"blue\", \"green\"], [\"blue\"], 'groups'),\n                ([\"blue\", \"green\"], [\"green\", \"blue\"], \"enabled\")]\n        for wanted, actual, reason in rows:\n            with self.subTest(wanted=wanted, actual=actual):\n                self.check(f(allowed_groups=wanted), s(groups=actual), 15, reason)\n        self.check(f(denied_groups=[\"red\"]), s(groups=[\"Red\"]), 15, \"enabled\")\n\n    def test_03(self):\n        for uid, salt, share, enabled in [(0, 0, 0, False), (99, 0, 100, True), (17, 3, 22, False), (17, 3, 23, True), (13, 0, 15, False), (100, 0, 1, True)]:\n            with self.subTest(uid=uid, salt=salt, share=share):\n                self.check(f(salt=salt, rollout=share), s(id=uid), 15,\n                           \"enabled\" if enabled else \"rollout\")\n\n    def test_04(self):\n        self.check(f(staff_bypass=True, allowed_groups=[\"closed\"], rollout=0), s(staff=True), 15, 'groups')\n        self.check(f(staff_bypass=False, allowed_groups=[\"closed\"], rollout=0), s(staff=True), 15, \"groups\")\n        self.check(f(staff_bypass=True, allowed_groups=[\"closed\"]), s(staff=False), 15, \"groups\")\n        self.check(f(staff_bypass=True, rollout=0), s(staff=True), 15, 'rollout')\n        self.check(f(staff_bypass=True, denied_groups=[\"blue\"]), s(staff=True, groups=[\"blue\"]), 15, \"denied_group\")\n        self.check(f(staff_bypass=True, environments=[\"test\"]), s(staff=True), 15, \"environment\")\n\n    def test_05(self):\n        flag, subject = f(allowed_groups=[\"a\"]), s(groups=[\"a\"])\n        before = copy.deepcopy((flag, subject))\n        one = evaluate_flag(flag, subject, 15)\n        two = evaluate_flag(flag, subject, 15)\n        self.assertEqual(one, {\"enabled\": True, \"reason\": \"enabled\"})\n        self.assertEqual(two, one)\n        self.assertIsNot(one, two)\n        self.assertEqual((flag, subject), before)\n        self.check(f(), s(environment=\"unlisted\"), 15, \"enabled\")\n",
+          "reference_solution": "def evaluate_flag(flag, subject, now):\n    def deny(reason):\n        return {\"enabled\": False, \"reason\": reason}\n    if flag[\"kill\"]:\n        return deny(\"kill\")\n    if not flag[\"enabled\"]:\n        return deny(\"disabled\")\n    if now < flag[\"start\"] or (flag[\"end\"] is not None and now > flag[\"end\"]):\n        return deny(\"window\")\n    if flag[\"environments\"] and subject[\"environment\"] not in flag[\"environments\"]:\n        return deny(\"environment\")\n    groups = set(subject[\"groups\"])\n    if groups.intersection(flag[\"denied_groups\"]):\n        return deny(\"denied_group\")\n    if flag[\"allowed_groups\"] and not set(flag[\"allowed_groups\"]).issubset(groups):\n        return deny(\"groups\")\n    if (subject[\"id\"] * 7 + flag[\"salt\"]) % 100 >= flag[\"rollout\"]:\n        return deny(\"rollout\")\n    return {\"enabled\": True, \"reason\": \"enabled\"}\n"
+        }
+      ]
+    },
+    {
+      "id": "retry-dispatch-maintenance",
+      "task_key": "retry-dispatch",
+      "title": "Retry dispatch maintenance",
+      "goal": "Maintain a pure job dispatch preview as retry timing and queue policies evolve. Implement schedule_jobs from the current policy snapshot.",
+      "requirements": [
+        "Implement only solution.py using Python standard library. Public function: schedule_jobs(jobs, now, capacity). Preserve the signature through all stages.",
+        "jobs is a list of dicts with unique string id; state in ready/retry/paused/done; nonnegative integer attempt; positive integer max_attempts and base; integer priority, not_before; string queue and error; last_run is an integer or None. A retry job always has attempt >= 1 and integer last_run. now is an integer and capacity a nonnegative integer.",
+        "Return only the specified new records, without mutating jobs. The current snapshot is complete; an absent bonus grant grants no bonus. No I/O, current-clock lookup, or hidden state."
+      ],
+      "initial_code": "def schedule_jobs(jobs, now, capacity):\n    raise NotImplementedError(\"dispatch preview pending\")\n",
+      "stages": [
+        {
+          "id": "stage-1",
+          "brief": "Implement the dispatch preview for ready and retry jobs using the current eligibility, timing, and ordering policies.",
+          "documents": [
+            {
+              "path": "jobs/contract.md",
+              "text": "schedule_jobs(jobs, now, capacity) returns a new list of dictionaries, each exactly {\"id\": job id, \"run_at\": computed due tick}. The list contains at most capacity jobs in the specified dispatch order.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/states.md",
+              "text": "Only state \"ready\" or \"retry\" is eligible. States \"paused\" and \"done\" are never dispatched, even if the queue has a grant.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/attempts.md",
+              "text": "A job is ineligible when attempt >= max_attempts. attempt counts completed attempts. Apply this gate to both ready and retry states.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/errors.md",
+              "text": "A retry job with error exactly \"invalid\" or \"denied\" is ineligible. Other error strings are retryable. The error field does not affect a ready job.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/ready-time.md",
+              "text": "A ready job has run_at equal to not_before. Its last_run and base fields do not affect that value.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/retry-time.md",
+              "text": "A retry job has delay = min(base * 2 ** (attempt - 1), 120). Its run_at is max(not_before, last_run + delay). Retry attempts start at one.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/due.md",
+              "text": "A job is due when run_at <= now. Future jobs are omitted rather than shifted to now. Negative ticks are ordinary signed integer timestamps.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/priority.md",
+              "text": "Higher effective priority dispatches first. Effective priority is the integer priority plus only bonuses granted by current documents. With no current grant, queue names have no effect.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/ties.md",
+              "text": "Among equal effective priorities, earlier run_at dispatches first. If both values tie, lexicographically smaller id dispatches first, using Python string ordering.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/express-grant.md",
+              "text": "The queue string \"express\" grants a bonus of 10 to effective priority. This changes ordering only: it bypasses no eligibility or due gate. All other queue names grant zero.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/capacity.md",
+              "text": "Select the first capacity eligible due jobs after ordering. Capacity zero returns an empty list. Unused slots remain unused; one job occupies exactly one slot.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/operations.md",
+              "text": "The admin screen calls this a dispatch preview. Do not add UI labels or explanations to the returned records. Queue color choices and operator preferences are outside this policy.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import schedule_jobs\n\n\ndef j(identity, **updates):\n    value = dict(id=identity, state=\"ready\", attempt=0, max_attempts=6, base=8,\n                 last_run=None, priority=0, queue=\"normal\", error=\"\", not_before=0)\n    value.update(updates)\n    return value\n\n\nclass DispatchChecks(unittest.TestCase):\n    def test_01(self):\n        rows = [\n            ([j(\"a\", state=\"paused\", queue=\"express\")], 100, 2, []),\n            ([j(\"a\", state=\"done\")], 100, 2, []),\n            ([j(\"a\", attempt=6)], 100, 2, []),\n            ([j(\"a\", attempt=5)], 0, 1, [{\"id\":\"a\", \"run_at\":0}]),\n            ([j(\"a\", not_before=4)], 3, 1, []),\n            ([j(\"a\", not_before=4)], 4, 1, [{\"id\":\"a\", \"run_at\":4}]),\n            ([j(\"a\", not_before=-2)], -2, 1, [{\"id\":\"a\", \"run_at\":-2}]),\n        ]\n        for jobs, now, capacity, expected in rows:\n            with self.subTest(jobs=jobs, now=now):\n                self.assertEqual(schedule_jobs(jobs, now, capacity), expected)\n\n    def test_02(self):\n        rows = [\n            (j(\"r\", state=\"retry\", attempt=1, last_run=10), 18, [{\"id\":\"r\", \"run_at\":18}]),\n            (j(\"r\", state=\"retry\", attempt=2, last_run=10), 25, []),\n            (j(\"r\", state=\"retry\", attempt=2, last_run=10), 26, [{\"id\":\"r\", \"run_at\":26}]),\n            (j(\"r\", state=\"retry\", attempt=1, last_run=-10, not_before=-20), -2, [{\"id\":\"r\", \"run_at\":-2}]),\n            (j(\"r\", state=\"retry\", attempt=1, last_run=0, not_before=30), 30, [{\"id\":\"r\", \"run_at\":30}]),\n            (j(\"cap\", state=\"retry\", attempt=5, last_run=0, base=10), 120, [{\"id\":\"cap\", \"run_at\":120}]),\n            (j(\"cap\", state=\"retry\", attempt=5, last_run=0, base=10), 90, []),\n        ]\n        for job, now, expected in rows:\n            with self.subTest(job=job, now=now):\n                self.assertEqual(schedule_jobs([job], now, 2), expected)\n\n    def test_03(self):\n        self.assertEqual(schedule_jobs([j(\"b\"), j(\"a\")], 0, 2), [{'id': 'a', 'run_at': 0}, {'id': 'b', 'run_at': 0}])\n        self.assertEqual(schedule_jobs([j(\"z\", not_before=-1), j(\"a\", not_before=0)], 0, 2),\n                         [{\"id\":\"z\", \"run_at\":-1}, {\"id\":\"a\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"a\", not_before=-1), j(\"b\", priority=1)], 0, 1),\n                         [{\"id\":\"b\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"e\", queue=\"express\"), j(\"n\", priority=5)], 0, 2), [{'id': 'e', 'run_at': 0}, {'id': 'n', 'run_at': 0}])\n        self.assertEqual(schedule_jobs([j(\"x\", queue=\"Express\"), j(\"y\", priority=1)], 0, 1),\n                         [{\"id\":\"y\", \"run_at\":0}])\n\n    def test_04(self):\n        for error in (\"invalid\", \"denied\"):\n            with self.subTest(error=error):\n                self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=1, last_run=0, error=error)], 100, 1), [])\n                self.assertEqual(schedule_jobs([j(\"r\", error=error)], 0, 1), [{\"id\":\"r\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"q\", state=\"retry\", attempt=1, last_run=0, error=\"quota\")], 100, 1), [{'id': 'q', 'run_at': 8}])\n        self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=1, last_run=0, error=\"Invalid\")], 8, 1), [{\"id\":\"r\", \"run_at\":8}])\n        self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=6, last_run=0)], 1000, 1), [])\n\n    def test_05(self):\n        jobs = [j(\"a\"), j(\"b\", state=\"paused\")]\n        before = copy.deepcopy(jobs)\n        self.assertEqual(schedule_jobs(jobs, 0, 0), [])\n        first = schedule_jobs(jobs, 0, 9)\n        second = schedule_jobs(jobs, 0, 9)\n        self.assertEqual(first, [{\"id\":\"a\", \"run_at\":0}])\n        self.assertEqual(first, second)\n        self.assertIsNot(first, second)\n        self.assertEqual(jobs, before)\n        self.assertEqual(schedule_jobs([], 0, 9), [])\n",
+          "reference_solution": "def schedule_jobs(jobs, now, capacity):\n    eligible = []\n    for job in jobs:\n        if job[\"state\"] not in (\"ready\", \"retry\") or job[\"attempt\"] >= job[\"max_attempts\"]:\n            continue\n        if job[\"state\"] == \"retry\":\n            if job[\"error\"] in (\"invalid\", \"denied\"):\n                continue\n            delay = min(job[\"base\"] * 2 ** (job[\"attempt\"] - 1), 120)\n            due = max(job[\"not_before\"], job[\"last_run\"] + delay)\n        else:\n            due = job[\"not_before\"]\n        if due <= now:\n            priority = job[\"priority\"] + (10 if job[\"queue\"] == \"express\" else 0)\n            eligible.append((job[\"id\"], due, priority))\n    eligible.sort(key=lambda item: item[0], reverse=False)\n    eligible.sort(key=lambda item: item[1])\n    eligible.sort(key=lambda item: item[2], reverse=True)\n    return [{\"id\": identity, \"run_at\": due} for identity, due, priority in eligible[:capacity]]\n"
+        },
+        {
+          "id": "stage-2",
+          "brief": "Retry delays have a new cap, and exact ordering ties use the revised identifier order. Keep the API and other current policies.",
+          "documents": [
+            {
+              "path": "jobs/contract.md",
+              "text": "schedule_jobs(jobs, now, capacity) returns a new list of dictionaries, each exactly {\"id\": job id, \"run_at\": computed due tick}. The list contains at most capacity jobs in the specified dispatch order.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/states.md",
+              "text": "Only state \"ready\" or \"retry\" is eligible. States \"paused\" and \"done\" are never dispatched, even if the queue has a grant.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/attempts.md",
+              "text": "A job is ineligible when attempt >= max_attempts. attempt counts completed attempts. Apply this gate to both ready and retry states.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/errors.md",
+              "text": "A retry job with error exactly \"invalid\" or \"denied\" is ineligible. Other error strings are retryable. The error field does not affect a ready job.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/ready-time.md",
+              "text": "A ready job has run_at equal to not_before. Its last_run and base fields do not affect that value.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/retry-time.md",
+              "text": "A retry job has delay = min(base * 2 ** (attempt - 1), 90). Its run_at is max(not_before, last_run + delay). Retry attempts start at one.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/due.md",
+              "text": "A job is due when run_at <= now. Future jobs are omitted rather than shifted to now. Negative ticks are ordinary signed integer timestamps.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/priority.md",
+              "text": "Higher effective priority dispatches first. Effective priority is the integer priority plus only bonuses granted by current documents. With no current grant, queue names have no effect.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/ties.md",
+              "text": "Among equal effective priorities, earlier run_at dispatches first. If both values tie, lexicographically larger id dispatches first, using Python string ordering.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/express-grant.md",
+              "text": "The queue string \"express\" grants a bonus of 10 to effective priority. This changes ordering only: it bypasses no eligibility or due gate. All other queue names grant zero.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/capacity.md",
+              "text": "Select the first capacity eligible due jobs after ordering. Capacity zero returns an empty list. Unused slots remain unused; one job occupies exactly one slot.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/operations.md",
+              "text": "The admin screen calls this a dispatch preview. Do not add UI labels or explanations to the returned records. Queue color choices and operator preferences are outside this policy.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import schedule_jobs\n\n\ndef j(identity, **updates):\n    value = dict(id=identity, state=\"ready\", attempt=0, max_attempts=6, base=8,\n                 last_run=None, priority=0, queue=\"normal\", error=\"\", not_before=0)\n    value.update(updates)\n    return value\n\n\nclass DispatchChecks(unittest.TestCase):\n    def test_01(self):\n        rows = [\n            ([j(\"a\", state=\"paused\", queue=\"express\")], 100, 2, []),\n            ([j(\"a\", state=\"done\")], 100, 2, []),\n            ([j(\"a\", attempt=6)], 100, 2, []),\n            ([j(\"a\", attempt=5)], 0, 1, [{\"id\":\"a\", \"run_at\":0}]),\n            ([j(\"a\", not_before=4)], 3, 1, []),\n            ([j(\"a\", not_before=4)], 4, 1, [{\"id\":\"a\", \"run_at\":4}]),\n            ([j(\"a\", not_before=-2)], -2, 1, [{\"id\":\"a\", \"run_at\":-2}]),\n        ]\n        for jobs, now, capacity, expected in rows:\n            with self.subTest(jobs=jobs, now=now):\n                self.assertEqual(schedule_jobs(jobs, now, capacity), expected)\n\n    def test_02(self):\n        rows = [\n            (j(\"r\", state=\"retry\", attempt=1, last_run=10), 18, [{\"id\":\"r\", \"run_at\":18}]),\n            (j(\"r\", state=\"retry\", attempt=2, last_run=10), 25, []),\n            (j(\"r\", state=\"retry\", attempt=2, last_run=10), 26, [{\"id\":\"r\", \"run_at\":26}]),\n            (j(\"r\", state=\"retry\", attempt=1, last_run=-10, not_before=-20), -2, [{\"id\":\"r\", \"run_at\":-2}]),\n            (j(\"r\", state=\"retry\", attempt=1, last_run=0, not_before=30), 30, [{\"id\":\"r\", \"run_at\":30}]),\n            (j(\"cap\", state=\"retry\", attempt=5, last_run=0, base=10), 120, [{\"id\":\"cap\", \"run_at\":90}]),\n            (j(\"cap\", state=\"retry\", attempt=5, last_run=0, base=10), 90, [{'id': 'cap', 'run_at': 90}]),\n        ]\n        for job, now, expected in rows:\n            with self.subTest(job=job, now=now):\n                self.assertEqual(schedule_jobs([job], now, 2), expected)\n\n    def test_03(self):\n        self.assertEqual(schedule_jobs([j(\"b\"), j(\"a\")], 0, 2), [{'id': 'b', 'run_at': 0}, {'id': 'a', 'run_at': 0}])\n        self.assertEqual(schedule_jobs([j(\"z\", not_before=-1), j(\"a\", not_before=0)], 0, 2),\n                         [{\"id\":\"z\", \"run_at\":-1}, {\"id\":\"a\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"a\", not_before=-1), j(\"b\", priority=1)], 0, 1),\n                         [{\"id\":\"b\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"e\", queue=\"express\"), j(\"n\", priority=5)], 0, 2), [{'id': 'e', 'run_at': 0}, {'id': 'n', 'run_at': 0}])\n        self.assertEqual(schedule_jobs([j(\"x\", queue=\"Express\"), j(\"y\", priority=1)], 0, 1),\n                         [{\"id\":\"y\", \"run_at\":0}])\n\n    def test_04(self):\n        for error in (\"invalid\", \"denied\"):\n            with self.subTest(error=error):\n                self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=1, last_run=0, error=error)], 100, 1), [])\n                self.assertEqual(schedule_jobs([j(\"r\", error=error)], 0, 1), [{\"id\":\"r\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"q\", state=\"retry\", attempt=1, last_run=0, error=\"quota\")], 100, 1), [{'id': 'q', 'run_at': 8}])\n        self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=1, last_run=0, error=\"Invalid\")], 8, 1), [{\"id\":\"r\", \"run_at\":8}])\n        self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=6, last_run=0)], 1000, 1), [])\n\n    def test_05(self):\n        jobs = [j(\"a\"), j(\"b\", state=\"paused\")]\n        before = copy.deepcopy(jobs)\n        self.assertEqual(schedule_jobs(jobs, 0, 0), [])\n        first = schedule_jobs(jobs, 0, 9)\n        second = schedule_jobs(jobs, 0, 9)\n        self.assertEqual(first, [{\"id\":\"a\", \"run_at\":0}])\n        self.assertEqual(first, second)\n        self.assertIsNot(first, second)\n        self.assertEqual(jobs, before)\n        self.assertEqual(schedule_jobs([], 0, 9), [])\n",
+          "reference_solution": "def schedule_jobs(jobs, now, capacity):\n    eligible = []\n    for job in jobs:\n        if job[\"state\"] not in (\"ready\", \"retry\") or job[\"attempt\"] >= job[\"max_attempts\"]:\n            continue\n        if job[\"state\"] == \"retry\":\n            if job[\"error\"] in (\"invalid\", \"denied\"):\n                continue\n            delay = min(job[\"base\"] * 2 ** (job[\"attempt\"] - 1), 90)\n            due = max(job[\"not_before\"], job[\"last_run\"] + delay)\n        else:\n            due = job[\"not_before\"]\n        if due <= now:\n            priority = job[\"priority\"] + (10 if job[\"queue\"] == \"express\" else 0)\n            eligible.append((job[\"id\"], due, priority))\n    eligible.sort(key=lambda item: item[0], reverse=True)\n    eligible.sort(key=lambda item: item[1])\n    eligible.sort(key=lambda item: item[2], reverse=True)\n    return [{\"id\": identity, \"run_at\": due} for identity, due, priority in eligible[:capacity]]\n"
+        },
+        {
+          "id": "stage-3",
+          "brief": "The retry error policy has changed. The express-grant document has been withdrawn; queue names now follow the absence rule in priority policy.",
+          "documents": [
+            {
+              "path": "jobs/contract.md",
+              "text": "schedule_jobs(jobs, now, capacity) returns a new list of dictionaries, each exactly {\"id\": job id, \"run_at\": computed due tick}. The list contains at most capacity jobs in the specified dispatch order.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/states.md",
+              "text": "Only state \"ready\" or \"retry\" is eligible. States \"paused\" and \"done\" are never dispatched, even if the queue has a grant.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/attempts.md",
+              "text": "A job is ineligible when attempt >= max_attempts. attempt counts completed attempts. Apply this gate to both ready and retry states.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/errors.md",
+              "text": "A retry job with error exactly \"invalid\", \"denied\", or \"quota\" is ineligible. Other error strings are retryable. The error field does not affect a ready job.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/ready-time.md",
+              "text": "A ready job has run_at equal to not_before. Its last_run and base fields do not affect that value.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/retry-time.md",
+              "text": "A retry job has delay = min(base * 2 ** (attempt - 1), 90). Its run_at is max(not_before, last_run + delay). Retry attempts start at one.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/due.md",
+              "text": "A job is due when run_at <= now. Future jobs are omitted rather than shifted to now. Negative ticks are ordinary signed integer timestamps.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/priority.md",
+              "text": "Higher effective priority dispatches first. Effective priority is the integer priority plus only bonuses granted by current documents. With no current grant, queue names have no effect.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/ties.md",
+              "text": "Among equal effective priorities, earlier run_at dispatches first. If both values tie, lexicographically larger id dispatches first, using Python string ordering.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/capacity.md",
+              "text": "Select the first capacity eligible due jobs after ordering. Capacity zero returns an empty list. Unused slots remain unused; one job occupies exactly one slot.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "jobs/operations.md",
+              "text": "The admin screen calls this a dispatch preview. Do not add UI labels or explanations to the returned records. Queue color choices and operator preferences are outside this policy.",
+              "task_key": "retry-dispatch"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import schedule_jobs\n\n\ndef j(identity, **updates):\n    value = dict(id=identity, state=\"ready\", attempt=0, max_attempts=6, base=8,\n                 last_run=None, priority=0, queue=\"normal\", error=\"\", not_before=0)\n    value.update(updates)\n    return value\n\n\nclass DispatchChecks(unittest.TestCase):\n    def test_01(self):\n        rows = [\n            ([j(\"a\", state=\"paused\", queue=\"express\")], 100, 2, []),\n            ([j(\"a\", state=\"done\")], 100, 2, []),\n            ([j(\"a\", attempt=6)], 100, 2, []),\n            ([j(\"a\", attempt=5)], 0, 1, [{\"id\":\"a\", \"run_at\":0}]),\n            ([j(\"a\", not_before=4)], 3, 1, []),\n            ([j(\"a\", not_before=4)], 4, 1, [{\"id\":\"a\", \"run_at\":4}]),\n            ([j(\"a\", not_before=-2)], -2, 1, [{\"id\":\"a\", \"run_at\":-2}]),\n        ]\n        for jobs, now, capacity, expected in rows:\n            with self.subTest(jobs=jobs, now=now):\n                self.assertEqual(schedule_jobs(jobs, now, capacity), expected)\n\n    def test_02(self):\n        rows = [\n            (j(\"r\", state=\"retry\", attempt=1, last_run=10), 18, [{\"id\":\"r\", \"run_at\":18}]),\n            (j(\"r\", state=\"retry\", attempt=2, last_run=10), 25, []),\n            (j(\"r\", state=\"retry\", attempt=2, last_run=10), 26, [{\"id\":\"r\", \"run_at\":26}]),\n            (j(\"r\", state=\"retry\", attempt=1, last_run=-10, not_before=-20), -2, [{\"id\":\"r\", \"run_at\":-2}]),\n            (j(\"r\", state=\"retry\", attempt=1, last_run=0, not_before=30), 30, [{\"id\":\"r\", \"run_at\":30}]),\n            (j(\"cap\", state=\"retry\", attempt=5, last_run=0, base=10), 120, [{\"id\":\"cap\", \"run_at\":90}]),\n            (j(\"cap\", state=\"retry\", attempt=5, last_run=0, base=10), 90, [{'id': 'cap', 'run_at': 90}]),\n        ]\n        for job, now, expected in rows:\n            with self.subTest(job=job, now=now):\n                self.assertEqual(schedule_jobs([job], now, 2), expected)\n\n    def test_03(self):\n        self.assertEqual(schedule_jobs([j(\"b\"), j(\"a\")], 0, 2), [{'id': 'b', 'run_at': 0}, {'id': 'a', 'run_at': 0}])\n        self.assertEqual(schedule_jobs([j(\"z\", not_before=-1), j(\"a\", not_before=0)], 0, 2),\n                         [{\"id\":\"z\", \"run_at\":-1}, {\"id\":\"a\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"a\", not_before=-1), j(\"b\", priority=1)], 0, 1),\n                         [{\"id\":\"b\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"e\", queue=\"express\"), j(\"n\", priority=5)], 0, 2), [{'id': 'n', 'run_at': 0}, {'id': 'e', 'run_at': 0}])\n        self.assertEqual(schedule_jobs([j(\"x\", queue=\"Express\"), j(\"y\", priority=1)], 0, 1),\n                         [{\"id\":\"y\", \"run_at\":0}])\n\n    def test_04(self):\n        for error in (\"invalid\", \"denied\"):\n            with self.subTest(error=error):\n                self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=1, last_run=0, error=error)], 100, 1), [])\n                self.assertEqual(schedule_jobs([j(\"r\", error=error)], 0, 1), [{\"id\":\"r\", \"run_at\":0}])\n        self.assertEqual(schedule_jobs([j(\"q\", state=\"retry\", attempt=1, last_run=0, error=\"quota\")], 100, 1), [])\n        self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=1, last_run=0, error=\"Invalid\")], 8, 1), [{\"id\":\"r\", \"run_at\":8}])\n        self.assertEqual(schedule_jobs([j(\"r\", state=\"retry\", attempt=6, last_run=0)], 1000, 1), [])\n\n    def test_05(self):\n        jobs = [j(\"a\"), j(\"b\", state=\"paused\")]\n        before = copy.deepcopy(jobs)\n        self.assertEqual(schedule_jobs(jobs, 0, 0), [])\n        first = schedule_jobs(jobs, 0, 9)\n        second = schedule_jobs(jobs, 0, 9)\n        self.assertEqual(first, [{\"id\":\"a\", \"run_at\":0}])\n        self.assertEqual(first, second)\n        self.assertIsNot(first, second)\n        self.assertEqual(jobs, before)\n        self.assertEqual(schedule_jobs([], 0, 9), [])\n",
+          "reference_solution": "def schedule_jobs(jobs, now, capacity):\n    eligible = []\n    for job in jobs:\n        if job[\"state\"] not in (\"ready\", \"retry\") or job[\"attempt\"] >= job[\"max_attempts\"]:\n            continue\n        if job[\"state\"] == \"retry\":\n            if job[\"error\"] in (\"invalid\", \"denied\", \"quota\"):\n                continue\n            delay = min(job[\"base\"] * 2 ** (job[\"attempt\"] - 1), 90)\n            due = max(job[\"not_before\"], job[\"last_run\"] + delay)\n        else:\n            due = job[\"not_before\"]\n        if due <= now:\n            priority = job[\"priority\"]\n            eligible.append((job[\"id\"], due, priority))\n    eligible.sort(key=lambda item: item[0], reverse=True)\n    eligible.sort(key=lambda item: item[1])\n    eligible.sort(key=lambda item: item[2], reverse=True)\n    return [{\"id\": identity, \"run_at\": due} for identity, due, priority in eligible[:capacity]]\n"
+        }
+      ]
+    },
+    {
+      "id": "artifact-audit-maintenance",
+      "task_key": "artifact-audit",
+      "title": "Artifact audit maintenance",
+      "goal": "Maintain a pure artifact manifest audit that reports validation problems as publication rules evolve. Implement audit_manifest from current documents.",
+      "requirements": [
+        "Implement only solution.py using Python standard library. Public function: audit_manifest(entries, required, max_bytes). Preserve the signature at every stage.",
+        "Inputs are structurally valid: entries is a list of dicts with string path, string digest, string compression, bool executable, and nonnegative integer size. required is a list of strings whose canonical forms are valid paths. max_bytes is a nonnegative integer. Paths and metadata in entries may fail semantic policy checks, which must be reported rather than raising.",
+        "Apply the complete current snapshot. Grant absence revokes the described exemption. Return new containers and preserve all inputs. No file, network, environment, random, or external-clock access."
+      ],
+      "initial_code": "def audit_manifest(entries, required, max_bytes):\n    raise NotImplementedError(\"manifest audit pending\")\n",
+      "stages": [
+        {
+          "id": "stage-1",
+          "brief": "Complete the artifact manifest auditor. Report all policy problems in the documented order.",
+          "documents": [
+            {
+              "path": "manifest/contract.md",
+              "text": "audit_manifest(entries, required, max_bytes) returns exactly {\"ok\": bool, \"total\": int, \"problems\": list of strings}. ok is true exactly when problems is empty. Entries are processed in input order.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/normalization.md",
+              "text": "Canonicalize a path by removing leading \"./\" repeatedly, then preserve all remaining characters. Do not case-fold or trim a canonical path unless a specific rule below says so. Required strings use the same normalization.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/paths.md",
+              "text": "A canonical path is invalid if empty, starts with \"/\", contains a backslash, or any slash-separated component is empty, \".\", or \"..\". Invalid entry i adds \"path:\" plus its zero-based decimal index; skip all further work for that entry.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/duplicates.md",
+              "text": "Valid canonical paths are duplicate identities only when their strings are exactly equal. The first occurrence owns the identity. Each later occurrence adds \"duplicate:\" plus its own canonical path and is otherwise skipped.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/checksums.md",
+              "text": "A unique valid entry needs digest to be exactly 8 lowercase hexadecimal characters (0-9 or a-f). A bad digest adds \"digest:\" plus canonical path, unless a current grant exempts it.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/compression.md",
+              "text": "compression must be exactly \"none\" or \"gzip\". Other strings add \"compression:\" plus canonical path, even when the digest is bad.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/execution.md",
+              "text": "An executable entry is allowed only if its canonical path starts with \"bin/\". Otherwise add \"executable:\" plus canonical path. Non-executable entries impose no such path restriction.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/aggregation.md",
+              "text": "Every first valid path occurrence contributes size to total, including entries with digest, compression, or executable problems. Invalid paths and skipped duplicates contribute nothing. No decompression or implicit header bytes are counted.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/required.md",
+              "text": "After processing entries, normalize required strings, deduplicate their exact strings, and visit them in Python sorted order. Add \"missing:\" plus each required string that is not exactly a first valid entry path. Presence ignores metadata problems; it requires no successful checksum.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/budget.md",
+              "text": "After required-file checks, add \"budget\" when total > max_bytes. Equality is allowed. Budget is checked once against the accumulated total.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/placeholder-grant.md",
+              "text": "A unique valid entry whose size is zero and compression is exactly \"none\" is exempt from the digest check. This placeholder allowance exempts no other checks. No exemption exists when this document is absent.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/reporting.md",
+              "text": "For each first valid entry, append its problems in this order: digest, compression, executable. Path or duplicate problems occur in their entry position. Missing problems follow all entries; budget is last. Do not sort or deduplicate the final problems list.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import audit_manifest\n\n\ndef e(path, **updates):\n    value = dict(path=path, size=2, digest='1a2b3c4d', compression=\"none\", executable=False)\n    value.update(updates)\n    return value\n\n\nclass ManifestChecks(unittest.TestCase):\n    def check(self, entries, required, maximum, total, problems):\n        self.assertEqual(audit_manifest(entries, required, maximum),\n                         {\"ok\": not problems, \"total\": total, \"problems\": problems})\n\n    def test_01(self):\n        self.check([e(\"././data/a\"), e(\"bin/run\", executable=True, compression=\"gzip\")],\n                   [\"data/a\", \"./bin/run\"], 10, 4, [])\n        self.check([e(\"x\", digest='1a2b3c4d5e6f')], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"x\", digest=\"A\" * 8)], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"x\", digest=\"g\" * 8)], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"empty\", size=0, digest=\"\")], [], 1, 0, [])\n        self.check([e(\"empty\", size=0, digest=\"\", compression=\"gzip\")], [], 1, 0, [\"digest:empty\"])\n\n    def test_02(self):\n        paths = [\"\", \"/abs\", \"a//b\", \"a/../b\", \"a/./b\", \"a/\", \"a\\\\b\", \"./\"]\n        self.check([e(path) for path in paths], [], 100, 0,\n                   [\"path:0\", \"path:1\", \"path:2\", \"path:3\", \"path:4\", \"path:5\", \"path:6\", \"path:7\"])\n        self.check([e(\"a b\"), e(\".hidden\")], [\"a b\", \".hidden\"], 20, 4, [])\n        self.check([e(\"../bad\"), e(\"ok\")], [\"ok\"], 10, 2, [\"path:0\"])\n\n    def test_03(self):\n        self.check([e(\"x\"), e(\"./x\", size=90, digest=\"bad\", executable=True)], [], 10, 2, [\"duplicate:x\"])\n        self.check([e(\"x\", digest=\"bad\"), e(\"x\", size=90)], [\"x\"], 10, 2, [\"digest:x\", \"duplicate:x\"])\n        self.check([e(\"readme\"), e(\"Readme\", size=3)], [\"readme\", \"Readme\"], 20, 5, [])\n        self.check([e(\"x\"), e(\"x\"), e(\"x\")], [], 10, 2, [\"duplicate:x\", \"duplicate:x\"])\n\n    def test_04(self):\n        self.check([e(\"z\", digest=\"bad\", compression=\"zip\", executable=True), e(\"bin/a\", compression=\"GZIP\")],\n                   [\"z\", \"./absent\", \"missing\", \"absent\"], 1, 4,\n                   [\"digest:z\", \"compression:z\", \"executable:z\", \"compression:bin/a\", \"missing:absent\", \"missing:missing\", \"budget\"])\n        self.check([e(\"binary/a\", executable=True)], [], 10, 2, [\"executable:binary/a\"])\n        self.check([e(\"x\", digest=\"bad\")], [\"./x\", \"x\"], 10, 2, [\"digest:x\"])\n        self.check([e(\"a\", size=0, digest=\"\", compression=\"zip\", executable=True)], [], 1, 0,\n                   [\"digest:a\", \"compression:a\", \"executable:a\"])\n\n    def test_05(self):\n        self.check([e(\"a\", size=3)], [], 3, 3, [])\n        self.check([e(\"a\", size=3)], [], 2, 3, [\"budget\"])\n        self.check([], [], 1, 0, [])\n        entries, required = [e(\"a\")], [\"./a\", \"a\"]\n        before = copy.deepcopy((entries, required))\n        first = audit_manifest(entries, required, 10)\n        second = audit_manifest(entries, required, 10)\n        self.assertEqual(first, {\"ok\":True, \"total\":2, \"problems\":[]})\n        self.assertEqual(first, second)\n        self.assertIsNot(first, second)\n        self.assertIsNot(first[\"problems\"], second[\"problems\"])\n        self.assertEqual((entries, required), before)\n",
+          "reference_solution": "def audit_manifest(entries, required, max_bytes):\n    def canonical(path):\n        while path.startswith(\"./\"):\n            path = path[2:]\n        return path\n    identities = set()\n    present = set()\n    problems = []\n    total = 0\n    for index, entry in enumerate(entries):\n        path = canonical(entry[\"path\"])\n        if not path or path.startswith(\"/\") or \"\\\\\" in path or any(part in (\"\", \".\", \"..\") for part in path.split(\"/\")):\n            problems.append(\"path:\" + str(index))\n            continue\n        identity = path\n        if identity in identities:\n            problems.append(\"duplicate:\" + path)\n            continue\n        identities.add(identity)\n        present.add(path)\n        total += entry[\"size\"]\n        digest = entry[\"digest\"]\n        valid_digest = len(digest) == 8 and all(char in \"0123456789abcdef\" for char in digest)\n        if not (entry[\"size\"] == 0 and entry[\"compression\"] == \"none\") and not valid_digest:\n            problems.append(\"digest:\" + path)\n        if entry[\"compression\"] not in (\"none\", \"gzip\"):\n            problems.append(\"compression:\" + path)\n        if entry[\"executable\"] and not path.startswith(\"bin/\"):\n            problems.append(\"executable:\" + path)\n    for path in sorted({canonical(value) for value in required}):\n        if path not in present:\n            problems.append(\"missing:\" + path)\n    if total > max_bytes:\n        problems.append(\"budget\")\n    return {\"ok\": not problems, \"total\": total, \"problems\": problems}\n"
+        },
+        {
+          "id": "stage-2",
+          "brief": "Checksum width and the reservation-budget boundary have changed. Keep the rest of the audit contract.",
+          "documents": [
+            {
+              "path": "manifest/contract.md",
+              "text": "audit_manifest(entries, required, max_bytes) returns exactly {\"ok\": bool, \"total\": int, \"problems\": list of strings}. ok is true exactly when problems is empty. Entries are processed in input order.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/normalization.md",
+              "text": "Canonicalize a path by removing leading \"./\" repeatedly, then preserve all remaining characters. Do not case-fold or trim a canonical path unless a specific rule below says so. Required strings use the same normalization.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/paths.md",
+              "text": "A canonical path is invalid if empty, starts with \"/\", contains a backslash, or any slash-separated component is empty, \".\", or \"..\". Invalid entry i adds \"path:\" plus its zero-based decimal index; skip all further work for that entry.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/duplicates.md",
+              "text": "Valid canonical paths are duplicate identities only when their strings are exactly equal. The first occurrence owns the identity. Each later occurrence adds \"duplicate:\" plus its own canonical path and is otherwise skipped.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/checksums.md",
+              "text": "A unique valid entry needs digest to be exactly 12 lowercase hexadecimal characters (0-9 or a-f). A bad digest adds \"digest:\" plus canonical path, unless a current grant exempts it.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/compression.md",
+              "text": "compression must be exactly \"none\" or \"gzip\". Other strings add \"compression:\" plus canonical path, even when the digest is bad.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/execution.md",
+              "text": "An executable entry is allowed only if its canonical path starts with \"bin/\". Otherwise add \"executable:\" plus canonical path. Non-executable entries impose no such path restriction.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/aggregation.md",
+              "text": "Every first valid path occurrence contributes size to total, including entries with digest, compression, or executable problems. Invalid paths and skipped duplicates contribute nothing. No decompression or implicit header bytes are counted.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/required.md",
+              "text": "After processing entries, normalize required strings, deduplicate their exact strings, and visit them in Python sorted order. Add \"missing:\" plus each required string that is not exactly a first valid entry path. Presence ignores metadata problems; it requires no successful checksum.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/budget.md",
+              "text": "After required-file checks, add \"budget\" when total >= max_bytes. Equality now exceeds the reservation policy, including a zero-byte total with a zero limit. Budget is checked once against the accumulated total.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/placeholder-grant.md",
+              "text": "A unique valid entry whose size is zero and compression is exactly \"none\" is exempt from the digest check. This placeholder allowance exempts no other checks. No exemption exists when this document is absent.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/reporting.md",
+              "text": "For each first valid entry, append its problems in this order: digest, compression, executable. Path or duplicate problems occur in their entry position. Missing problems follow all entries; budget is last. Do not sort or deduplicate the final problems list.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import audit_manifest\n\n\ndef e(path, **updates):\n    value = dict(path=path, size=2, digest='1a2b3c4d5e6f', compression=\"none\", executable=False)\n    value.update(updates)\n    return value\n\n\nclass ManifestChecks(unittest.TestCase):\n    def check(self, entries, required, maximum, total, problems):\n        self.assertEqual(audit_manifest(entries, required, maximum),\n                         {\"ok\": not problems, \"total\": total, \"problems\": problems})\n\n    def test_01(self):\n        self.check([e(\"././data/a\"), e(\"bin/run\", executable=True, compression=\"gzip\")],\n                   [\"data/a\", \"./bin/run\"], 10, 4, [])\n        self.check([e(\"x\", digest='1a2b3c4d')], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"x\", digest=\"A\" * 12)], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"x\", digest=\"g\" * 12)], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"empty\", size=0, digest=\"\")], [], 1, 0, [])\n        self.check([e(\"empty\", size=0, digest=\"\", compression=\"gzip\")], [], 1, 0, [\"digest:empty\"])\n\n    def test_02(self):\n        paths = [\"\", \"/abs\", \"a//b\", \"a/../b\", \"a/./b\", \"a/\", \"a\\\\b\", \"./\"]\n        self.check([e(path) for path in paths], [], 100, 0,\n                   [\"path:0\", \"path:1\", \"path:2\", \"path:3\", \"path:4\", \"path:5\", \"path:6\", \"path:7\"])\n        self.check([e(\"a b\"), e(\".hidden\")], [\"a b\", \".hidden\"], 20, 4, [])\n        self.check([e(\"../bad\"), e(\"ok\")], [\"ok\"], 10, 2, [\"path:0\"])\n\n    def test_03(self):\n        self.check([e(\"x\"), e(\"./x\", size=90, digest=\"bad\", executable=True)], [], 10, 2, [\"duplicate:x\"])\n        self.check([e(\"x\", digest=\"bad\"), e(\"x\", size=90)], [\"x\"], 10, 2, [\"digest:x\", \"duplicate:x\"])\n        self.check([e(\"readme\"), e(\"Readme\", size=3)], [\"readme\", \"Readme\"], 20, 5, [])\n        self.check([e(\"x\"), e(\"x\"), e(\"x\")], [], 10, 2, [\"duplicate:x\", \"duplicate:x\"])\n\n    def test_04(self):\n        self.check([e(\"z\", digest=\"bad\", compression=\"zip\", executable=True), e(\"bin/a\", compression=\"GZIP\")],\n                   [\"z\", \"./absent\", \"missing\", \"absent\"], 1, 4,\n                   [\"digest:z\", \"compression:z\", \"executable:z\", \"compression:bin/a\", \"missing:absent\", \"missing:missing\", \"budget\"])\n        self.check([e(\"binary/a\", executable=True)], [], 10, 2, [\"executable:binary/a\"])\n        self.check([e(\"x\", digest=\"bad\")], [\"./x\", \"x\"], 10, 2, [\"digest:x\"])\n        self.check([e(\"a\", size=0, digest=\"\", compression=\"zip\", executable=True)], [], 1, 0,\n                   [\"digest:a\", \"compression:a\", \"executable:a\"])\n\n    def test_05(self):\n        self.check([e(\"a\", size=3)], [], 3, 3, ['budget'])\n        self.check([e(\"a\", size=3)], [], 2, 3, [\"budget\"])\n        self.check([], [], 1, 0, [])\n        self.check([], [], 0, 0, [\"budget\"])\n        entries, required = [e(\"a\")], [\"./a\", \"a\"]\n        before = copy.deepcopy((entries, required))\n        first = audit_manifest(entries, required, 10)\n        second = audit_manifest(entries, required, 10)\n        self.assertEqual(first, {\"ok\":True, \"total\":2, \"problems\":[]})\n        self.assertEqual(first, second)\n        self.assertIsNot(first, second)\n        self.assertIsNot(first[\"problems\"], second[\"problems\"])\n        self.assertEqual((entries, required), before)\n",
+          "reference_solution": "def audit_manifest(entries, required, max_bytes):\n    def canonical(path):\n        while path.startswith(\"./\"):\n            path = path[2:]\n        return path\n    identities = set()\n    present = set()\n    problems = []\n    total = 0\n    for index, entry in enumerate(entries):\n        path = canonical(entry[\"path\"])\n        if not path or path.startswith(\"/\") or \"\\\\\" in path or any(part in (\"\", \".\", \"..\") for part in path.split(\"/\")):\n            problems.append(\"path:\" + str(index))\n            continue\n        identity = path\n        if identity in identities:\n            problems.append(\"duplicate:\" + path)\n            continue\n        identities.add(identity)\n        present.add(path)\n        total += entry[\"size\"]\n        digest = entry[\"digest\"]\n        valid_digest = len(digest) == 12 and all(char in \"0123456789abcdef\" for char in digest)\n        if not (entry[\"size\"] == 0 and entry[\"compression\"] == \"none\") and not valid_digest:\n            problems.append(\"digest:\" + path)\n        if entry[\"compression\"] not in (\"none\", \"gzip\"):\n            problems.append(\"compression:\" + path)\n        if entry[\"executable\"] and not path.startswith(\"bin/\"):\n            problems.append(\"executable:\" + path)\n    for path in sorted({canonical(value) for value in required}):\n        if path not in present:\n            problems.append(\"missing:\" + path)\n    if total >= max_bytes:\n        problems.append(\"budget\")\n    return {\"ok\": not problems, \"total\": total, \"problems\": problems}\n"
+        },
+        {
+          "id": "stage-3",
+          "brief": "Duplicate identity now ignores case using casefold. The placeholder-grant document is withdrawn, so its digest exemption no longer applies.",
+          "documents": [
+            {
+              "path": "manifest/contract.md",
+              "text": "audit_manifest(entries, required, max_bytes) returns exactly {\"ok\": bool, \"total\": int, \"problems\": list of strings}. ok is true exactly when problems is empty. Entries are processed in input order.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/normalization.md",
+              "text": "Canonicalize a path by removing leading \"./\" repeatedly, then preserve all remaining characters. Do not case-fold or trim a canonical path unless a specific rule below says so. Required strings use the same normalization.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/paths.md",
+              "text": "A canonical path is invalid if empty, starts with \"/\", contains a backslash, or any slash-separated component is empty, \".\", or \"..\". Invalid entry i adds \"path:\" plus its zero-based decimal index; skip all further work for that entry.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/duplicates.md",
+              "text": "Valid canonical paths are duplicate identities when their Python casefold() strings are equal. The first occurrence owns the identity, retaining its original canonical spelling. Each later occurrence adds \"duplicate:\" plus its own canonical path and is otherwise skipped. Required-file presence still uses exact retained spelling.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/checksums.md",
+              "text": "A unique valid entry needs digest to be exactly 12 lowercase hexadecimal characters (0-9 or a-f). A bad digest adds \"digest:\" plus canonical path, unless a current grant exempts it.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/compression.md",
+              "text": "compression must be exactly \"none\" or \"gzip\". Other strings add \"compression:\" plus canonical path, even when the digest is bad.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/execution.md",
+              "text": "An executable entry is allowed only if its canonical path starts with \"bin/\". Otherwise add \"executable:\" plus canonical path. Non-executable entries impose no such path restriction.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/aggregation.md",
+              "text": "Every first valid path occurrence contributes size to total, including entries with digest, compression, or executable problems. Invalid paths and skipped duplicates contribute nothing. No decompression or implicit header bytes are counted.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/required.md",
+              "text": "After processing entries, normalize required strings, deduplicate their exact strings, and visit them in Python sorted order. Add \"missing:\" plus each required string that is not exactly a first valid entry path. Presence ignores metadata problems; it requires no successful checksum.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/budget.md",
+              "text": "After required-file checks, add \"budget\" when total >= max_bytes. Equality now exceeds the reservation policy, including a zero-byte total with a zero limit. Budget is checked once against the accumulated total.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "manifest/reporting.md",
+              "text": "For each first valid entry, append its problems in this order: digest, compression, executable. Path or duplicate problems occur in their entry position. Missing problems follow all entries; budget is last. Do not sort or deduplicate the final problems list.",
+              "task_key": "artifact-audit"
+            },
+            {
+              "path": "engineering/pure-functions.md",
+              "text": "All policy functions are pure: return new values, preserve arguments, and use only their supplied inputs. No file, network, clock, random, or environment access.",
+              "task_key": ""
+            },
+            {
+              "path": "engineering/policy-snapshots.md",
+              "text": "The supplied documents are the complete current snapshot. Current text controls. Exceptions exist only while their granting document is present; deleting a grant removes that exception. Other project policies do not apply.",
+              "task_key": ""
+            },
+            {
+              "path": "display/release-labels.md",
+              "text": "The dashboard shows beta labels in violet. Release headings are written in sentence case; these presentation choices do not affect backend policy decisions.",
+              "task_key": "display-theme"
+            },
+            {
+              "path": "support/triage-calendar.md",
+              "text": "Support rotates the morning handoff on Tuesdays. Ticket attachments are retained for review; no scheduling or eligibility rules are defined here.",
+              "task_key": "support-desk"
+            }
+          ],
+          "test_source": "import copy\nimport unittest\nfrom solution import audit_manifest\n\n\ndef e(path, **updates):\n    value = dict(path=path, size=2, digest='1a2b3c4d5e6f', compression=\"none\", executable=False)\n    value.update(updates)\n    return value\n\n\nclass ManifestChecks(unittest.TestCase):\n    def check(self, entries, required, maximum, total, problems):\n        self.assertEqual(audit_manifest(entries, required, maximum),\n                         {\"ok\": not problems, \"total\": total, \"problems\": problems})\n\n    def test_01(self):\n        self.check([e(\"././data/a\"), e(\"bin/run\", executable=True, compression=\"gzip\")],\n                   [\"data/a\", \"./bin/run\"], 10, 4, [])\n        self.check([e(\"x\", digest='1a2b3c4d')], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"x\", digest=\"A\" * 12)], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"x\", digest=\"g\" * 12)], [], 10, 2, [\"digest:x\"])\n        self.check([e(\"empty\", size=0, digest=\"\")], [], 1, 0, ['digest:empty'])\n        self.check([e(\"empty\", size=0, digest=\"\", compression=\"gzip\")], [], 1, 0, [\"digest:empty\"])\n\n    def test_02(self):\n        paths = [\"\", \"/abs\", \"a//b\", \"a/../b\", \"a/./b\", \"a/\", \"a\\\\b\", \"./\"]\n        self.check([e(path) for path in paths], [], 100, 0,\n                   [\"path:0\", \"path:1\", \"path:2\", \"path:3\", \"path:4\", \"path:5\", \"path:6\", \"path:7\"])\n        self.check([e(\"a b\"), e(\".hidden\")], [\"a b\", \".hidden\"], 20, 4, [])\n        self.check([e(\"../bad\"), e(\"ok\")], [\"ok\"], 10, 2, [\"path:0\"])\n\n    def test_03(self):\n        self.check([e(\"x\"), e(\"./x\", size=90, digest=\"bad\", executable=True)], [], 10, 2, [\"duplicate:x\"])\n        self.check([e(\"x\", digest=\"bad\"), e(\"x\", size=90)], [\"x\"], 10, 2, [\"digest:x\", \"duplicate:x\"])\n        self.check([e(\"readme\"), e(\"Readme\", size=3)], [\"readme\", \"Readme\"], 20, 2, ['duplicate:Readme', 'missing:Readme'])\n        self.check([e(\"x\"), e(\"x\"), e(\"x\")], [], 10, 2, [\"duplicate:x\", \"duplicate:x\"])\n        self.check([e(\"Straße\"), e(\"STRASSE\", size=3)], [\"Straße\", \"STRASSE\"], 20, 2,\n                   [\"duplicate:STRASSE\", \"missing:STRASSE\"])\n        self.check([e(\"STRASSE\"), e(\"Straße\", size=3)], [\"Straße\", \"STRASSE\"], 20, 2,\n                   [\"duplicate:Straße\", \"missing:Straße\"])\n\n    def test_04(self):\n        self.check([e(\"z\", digest=\"bad\", compression=\"zip\", executable=True), e(\"bin/a\", compression=\"GZIP\")],\n                   [\"z\", \"./absent\", \"missing\", \"absent\"], 1, 4,\n                   [\"digest:z\", \"compression:z\", \"executable:z\", \"compression:bin/a\", \"missing:absent\", \"missing:missing\", \"budget\"])\n        self.check([e(\"binary/a\", executable=True)], [], 10, 2, [\"executable:binary/a\"])\n        self.check([e(\"x\", digest=\"bad\")], [\"./x\", \"x\"], 10, 2, [\"digest:x\"])\n        self.check([e(\"a\", size=0, digest=\"\", compression=\"zip\", executable=True)], [], 1, 0,\n                   [\"digest:a\", \"compression:a\", \"executable:a\"])\n\n    def test_05(self):\n        self.check([e(\"a\", size=3)], [], 3, 3, ['budget'])\n        self.check([e(\"a\", size=3)], [], 2, 3, [\"budget\"])\n        self.check([], [], 1, 0, [])\n        self.check([], [], 0, 0, [\"budget\"])\n        entries, required = [e(\"a\")], [\"./a\", \"a\"]\n        before = copy.deepcopy((entries, required))\n        first = audit_manifest(entries, required, 10)\n        second = audit_manifest(entries, required, 10)\n        self.assertEqual(first, {\"ok\":True, \"total\":2, \"problems\":[]})\n        self.assertEqual(first, second)\n        self.assertIsNot(first, second)\n        self.assertIsNot(first[\"problems\"], second[\"problems\"])\n        self.assertEqual((entries, required), before)\n",
+          "reference_solution": "def audit_manifest(entries, required, max_bytes):\n    def canonical(path):\n        while path.startswith(\"./\"):\n            path = path[2:]\n        return path\n    identities = set()\n    present = set()\n    problems = []\n    total = 0\n    for index, entry in enumerate(entries):\n        path = canonical(entry[\"path\"])\n        if not path or path.startswith(\"/\") or \"\\\\\" in path or any(part in (\"\", \".\", \"..\") for part in path.split(\"/\")):\n            problems.append(\"path:\" + str(index))\n            continue\n        identity = path.casefold()\n        if identity in identities:\n            problems.append(\"duplicate:\" + path)\n            continue\n        identities.add(identity)\n        present.add(path)\n        total += entry[\"size\"]\n        digest = entry[\"digest\"]\n        valid_digest = len(digest) == 12 and all(char in \"0123456789abcdef\" for char in digest)\n        if not (False) and not valid_digest:\n            problems.append(\"digest:\" + path)\n        if entry[\"compression\"] not in (\"none\", \"gzip\"):\n            problems.append(\"compression:\" + path)\n        if entry[\"executable\"] and not path.startswith(\"bin/\"):\n            problems.append(\"executable:\" + path)\n    for path in sorted({canonical(value) for value in required}):\n        if path not in present:\n            problems.append(\"missing:\" + path)\n    if total >= max_bytes:\n        problems.append(\"budget\")\n    return {\"ok\": not problems, \"total\": total, \"problems\": problems}\n"
+        }
+      ]
+    }
+  ]
+}

@@ -380,7 +380,11 @@ def test_outstanding_verifier_cannot_change_reconfigured_policy(ao_factory, kb, 
 
     provider = RacingVerifier()
     operation = run_maintenance(
-        ao, run_key="policy-cas", budget=MaintenanceBudget(), verifier=provider
+        # Exercise policy fencing independently of load on the local SQL server.
+        ao,
+        run_key="policy-cas",
+        budget=MaintenanceBudget(max_wall_seconds=100),
+        verifier=provider,
     )
     if outcome == "cancelled":
         with pytest.raises(asyncio.CancelledError):

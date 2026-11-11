@@ -1,6 +1,6 @@
 # ai-knot examples
 
-Updated: **October 27, 2026**
+Updated: **October 28, 2026**
 
 Use this page when you want the shortest path to a runnable proof.
 
@@ -23,6 +23,7 @@ The examples are grouped by **what you are trying to prove first**:
 | Prove the generic function-calling memory surface in code | `python examples/function_calling_surface_demo.py` | plain Python `add` / `search` / `list` / `get` / `delete` callables for runtimes that register ordinary functions as tools |
 | Prove structured updates and memory history in code | `python examples/structured_correction.py` | `add_resolved` / `MemoryOp.UPDATE` / `MemoryOp.DELETE` / `lineage()` with active-vs-history output |
 | Prove always-on recovery after a process crash | `python examples/always_on_recovery.py --data-dir /tmp/knot-recovery` | durable waiting, stale-plan rejection, external-effect reconciliation, and one effect across repeated runs |
+| Connect always-on team memory to an event/timer host | `PYTHONPATH=src python examples/always_on_team.py` | bounded catch-up, durable context/receipt, replanning, action guards and shared experience withdrawal; [guide](../docs/always-on-team-cycle.md) |
 | Prove the installed npm bridge in one command | `npx ai-knot-demo` | the same built-in proof routed through the packaged Node bridge |
 | Prove the core TypeScript memory loop in under 2 minutes | `cd npm && npm run example:basic-memory-loop` | the same `add` / `search` / `list` / `delete` loop from Node |
 | Prove the HTTP sidecar memory loop without binding a real port | `python examples/http_sidecar_surface_demo.py` | `/health`, `POST /v1/facts`, `POST /v1/search`, `GET /v1/facts`, `GET /v1/facts/{id}`, and delete via the same JSON surface as `ai-knot serve` |
@@ -75,6 +76,10 @@ Use these once the zero-network surface looks right and you want actual runtime 
 | [`quickstart.py`](quickstart.py) | first proof of the core memory loop |
 | [`structured_correction.py`](structured_correction.py) | explicit update/delete memory lifecycle with lineage and active-vs-history output |
 | [`shared_pool.py`](shared_pool.py) | multi-agent shared memory with trust / visibility |
+| [`shared_memory_return.py`](shared_memory_return.py) | restart, saved refs and complete retention recovery |
+| [`task_context.py`](task_context.py) | explicit task requirements and recipient-role context |
+| [`team_experience.py`](team_experience.py) | outcome-bound and historical lessons with source retraction |
+| [`always_on_team.py`](always_on_team.py) | an event/timer host combining all three memory paths |
 | [`coding_agent.py`](coding_agent.py) | project-memory and coding-agent context |
 | [`multilingual.py`](multilingual.py) | multilingual fact storage and recall |
 | [`hero_demo.py`](hero_demo.py) | the deterministic demo used for launch assets |

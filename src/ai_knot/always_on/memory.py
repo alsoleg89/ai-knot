@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, suppress
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
 from ai_knot.knowledge import KnowledgeBase
 from ai_knot.pool import SharedMemoryPool
-from ai_knot.types import Fact
+from ai_knot.types import Fact, MemoryType
 
 from . import _state as transitions
-from .changes import access_projection, evidence_revision, visible
+from .changes import ChangeBatch, FactChange, access_projection, evidence_revision, visible
+from .changes import canonical as encode_changes
 from .lineage import (
     DEPENDENCIES_KEY,
     ROOTS_KEY,
@@ -30,6 +33,8 @@ from .models import (
     ActionPermit,
     ActionRecord,
     BasisIssue,
+    ContextFact,
+    ContextReview,
     EvidenceRef,
     FreshnessRecord,
     IdempotencyConflict,
@@ -37,9 +42,13 @@ from .models import (
     IntentState,
     JSONObject,
     Lease,
+    RecordedExperience,
     ResumePacket,
     RevisionConflict,
+    SnapshotTooLarge,
     StaleEvidence,
+    TaskContext,
+    TaskContextGuard,
     UnsupportedAlwaysOnBackend,
     VerificationRequest,
     VerificationResult,
@@ -48,6 +57,7 @@ from .models import (
     WaitForSlot,
     WaitUntil,
     canonical,
+    context_label,
     digest,
     nonempty,
     page_limit,
@@ -66,7 +76,7 @@ from .state_storage import (
     save_intent,
     timestamp,
 )
-from .storage import AlwaysOnSession, AlwaysOnStorageCapable, enable_stream, sql
+from .storage import AlwaysOnSession, AlwaysOnStorageCapable, SQLStatement, enable_stream, sql
 from .subscriptions import SubscriptionsMixin
 from .workspace import WorkspaceMemory, initialize_workspace_bindings, require_action_workspace
 
@@ -107,6 +117,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
             initialize(session)
             initialize_workspace_bindings(session)
             initialize_maintenance(session)
+            session.execute(sql("UPDATE ao_schema SET version=8 WHERE id=1 AND version<8"))
             enable_stream(session, self._owner, self._now())
 
     def _now(self) -> datetime:
@@ -187,6 +198,9 @@ class AlwaysOnMemory(SubscriptionsMixin):
             scopes.update(ref.namespace for ref in action.basis)
             refs.extend(action.basis)
         scopes.update(self._root_scopes(session, tuple(refs)))
+        from .experience import experience_scopes
+
+        scopes.update(experience_scopes(session, self._owner, intent.id))
         if isinstance(intent.waiting_for, WaitForSlot):
             scopes.add(intent.waiting_for.namespace)
         elif isinstance(intent.waiting_for, WaitForChange):
@@ -201,9 +215,13 @@ class AlwaysOnMemory(SubscriptionsMixin):
 
     @contextmanager
     def _intent_transaction(
-        self, intent_id: str, refs: tuple[EvidenceRef, ...] = ()
+        self,
+        intent_id: str,
+        refs: tuple[EvidenceRef, ...] = (),
+        *,
+        extra_namespaces: tuple[str, ...] = (),
     ) -> Iterator[tuple[AlwaysOnSession, Intent, tuple[ActionRecord, ...]]]:
-        namespaces = {self._owner, *(ref.namespace for ref in refs)}
+        namespaces = {self._owner, *extra_namespaces, *(ref.namespace for ref in refs)}
         for _attempt in range(3):
             with self._transaction(write=False) as snapshot:
                 item = self._intent(snapshot, intent_id)
@@ -471,6 +489,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
         next_step: str = "",
         waiting_for: WaitCondition | None = None,
         basis: tuple[EvidenceRef, ...] = (),
+        context_guard: TaskContextGuard | None = None,
     ) -> Intent:
         state = IntentState(state)
         positive_integer(expected_revision, "expected_revision")
@@ -489,7 +508,12 @@ class AlwaysOnMemory(SubscriptionsMixin):
             extra.append(waiting_for.ref)
         elif waiting_for is not None:
             raise ValueError("unknown wait condition")
-        with self._intent_transaction(intent_id, tuple(extra)) as (session, intent, actions):
+        guard_scopes = self._task_guard_scopes(context_guard)
+        with self._intent_transaction(intent_id, tuple(extra), extra_namespaces=guard_scopes) as (
+            session,
+            intent,
+            actions,
+        ):
             now = self._now()
             current = transitions.checkpoint(
                 intent,
@@ -504,6 +528,8 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 views=self._views(session, refs, now),
                 now=now,
             )
+            if context_guard is not None:
+                self._check_task_guard(session, context_guard, now)
             save_intent(session, intent, current)
             return current
 
@@ -579,6 +605,136 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 found.append(ref)
             return transitions.union_basis(tuple(found))
 
+    def _snapshot_current(self, session: AlwaysOnSession, event: FactChange, now: datetime) -> bool:
+        if event.after_revision is None:
+            return False
+        ref = EvidenceRef(event.namespace, event.fact_id, event.after_revision)
+        return not self._validate_basis(session, (ref,), now, freshness=False)
+
+    def resync(self, subscription_id: str, *, limit: int = 500) -> ChangeBatch:
+        """Replace a pending delivery with a complete bounded working-set manifest.
+
+        Persist the replacement cache and receipt before ack. No cursor advances
+        here, and writes after the captured head remain in the delta journal.
+        """
+        nonempty(subscription_id, "subscription_id")
+        page_limit(limit)
+        with self._transaction(write=False) as session:
+            namespace = str(self._subrow(session, subscription_id)["namespace"])
+        self._subscription_namespace(namespace)
+        scopes = (self._owner, "__shared__") if self._pool is not None else (self._owner,)
+        with self._transaction(scopes) as session:
+            row = self._subrow(session, subscription_id)
+            if row["namespace"] != namespace:
+                raise RevisionConflict("subscription changed")
+            selector = self._subscription(row).selector
+            stream = session.fetch_one(
+                sql("SELECT head_seq FROM ao_streams WHERE namespace=?"), (namespace,)
+            )
+            assert stream is not None
+            head = int(stream["head_seq"] or 0)
+            now = self._now()
+            events: list[FactChange] = []
+            after: str | None = None
+            while True:
+                clause = " AND id>?" if after is not None else ""
+                candidates = session.fetch_all(
+                    SQLStatement(
+                        "SELECT id,slot_key FROM facts WHERE agent_id=?"
+                        + clause
+                        + " ORDER BY id LIMIT 500",
+                        'SELECT id,slot_key FROM "ai-knot_facts" WHERE agent_id=%s'
+                        + clause.replace("?", "%s")
+                        + " ORDER BY id LIMIT 500",
+                    ),
+                    (namespace, after) if after is not None else (namespace,),
+                )
+                for candidate in candidates:
+                    fact_id = str(candidate["id"])
+                    if (selector.fact_ids or selector.slot_keys) and (
+                        fact_id not in selector.fact_ids
+                        and candidate["slot_key"] not in selector.slot_keys
+                    ):
+                        continue
+                    fact = session.load_facts(namespace, fact_id=fact_id)[0]
+                    if not fact.supported or not fact.is_active(now):
+                        continue
+                    event = FactChange(
+                        namespace,
+                        head,
+                        "snapshot",
+                        fact.id,
+                        fact.slot_key,
+                        None,
+                        evidence_revision(fact),
+                    )
+                    if not self._snapshot_current(session, event, now):
+                        continue
+                    events.append(event)
+                    if len(events) > limit:
+                        raise SnapshotTooLarge("Narrow the selected working set before recovery")
+                if len(candidates) < 500:
+                    break
+                after = str(candidates[-1]["id"])
+            token = uuid4().hex
+            grants = self._grants(session, namespace)
+            acl_digest = hashlib.sha256(encode_changes(sorted(grants)).encode()).hexdigest()
+            session.execute(
+                sql(
+                    "UPDATE ao_subscriptions SET pending_since=NULL,inflight_token=?,"
+                    "inflight_through_seq=?,inflight_events_json=?,inflight_resync=0,"
+                    "inflight_acl_digest=?,inflight_snapshot=1 WHERE owner=? AND id=?"
+                ),
+                (
+                    token,
+                    head,
+                    encode_changes([asdict(event) for event in events]),
+                    acl_digest,
+                    self._owner,
+                    subscription_id,
+                ),
+            )
+            return ChangeBatch(
+                token, tuple(events), through_seq=head, head_seq=head, is_snapshot=True
+            )
+
+    def review_context(
+        self, refs: tuple[EvidenceRef, ...], *, max_chars: int = 12000
+    ) -> ContextReview:
+        """Admit exact saved revisions within a whole-fact character budget.
+
+        Replace cached model context with the accepted set. This read-only view
+        is point-in-time evidence checking, not permission for a later effect.
+        """
+        positive_integer(max_chars, "max_chars", 65536)
+        if len(refs) > 128 or any(not isinstance(ref, EvidenceRef) for ref in refs):
+            raise ValueError("context requires at most 128 evidence references")
+        transitions.union_basis(refs)
+        scopes = (self._owner, "__shared__") if self._pool is not None else (self._owner,)
+        with self._transaction(scopes, write=False) as session:
+            from .reads import ReadCache
+
+            session = ReadCache(session)
+            now = self._now()
+            accepted: list[ContextFact] = []
+            issues: list[BasisIssue] = []
+            omitted: list[EvidenceRef] = []
+            remaining = max_chars
+            for ref in dict.fromkeys(refs):
+                problems = self._validate_basis(session, (ref,), now)
+                if problems:
+                    issues.extend(problems)
+                    continue
+                fact = session.load_facts(ref.namespace, fact_id=ref.fact_id)[0]
+                if len(fact.content) > remaining:
+                    omitted.append(ref)
+                    continue
+                accepted.append(ContextFact(ref, fact.content, fact.slot_key))
+                remaining -= len(fact.content)
+            return ContextReview(
+                tuple(accepted), tuple(issues), tuple(omitted), now, not issues and not omitted
+            )
+
     def independent_evidence(self, refs: tuple[EvidenceRef, ...]) -> tuple[EvidenceRef, ...]:
         """Flatten copied observations into distinct current source revisions."""
         scopes = {ref.namespace for ref in refs}
@@ -593,6 +749,80 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 roots, lambda namespace, fact_id: session.load_facts(namespace, fact_id=fact_id)
             )
 
+    def select_context(
+        self,
+        requirements: tuple[str, ...],
+        *,
+        task_key: str = "",
+        role: str = "",
+        max_facts: int = 8,
+        max_chars: int = 12000,
+        required_refs: tuple[EvidenceRef, ...] = (),
+    ) -> TaskContext:
+        """Select current task evidence within a whole-fact context budget."""
+        from .context import select_context
+
+        return select_context(
+            self,
+            requirements,
+            task_key=task_key,
+            role=role,
+            max_facts=max_facts,
+            max_chars=max_chars,
+            required_refs=required_refs,
+        )
+
+    def task_snapshot(
+        self,
+        *,
+        task_key: str,
+        max_facts: int = 8,
+        max_chars: int = 12000,
+        include_derived: bool = True,
+    ) -> tuple[ContextFact, ...]:
+        """Read all current task evidence, or raise SnapshotTooLarge without a prefix."""
+        from .context import task_snapshot
+
+        return task_snapshot(
+            self,
+            task_key=task_key,
+            max_facts=max_facts,
+            max_chars=max_chars,
+            include_derived=include_derived,
+        )
+
+    def task_guard(self, *, task_key: str, max_facts: int = 128) -> TaskContextGuard:
+        """Capture the admissible universe before selection; not semantic completeness."""
+        from .context import task_guard, task_scopes
+
+        context_label(task_key, "task_key")
+        positive_integer(max_facts, "max_facts", 128)
+        with self._transaction(task_scopes(self), write=False) as session:
+            return task_guard(
+                self, session, task_key=task_key, max_facts=max_facts, now=self._now()
+            )
+
+    def _task_guard_scopes(self, guard: TaskContextGuard | None) -> tuple[str, ...]:
+        from .context import task_scopes
+
+        if guard is not None and not isinstance(guard, TaskContextGuard):
+            raise ValueError("context_guard must be TaskContextGuard")
+        return task_scopes(self) if guard is not None else ()
+
+    def _check_task_guard(
+        self, session: AlwaysOnSession, guard: TaskContextGuard, now: datetime
+    ) -> None:
+        from .context import task_guard
+
+        try:
+            current = task_guard(
+                self, session, task_key=guard.task_key, max_facts=guard.max_facts, now=now
+            )
+        except SnapshotTooLarge:
+            raise StaleEvidence("task context no longer matches") from None
+        if current != guard:
+            raise StaleEvidence("task context no longer matches")
+
     def derive_fact(
         self,
         content: str,
@@ -600,6 +830,9 @@ class AlwaysOnMemory(SubscriptionsMixin):
         basis: tuple[EvidenceRef, ...],
         namespace: str | None = None,
         visibility_scope: str = "global",
+        memory_type: MemoryType = MemoryType.SEMANTIC,
+        task_key: str = "",
+        for_role: str = "",
     ) -> Fact:
         """Store a host-declared derivation with flattened, revision-bound roots.
 
@@ -610,6 +843,9 @@ class AlwaysOnMemory(SubscriptionsMixin):
         self._check_namespace(namespace)
         nonempty(content, "content")
         nonempty(visibility_scope, "visibility_scope")
+        memory_type = MemoryType(memory_type)
+        context_label(task_key, "task_key")
+        context_label(for_role, "for_role")
         if not basis:
             raise ValueError("derivation requires evidence")
         scopes = {namespace, *(ref.namespace for ref in basis)}
@@ -628,6 +864,7 @@ class AlwaysOnMemory(SubscriptionsMixin):
             now = self._now()
             output = Fact(
                 content,
+                type=memory_type,
                 created_at=now,
                 last_accessed=now,
                 valid_from=now,
@@ -638,10 +875,41 @@ class AlwaysOnMemory(SubscriptionsMixin):
                 qualifiers={
                     ROOTS_KEY: encode_roots(tuple(roots)),
                     DEPENDENCIES_KEY: encode_roots(tuple(dependencies)),
+                    **({"task_key": task_key} if task_key else {}),
+                    **({"for_role": for_role} if for_role else {}),
                 },
             )
             session.replace_facts(namespace, [*session.load_facts(namespace), output])
             return output
+
+    def record_experience(
+        self,
+        action_id: str,
+        *,
+        expected_action_revision: int,
+        experience_key: str,
+        content: str,
+        basis: tuple[EvidenceRef, ...],
+        namespace: str | None = None,
+        visibility_scope: str = "global",
+        task_key: str = "",
+        for_role: str = "",
+    ) -> RecordedExperience:
+        """Record a host-authored lesson bound to this action's current outcome."""
+        from .experience import record_experience
+
+        return record_experience(
+            self,
+            action_id,
+            expected_action_revision=expected_action_revision,
+            experience_key=experience_key,
+            content=content,
+            basis=basis,
+            namespace=namespace,
+            visibility_scope=visibility_scope,
+            task_key=task_key,
+            for_role=for_role,
+        )
 
     def prepare_action(
         self,
@@ -704,10 +972,21 @@ class AlwaysOnMemory(SubscriptionsMixin):
         with self._transaction(write=False) as session:
             return self._action(session, action_id).intent_id
 
-    def begin_action(self, action_id: str, *, lease_token: str) -> ActionPermit:
+    def begin_action(
+        self,
+        action_id: str,
+        *,
+        lease_token: str,
+        context_guard: TaskContextGuard | None = None,
+    ) -> ActionPermit:
+        guard_scopes = self._task_guard_scopes(context_guard)
         intent_id = self._action_intent_id(action_id)
         error = None
-        with self._intent_transaction(intent_id) as (session, intent, actions):
+        with self._intent_transaction(intent_id, extra_namespaces=guard_scopes) as (
+            session,
+            intent,
+            actions,
+        ):
             action = self._action(session, action_id)
             if self._workspace is not None:
                 self._workspace.check(session, self._owner, action)
@@ -715,6 +994,11 @@ class AlwaysOnMemory(SubscriptionsMixin):
             transitions.require_lease(intent, lease_token, now)
             refs = transitions.union_basis(intent.basis, action.basis)
             issues = self._validate_basis(session, refs, now)
+            if context_guard is not None and not issues:
+                try:
+                    self._check_task_guard(session, context_guard, now)
+                except StaleEvidence:
+                    issues = (BasisIssue("changed", None),)
             if issues:
                 reasons = tuple(
                     sorted(set(intent.blocked_reasons) | {issue.reason for issue in issues})

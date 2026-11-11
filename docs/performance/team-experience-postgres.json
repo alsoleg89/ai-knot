@@ -1,0 +1,83 @@
+{
+  "backend": "postgres",
+  "environment": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "python": "3.12.13"
+  },
+  "expected": {
+    "durable_lessons": 64,
+    "record_calls": 384
+  },
+  "fixed_source_corpus_sha256": "ad41b7c7df6add2ba4907487e6b436f8d5fac8973fd64148ebd4c297745b80cd",
+  "invariants": {
+    "acl_rejected": 64,
+    "distinct_record_processes": 8,
+    "duplicate_bindings": 0,
+    "durable_lessons": 64,
+    "historical_attempt_warning_survives": true,
+    "independent_roots_for_original_and_copies": 1,
+    "independent_sources_for_all_lessons": 8,
+    "inference_endpoints_blocked": true,
+    "model_calls": 0,
+    "outcome_rejected": 32,
+    "overlapping_worker_intervals": true,
+    "record_calls": 384,
+    "reopened_without_pool": 4,
+    "source_rejected": 8,
+    "stale_selections": 0,
+    "unique_returned_lessons": 64
+  },
+  "record": {
+    "samples": 384,
+    "seconds_p50": 0.10502166603691876,
+    "seconds_p95": 0.6723934579640627
+  },
+  "return": {
+    "samples": 112,
+    "seconds_p50": 0.036927708075381815,
+    "seconds_p95": 0.04988987499382347
+  },
+  "return_stages": [
+    {
+      "accepted_lessons": 64,
+      "historical_survives": true,
+      "selected_facts": 48,
+      "stage": "before_changes"
+    },
+    {
+      "accepted_lessons": 0,
+      "historical_survives": false,
+      "selected_facts": 0,
+      "stage": "acl_revoked"
+    },
+    {
+      "accepted_lessons": 56,
+      "historical_survives": true,
+      "selected_facts": 42,
+      "stage": "source_corrected"
+    },
+    {
+      "accepted_lessons": 24,
+      "historical_survives": true,
+      "selected_facts": 18,
+      "stage": "outcome_reconciled"
+    }
+  ],
+  "scope": "Consistency/local timing only; no capacity, comparison or model-accuracy claim",
+  "timing_scope": {
+    "record": "record_experience calls, including idempotent replays",
+    "return": "select_context only; subsequent review/assertions excluded"
+  },
+  "workload": {
+    "actions": 8,
+    "correction_schedule": "between fresh-process return phases",
+    "keys": 8,
+    "max_chars": 600,
+    "max_facts": 3,
+    "noise": 500,
+    "owners": 4,
+    "process_model": "simultaneous processes; independent SQL connections",
+    "replays_per_worker": 3,
+    "workers": 8
+  }
+}

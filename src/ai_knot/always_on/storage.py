@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -15,6 +16,14 @@ from ai_knot.types import Fact
 
 SQLScalar: TypeAlias = str | int | float | bytes | None
 SQLRow: TypeAlias = dict[str, SQLScalar]
+
+
+def task_row_applicable(memory_type: str, qualifiers_json: str | None, task_key: str) -> bool:
+    """Cheap candidate check before full decoding; keep admission in context.py."""
+    if memory_type == "episodic":
+        return False
+    qualifiers = json.loads(qualifiers_json) if qualifiers_json else {}
+    return qualifiers.get("task_key", "") in ("", task_key)
 
 
 @dataclass(frozen=True)
@@ -31,6 +40,7 @@ def sql(statement: str) -> SQLStatement:
 
 
 class AlwaysOnSession(Protocol):
+    def load_task_facts(self, namespace: str, *, task_key: str) -> Iterable[Fact]: ...
     def load_facts(
         self, namespace: str, *, fact_id: str | None = None, slot_key: str | None = None
     ) -> list[Fact]: ...
@@ -88,6 +98,10 @@ class SQLSession:
         if fact_id is None and slot_key is None:
             return self._loader(self._connection, namespace)
         return self._loader(self._connection, namespace, fact_id=fact_id, slot_key=slot_key)
+
+    def load_task_facts(self, namespace: str, *, task_key: str) -> list[Fact]:
+        self._check(namespace)
+        return self._loader(self._connection, namespace, task_key=task_key)
 
     def replace_facts(self, namespace: str, facts: list[Fact]) -> None:
         self._check(namespace)
@@ -150,7 +164,8 @@ DDL = (
         "unce_seconds DOUBLE PRECISION NOT NULL CHECK(debounce_seconds BETWEEN "
         "0 AND 3600), pending_since TEXT, inflight_token TEXT, inflight_through"
         "_seq BIGINT, inflight_events_json TEXT, inflight_resync INTEGER, infli"
-        "ght_acl_digest TEXT, PRIMARY KEY(owner,id), CHECK((inflight_token IS N"
+        "ght_acl_digest TEXT, inflight_snapshot INTEGER NOT NULL DEFAULT 0, "
+        "PRIMARY KEY(owner,id), CHECK((inflight_token IS N"
         "ULL AND inflight_through_seq IS NULL AND inflight_events_json IS NULL "
         "AND inflight_resync IS NULL AND inflight_acl_digest IS NULL) OR (infli"
         "ght_token IS NOT NULL AND inflight_through_seq IS NOT NULL AND infligh"
@@ -188,11 +203,25 @@ def migrate(session: AlwaysOnSession) -> None:
     for statement in DDL:
         session.execute(sql(statement))
     row = session.fetch_one(sql("SELECT version FROM ao_schema WHERE id=1"))
-    if row is not None and int(row["version"] or 0) > 6:
+    if row is not None and int(row["version"] or 0) > 8:
         raise RuntimeError("unsupported always-on schema version")
     session.execute(sql("INSERT INTO ao_schema(id,version) VALUES(1,2) ON CONFLICT(id) DO NOTHING"))
     if row is not None and int(row["version"] or 0) >= 5:
         migrate_freshness(session)
+    columns = session.fetch_all(
+        SQLStatement(
+            "SELECT name FROM pragma_table_info('ao_subscriptions')",
+            "SELECT column_name AS name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='ai-knot_ao_subscriptions'",
+        )
+    )
+    if "inflight_snapshot" not in {column["name"] for column in columns}:
+        session.execute(
+            sql(
+                "ALTER TABLE ao_subscriptions ADD COLUMN "
+                "inflight_snapshot INTEGER NOT NULL DEFAULT 0"
+            )
+        )
 
 
 def append_event(

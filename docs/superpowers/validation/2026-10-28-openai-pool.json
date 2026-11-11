@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-28",
+  "base_commit": "2f47c0436321c3fcbcfd04cf1d610b2e1eb9f158",
+  "scope": "Opt-in shared-pool embedding provider configuration; broader product goal remains active",
+  "requested_runtime": {
+    "chat": "gpt-4.1-mini",
+    "embeddings": "text-embedding-3-small"
+  },
+  "live_openai": {
+    "status": "not_run",
+    "reason": "Current API key location unresolved; user reports an existing key",
+    "provider_requests": 0
+  },
+  "local_ci": {
+    "command": "python -m pytest -n 4 --timeout=20 -m 'not slow' --cov=ai_knot -rs",
+    "postgres_required": true,
+    "postgres_image": "postgres:16-alpine",
+    "passed": 1996,
+    "skipped": 2,
+    "coverage_percent": 89.68,
+    "seconds": 70.24,
+    "skip_reasons": [
+      "PostgreSQL initialization regression SQLite parameter",
+      "Missing-psycopg import path while psycopg is installed"
+    ],
+    "slow_tests": "Not in normal CI; optional traced performance run was stopped. No new load-capacity result is claimed."
+  },
+  "focused": {
+    "quota_and_wall_tests": 89,
+    "python311_pool_embedder_tests": 85,
+    "python313_pool_embedder_tests": 85
+  },
+  "static": {
+    "ruff": "pass",
+    "format_files": 276,
+    "strict_mypy_source_files": 78,
+    "diff_check": "pass"
+  },
+  "review": {
+    "model": "gpt-6-astra",
+    "reasoning": "xhigh",
+    "skill": "Ponytail review",
+    "verdict": "Ship",
+    "actionable_findings": 0,
+    "path": "../reviews/2026-10-28-openai-pool-astra-ponytail.md",
+    "independent_focused_tests": 87
+  },
+  "test_diagnostic": "First CI run failed the preexisting daily-call-quota test on its default1s wall deadline. It now explicitly permits10s, matching neighboring quota tests. Production default1s and separate wall-budget/pytest20s checks are unchanged. Focused89 and repeated full CI pass.",
+  "offline_probe": {
+    "scope": "Temporary three-question S9 diagnostic; HTTP mocks only",
+    "reader_calls": 9,
+    "embedding_calls": 4,
+    "embedding_failure_rejected": true,
+    "task_success_claim": false
+  },
+  "protected_original": {
+    "head": "01aad887846364541da8428d7e3d6c4b4ad57ed2",
+    "head_and_status_unchanged": true,
+    "file_hashes_unchanged": 30,
+    "version_metadata": "0.12.0 in feature worktree; original deferred release files untouched"
+  },
+  "source_test_sha256": {
+    "src/ai_knot/pool.py": "f23bdc3a1bf122c65a98794f64fcb7151a97f37b6d34c9895a5968456a4ce33f",
+    "src/ai_knot/_pool_recall.py": "eb3c5f9faa3034b85731247750b769e3cf8f702d9e99cdfb270cd056379c8160",
+    "tests/test_pool_openai_embeddings.py": "d3341ddcf752d9618e6cac98821b28b2ff7ecc4649f26da8c08bb2fd3ebc9ae2",
+    "tests/always_on/test_shared_maintenance.py": "b1e18f861e9a4054caaa6a3fc3454744b24c6bfc949afc0dcf202ad0c1e35543",
+    "docs/usage.md": "294e870ddccb5d69ecf281fb041f39752fbade479ea50ee8f10e29945727561f"
+  }
+}

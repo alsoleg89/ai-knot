@@ -53,6 +53,15 @@ intent_id,  action_key),  CHECK(state IN ('prepared',  'started',  'succeeded',
 """,
     "CREATE INDEX IF NOT EXISTS ao_actions_intent_state ON ao_actions(owner,intent_id,state,id)",
     """
+CREATE TABLE IF NOT EXISTS ao_experiences (
+owner TEXT NOT NULL, action_id TEXT NOT NULL, namespace TEXT NOT NULL,
+experience_key TEXT NOT NULL, fact_id TEXT NOT NULL, action_revision BIGINT NOT NULL,
+input_digest TEXT NOT NULL, fact_revision TEXT NOT NULL,
+PRIMARY KEY(owner, action_id, namespace, experience_key))
+""",
+    "CREATE INDEX IF NOT EXISTS ao_experiences_action ON ao_experiences(owner,action_id)",
+    "CREATE INDEX IF NOT EXISTS ao_experiences_fact ON ao_experiences(namespace,fact_id)",
+    """
 CREATE TABLE IF NOT EXISTS ao_freshness ( namespace TEXT NOT NULL,  subject_kind
 TEXT NOT NULL,  subject_key TEXT NOT NULL,  bound_fact_id TEXT NOT NULL,
 bound_revision TEXT NOT NULL,  source_ref TEXT NOT NULL,  interval_seconds INTEGER
@@ -325,6 +334,9 @@ updated_at=? WHERE owner=? AND id=? AND revision=?
             from .models import RevisionConflict
 
             raise RevisionConflict("action revision changed")
+        from .experience import invalidate_experiences
+
+        invalidate_experiences(session, owner, current)
 
 
 def freshness_from_row(row: SQLRow) -> FreshnessRecord:

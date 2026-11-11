@@ -13,6 +13,8 @@ assembler picks the best combination.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from ai_knot.multi_agent.models import AssemblyResult, CandidateFact
 from ai_knot.multi_agent.scoring import DiversityPolicy
 
@@ -37,6 +39,8 @@ class CoverageAwareAssembler:
         top_k: int,
         n_publishers: int = 3,
         min_backfill_score_frac: float = 0.0,
+        max_chars: int | None = None,
+        admit: Callable[[CandidateFact], bool] | None = None,
     ) -> AssemblyResult:
         """Select top-k facts maximising facet coverage and diversity.
 
@@ -54,9 +58,15 @@ class CoverageAwareAssembler:
                 adaptive truncation so padding does not inflate the distractor
                 rate.  ``0.0`` keeps the original pad-to-top_k behaviour.
 
+            max_chars: Optional ceiling for selected whole-fact content.
+            admit: Optional current-evidence check; rejected candidates cannot
+                supply coverage. Callers can cache checks by fact identity.
+
         Returns:
             AssemblyResult with selected candidates and coverage metrics.
         """
+        if max_chars is not None and (type(max_chars) is not int or max_chars < 1):
+            raise ValueError("max_chars must be a positive integer")
         all_facet_ids = set(candidates_by_facet.keys())
         if not all_facet_ids:
             return AssemblyResult(
@@ -70,13 +80,37 @@ class CoverageAwareAssembler:
         selected_fact_ids: set[str] = set()
         agent_counts: dict[str, int] = {}
         covered_facets: set[str] = set()
+        evidence_facets: dict[str, set[str]] = {}
+        for candidates in candidates_by_facet.values():
+            for candidate in candidates:
+                evidence_facets.setdefault(candidate.fact.id, set()).update(
+                    facet_id
+                    for facet_id, score in candidate.facet_scores.items()
+                    if score > 0 and facet_id in all_facet_ids
+                )
+        used_chars = 0
+        budget_limited = False
+
+        def eligible(candidate: CandidateFact) -> bool:
+            nonlocal budget_limited
+            exceeds_budget = max_chars is not None and (
+                used_chars + len(candidate.fact.content) > max_chars
+            )
+            if exceeds_budget and budget_limited:
+                return False
+            if admit is not None and not admit(candidate):
+                return False
+            if exceeds_budget:
+                budget_limited = True
+                return False
+            return True
 
         # Phase 1: Greedy coverage — pick best candidate for each uncovered facet.
         # Process facets in order of fewest available candidates first
         # (most constrained first heuristic).
         facet_order = sorted(
             all_facet_ids,
-            key=lambda fid: len(candidates_by_facet.get(fid, [])),
+            key=lambda fid: (len(candidates_by_facet.get(fid, [])), fid),
         )
 
         for facet_id in facet_order:
@@ -88,7 +122,7 @@ class CoverageAwareAssembler:
             candidates = candidates_by_facet.get(facet_id, [])
             # Sort by final_score so the best candidate is picked first,
             # not just the first in insertion order.
-            sorted_cands = sorted(candidates, key=lambda c: c.final_score, reverse=True)
+            sorted_cands = sorted(candidates, key=lambda c: (-c.final_score, c.fact.id))
             for cand in sorted_cands:
                 if cand.facet_scores.get(facet_id, 0.0) <= 0:
                     continue
@@ -97,16 +131,19 @@ class CoverageAwareAssembler:
 
                 if fid in selected_fact_ids:
                     # Already selected via another facet — still counts as coverage.
-                    covered_facets.add(facet_id)
+                    covered_facets.update(evidence_facets[fid])
                     break
 
                 if agent_counts.get(aid, 0) >= agent_cap:
                     continue
+                if not eligible(cand):
+                    continue
 
                 selected.append(cand)
+                used_chars += len(cand.fact.content)
                 selected_fact_ids.add(fid)
                 agent_counts[aid] = agent_counts.get(aid, 0) + 1
-                covered_facets.add(facet_id)
+                covered_facets.update(evidence_facets[fid])
                 break
 
         # Phase 2: Backfill remaining slots from all candidates, ranked by
@@ -122,7 +159,7 @@ class CoverageAwareAssembler:
                         all_remaining.append(cand)
                         seen_ids.add(fid)
 
-            all_remaining.sort(key=lambda c: c.final_score, reverse=True)
+            all_remaining.sort(key=lambda c: (-c.final_score, c.fact.id))
 
             # Confident-cut threshold: backfill only candidates close enough to the
             # strongest facet winner.  Coverage (phase 1) is always preserved.
@@ -140,22 +177,18 @@ class CoverageAwareAssembler:
                 aid = cand.fact.origin_agent_id or "__self__"
                 if agent_counts.get(aid, 0) >= agent_cap:
                     continue
+                if not eligible(cand):
+                    continue
                 selected.append(cand)
+                used_chars += len(cand.fact.content)
                 selected_fact_ids.add(cand.fact.id)
                 agent_counts[aid] = agent_counts.get(aid, 0) + 1
                 # Check if this backfill candidate covers any uncovered facets.
-                for fid, score in cand.facet_scores.items():
-                    if score > 0 and fid not in covered_facets:
-                        covered_facets.add(fid)
+                covered_facets.update(evidence_facets[cand.fact.id])
 
         # A selected fact can cover several facets even when top_k stops phase 1.
         # Rank/list membership alone does not establish relevance to a facet.
-        covered_facets = {
-            fid
-            for cand in selected
-            for fid, score in cand.facet_scores.items()
-            if score > 0 and fid in all_facet_ids
-        }
+        covered_facets = {fid for cand in selected for fid in evidence_facets[cand.fact.id]}
         uncovered = all_facet_ids - covered_facets
         coverage = len(covered_facets) / len(all_facet_ids) if all_facet_ids else 0.0
 
@@ -164,4 +197,5 @@ class CoverageAwareAssembler:
             covered_facets=covered_facets,
             uncovered_facets=uncovered,
             coverage_score=coverage,
+            budget_limited=budget_limited,
         )

@@ -22,6 +22,10 @@ class CursorExpired(Exception):
     pass
 
 
+class SnapshotTooLarge(Exception):
+    """The selected working set cannot fit a complete bounded snapshot."""
+
+
 class InvalidDelivery(Exception):
     pass
 
@@ -194,6 +198,13 @@ class ActionPermit:
 
 
 @dataclass(frozen=True)
+class RecordedExperience:
+    lesson: ContextFact
+    outcome: Literal["succeeded", "failed"]
+    action_revision: int
+
+
+@dataclass(frozen=True)
 class FreshnessRecord:
     ref: EvidenceRef
     subject_kind: Literal["slot", "fact"]
@@ -236,6 +247,54 @@ class ResumePacket:
     freshness_due: tuple[EvidenceRef, ...]
     ready: bool
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ContextFact:
+    ref: EvidenceRef
+    content: str
+    slot_key: str
+
+
+@dataclass(frozen=True)
+class TaskContextGuard:
+    task_key: str
+    digest: str
+    max_facts: int = 128
+
+    def __post_init__(self) -> None:
+        context_label(self.task_key, "task_key")
+        positive_integer(self.max_facts, "max_facts", 128)
+        if (
+            not isinstance(self.digest, str)
+            or len(self.digest) != 64
+            or any(c not in "0123456789abcdef" for c in self.digest)
+        ):
+            raise ValueError("digest must be a lowercase SHA256 value")
+
+
+@dataclass(frozen=True)
+class ContextReview:
+    accepted: tuple[ContextFact, ...]
+    issues: tuple[BasisIssue, ...]
+    omitted: tuple[EvidenceRef, ...]
+    checked_at: datetime
+    complete: bool
+
+
+@dataclass(frozen=True)
+class TaskContext:
+    facts: tuple[ContextFact, ...]
+    covered_requirements: tuple[str, ...]
+    missing_requirements: tuple[str, ...]
+    budget_limited: bool
+    checked_at: datetime
+    complete: bool
+
+
+def context_label(value: str, field: str) -> None:
+    if not isinstance(value, str) or len(value) > 256 or value != value.strip():
+        raise ValueError(f"{field} must be an exact label of at most 256 characters")
 
 
 def nonempty(value: str, field: str = "value") -> str:

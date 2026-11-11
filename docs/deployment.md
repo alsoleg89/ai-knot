@@ -5,7 +5,7 @@ multi-agent pool, observability, and security. For the design rationale see
 [ARCHITECTURE.md](../ARCHITECTURE.md); for a feature-by-feature readiness view
 see [production-readiness.md](production-readiness.md).
 
-For the unreleased always-on layer, use the matching source checkout and the
+For the always-on layer introduced in 0.13.0, use matching engine/client versions and the
 [always-on operations guide](always-on.md). It documents `AI_KNOT_ALWAYS_ON=true`,
 SQLite/PostgreSQL support, complete state backups, clock assumptions and recovery.
 

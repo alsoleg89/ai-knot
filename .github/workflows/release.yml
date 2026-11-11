@@ -45,7 +45,7 @@ jobs:
         run: |
           sed -i 's/__version__ = ".*"/__version__ = "${{ inputs.version }}"/' src/ai_knot/__init__.py
 
-      - name: Bump version in npm/package.json
+      - name: Bump client and MCP manifest versions
         run: |
           cd npm
           node -e "
@@ -53,6 +53,10 @@ jobs:
             const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
             pkg.version = '${{ inputs.version }}';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            const manifest = JSON.parse(fs.readFileSync('../server.json','utf8'));
+            manifest.version = pkg.version;
+            for (const entry of manifest.packages) entry.version = pkg.version;
+            fs.writeFileSync('../server.json', JSON.stringify(manifest, null, 2) + '\n');
           "
 
       - name: Refresh npm/package-lock.json
@@ -64,7 +68,7 @@ jobs:
         run: |
           git config user.name "alsoleg89"
           git config user.email "155813332+alsoleg89@users.noreply.github.com"
-          git add pyproject.toml src/ai_knot/__init__.py npm/package.json npm/package-lock.json
+          git add pyproject.toml src/ai_knot/__init__.py npm/package.json npm/package-lock.json server.json
           if git diff --cached --quiet; then
             echo "Version already at ${{ inputs.version }} — nothing to commit"
           else

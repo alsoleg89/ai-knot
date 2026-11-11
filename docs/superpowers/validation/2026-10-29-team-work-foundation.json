@@ -1,0 +1,65 @@
+{
+  "base_commit": "e5e6316",
+  "scope": "evaluation foundation, no paid quality runner",
+  "full_python": {
+    "passed": 2817,
+    "skipped": 8,
+    "coverage": 90.13,
+    "postgres_required": true,
+    "workers": 2,
+    "marker": "not slow",
+    "log": "full-pg.log"
+  },
+  "compatibility": {
+    "python": [
+      "3.11",
+      "3.13"
+    ],
+    "focused_passed_each": 22
+  },
+  "static": {
+    "ruff_format": "passed",
+    "ruff_lint": "passed",
+    "mypy_source_files": 80
+  },
+  "production_code_changed": false,
+  "typescript": "unchanged; not rerun this batch",
+  "cases": {
+    "count": 3,
+    "stages": 9,
+    "test_methods": 45,
+    "current_sha256": "0b11a369992ee24052b69c014a8dcc4bf8e1e4bb2cd6b4a7ec40df5d997d782e",
+    "original_sha256": "8557254849082076acc9f36948804718f8b2df0d76403a2738f74aacc2f36265",
+    "public_ref_initial_fields_unchanged": true
+  },
+  "docker": {
+    "original_controls_matched": 24,
+    "revised_controls_matched": 24,
+    "same_mutants_original_pass": 3,
+    "same_mutants_revised_assertion_fail": 3,
+    "executions": 54,
+    "image": "sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a"
+  },
+  "pre_case_generic_freeze": {
+    "files": 91,
+    "all_unchanged": true,
+    "sha256": "f081ff3c83b2445408ee9b7c0e4a49920b0dea999f62fecb764c51ad778a696f"
+  },
+  "review": "independent non-Astra source/method/fixture review; two private-contract findings fixed and owner-tested",
+  "retained_failures": [
+    "missing modules RED",
+    "tuple wire-fixture error",
+    "initial PostgreSQL connection closed",
+    "Fact-vs-entry renderer prototype RED",
+    "incorrect assumption that resume is read-only",
+    "initial lint long lines",
+    "diagnostic script import path",
+    "three original false-positive semantic mutants"
+  ],
+  "openai_project_requests": 0,
+  "astra_used": false,
+  "quality_gain_claimed": false,
+  "release_changes": "untouched",
+  "goal_status": "active",
+  "archive_sha256": "0956487eff2508e170c3458cf3b36ae7a318c13fe6b5c4c665956d5368d26716"
+}

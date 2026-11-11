@@ -6,8 +6,14 @@
 |---|---|
 | [../README.md](../README.md) | Product overview, quickstart, install-by-surface, integration snippets, and examples. |
 | [usage.md](usage.md) | Full API reference: storage, learning, recall, MCP, integrations, multi-agent memory, and bi-temporal recall. |
-| [always-on.md](always-on.md) | Durable intentions, leases, subscriptions with acknowledgment, guarded actions, freshness, maintenance, and recovery. Unreleased source feature for SQLite/PostgreSQL. |
+| [always-on.md](always-on.md) | Durable intentions, leases, subscriptions with acknowledgment, guarded actions, freshness, maintenance, and recovery. SQLite/PostgreSQL support since 0.13.0. |
 | [multi-agent-always-on.md](multi-agent-always-on.md) | Workspace operations, resource fencing, shared maintenance authority/budgets, evidence lineage, and local load checks. |
+| [shared-memory-return.md](shared-memory-return.md) | Catch-up progress, bounded snapshot recovery, checked saved context and an executable two-agent workflow. |
+| [task-context.md](task-context.md) | Explicit task requirements, applicability/role preference, grounded procedures and fixed-data selection comparisons. |
+| [team-experience.md](team-experience.md) | Idempotent outcome-bound procedures, source lineage, reconciliation retraction and a real-process workload. |
+| [always-on-team-cycle.md](always-on-team-cycle.md) | One-shot event/timer host recipe composing return, bounded context, guarded work, diagnostics and experience. |
+| [shared-memory-completion.md](shared-memory-completion.md) | Four-stage acceptance audit, reproducible local results, source hashes and claim boundaries. |
+| [shared-memory-roadmap.md](shared-memory-roadmap.md) | Development program and acceptance criteria for lightweight always-on team memory. |
 | [multi-agent-governance.md](multi-agent-governance.md) | The governed-shared-memory surface: access control, supersession, provenance, trust, and audit — mapped to code and to the 2026 literature. |
 | [memory-commands.md](memory-commands.md) | Cross-surface command map for `add`, `search`, `list`, `get`, `delete`, `learn`, and structured correction. |
 | [integrations.md](integrations.md) | Fast routing by ecosystem surface: CrewAI, LangGraph, LangChain, LlamaIndex, AutoGen, OpenAI Agents SDK, PydanticAI, MCP, HTTP, and TypeScript. |

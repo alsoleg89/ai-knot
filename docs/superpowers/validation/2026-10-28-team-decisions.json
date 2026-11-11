@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-28",
+  "base_commit": "6f23a03c9cb726e72895c5102ec93d012e4d1ffe",
+  "scope": "Revision-safe async pool embeddings plus exploratory budgeted decision traces. Broad product goal remains active.",
+  "runtime_fixes": [
+    "Same-ID content updates refresh only changed vectors",
+    "Source changes during document/query I/O cannot rank current text by stale vectors",
+    "Deleted/inactive vectors pruned; missing vectors have no dense rank",
+    "Real lexical fallback when cached vectors are outside readable candidates",
+    "Explicit as-of time shared by embedding snapshots and recall"
+  ],
+  "python312_postgres_required": {
+    "passed": 2106,
+    "skipped": 2,
+    "coverage_percent": 89.74,
+    "seconds": 98.57,
+    "command": "python -m pytest -n 4 --timeout=20 -m 'not slow' --cov=ai_knot -rs",
+    "skip_reasons": [
+      "PostgreSQL initialization regression SQLite parameter",
+      "Missing-psycopg branch while psycopg installed"
+    ],
+    "slow_tests": "Excluded by standard CI selection; no new load-capacity claim"
+  },
+  "compatibility": {
+    "python311": 86,
+    "python313": 86,
+    "scope": "New cache/world/provider/proposal tests, offline"
+  },
+  "static": {
+    "ruff": "pass",
+    "format_files": 285,
+    "strict_mypy_source_files": 78,
+    "diff_check": "pass"
+  },
+  "ma_gate": {
+    "sqlite": {
+      "scenarios": 19,
+      "binding_passed": 11
+    },
+    "postgres": {
+      "scenarios": 19,
+      "binding_passed": 11
+    },
+    "advisory_misses_per_backend": 5,
+    "evidence": "../../performance/team-decisions-ma-gate.json"
+  },
+  "live_evaluation": {
+    "requested_models": [
+      "gpt-4.1-mini",
+      "text-embedding-3-small"
+    ],
+    "reader_snapshot": "gpt-4.1-mini-2025-04-14",
+    "protocol": 3,
+    "protocol_sha256": "f3ddea2a84a999d1e850f3f7de5c9918ea0f920430f48b169e736cff80f15d80",
+    "scenarios": 3,
+    "arms": 5,
+    "proposals_per_scenario": 5,
+    "backends": [
+      "sqlite",
+      "postgres"
+    ],
+    "provider_requests_current_protocol": 210,
+    "selection_contexts_equal_across_backends": 75,
+    "all_four_multi_step_runs": {
+      "requests": 406,
+      "tokens": 309341
+    },
+    "raw_and_summary": "../../performance/team-decisions-summary.json",
+    "runtime_archive": "../../performance/team-decisions-v3-runtime.json.gz",
+    "limits": [
+      "Exploratory authored fixtures, not held out",
+      "Five proposals, not unrestricted autonomous execution",
+      "Post-pilot protocol repairs are not memory improvements",
+      "Full history remains a strong control; no general dominance/production-readiness claim"
+    ]
+  },
+  "independent_review": {
+    "model": "gpt-6-astra",
+    "reasoning": "xhigh",
+    "skill": "Ponytail review",
+    "final_focused_passes": 75,
+    "material_findings": "Both closed",
+    "verdict": "Ship bounded changes",
+    "evidence": "../reviews/2026-10-28-team-decisions-astra-ponytail.md"
+  },
+  "test_incident": {
+    "parallel_run": "CI and separate MA benchmark lost local PostgreSQL TCP connections. No postmaster/container restart or OOM was observed; root cause was not established.",
+    "resolution": "Unchanged tests and complete PostgreSQL MA suite passed when run sequentially.",
+    "false_green_rejected": "Legacy gate displayed9/9after failed S26. Owner verification required every19selected scenario and all11binding thresholds; partial result was not accepted.",
+    "follow_up": "Harden legacy MA runner to fail closed on selected-scenario exceptions before relying on its CLI exit status alone."
+  },
+  "protected_original": {
+    "head_and_status_unchanged": true,
+    "sha256_files_unchanged": 30,
+    "release_metadata_unchanged": true,
+    "feature_package_version": "0.12.0",
+    "push_merge_release": "none"
+  },
+  "source_test_sha256": {
+    "src/ai_knot/_pool_recall.py": "284134a95573f5b1d90eb0a2778078c9b0a6a1b8ced08b2325bde8436f37877c",
+    "src/ai_knot/pool.py": "3a29bb621983deb370a66ee44630670564dd3b14b34daa5900371b7c8018cdc3",
+    "src/ai_knot/retriever.py": "3dee843db0fa0d9ab198a3d29527406317f342f4b0f3243e2b0a10ea0e9e6d31",
+    "tests/always_on/test_team_decisions.py": "0fd7771d91ab3a1db9187a790cb9523eda44bf6d30eaca2ef7166a3f43fc06a8",
+    "tests/eval/team_decisions/__init__.py": "35ae31bf5b6bc9ffb13f31a4136cb0ba9c70a1c03a10a5e54ccb46b2c7e2d2cc",
+    "tests/eval/team_decisions/openai.py": "0d16e646eb5d37d50dd28c0462801695c80fd4418b67fa3af7131671982533b9",
+    "tests/eval/team_decisions/runner.py": "24b98de28211f5c9c1e1bd6d75c8592b4668fe827deb1f89ba52ea697bcdb591",
+    "tests/eval/team_decisions/world.py": "adbff820a609eab34dba758ac9fbf314157181f10e58f81ce20560d89d18b6ed",
+    "tests/eval/test_team_decision_openai.py": "7757214568635f22d25cf7189fef8f2c2ed6527fa4b9cb6487d0262f2a05c8af",
+    "tests/eval/test_team_decision_runner.py": "927e397f0cd7ca4be77d2107f9bb789c5177dfd8a6bbf33431ff304e03ba7a84",
+    "tests/eval/test_team_decision_world.py": "7ac43864a34e4aa066dac9ac063c11c40fa8b429b122d669eed0edf4ab9d1bda",
+    "tests/test_pool_embedding_revisions.py": "a1cf3922019348e26a73da06052128eee4e3f1f0b6a51122c65a4ba08f707f57"
+  }
+}

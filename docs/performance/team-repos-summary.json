@@ -1,0 +1,363 @@
+{
+  "scope": "Exploratory authored single-file repository tasks with real researcher/coder models and isolated code execution; no superiority/capacity/production claim",
+  "backends": {
+    "sqlite": {
+      "run_status": "failed",
+      "worker_processes": 36,
+      "actual_calls": 56,
+      "actual_tokens": 121994,
+      "formation_calls": 9,
+      "formation_tokens": 12248,
+      "unknown_billing_or_worker_loss": 0,
+      "embedding_calls": 0,
+      "arms": {
+        "direct_sources": {
+          "stages_observed": 9,
+          "passing_stages": 7,
+          "repositories_passing_all_stages": 2,
+          "repositories_passing_final_contract": 3,
+          "logical_calls_including_full_formation": 12,
+          "logical_tokens_including_full_formation": 22971,
+          "proposals": 12,
+          "container_tests": 12,
+          "acquisition_counts": {
+            "current_sources": 9
+          },
+          "max_rendered_context_chars": 2552,
+          "container_median_seconds": 0.6234200000000001,
+          "failed_stages": [
+            {
+              "case": "notes-digest",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "notes-digest",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            }
+          ]
+        },
+        "raw_team_history": {
+          "stages_observed": 9,
+          "passing_stages": 6,
+          "repositories_passing_all_stages": 1,
+          "repositories_passing_final_contract": 2,
+          "logical_calls_including_full_formation": 20,
+          "logical_tokens_including_full_formation": 44140,
+          "proposals": 11,
+          "container_tests": 10,
+          "acquisition_counts": {
+            "all_history": 9
+          },
+          "max_rendered_context_chars": 11080,
+          "container_median_seconds": 0.6897530000000001,
+          "failed_stages": [
+            {
+              "case": "parcel-ledger",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "parcel-ledger",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "notes-digest",
+              "stage": 2,
+              "error_type": "StaleEvidence",
+              "tests_passed": false
+            }
+          ]
+        },
+        "current_docs_handoff": {
+          "stages_observed": 9,
+          "passing_stages": 8,
+          "repositories_passing_all_stages": 2,
+          "repositories_passing_final_contract": 3,
+          "logical_calls_including_full_formation": 19,
+          "logical_tokens_including_full_formation": 34998,
+          "proposals": 10,
+          "container_tests": 10,
+          "acquisition_counts": {
+            "current_sources_and_latest_handoff": 9
+          },
+          "max_rendered_context_chars": 4701,
+          "container_median_seconds": 0.6757200000000001,
+          "failed_stages": [
+            {
+              "case": "parcel-ledger",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            }
+          ]
+        },
+        "task_memory": {
+          "stages_observed": 9,
+          "passing_stages": 5,
+          "repositories_passing_all_stages": 1,
+          "repositories_passing_final_contract": 2,
+          "logical_calls_including_full_formation": 23,
+          "logical_tokens_including_full_formation": 44381,
+          "proposals": 14,
+          "container_tests": 14,
+          "acquisition_counts": {
+            "snapshot": 9
+          },
+          "max_rendered_context_chars": 4701,
+          "container_median_seconds": 0.6027795,
+          "failed_stages": [
+            {
+              "case": "parcel-ledger",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "catalog-pages",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "catalog-pages",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "catalog-pages",
+              "stage": 2,
+              "error_type": null,
+              "tests_passed": false
+            }
+          ]
+        }
+      }
+    },
+    "postgres": {
+      "run_status": "complete",
+      "worker_processes": 36,
+      "actual_calls": 57,
+      "actual_tokens": 129682,
+      "formation_calls": 9,
+      "formation_tokens": 12256,
+      "unknown_billing_or_worker_loss": 0,
+      "embedding_calls": 0,
+      "arms": {
+        "direct_sources": {
+          "stages_observed": 9,
+          "passing_stages": 7,
+          "repositories_passing_all_stages": 2,
+          "repositories_passing_final_contract": 3,
+          "logical_calls_including_full_formation": 11,
+          "logical_tokens_including_full_formation": 20532,
+          "proposals": 11,
+          "container_tests": 11,
+          "acquisition_counts": {
+            "current_sources": 9
+          },
+          "max_rendered_context_chars": 2552,
+          "container_median_seconds": 0.550363,
+          "failed_stages": [
+            {
+              "case": "parcel-ledger",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "parcel-ledger",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            }
+          ]
+        },
+        "raw_team_history": {
+          "stages_observed": 9,
+          "passing_stages": 5,
+          "repositories_passing_all_stages": 1,
+          "repositories_passing_final_contract": 2,
+          "logical_calls_including_full_formation": 22,
+          "logical_tokens_including_full_formation": 53594,
+          "proposals": 13,
+          "container_tests": 13,
+          "acquisition_counts": {
+            "all_history": 9
+          },
+          "max_rendered_context_chars": 11407,
+          "container_median_seconds": 0.546743,
+          "failed_stages": [
+            {
+              "case": "parcel-ledger",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "parcel-ledger",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "notes-digest",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "notes-digest",
+              "stage": 2,
+              "error_type": null,
+              "tests_passed": false
+            }
+          ]
+        },
+        "current_docs_handoff": {
+          "stages_observed": 9,
+          "passing_stages": 7,
+          "repositories_passing_all_stages": 2,
+          "repositories_passing_final_contract": 3,
+          "logical_calls_including_full_formation": 20,
+          "logical_tokens_including_full_formation": 36651,
+          "proposals": 11,
+          "container_tests": 11,
+          "acquisition_counts": {
+            "current_sources_and_latest_handoff": 9
+          },
+          "max_rendered_context_chars": 4726,
+          "container_median_seconds": 0.557737,
+          "failed_stages": [
+            {
+              "case": "parcel-ledger",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "parcel-ledger",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            }
+          ]
+        },
+        "task_memory": {
+          "stages_observed": 9,
+          "passing_stages": 5,
+          "repositories_passing_all_stages": 1,
+          "repositories_passing_final_contract": 2,
+          "logical_calls_including_full_formation": 22,
+          "logical_tokens_including_full_formation": 43417,
+          "proposals": 13,
+          "container_tests": 13,
+          "acquisition_counts": {
+            "snapshot": 9
+          },
+          "max_rendered_context_chars": 4726,
+          "container_median_seconds": 0.550927,
+          "failed_stages": [
+            {
+              "case": "parcel-ledger",
+              "stage": 0,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "parcel-ledger",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "notes-digest",
+              "stage": 1,
+              "error_type": null,
+              "tests_passed": false
+            },
+            {
+              "case": "notes-digest",
+              "stage": 2,
+              "error_type": null,
+              "tests_passed": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "archives": {
+    "sqlite": {
+      "file": "team-repos-live-sqlite.json.gz",
+      "content_sha256": "34d1d80cd1e4ce8b300bc4abac397ffbb4710482c52a01101a97a4fc192f593a",
+      "file_sha256": "b2602e6de4f588c6f6c97a0d540e09df71ce7c1362751c3f8cb42c5d6e20d1fe"
+    },
+    "postgres": {
+      "file": "team-repos-live-postgres.json.gz",
+      "content_sha256": "b82542d7a7695005956837244f9f9d46e1954b36b4f463986c330dcc98ed74d4",
+      "file_sha256": "f5f5417630f429b7cab74c7f5fea0d65b9246d6859036b7b720876fe00358b3d"
+    },
+    "repo-docker-feasibility.json": {
+      "file": "team-repos-docker-feasibility.json",
+      "content_sha256": "a01815e28a3f3d428204f1747eea13ce6976352ff7c1e1de5100edc5be097ea5"
+    },
+    "repo-cases-metadata-repair-proof.json": {
+      "file": "team-repos-metadata-repair.json",
+      "content_sha256": "a2b0a441ceac84f143144db14f2912b7ab4aed23e8dc308ee97950493af9d770"
+    },
+    "repo-contradictory-review-repro.json": {
+      "file": "team-repos-conflicting-ref-repro.json",
+      "content_sha256": "6fa0a09e16dd40c4b054ff8bb8f1639efb9a7fd917bd24eee5aff3f592d2bd88"
+    }
+  },
+  "measured_runtime_file": "team-repos-measured-runtime.json.gz",
+  "measured_runtime_sha256": "f1e2ebfde3fe0ee87870a79941be3f6b6df5ebe5bc3829d50b040f2eac50e0e4",
+  "case_manifest_sha256": "148d2368d1c841fd5005879118b041d6d4ce7b9cfe574c8038a4c65af1ffc656",
+  "cases": 3,
+  "stages_per_case": 3,
+  "known_account_calls": 113,
+  "known_account_tokens": 251676,
+  "runtime_note": "Measured runtime retained in archive. Final runner afterward catches StaleEvidence per attempt and uses null for an unperformed source check; final sandbox also catches receipt JSON RecursionError found on Python 3.11. Live outputs/scores were not rerun or rescored.",
+  "context_audit": {
+    "cheap_vs_memory": {
+      "sqlite": {
+        "positions": 9,
+        "identical_evidence_metadata_sets": 9,
+        "identical_ordered_contexts": 0
+      },
+      "postgres": {
+        "positions": 9,
+        "identical_evidence_metadata_sets": 9,
+        "identical_ordered_contexts": 0
+      }
+    },
+    "cross_backend": {
+      "positions": 36,
+      "raw_source_sets_equal": 36,
+      "raw_source_order_equal": 13,
+      "full_context_equal": 4
+    },
+    "interpretation": "Unspecified storage iteration changes controls/history order; independently generated handoffs differ between SQL runs. These are not database-induced quality differences."
+  },
+  "limits": [
+    "Three authored synthetic repositories, not existing production codebases or nine independent tasks",
+    "Public fixture metadata was inspected after initial freeze to repair explicit task_key; all110assertions and everyoldfield unchanged; orchestration contributor saw2earlierkeywordmatches",
+    "Sequential researcher/coder roles and36freshworkers/backend, not a concurrent always-on fleet",
+    "Shared SQL intent/code/guard state is common even to direct-source knowledge baseline",
+    "Source corpus is explicitly projected and parent clears intent basis on source events; no proof of automatic retained-memory invalidation here",
+    "All18memoryacquisitions are six-fact snapshots; no embedding/semantic retrieval benefit measured",
+    "Cheap and memory have same evidence sets, differentorder; own prior code, model variation, and noteformation also affectoutcomes",
+    "Minimal private-test counts/names feedback differs from normal full coding diagnostics",
+    "Docker/unittest grading is not adversarial tamper-proof attestation",
+    "SQLite one contradictory-citation abort is a bad proposal plus missed caller recovery, no hiddentestfailure",
+    "No paid repetitions after fixes and no rerun to improve scores"
+  ]
+}

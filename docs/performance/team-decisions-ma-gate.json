@@ -1,0 +1,353 @@
+{
+  "expected_scenarios": [
+    "s10_ma_mesi_cas",
+    "s11_ma_mesi_sync",
+    "s12_topic_gating",
+    "s13_concurrent_writers",
+    "s14_trust_drift",
+    "s15_topic_leakage",
+    "s16_knowledge_relay",
+    "s17_self_correction",
+    "s18_trust_calibration",
+    "s19_incident_reconstruction",
+    "s20_belief_revision",
+    "s21_partial_assembly",
+    "s22_temporal_staleness",
+    "s23_adversarial_noise",
+    "s24_onboarding",
+    "s25_conflict_resolution",
+    "s26_sparse_assembly",
+    "s8_ma_isolation",
+    "s9_ma_pool_publish"
+  ],
+  "expected_binding_thresholds": 11,
+  "backends": {
+    "ai_knot_multi_agent": {
+      "raw_file": "team-decisions-ma-initial.json.gz",
+      "raw_sha256": "162f9d8ab7b822073b9a8156e9dcad42ac0f78438aa8fe27b4108e1f1c58ad19",
+      "gzip_sha256": "9797c5a979d3328586c0c08b881bc158192248040c85d851bf86e55ade6bd08e",
+      "scenarios_present": 19,
+      "binding_passed": 11,
+      "advisory_misses": 5,
+      "checks": [
+        {
+          "scenario": "s10_ma_mesi_cas",
+          "metric": "cas_correctness",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s11_ma_mesi_sync",
+          "metric": "delta_correctness",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s13_concurrent_writers",
+          "metric": "no_lost_updates",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s17_self_correction",
+          "metric": "correction_surfaced",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s20_belief_revision",
+          "metric": "final_consensus",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s25_conflict_resolution",
+          "metric": "resolution_correctness",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "correct_at_3",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 0.9,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "conflict_resolution",
+          "value": 0.3333333333333333,
+          "operator": ">=",
+          "target": 0.8,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "wrong_suppression",
+          "value": 0.3333333333333333,
+          "operator": ">=",
+          "target": 0.8,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s19_incident_reconstruction",
+          "metric": "evidence_precision",
+          "value": 0.6153846153846154,
+          "operator": ">=",
+          "target": 0.7,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s23_adversarial_noise",
+          "metric": "free_standing_suppression",
+          "value": 0.9,
+          "operator": ">=",
+          "target": 0.85,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s23_adversarial_noise",
+          "metric": "trust_penalty",
+          "value": 1.0,
+          "operator": ">",
+          "target": 0.5,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "target_shard_recall_at_10",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 0.6,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "p95_retrieve_ms_at_1000",
+          "value": 70.0971995247528,
+          "operator": "<=",
+          "target": 150.0,
+          "advisory": true,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "equivalence_recall_at_1000",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 0.9,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "target_shard_recall_at_1000",
+          "value": 0.3333333333333333,
+          "operator": ">=",
+          "target": 0.6,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "distractor_rate_at_1000",
+          "value": 0.9,
+          "operator": "<=",
+          "target": 0.5,
+          "advisory": true,
+          "passed": false
+        }
+      ]
+    },
+    "ai_knot_multi_agent_postgres": {
+      "raw_file": "team-decisions-ma-postgres.json.gz",
+      "raw_sha256": "fa770e3e346e5b6e34ff7bc68a55caeedbd5880826895554b66e1d5d501a7522",
+      "gzip_sha256": "3bed422526e402bf21b7e405fd05d1258bcdad8f4abb5ddef9e1a33a8c544bcf",
+      "scenarios_present": 19,
+      "binding_passed": 11,
+      "advisory_misses": 5,
+      "checks": [
+        {
+          "scenario": "s10_ma_mesi_cas",
+          "metric": "cas_correctness",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s11_ma_mesi_sync",
+          "metric": "delta_correctness",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s13_concurrent_writers",
+          "metric": "no_lost_updates",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s17_self_correction",
+          "metric": "correction_surfaced",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s20_belief_revision",
+          "metric": "final_consensus",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s25_conflict_resolution",
+          "metric": "resolution_correctness",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 1.0,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "correct_at_3",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 0.9,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "conflict_resolution",
+          "value": 0.3333333333333333,
+          "operator": ">=",
+          "target": 0.8,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s9_ma_pool_publish",
+          "metric": "wrong_suppression",
+          "value": 0.3333333333333333,
+          "operator": ">=",
+          "target": 0.8,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s19_incident_reconstruction",
+          "metric": "evidence_precision",
+          "value": 0.6153846153846154,
+          "operator": ">=",
+          "target": 0.7,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s23_adversarial_noise",
+          "metric": "free_standing_suppression",
+          "value": 0.9,
+          "operator": ">=",
+          "target": 0.85,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s23_adversarial_noise",
+          "metric": "trust_penalty",
+          "value": 1.0,
+          "operator": ">",
+          "target": 0.5,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "target_shard_recall_at_10",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 0.6,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "p95_retrieve_ms_at_1000",
+          "value": 94.54236621968448,
+          "operator": "<=",
+          "target": 150.0,
+          "advisory": true,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "equivalence_recall_at_1000",
+          "value": 1.0,
+          "operator": ">=",
+          "target": 0.9,
+          "advisory": false,
+          "passed": true
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "target_shard_recall_at_1000",
+          "value": 0.3333333333333333,
+          "operator": ">=",
+          "target": 0.6,
+          "advisory": true,
+          "passed": false
+        },
+        {
+          "scenario": "s26_sparse_assembly",
+          "metric": "distractor_rate_at_1000",
+          "value": 0.9,
+          "operator": "<=",
+          "target": 0.5,
+          "advisory": true,
+          "passed": false
+        }
+      ]
+    }
+  },
+  "note": "First combined PG run lost TCP connections and omitted S26; its9/9display was rejected. Sequential PG repeat is accepted only after asserting19scenarios and11binding thresholds. No Ollama/model HTTP; embedder stub and mock judge."
+}

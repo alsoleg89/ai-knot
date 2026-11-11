@@ -11,7 +11,7 @@ from __future__ import annotations
 import statistics
 from datetime import UTC, datetime
 
-from tests.eval.benchmark.base import BenchmarkMetrics
+from tests.eval.benchmark.base import BenchmarkMetrics, valid_scores
 
 # SA scenario IDs — used to classify backends as single-agent vs multi-agent.
 _SA_SCENARIO_IDS = frozenset(
@@ -83,7 +83,11 @@ def render_markdown(results: list[BenchmarkMetrics]) -> str:
         m for m in results if any(sr.scenario_id in _SA_SCENARIO_IDS for sr in m.scenario_results)
     ]
     ma_results = [
-        m for m in results if any(sr.scenario_id in _MA_SCENARIO_IDS for sr in m.scenario_results)
+        m
+        for m in results
+        if "_multi_agent" in m.backend_name
+        or _MA_SCENARIO_IDS.intersection(m.selected_scenarios)
+        or any(sr.scenario_id in _MA_SCENARIO_IDS for sr in m.scenario_results)
     ]
 
     lines.append("## Summary — Single-Agent\n")
@@ -205,7 +209,7 @@ def _has_metric(metrics: BenchmarkMetrics, sid: str, metric: str) -> bool:
     """Return True if *metrics* actually contains scores for *sid*/*metric*."""
     for r in metrics.scenario_results:
         if r.scenario_id == sid:
-            return bool(r.judge_scores.get(metric))
+            return valid_scores(r.judge_scores.get(metric, []))
     return False
 
 
@@ -340,25 +344,34 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
 
     A per-backend overall verdict, then a per-threshold breakdown for the first
     MA backend (the one that owns the protocol-correctness scenarios).  Non-applicable
-    thresholds (metric not measured in this run) render as ``n/a`` and do not fail.
+    thresholds from absent, unselected scenarios render as ``n/a`` and do not fail.
     """
     from tests.eval.benchmark.ma_gate import evaluate_gate, gate_passed
 
     # The gate is ai-knot's own acceptance criteria. Cross-system backends (e.g. mem0)
     # appear in the summary table above; they are NOT judged by ai-knot's protocol gate
     # (they do not implement slot-CAS/MESI/trust), so the verdict is scoped to ai-knot.
-    gated = [m for m in ma_results if m.backend_name.startswith("ai_knot")] or ma_results
+    gated = [m for m in ma_results if m.backend_name.startswith("ai_knot_multi_agent")]
 
     lines: list[str] = ["#### Acceptance Scorecard\n"]
     lines.append("_ai-knot acceptance gate; cross-system backends are in the summary above._\n")
+    if not gated:
+        lines.append("❌ FAIL — no ai-knot multi-agent verification.")
+        return lines
     lines.append("| Backend | Binding thresholds passed | Verdict |")
     lines.append("|---------|---------------------------|---------|")
     for m in gated:
         results = evaluate_gate(m)
         binding = [r for r in results if r.applicable and not r.threshold.advisory]
         n_pass = sum(1 for r in binding if r.passed)
-        verdict = "✅ PASS" if gate_passed(results) else "❌ FAIL"
+        verdict = "✅ PASS" if gate_passed(results) and not m.scenario_failures() else "❌ FAIL"
         lines.append(f"| {_display(m.backend_name)} | {n_pass}/{len(binding)} | {verdict} |")
+
+    for m in gated:
+        errors = m.scenario_failures()
+        if errors:
+            lines.append(f"\n##### Scenario execution errors — {_display(m.backend_name)}\n")
+            lines.extend(f"- `{sid}`: {error}" for sid, error in errors.items())
 
     if gated:
         primary = gated[0]
@@ -371,6 +384,8 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
             t = r.threshold
             if not r.applicable:
                 value_str, status = "—", "n/a"
+            elif r.missing:
+                value_str, status = "—", "❌ missing/invalid"
             elif t.advisory:
                 value_str = _fmt(r.value)
                 status = "ℹ️ advisory"
@@ -385,7 +400,7 @@ def _ma_scorecard(ma_results: list[BenchmarkMetrics]) -> list[str]:
             )
         if advisory_notes:
             lines.append("")
-            lines.append("_Advisory (structurally capped / resolver-dependent — not binding):_")
+            lines.append("_Advisory (diagnostic targets — not binding):_")
             lines.extend(advisory_notes)
     return lines
 
@@ -416,7 +431,7 @@ def _scenario_section(results: list[BenchmarkMetrics], sid: str, title: str) -> 
         cells = []
         for metric in metric_list:
             vals = sr.judge_scores.get(metric, [])
-            if vals:
+            if valid_scores(vals):
                 med = statistics.median(vals)
                 cells.append(_fmt(med))
             else:

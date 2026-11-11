@@ -40,6 +40,9 @@ def test_cli_changes_and_maintenance(tmp_path):
     )
     batch = runner.invoke(main, prefix + ["changes", "poll", "owner", "watch", "--json"])
     assert json.loads(batch.output)["delivery_id"] is None
+    snapshot = runner.invoke(main, prefix + ["changes", "resync", "owner", "watch", "--json"])
+    assert snapshot.exit_code == 0, snapshot.output
+    assert json.loads(snapshot.output)["is_snapshot"]
     assert (
         runner.invoke(
             main, prefix + ["changes", "unsubscribe", "owner", "watch", "--json"]

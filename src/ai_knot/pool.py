@@ -104,6 +104,10 @@ class SharedMemoryPool(_PoolRecallMixin):
 
     Args:
         storage: Backend used to persist the shared namespace.
+        embed_url: OpenAI-compatible embedding server, without ``/v1``.
+            Defaults to local Ollama. Set to ``""`` to disable embeddings.
+        embed_model: Model used by :meth:`arecall` for documents and queries.
+        embed_api_key: Optional bearer token for the embedding server.
     """
 
     # Auto-promotion: promote facts used by >= N distinct agents to "org" tier.
@@ -120,6 +124,9 @@ class SharedMemoryPool(_PoolRecallMixin):
         persist_stats: bool = False,
         semantic_resolver: SemanticConflictResolver | None = None,
         clock: Callable[[], datetime] | None = None,
+        embed_url: str = "http://localhost:11434",
+        embed_model: str = "nomic-embed-text",
+        embed_api_key: str | None = None,
     ) -> None:
         self._storage: StorageBackend = storage or YAMLStorage()
         # Clock for audit-ledger timestamps and grant times; injectable so tests
@@ -127,6 +134,9 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._clock: Callable[[], datetime] = clock or (lambda: datetime.now(UTC))
         self._bm25 = BM25Retriever(skip_prf=True)
         self._dense = DenseRetriever()
+        self._embed_url = embed_url
+        self._embed_model = embed_model
+        self._embed_api_key = embed_api_key
         # Pool retrieval has a wider semantic gap than private KB recall:
         # queries use abstract terms while facts contain technical specifics.
         # Weight dense higher to bridge this gap (2:3 vs KnowledgeBase's 2:1).
@@ -157,8 +167,8 @@ class SharedMemoryPool(_PoolRecallMixin):
         self._last_recall_meta: _RecallMeta | None = None
         # Per-fact usage tracking: fact_id -> set of agent_ids that recalled it.
         self._fact_consumers: dict[str, set[str]] = {}
-        # Tracks which fact IDs have been embedded to avoid re-embedding.
-        self._embedded_ids: set[str] = set()
+        # Reuse vectors only for the exact text sent to the embedding provider.
+        self._embedded_texts: dict[str, str] = {}
         # Transient query vector set by arecall() for hybrid search.
         self._query_vector: list[float] | None = None
         self._recall_service = SharedPoolRecallService()
@@ -491,6 +501,9 @@ class SharedMemoryPool(_PoolRecallMixin):
             next_version = max((f.version for f in shared), default=0) + 1
 
             for fact in to_publish:
+                if "_ai_knot_action_binding" in fact.qualifiers:
+                    # Publish through record_experience so shared authority/binding survive.
+                    continue
                 if is_derived(fact):
                     current = next(iter(load(agent_id, fact.id)), None)
                     if (

@@ -66,6 +66,11 @@ class DenseRetriever:
         """Merge new embeddings into the existing set without rebuilding."""
         self._vectors.update(vectors)
 
+    def remove_embeddings(self, fact_ids: set[str]) -> None:
+        """Discard vectors for removed or revised facts."""
+        for fact_id in fact_ids:
+            self._vectors.pop(fact_id, None)
+
     def has_embeddings(self) -> bool:
         """Return True if at least one embedding is available."""
         return bool(self._vectors)
@@ -79,7 +84,7 @@ class DenseRetriever:
     ) -> list[tuple[Fact, float]]:
         """Rank facts by cosine similarity to *query_vector*.
 
-        Facts without a precomputed embedding are scored 0.0.
+        Facts without a precomputed embedding contribute no dense signal.
 
         Returns:
             (Fact, score) pairs sorted by descending cosine similarity.
@@ -91,7 +96,6 @@ class DenseRetriever:
         for fact in facts:
             vec = self._vectors.get(fact.id)
             if vec is None:
-                results.append((fact, 0.0))
                 continue
             results.append((fact, _cosine(query_vector, vec)))
 
@@ -178,19 +182,18 @@ class HybridRetriever:
             bm25f_only=True,
         )
 
-        # If no dense signal available, return BM25 directly.
+        dense_results = (
+            self._dense.search(query_vector, facts, top_k=len(facts))
+            if query_vector is not None and self._dense.has_embeddings()
+            else []
+        )
+
+        # If no dense signal is available for these facts, return BM25 directly.
         # Filter zero-scored facts: without dense signal to rescue them,
         # they would pollute top-k and inflate used_count for trust.
-        if query_vector is None or not self._dense.has_embeddings():
+        if not dense_results:
             scored = [(f, s) for f, s in bm25_results if s > 0.0]
             return scored[:top_k] if scored else bm25_results[:top_k]
-
-        # Run dense retrieval.
-        dense_results = self._dense.search(
-            query_vector,
-            facts,
-            top_k=len(facts),
-        )
 
         # Build ranked lists for RRF fusion.
         bm25_ranked = [f.id for f, _ in bm25_results]

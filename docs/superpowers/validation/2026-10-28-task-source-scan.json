@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-28",
+  "base": "53d72fbc290486060bad6c052f6c353516f43993",
+  "scope": "internal task-source loader/cache; public APIs/schema/dependencies/releases unchanged",
+  "full_python312_postgres_required": {
+    "passed": 2648,
+    "skipped": 5,
+    "warnings": 1,
+    "coverage_percent": 89.99,
+    "seconds": 190.92
+  },
+  "additional_python312_cardinality_race": {
+    "passed": 2,
+    "deselected": 42,
+    "seconds": 0.42,
+    "note": "Added after fullgate collection; separate result."
+  },
+  "compatibility311_postgres_required": {
+    "passed": 147,
+    "seconds": 38.38
+  },
+  "compatibility313_postgres_required": {
+    "passed": 147,
+    "seconds": 29.87
+  },
+  "ruff": "check/format passed,src/tests",
+  "mypy": "strict passed,80sourcefiles",
+  "focused": [
+    "141passed afterCOUNTcache proof",
+    "4tiedtimestamp/nonmonotonicID parity cases passed",
+    "2concurrent cardinality deletion cases passed"
+  ],
+  "profiles": {
+    "public_output_pairs_identical": 32,
+    "backends": [
+      "sqlite",
+      "postgres"
+    ],
+    "provider_calls": 0,
+    "five_timing_samples_per_row": true,
+    "intermediate_regression_retained": true
+  },
+  "original_checkout": {
+    "head_unchanged": true,
+    "status_unchanged": true,
+    "protected_sha256_files": 30,
+    "release_changes": false
+  },
+  "warning": "Existing archived semantic-runtime compiled filename produces coverage no-source warning.",
+  "skips": [
+    "1SQLite parameter ofPG-only initialization",
+    "3opt-in Docker sandbox cases not enabled",
+    "1factoryenvironment case"
+  ],
+  "review": "docs/superpowers/reviews/2026-10-28-task-source-scan.md",
+  "research": "docs/research/2026-10-28-growing-task-memory.md",
+  "raw_sha256": "cef7b5ce7a3cf05ba56e615bcc5a9984b11ebf1cb86bf19135a5b5bdcb1013c8",
+  "raw": "docs/performance/task-source-scan-raw.json.gz",
+  "remaining": [
+    "admitted generic/same-task growth stilloverflows",
+    "selectedcontext sufficiency/new-condition guard remains productwork",
+    "SQL/native memory not bounded"
+  ],
+  "broad_product_goal": "active"
+}

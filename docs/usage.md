@@ -6,7 +6,7 @@ For a surface-by-surface routing guide, see [integrations.md](integrations.md).
 If you only need the cross-surface `add -> search -> list -> delete` loop, start
 with [memory-commands.md](memory-commands.md).
 For resumable agent work, acknowledged changes and guarded external actions,
-see [always-on memory](always-on.md) (unreleased source feature).
+see [always-on memory](always-on.md) (available since 0.13.0).
 
 - [Initialization — storage + provider](#initialization)
 - [Memory types](#memory-types)
@@ -888,6 +888,28 @@ results = pool.recall("rate limits", "writer", top_k=3)
 for fact, score in results:
     print(f"[{score:.2f}] (trust={pool.get_trust(fact.origin_agent_id):.2f}) {fact.content}")
 ```
+
+For OpenAI embeddings, configure both private and shared async retrieval explicitly:
+
+```python
+import os
+
+embeddings = dict(
+    embed_url="https://api.openai.com",  # omit /v1
+    embed_model="text-embedding-3-small",
+    embed_api_key=os.environ["OPENAI_API_KEY"],
+)
+researcher = KnowledgeBase("researcher", storage=storage, **embeddings)
+pool = SharedMemoryPool(storage=storage, **embeddings)
+results = await pool.arecall("rate limits", "writer", top_k=3)
+```
+
+`arecall()` embeds new shared documents and each query; `recall()` makes no embedding
+request. These settings do not choose the host agent's chat model: pass
+`model="gpt-4.1-mini"` to the host's OpenAI call separately. Embedding failures fall
+back to lexical search. Set `embed_url=""` to disable embedding HTTP entirely.
+`AlwaysOnMemory.select_context()` and `review_context()` remain deterministic and do
+not invoke embeddings or a chat model.
 
 ### Publish gating, channels, delta sync
 

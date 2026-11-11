@@ -5,8 +5,10 @@
 // client (HttpKnowledgeBase) needs no Python on this machine. Always exits 0.
 
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
-const PACKAGE = "ai-knot[mcp]";
+const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const PACKAGE = `ai-knot[mcp]==${version}`;
 
 if (
   process.env["AI_KNOT_SKIP_PYTHON_INSTALL"] === "1" ||
@@ -43,7 +45,7 @@ console.warn(
     '       import { HttpKnowledgeBase } from "ai-knot";',
     "",
     "  2) In-process client — install the Python bridge (needs Python 3.11+ and pip):",
-    '       pip install "ai-knot[mcp]"',
+    `       pip install "${PACKAGE}"`,
     "       npx ai-knot-doctor",
     "",
   ].join("\n"),

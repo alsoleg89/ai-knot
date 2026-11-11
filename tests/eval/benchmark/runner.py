@@ -45,6 +45,7 @@ from tests.eval.benchmark.base import (
     MemoryBackend,
     MultiAgentMemoryBackend,
     ScenarioResult,
+    valid_scores,
 )
 from tests.eval.benchmark.report import render_markdown
 
@@ -511,6 +512,8 @@ async def _run(
         all_metrics.extend(ma_metrics_list)
 
     _write_reports(all_metrics, output, raw_output)
+    if ma_gate:
+        _enforce_ma_gate(all_metrics)
 
 
 async def _run_backend(
@@ -639,10 +642,16 @@ async def _run_multi_agent_inline(
     if scenarios_arg in ("all", "ma"):
         runners = get_ma_scenario_runners(category=ma_category)
     else:
-        names = [s.strip() for s in scenarios_arg.split(",")]
+        names = [s.strip() for s in scenarios_arg.split(",") if s.strip()]
         runners = get_ma_scenario_runners(names=names, category=ma_category)
         if not runners:
             return []
+        unmatched = [name for name in names if not any(sid.startswith(name) for sid, _ in runners)]
+        if unmatched:
+            raise click.BadParameter(
+                f"No multi-agent scenarios matched: {', '.join(unmatched)}",
+                param_hint="--scenarios",
+            )
 
     storage_types = [s.strip() for s in ma_storage.split(",") if s.strip()]
     backends: list[MultiAgentMemoryBackend] = [
@@ -659,7 +668,11 @@ async def _run_multi_agent_inline(
     all_ma_metrics: list[BenchmarkMetrics] = []
     for backend in backends:
         click.echo(f"\n>>> Backend: {backend.name}")
-        metrics = BenchmarkMetrics(backend_name=backend.name, language="en")
+        metrics = BenchmarkMetrics(
+            backend_name=backend.name,
+            language="en",
+            selected_scenarios=[sid for sid, _ in runners],
+        )
         for sid, scenario_fn in runners:
             click.echo(f"    {sid} ...", nl=False)
             try:
@@ -674,7 +687,8 @@ async def _run_multi_agent_inline(
                 if jsonl_output:
                     _append_jsonl(jsonl_output, result, backend.name, language="en")
             except Exception as exc:
-                click.echo(f" ERROR: {exc}")
+                metrics.scenario_errors[sid] = type(exc).__name__
+                click.echo(f" ERROR: {type(exc).__name__}")
         all_ma_metrics.append(metrics)
 
     return all_ma_metrics
@@ -750,30 +764,35 @@ def _enforce_ma_gate(metrics_list: list[BenchmarkMetrics]) -> None:
     """Evaluate the MA acceptance gate and exit non-zero if any threshold fails."""
     from tests.eval.benchmark.ma_gate import evaluate_gate, gate_passed
 
-    failed_any = False
-    for m in metrics_list:
-        # Gate ai-knot only; cross-system backends are not judged by ai-knot's protocol gate.
-        if not m.backend_name.startswith("ai_knot"):
-            continue
+    # Single-agent and cross-system backends do not own ai-knot's MA protocol gate.
+    gated = [m for m in metrics_list if m.backend_name.startswith("ai_knot_multi_agent")]
+    failed_any = not gated
+    if not gated:
+        click.echo("MA gate: FAIL (no ai-knot multi-agent verification)", err=True)
+    for m in gated:
         results = evaluate_gate(m)
         applicable = [r for r in results if r.applicable]
-        if not applicable:
-            continue
-        passed = gate_passed(results)
+        errors = m.scenario_failures()
+        passed = gate_passed(results) and not errors
         binding = [r for r in applicable if not r.threshold.advisory]
         n_pass = sum(1 for r in binding if r.passed)
         click.echo(
             f"MA gate [{m.backend_name}]: {n_pass}/{len(binding)} binding thresholds "
             f"{'PASS' if passed else 'FAIL'}"
         )
-        for r in binding:
-            if not r.passed:
+        for sid, error in errors.items():
+            click.echo(f"  ✗ {sid}: {error}")
+        for r in applicable:
+            if r.missing:
+                t = r.threshold
+                click.echo(f"  ✗ {t.scenario_id}/{t.metric}: missing or invalid metric")
+            elif not r.threshold.advisory and not r.passed:
                 t = r.threshold
                 click.echo(
                     f"  ✗ {t.scenario_id}/{t.metric} = {r.value:.3f} (need {t.op} {t.target})"
                 )
         for r in applicable:
-            if r.threshold.advisory and not r.passed:
+            if r.threshold.advisory and not r.passed and not r.missing:
                 t = r.threshold
                 click.echo(
                     f"  ℹ {t.scenario_id}/{t.metric} = {r.value:.3f} "
@@ -978,6 +997,7 @@ def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
         "schema_version": 2,
         "generated_at": datetime.now(UTC).isoformat(),
         "backends": {},
+        "run_metadata": {},
     }
     for m in metrics:
         key = f"{m.backend_name}:{m.language}"
@@ -986,6 +1006,8 @@ def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
             # Unified schema (v2): always {"mean": X, "stdev": Y} per metric.
             enriched_scores: dict[str, object] = {}
             for k, v in sr.judge_scores.items():
+                if v and not valid_scores(v):
+                    continue  # Invalid measurements are retained as scenario errors, not NaN JSON.
                 mean_val = sum(v) / len(v) if v else 0.0
                 stdev_val = (
                     sr.long_run_stats.metric_stdev.get(k, 0.0)
@@ -1013,6 +1035,11 @@ def _to_raw_json(metrics: list[BenchmarkMetrics]) -> dict[str, object]:
                 }
             backend_data[sr.scenario_id] = scenario_data
         out["backends"][key] = backend_data  # type: ignore[index]
+        if m.selected_scenarios or m.scenario_failures():
+            out["run_metadata"][key] = {  # type: ignore[index]
+                "selected_scenarios": m.selected_scenarios,
+                "scenario_errors": m.scenario_failures(),
+            }
     return out
 
 
